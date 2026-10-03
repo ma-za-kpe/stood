@@ -24,7 +24,7 @@ Source: [paypalaihackathon.devpost.com](https://paypalaihackathon.devpost.com/),
   3. be a working prototype or proof of concept
   4. be documented well enough for judges
   5. comply with the Official Rules
-- **Existing projects allowed** if there's *meaningful progress during the hackathon*. Building Stood alongside EyeOnSite is fine. Keep dated commits to show progress.
+- **Existing projects allowed** if there's *meaningful progress during the hackathon*. Building Stood alongside [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is fine. Keep dated commits to show progress.
 - **Individual or team.**
 
 ### What to submit (official)
@@ -87,6 +87,7 @@ Workshop notes: AG Grid and Bryntum are one group ("AG Grid × Bryntum"). APIMat
 ## Competitors already building [C, new]
 
 Public repos already tagged for this hackathon:
+
 - **Mandat** (`blanco1er/mandat`): an agent with a budget that you sign a **PayPal mandate** for once (Vault v3 setup and payment tokens). It holds deposits as **authorisations** (Orders v2), captures on merchant confirmation, issues invoices through the Agent Toolkit, and uses Channel3, AG Grid and Bryntum. **Deployed and well along.**
 - **subscription-killer:** finds and cancels forgotten subscriptions.
 - **Pr1meGG/paypal-ai-hackathon:** payment-aware agents for RTO (return-to-origin) reduction and lead conversion.

@@ -1,0 +1,9 @@
+{
+  "name": "stood-site-build",
+  "private": true,
+  "type": "module",
+  "description": "Builds the GitHub Pages landing page and changelog",
+  "dependencies": {
+    "marked": "18.0.14"
+  }
+}

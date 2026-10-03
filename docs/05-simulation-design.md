@@ -13,6 +13,7 @@
 ## The two-ledger rule [U]
 
 Keep two separate ledgers:
+
 1. **Exogenous grants.** Trading P&L, bounties, subsidies. Each one can be switched off.
 2. **Internal revenue.** Agent A pays agent B for delivered output that A still wants after the grants shrink.
 

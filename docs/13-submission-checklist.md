@@ -10,7 +10,7 @@ Use this at the end, when we review everything against the official brief ([06](
 - [ ] A working prototype (no mock-ups standing in for features). Evidence:
 - [ ] Documented well enough for judges to understand it (README + docs/). Evidence:
 - [ ] Complies with the **Official Rules** (read in full, including judge-contact and IP clauses). Date read:
-- [ ] If any EyeOnSite code is reused: **meaningful progress during 1 Oct – 12 Nov** shown in dated commits. Evidence:
+- [ ] If any [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) code is reused: **meaningful progress during 1 Oct – 12 Nov** shown in dated commits. Evidence:
 
 ## B. What to submit
 

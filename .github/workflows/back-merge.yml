@@ -1,0 +1,28 @@
+name: back-merge
+
+# GitFlow: after anything lands on main (release or hotfix), open a PR main -> develop.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Open main -> develop PR if develop is behind
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          behind=$(gh api "repos/$REPO/compare/develop...main" --jq '.ahead_by')
+          if [ "$behind" = "0" ]; then echo "develop is up to date"; exit 0; fi
+          existing=$(gh pr list --repo "$REPO" --base develop --head main --state open --json number --jq 'length')
+          if [ "$existing" != "0" ]; then echo "back-merge PR already open"; exit 0; fi
+          gh pr create --repo "$REPO" --base develop --head main \
+            --title "chore: back-merge main into develop" \
+            --body "Automated GitFlow back-merge after a release or hotfix on main. Merge with a merge commit."

@@ -13,7 +13,7 @@
 
 1. **"Money exchanged" is too thin a definition.** An economy is *repeated, voluntary exchange of things someone values*, under rules that let production, specialisation and accumulation continue. Transfers can look busy and still destroy value. [U]
 2. **The pyramid's harms are how it works, not bugs.** Take away the upstream recruitment payout and there's no reason left to join. You don't get a healthy market. You get an empty one. [U]
-3. **The real question underneath is ignition (cold start), not the pyramid.** [C] What a pyramid actually offers is fast onboarding and early-adopter rewards. Those are real needs for any new network. They can be met with mechanisms that don't need the bottom layer to lose (see [02](02-pyramid-schemes-and-ignition.md#what-is-salvageable-ignition-without-a-pyramid)).
+3. **The real question underneath is ignition (cold start), not the pyramid.** [C] What a pyramid actually offers is fast onboarding and early-adopter rewards. Those are real needs for any new network. They can be met with mechanisms that don't need the bottom layer to lose (see [02](02-pyramid-schemes-and-ignition.md#what-can-be-salvaged-ignition-without-a-pyramid-c)).
 4. **Agents are almost never the "ultimate user".** [C] US law (the Koscot test) separates a business from a pyramid by whether rewards come from *sales to ultimate users*. An agent with no need of its own isn't an ultimate user. Its demand is borrowed from whoever set its goal. So any agent economy has to end, somewhere, in a human or physical-world need. A fully closed agent-to-agent loop is circular by definition.
 
 ## Revised phase plan [U + C]

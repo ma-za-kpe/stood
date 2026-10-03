@@ -1,0 +1,12 @@
+{
+  // Strict by default; only rules that fight our docs' deliberate style are relaxed.
+  "config": {
+    "default": true,
+    "MD013": false,          // line length: prose and tables wrap naturally
+    "MD033": false,          // inline HTML: README hero + badges
+    "MD041": false,          // README starts with an HTML hero
+    "MD024": { "siblings_only": true },
+    "MD060": false           // table pipe spacing style
+  },
+  "ignores": ["CHANGELOG.md", "node_modules/**"]
+}

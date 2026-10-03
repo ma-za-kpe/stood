@@ -25,7 +25,7 @@ The pasted plan relies on "GPS matches, EXIF consistent, photos not reused". **E
 | **Near-duplicate search** with perceptual hashes *and* image embeddings across **all** prior packages on **all** plots (**Elastic** kNN on image embeddings, seeded with public construction images so internet photos are caught too: [S13](S13-sponsor-integration.md)) | A3, A4 | ✅ |
 | **Screen / print re-capture detection** (vision model: moiré, bezels, glare) | A5 | ✅ (model check) |
 | **Geofence with tolerance**, plus a check for implausible GPS (perfect accuracy, no jitter across shots, mock-location flag) | A1 partly | ✅ basic |
-| **Device attestation** (Play Integrity / App Attest) via the capture SDK | A1, A2 | Later (EyeOnSite's KMP app) |
+| **Device attestation** (Play Integrity / App Attest) via the capture SDK | A1, A2 | Later ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)'s KMP app) |
 | **Stage recognition** against the allowance's checklist | A9 | ✅ |
 | **Structured output only from the model.** Image text is treated as data, never instructions. The final decision is made by rules, not the model | A8 | ✅ (by design: [09](../09-stood.md)) |
 | **Runtime separation:** the evidence agent runs on Astropods with **no PayPal credentials**, so even a fully hijacked model can't move money | A8 | ✅ ([S13](S13-sponsor-integration.md)) |

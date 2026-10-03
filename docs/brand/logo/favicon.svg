@@ -1,3 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><style>g{stroke:#1A1A1A}@media (prefers-color-scheme:dark){g{stroke:#ECE7DC}}</style><g fill="none" stroke-linecap="butt"><circle cx="18" cy="14" r="8" stroke-width="4.5"/>
-    <line x1="18" y1="22" x2="18" y2="40" stroke-width="4.5"/>
-    <line x1="4" y1="41.75" x2="46" y2="41.75" stroke-width="4.5"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><style>.f{fill:#0D0A1E}.g{fill:#6C4DFF}@media (prefers-color-scheme:dark){.f{fill:#FFF7EC}.g{fill:#C8FF3D}}</style><circle class="f" cx="22" cy="17" r="12"/><rect class="f" x="17" y="22" width="10" height="28"/><rect class="g" x="4" y="49" width="56" height="10" rx="5"/></svg>
