@@ -47,6 +47,8 @@ Additional money-specific controls:
 
 See [T10 §Secrets](T10-deployment.md#secrets-and-config) and [WoW §11](../WAYS_OF_WORKING.md#11-security-and-secrets-open-source-edition). gitleaks runs at pre-commit and in CI.
 
+T-0135 makes guided key onboarding a prerequisite for the PayPal client. Secret prompts must hide input; local setup writes only to git-ignored `.env` with restricted access and never prints credentials or OAuth tokens. Hosted platform keys are shown once and support rotation. Readiness/error responses may list missing variable names and setup guidance, never values or provider response bodies. Missing credentials disable payments without crashing; the sandbox-only boot guard still rejects other environments. This is a required design, not implemented onboarding.
+
 ## Supply chain
 
 - Lockfile committed. `pnpm audit` in CI. Dependabot for Actions (and npm once code lands).
