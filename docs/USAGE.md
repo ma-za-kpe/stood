@@ -74,11 +74,19 @@ The creation-only domain aggregate currently permits GBP/USD/EUR holds and valid
 
 ## Keys and configuration
 
+### First run (planned, T-0135)
+
+**Stood will ask for your keys.** The planned setup tool (`scripts/dev setup` or `stood init`; neither exists yet) will prompt for `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` and platform configuration, with links to each source. It will hide secret input, write only to your git-ignored `.env` and validate the client credentials by fetching a **sandbox** OAuth token. No keys or tokens will appear in logs, URLs or committed examples.
+
+Create the PayPal credentials in your [sandbox app](https://developer.paypal.com/dashboard/applications/sandbox); see [PayPal authentication](https://developer.paypal.com/api/rest/authentication/). Obtain the webhook id from that app's [webhook configuration](https://developer.paypal.com/api/rest/webhooks/). Hosted platform onboarding will ask for your webhook URL and issue `STOOD_API_KEY` / `STOOD_HMAC_SECRET` with a copy-once display and rotation. Those onboarding flows are planned, not available today.
+
+The current local `/health` always reports `paymentReady: false`. T-0135 will add `missing` (variable **names** only) and the sentence: "Payments are off: add your PayPal sandbox keys, see docs/USAGE.md#keys-and-configuration". Planned money endpoints will return `503 payments_not_configured` with the same guidance when credentials are missing or invalid. Supplying keys alone will not enable payments: durable operations and reconciliation must also be ready. The sandbox-only boot guard remains in place.
+
 ### A. Calling Stood from your platform (hosted)
 
 | Key | What it is | Where it comes from | Where it lives |
 |---|---|---|---|
-| `STOOD_API_KEY` | Bearer key identifying your platform | Issued per platform and environment by the Stood maintainer (during the hackathon: open an issue) | Your server's secret store (for example Google Secret Manager). **Never in a mobile app or browser** |
+| `STOOD_API_KEY` | Bearer key identifying your platform | Planned platform onboarding: issued per platform/environment, shown once and rotatable. Until then, contact the maintainer without posting secrets | Your server's secret store (for example Google Secret Manager). **Never in a mobile app or browser** |
 | `STOOD_HMAC_SECRET` | Signs every request you send (`Stood-Signature`) | Issued with the API key | Server secret store |
 | `STOOD_WEBHOOK_SECRET` | Verifies the webhooks Stood sends you | Issued when you register a webhook URL | Server secret store |
 | `STOOD_BASE_URL` | `https://stood-api.onrender.com/v1` (sandbox) | — | Config |
@@ -272,6 +280,7 @@ RFC 9457 `application/problem+json`. A **refusal is not an error**: it's a `200`
 | `invalid_state` | 409 | For example dispatching a tranche that's already `HELD` |
 | `idempotency_conflict` | 409 | Same key, different body. Use a new key |
 | `unauthorized` | 401 | Wrong key or a bad `Stood-Signature` (check the clock skew is under 5 min) |
+| `payments_not_configured` (planned) | 503 | Payments are off. Follow [Keys and configuration](#keys-and-configuration); missing/invalid keys must not crash the service |
 | `paypal_unavailable` | 503 | Retry with the same idempotency key. State is reconciled automatically |
 
 ## FAQ

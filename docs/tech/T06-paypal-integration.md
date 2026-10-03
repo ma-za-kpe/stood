@@ -87,6 +87,10 @@ Allowance and direct tranche creation accept only GBP/USD/EUR, Stood's current s
 
 ## Sandbox setup
 
+Wiring T-0027 is blocked on durable payment operations (T-0132), reconciliation/status checks (T-0056 / T-0138) and guided key onboarding/readiness (T-0135). The setup tool must ask for sandbox app/webhook credentials, keep them out of output/Git and validate client credentials with sandbox OAuth. Missing/invalid keys leave payment readiness false; future money endpoints return `503 payments_not_configured` with setup guidance. Health lists missing variable names, never values. See [USAGE: keys and configuration](../USAGE.md#keys-and-configuration); these flows remain planned.
+
+An ambiguous renewal must remain reserved past the deadline until provider status resolves whether it renewed. A confirmed renewal supplies the new id for expiry; a confirmed absence of renewal plus provider expiry/no payment needs a matched typed renewal-reconciliation exit (T-0138). The existing domain has no such direct expiry exit; elapsed time or an inconclusive lookup cannot clear it. Package intake during REAUTHORIZE_PENDING must queue durably and retry when the operation resolves (T-0137).
+
 - One sandbox **business** account (the platform merchant: "[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) Demo") and two sandbox **personal** accounts (Ama-success, Ama-declined).
 - Webhook subscription created per environment (`demo`, `ci`). The webhook ID is in env.
 - CI contract tests run against sandbox with **recorded** responses (replayed by default). A nightly job runs them live against sandbox.
