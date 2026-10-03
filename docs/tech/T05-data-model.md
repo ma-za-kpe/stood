@@ -30,7 +30,8 @@ packages             (id, tranche_id, platform_ref, status, submitted_at, comple
                       platform_signals jsonb, UNIQUE(tranche_id, platform_ref))
 photos               (id, package_id, shot, r2_key, sha256, phash, lat, lng, accuracy_m,
                       captured_at_device, received_at_server, mock_location, exif jsonb)
-check_results        (package_id, check_code, status, detail jsonb, PRIMARY KEY(package_id, check_code))
+check_results        (package_id, check_code, source RULE|MODEL, confidence nullable, status, detail jsonb,
+                      PRIMARY KEY(package_id, check_code))
 findings             (id, package_id, kind, value jsonb, confidence, model_id, model_version, latency_ms)
 decisions            (id, package_id, supersedes_decision_id, tranche_id, outcome, effect, named_field, reason_key, reason_params jsonb,
                       rule_set_version, decided_by, actor_ref, decided_at)
@@ -48,7 +49,8 @@ Notes:
 - **The CHECK constraints mirror the domain invariants**, as a second line of defence.
 - `nonce_hash` stores a hash of the nonce, not the nonce itself. The nonce is returned once, at dispatch.
 - `paypal_calls.request_id` = the `PayPal-Request-Id`. Its uniqueness prevents duplicate mutations.
-- Money columns are `bigint` minor units. There are no float columns anywhere.
+- Money columns are `bigint` minor units. Money never uses floating-point columns.
+- Confidence and measured distances are non-money numeric values. Model confidence is required in [0,1]; rule confidence is NULL. Check details include `distance_m` and `matched_package_id`; the selected detail is copied into the immutable decision record (`reason_params`) for audit and sentence generation.
 - Decisions form an immutable history, including WAIT followed by a later rules or human decision ([ADR-0009](../adr/0009-assessment-and-payment-confirmation.md)). Hold attempts and payment-operation reservations need their own durable records before money endpoints are enabled; the schema above remains a logical draft, not an applied migration.
 - Migrations use **Drizzle Kit**, forward-only, checked in, and run on deploy before traffic switches.
 

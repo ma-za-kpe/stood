@@ -32,7 +32,19 @@ Stood **never holds money**, never pays anyone locally, and never knows your ind
 
 **Current local implementation:** start `docker compose up -d api`. `POST http://localhost:3000/v1/demo/scenarios/wrong-plot` runs synthetic check results through the real rule and returns `payment.executed: false`. It does not authorise, capture or void. The hosted sandbox replay and SDK below are planned contracts, not shipped capabilities.
 
-**Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
+The local response includes assessment copy and structured evidence details:
+
+```json
+{ "outcome": "REFUSE", "effect": "VOID", "namedField": "plot",
+  "ruleSetVersion": "1.1.0", "detail": { "distance_m": 1400 },
+  "sentence": "Wrong plot. 1.4 km off. No payment was executed.",
+  "evidenceTier": "fixture", "source": "synthetic_check_results",
+  "payment": { "executed": false } }
+```
+
+This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
+
+**Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, payment-confirmed sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
 
 ```bash
 BASE=https://stood-api.onrender.com/v1

@@ -97,6 +97,10 @@ decide(checks, findings, ruleSet):
 - **Never refuse on model uncertainty.** Never release on missing data.
 - The rule set is versioned. Changing a threshold is a `feat(decision)` with an ADR when it loosens safety.
 
+Implemented rule set **1.1.0** requires each check to declare `source: RULE | MODEL`; profiles fix the expected source so a model result cannot be relabelled as a rule. Model confidence must be finite and in [0,1]. Nonce PASS requires >= 0.8, stage PASS >= 0.75, and rental pair-match PASS >= 0.9 (a conservative threshold pending model evaluation). Every model FAIL below 0.9 becomes uncertain centrally. Stage FAIL remains WAIT even above that threshold until evaluation qualifies it. Rule results do not accept a confidence field. Malformed or absent provenance/confidence yields WAIT.
+
+Structured `detail` carries `distance_m` (distance from the pin in metres, not distance beyond the geofence edge) and `matched_package_id` for reuse. A location/novelty FAIL without its required detail yields WAIT. Decisions and tranche history copy/freeze the detail. Assessment sentences describe evidence; only payment confirmation may produce copy claiming capture/void completion.
+
 ## Invariant tests (property-based)
 
 ### Implemented baseline
