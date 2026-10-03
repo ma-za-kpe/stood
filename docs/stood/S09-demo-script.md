@@ -19,7 +19,7 @@
 ## Rules for the recording [C]
 
 - Every PayPal moment shows **the real sandbox object** (order, void, capture id) for at least one second. Judges score "meaningful use of PayPal".
-- Show the "local rail" line honestly: "Builder paid locally by EyeOnSite (not part of this demo)."
+- Show the "local rail" line honestly: "Builder paid locally by [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) (not part of this demo)."
 - Don't show real Paga, PayPal or WhatsApp branding in a negative light. Use neutral reconstructions ([10](../10-risks-and-open-questions.md)).
 - If possible, film a real plot in Accra. Authentic footage is the one thing other entrants can't fake.
 - Captions on (many judges watch muted).

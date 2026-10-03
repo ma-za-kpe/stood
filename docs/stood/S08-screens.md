@@ -35,7 +35,7 @@ Six screens [U]. Each one lists its empty, loading and failed states. Rule: *if 
 
 - Opens without an account (a signed link).
 - **Content:** "Foundation, £4,000, released 10:58 by Ama's agent under allowance A-7. Kojo stood on the plot at 10:42, 6 photos, 8 m from the pin." Thumbnail strip. PayPal capture id. A "Dispute this" link.
-- **Failed / expired link:** "This receipt link has expired. Ask EyeOnSite for a new one." Never leak data.
+- **Failed / expired link:** "This receipt link has expired. Ask [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) for a new one." Never leak data.
 
 ## 5. Dispute packet
 

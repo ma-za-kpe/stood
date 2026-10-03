@@ -24,7 +24,7 @@ Source: [paypalaihackathon.devpost.com](https://paypalaihackathon.devpost.com/),
   3. be a working prototype or proof of concept
   4. be documented well enough for judges
   5. comply with the Official Rules
-- **Existing projects allowed** if there's *meaningful progress during the hackathon*. Building Stood alongside EyeOnSite is fine. Keep dated commits to show progress.
+- **Existing projects allowed** if there's *meaningful progress during the hackathon*. Building Stood alongside [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is fine. Keep dated commits to show progress.
 - **Individual or team.**
 
 ### What to submit (official)

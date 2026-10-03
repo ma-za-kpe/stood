@@ -22,7 +22,7 @@ Four people, no more. [U, with Claude's notes marked C]
 
 ## Esi: the platform
 
-- Builds EyeOnSite. Calls Stood.
+- Builds [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite). Calls Stood.
 - **Needs:** an allowance id, a decision, and a payout id. **Doesn't want a second user system.**
 - **Sees:** Reviewer file, API and webhooks.
 - [C] Wants test fixtures: a "good package", a "wrong plot" and a "recycled photo" she can replay in CI.
@@ -36,4 +36,4 @@ Four people, no more. [U, with Claude's notes marked C]
 
 ## Not a persona yet: the builder [U]
 
-Paid by EyeOnSite on a local rail after the release flag. **Designing his wallet now would repeat Paga.**
+Paid by [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) on a local rail after the release flag. **Designing his wallet now would repeat Paga.**

@@ -1,0 +1,120 @@
+# T04: API specification (v1)
+
+The **OpenAPI 3.1** document is the source of truth (`openapi/stood.yaml`, generated from the Zod route schemas). APIMatic generates the TypeScript SDK, docs portal and MCP server from it ([S13](../stood/S13-sponsor-integration.md)). This page is the human summary.
+
+## Conventions
+
+- Base URL: `https://stood-api.onrender.com/v1` (hackathon). JSON, UTF-8, UTC ISO-8601 timestamps.
+- **Auth (platform → Stood):** `Authorization: Bearer <platform_key>` plus an **HMAC request signature** `Stood-Signature: t=<ts>,v1=<hmac_sha256(secret, ts + "." + body)>`, rejected if skew > 5 min. One key pair per platform and environment.
+- **Idempotency:** `Idempotency-Key` is required on every POST. Same key + same body → same response for 24h. Same key + a different body → `409`.
+- **Money:** `{ "minor": 400000, "currency": "GBP" }`.
+- **Errors:** RFC 9457 `application/problem+json` with a `type` from a fixed catalogue (`validation`, `not_found`, `conflict`, `invalid_state`, `idempotency_conflict`, `paypal_unavailable`). **Domain outcomes (refuse / wait) are 200s, not errors.**
+- Pagination: cursor-based (`?cursor=&limit=`).
+
+## Endpoints
+
+### Allowances
+
+| Method | Path | Purpose | FR |
+|---|---|---|---|
+| POST | `/allowances` | Create the allowance (plot, stages, payee, window). Returns `approve_url` | FR-01, 02 |
+| GET | `/allowances/{id}` | Allowance + stage / tranche states | — |
+| POST | `/allowances/{id}/versions` | Propose changes. Needs a new signature | FR-03 |
+
+`POST /allowances`, request (abridged):
+
+```json
+{
+  "platform_ref": "eos-task-01J9…",
+  "plot": { "center": { "lat": 5.6037, "lng": -0.1870 }, "radius_m": 75 },
+  "currency": "GBP",
+  "stages": [
+    { "name": "foundation", "amount": { "minor": 400000, "currency": "GBP" },
+      "required_shots": ["north_wall","south_wall","east_wall","west_wall","overview","nonce_card"],
+      "checklist": ["footings_poured","dpc_visible"] },
+    { "name": "blockwork", "amount": { "minor": 500000, "currency": "GBP" }, "depends_on": "foundation" }
+  ],
+  "window_days": 7,
+  "max_resubmits": 2,
+  "payer": { "email_hint": "optional, for PayPal pre-fill only" },
+  "return_url": "https://…/allowance/done",
+  "cancel_url": "https://…/allowance/cancelled"
+}
+```
+
+Response: `201 { "id": "alw_…", "status": "AWAITING_SIGNATURE", "approve_url": "https://www.sandbox.paypal.com/…" }`.
+
+> The coordinates above are a **synthetic example** (central Accra), not a real plot.
+
+### Tranches
+
+| Method | Path | Purpose | FR |
+|---|---|---|---|
+| POST | `/tranches/{id}/dispatch` | Authorise and hold. Returns the nonce | FR-10, 11, 13 |
+| POST | `/tranches/{id}/packages` | Submit evidence (or create the upload session) | FR-20–22 |
+| POST | `/tranches/{id}/packages/{pid}/complete` | Mark the upload complete and start the decision | FR-22 |
+| GET | `/tranches/{id}` | State, hold age, decision, sentence | — |
+| POST | `/tranches/{id}/decisions/override` | Reviewer / payer release or refuse a WAIT (reason required) | FR-39, 40 |
+| POST | `/tranches/{id}/disputes` | Build (and, where possible, file) the dispute packet | FR-51, 52 |
+
+**Photo upload:** `POST /packages` returns presigned **R2 PUT URLs** per photo (direct upload, up to 10 photos, ≤ 8 MB each, JPEG / HEIC / WebP). Alternatively the platform passes `source_url`s (for example Firebase Storage signed URLs) and Stood copies them server-side.
+
+Per-photo metadata:
+
+```json
+{ "shot": "north_wall", "lat": 5.60371, "lng": -0.18702, "accuracy_m": 8.5,
+  "captured_at_device": "2026-11-02T10:41:58Z", "received_at_server": "2026-11-02T10:42:03Z",
+  "mock_location": false, "platform_phash": "a1b2…", "exif": { "lat": 5.60370, "lng": -0.18701 } }
+```
+
+Package-level `platform_signals`: `[{ "type": "ATTESTATION", "verdict": "PASSED", "source": "firebase_app_check" }, { "type": "IMPOSSIBLE_TRAVEL", "severity": "HIGH" }]`. These are stored and **re-checked where possible, never trusted blindly**.
+
+### Records
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/receipts/{token}` | Public receipt (signed JWT link, 30-day expiry). Distance shown, not coordinates |
+| GET | `/tranches/{id}/packet` | Dispute packet (JSON). `Accept: application/pdf` for the PDF |
+| GET | `/reviewer/decisions` | Reviewer grid data source (filter, sort, paging: matches the AG Studio async data source) |
+| GET | `/reviewer/reconciliation` | Joined PayPal Transaction Search × Stood decisions |
+
+Reviewer endpoints use **reviewer session auth** (GitHub OAuth via Better Auth), not platform keys.
+
+### Demo (hackathon only, behind a `DEMO_MODE` flag)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/demo/scenarios/{name}` | Run a fixture end to end: `good`, `wrong-plot`, `recycled`, `wrong-stage`, `substituted-fitting` |
+| POST | `/demo/approve` | Kernel drives the sandbox buyer approval (live view URL returned) |
+
+## Webhooks out
+
+`POST <platform webhook url>`, headers `Stood-Event-Id`, `Stood-Signature` (same HMAC scheme), `Stood-Event-Type`. At-least-once, exponential backoff for 24h, then dead-letter visible in the reviewer file.
+
+```json
+{ "id": "evt_…", "type": "tranche.refused", "schema_version": "1",
+  "created_at": "2026-11-02T10:43:10Z",
+  "data": { "tranche_id": "trn_…", "allowance_id": "alw_…", "platform_ref": "eos-task-…",
+            "outcome": "REFUSE", "named_field": "plot", "distance_m": 1400,
+            "sentence": { "payer": "Wrong plot. 1.4 km off. Nothing was paid.",
+                          "inspector": "Photos were taken 1.4 km from the pin. Go back and capture again." },
+            "paypal": { "order_id": "…", "authorization_id": "…", "void_status": "VOIDED" },
+            "receipt_url": "https://stood-web.onrender.com/r/…" } }
+```
+
+Event types: `allowance.signed`, `allowance.signature_failed`, `tranche.held`, `tranche.funding_failed`, `tranche.deciding`, `tranche.released`, `tranche.refused`, `tranche.waiting`, `tranche.hold_expiring`, `tranche.expired`, `dispute.opened`, `reconciliation.mismatch`.
+
+## Webhooks in (PayPal)
+
+`POST /webhooks/paypal`. Verified with `POST /v1/notifications/verify-webhook-signature` (simulator events can't be verified that way, so they're accepted only when `DEMO_MODE` is on), then deduplicated on event id.
+
+Subscribed events:
+- `VAULT.PAYMENT-TOKEN.CREATED`
+- `PAYMENT.AUTHORIZATION.CREATED`
+- `PAYMENT.AUTHORIZATION.VOIDED`
+- `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.DENIED`, `PAYMENT.CAPTURE.REFUNDED`
+- `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.RESOLVED`
+
+## Rate limits (hackathon)
+
+60 requests/min per platform key. 10 packages/min. A `429` comes with `Retry-After`.

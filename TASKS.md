@@ -14,3 +14,7 @@ Evidence tiers: designed → implemented → unit-tested → contract-tested →
 - [ ] T-0006 Enable branch protection on `main` (require PR, CI green, CODEOWNERS on money path).
 - [ ] T-0007 Week-1 spikes from docs/stood/S12: Vault + AUTHORIZE + capture / void in sandbox (S10 Q1), Kernel sandbox approval, Channel3 image-search test, email APIMatic for MCP generation, read the Official Rules (S10 Q9).
 - [ ] T-0008 Attend webinars: 6 Oct and 7 Oct (9am PT), 12 Oct (7am PT).
+- [x] T-0009 Technical docs T01–T14 (requirements, architecture, domain, API, data, PayPal, evidence pipeline, EyeOnSite integration, stack, deployment, security, testing, runbooks, milestones). Tier: designed. Evidence: branch `docs/ways-of-working`.
+- [x] T-0010 Link every EyeOnSite mention to https://github.com/ma-za-kpe/eyeonsite. Tier: designed.
+- [ ] T-0011 Open a matching issue / PR in EyeOnSite for the `stood/` functions and the removal of the 48h auto-accept ([T08](docs/tech/T08-eyeonsite-integration.md)).
+- [ ] T-0012 Create free-tier accounts: Neon (eu-central), Cloudflare (R2 + Workers AI), Render (Frankfurt), Astropods, Kernel; ask partners about hackathon credits (Render, Elastic, Zapier).

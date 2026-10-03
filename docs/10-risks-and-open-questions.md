@@ -13,7 +13,7 @@ Product-level sandbox questions live in [S10](stood/S10-sandbox-limits-and-open-
 | 5 | **The AI claim fails on real photos** (stage recognition) | Medium | High | Collect real photos in week 1. Low confidence → wait |
 | 6 | **Regulatory: platform as money transmitter / PSP** in the US (state MTLs) and Ghana (Bank of Ghana PSP licence) | Medium (real world) | High (post-hackathon) | Stood never holds funds. Platform uses licensed partners (Flutterwave / Paystack) |
 | 7 | **Defamation / brand risk**: the video shows Paga or PayPal failing | Medium | Medium | Neutral reconstructions, no logos, factual claims with sources |
-| 8 | **Scope creep into EyeOnSite** (matching, ratings, maps) | High | Medium | Boundary tests in [S02](stood/S02-product-boundary.md) |
+| 8 | **Scope creep into [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)** (matching, ratings, maps) | High | Medium | Boundary tests in [S02](stood/S02-product-boundary.md) |
 | 9 | **The solo-builder timeline** (5.5 weeks) | Medium | High | Week-by-week exit checks in [S12](stood/S12-hackathon-plan.md). Submit a day early |
 | 10 | **False refusals hurt honest inspectors** and the trust of the very people this is for | Medium | High (ethically) | Track the false-refusal rate. Human review on low confidence |
 | 11 | **Construction finance reality**: builders need advances, not arrears | High | Medium | Open question Q2 in [S10](stood/S10-sandbox-limits-and-open-questions.md) |
@@ -21,7 +21,7 @@ Product-level sandbox questions live in [S10](stood/S10-sandbox-limits-and-open-
 
 ## Strategic open questions
 
-1. Is Stood a **standalone company / API** or **an EyeOnSite module**? The docs assume a separate API with EyeOnSite as the first consumer. That needs deciding before any fundraising story.
+1. Is Stood a **standalone company / API** or **an [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) module**? The docs assume a separate API with [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) as the first consumer. That needs deciding before any fundraising story.
 2. Does Stood ever become an **AP2-native** component (export allowances as AP2 intent mandates)? It would make Stood relevant to PayPal's FIDO / AP2 work.
-3. Second consumer after EyeOnSite: input-finance (Farmerline-adjacent), insurance claims, or NGO disbursement? See [08](08-idea-bank.md) #24–26.
+3. Second consumer after [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite): input-finance (Farmerline-adjacent), insurance claims, or NGO disbursement? See [08](08-idea-bank.md) #24–26.
 4. Does the original "agent economy" vision come back once Stood exists? Stood is a primitive an agent economy needs: **payment contingent on verified delivery**. That's the "force value creation" rule from [03](03-how-agents-make-money-today.md) turned into a product.

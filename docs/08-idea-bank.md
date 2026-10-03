@@ -40,11 +40,11 @@ Legend: **Fit** = hackathon fit, **Adopt** = chance of real adoption after Novem
 | 20 | Don't lend against agent sales (Working Capital) | Clever. Hard to demo |
 | 21 | Hold-before-the-freeze warning | |
 
-## Round 4: EyeOnSite and the Paga lesson [U] → **selected**
+## Round 4: [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) and the Paga lesson [U] → **selected**
 
 | # | Idea | Note |
 |---|---|---|
-| 22 | Tranche agent / release gate on EyeOnSite | Became **Stood** |
+| 22 | Tranche agent / release gate on [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) | Became **Stood** |
 
 ## Claude's additional candidates [C]
 
@@ -55,4 +55,4 @@ Recorded for completeness. **None beats Stood**, but #24 and #25 are natural *se
 | 23 | **Compute-saving agent services** as a seed for an agent-to-agent economy | Long-term research track ([04](04-external-income-sources.md)) |
 | 24 | **Input-finance release for smallholder farmers.** A lender's money for seed or fertiliser releases only on evidence of planting or delivery | The founder works at Farmerline, so this is domain access. Same API as Stood |
 | 25 | **NGO / grant disbursement by milestone** (school built, borehole drilled) | Donors are an existing PayPal segment (Giving Fund) |
-| 26 | **Insurance claims field verification** | Already in the EyeOnSite market list |
+| 26 | **Insurance claims field verification** | Already in the [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) market list |

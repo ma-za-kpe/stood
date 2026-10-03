@@ -66,6 +66,8 @@ Everything decided so far is in **[`docs/`](docs/README.md)**: research, product
 | [Partner integration map](docs/stood/S13-sponsor-integration.md) | How every hackathon partner tool is used, and what we refused to use it for |
 | [Open-source plan](docs/stood/S14-open-source-plan.md) | Repo layout, MCP setup, "how we used every tool" lessons |
 | [Design system](docs/stood/S15-design-system.md) | Themes, tokens, type, logo, platform assets |
+| [Technical docs T01–T14](docs/tech/README.md) | Requirements, architecture, API, data, PayPal, evidence pipeline, deployment on free tiers |
+| [EyeOnSite integration](docs/tech/T08-eyeonsite-integration.md) | Where [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) calls Stood and how its payments change |
 
 ## Built with (planned)
 
@@ -83,6 +85,8 @@ Everything decided so far is in **[`docs/`](docs/README.md)**: research, product
 | Kernel | Automates sandbox buyer approval so judges can replay every outcome |
 | Postman | Public workspace, fixtures, uptime monitors |
 | Zapier | Delivers the one-line reason by email / SMS / WhatsApp |
+
+**Runs on (free tiers):** Render (API, static web, Workflows) · Neon Postgres · Cloudflare R2 · Cloudflare Workers AI (Llama 3.2 Vision, open weights) · GitHub Actions. Everything else is open source. See [T09](docs/tech/T09-tech-stack.md) / [T10](docs/tech/T10-deployment.md).
 
 ## Brand
 

@@ -8,7 +8,7 @@
 
 ## Where the thinking is now
 
-This started as "use a pyramid scheme to ignite a real agentic economy". Research showed that a pyramid can't be the seed. Its harms are how it works. What survived is the test it fails: **money should move only for something actually delivered, to someone outside the payer's recruitment tree.** The PayPal AI Hackathon, PayPal's stalled push into Africa (the Paga holds), and the user's existing project **EyeOnSite** turned that test into a product.
+This started as "use a pyramid scheme to ignite a real agentic economy". Research showed that a pyramid can't be the seed. Its harms are how it works. What survived is the test it fails: **money should move only for something actually delivered, to someone outside the payer's recruitment tree.** The PayPal AI Hackathon, PayPal's stalled push into Africa (the Paga holds), and the user's existing project **[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)** turned that test into a product.
 
 **Stood** is a release gate that platforms call before a staged payment leaves. A payer abroad signs what "done" means. An inspector's evidence is checked. Stood **releases** (PayPal capture), **refuses** (void, with a named reason), or **waits** (a human reviews), and every decision leaves a file a dispute can use.
 
@@ -36,6 +36,10 @@ This started as "use a pyramid scheme to ignite a real agentic economy". Researc
 
 Brand assets (SVG): [`brand/`](brand/): logo, app icons, social, stamps.
 
+## Technical docs (`tech/`)
+
+Requirements, architecture, domain model, API, data, PayPal integration, evidence pipeline, **[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) integration**, stack, **deployment (free tier)**, security, testing, runbooks, milestones: **[tech/README.md](tech/README.md)**.
+
 ## Research docs
 
 | # | Doc | What it covers |
@@ -50,7 +54,7 @@ Brand assets (SVG): [`brand/`](brand/): logo, app icons, social, stamps.
 | 08 | [Idea bank](08-idea-bank.md) | All 26 ideas, scored |
 | 09 | [Stood overview](09-stood.md) | Vision, money model, where the AI is |
 | 10 | [Risks and open questions](10-risks-and-open-questions.md) | Project-level risks |
-| 11 | [Africa payments and EyeOnSite](11-africa-payments-and-eyeonsite.md) | Paga, Xoom, Paystack, Ghana, EyeOnSite |
+| 11 | [Africa payments and EyeOnSite](11-africa-payments-and-eyeonsite.md) | Paga, Xoom, Paystack, Ghana, [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) |
 | 12 | [Judges](12-judges.md) | All 13 judges, LinkedIn / X, what each will notice |
 | 13 | [Submission checklist](13-submission-checklist.md) | **Final cross-check** against the official brief |
 | — | [Audit log](audit-log.md) | Every claim checked: confirmed, corrected, flagged |

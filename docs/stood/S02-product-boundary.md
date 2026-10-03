@@ -16,7 +16,7 @@
 | PayPal order: authorise on dispatch, capture on release, void on refuse | **Stood** (using the platform's PayPal credentials) |
 | Dispute packet, receipt, reviewer file | **Stood** |
 | Inspector and plot record (accepted visits only) | **Stood** (later) |
-| Users, sign-up, KYC of inspectors and builders | Platform (EyeOnSite) |
+| Users, sign-up, KYC of inspectors and builders | Platform ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)) |
 | Inspector matching, routing, ratings | Platform |
 | Capture app on the inspector's phone | Platform (Stood offers an intake spec and SDK) |
 | Local payouts (builder draw, inspector fee) on Paystack / Flutterwave / MoMo | Platform |
@@ -28,7 +28,7 @@
 Before adding anything, ask:
 1. Does it change whether money moves, or what the file says about it? If not, it belongs to the platform.
 2. Would Stood have to **hold** money or **know a person** to do it? If so, no.
-3. Would a second consumer (a lender, an NGO) need it in the same shape? If not, it's EyeOnSite-specific and belongs in EyeOnSite.
+3. Would a second consumer (a lender, an NGO) need it in the same shape? If not, it's EyeOnSite-specific and belongs in [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite).
 
 ## Integration surface (concept, not code)
 

@@ -70,4 +70,4 @@ Accessed 2026-10-03 unless noted.
 - [Paystack transfers in Ghana](https://paystack.com/blog/product/transfers-in-gh)
 - [PayPal in Ghana (send-only)](https://www.worldfirst.com/af/blog/business-banking-insights/paypal-business-nigeria-morocco-kenya/)
 - [Bangladesh freelancer ID](https://www.thedailystar.net/news/bangladesh-sees-first-state-run-freelancer-id-management-software-4080081)
-- EyeOnSite vision: `github.com/ma-za-kpe/eyeonsite/docs/EOS-01-VISION-AND-MARKET.md` (pasted by the user)
+- [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) vision: `github.com/ma-za-kpe/eyeonsite/docs/EOS-01-VISION-AND-MARKET.md` (pasted by the user)
