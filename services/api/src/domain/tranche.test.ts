@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { type CheckResult, decide, getProfile } from './decision.js';
+import { CAPTURE_SAFETY_MARGIN_MS } from './hold-policy.js';
 import { Money } from './money.js';
 import { Nonce } from './nonce.js';
 import { Tranche } from './tranche.js';
@@ -33,6 +34,17 @@ const held = () => {
 };
 
 describe('Settlement review regressions', () => {
+  it('does not reserve capture one second before expiry', () => {
+    const tranche = held();
+    tranche.startDeciding();
+    expect(tranche.beginSettlement(release(), 'dec_too_close', expiry - 1000)).toBeNull();
+    expect(tranche.state).toBe('WAITING');
+  });
+  it.each(['GHS', 'NGN', 'KES', 'UGX'])('rejects direct hold creation in %s', (currency) => {
+    expect(() => new Tranche('trn_currency', new Money(1n, currency), 'construction.stage@1', 0)).toThrow(
+      'Unsupported hold currency',
+    );
+  });
   it.each(['CAPTURE', 'VOID'] as const)('allocates a new %s key after definite failures', (effect) => {
     const tranche = held();
     const decision = effect === 'CAPTURE' ? release() : refuse();
@@ -42,7 +54,7 @@ describe('Settlement review regressions', () => {
     const second = tranche.beginSettlement(decision, 'dec_retry', at);
     expect(second?.key).not.toBe(first?.key);
     expect(second?.authorizationId).toBe(first?.authorizationId);
-    tranche.settlementFailed({ kind: 'SYSTEM_FAULT', effect, authorizationId: 'auth_1' });
+    tranche.settlementFailed({ kind: 'REJECTED_NO_PAYMENT', effect, authorizationId: 'auth_1' });
     const third = tranche.beginSettlement(decision, 'dec_retry_again', at);
     expect(new Set([first?.key, second?.key, third?.key]).size).toBe(3);
   });
@@ -87,12 +99,12 @@ describe('Settlement review regressions', () => {
     expect(tranche.settlements).toHaveLength(0);
   });
   it.each(['CAPTURE', 'VOID'] as const)('handles definite and ambiguous %s failures', (effect) => {
-    for (const kind of ['DECLINED', 'SYSTEM_FAULT', 'AMBIGUOUS', 'AUTHORIZATION_EXPIRED'] as const) {
+    for (const kind of ['DECLINED', 'REJECTED_NO_PAYMENT', 'AMBIGUOUS', 'AUTHORIZATION_EXPIRED'] as const) {
       const tranche = held();
       tranche.startDeciding();
       tranche.beginSettlement(effect === 'CAPTURE' ? release() : refuse(), 'dec_1', at);
       expect(() =>
-        tranche.settlementFailed({ kind: 'UNKNOWN' as 'SYSTEM_FAULT', effect, authorizationId: 'auth_1' }),
+        tranche.settlementFailed({ kind: 'UNKNOWN' as 'REJECTED_NO_PAYMENT', effect, authorizationId: 'auth_1' }),
       ).toThrow();
       expect(() =>
         tranche.settlementFailed({ kind, effect, authorizationId: 'wrong', reference: 'failure' }),
@@ -115,7 +127,7 @@ describe('Settlement review regressions', () => {
         expect(tranche.expire(expiry).effect).toBe('VOID');
       }
     }
-    expect(() => held().settlementFailed({ kind: 'SYSTEM_FAULT', effect, authorizationId: 'auth_1' })).toThrow();
+    expect(() => held().settlementFailed({ kind: 'REJECTED_NO_PAYMENT', effect, authorizationId: 'auth_1' })).toThrow();
   });
   it('preserves money safety through arbitrary operation sequences', () => {
     fc.assert(
@@ -145,7 +157,8 @@ describe('Settlement review regressions', () => {
                     `dec_${index}`,
                     lastNow,
                   );
-                  if (operation?.effect === 'CAPTURE') expect(lastNow).toBeLessThan(tranche.currentHold.expiresAt);
+                  if (operation?.effect === 'CAPTURE')
+                    expect(lastNow).toBeLessThan(tranche.currentHold.expiresAt - CAPTURE_SAFETY_MARGIN_MS);
                   break;
                 }
                 case 3:
@@ -167,7 +180,7 @@ describe('Settlement review regressions', () => {
                   break;
                 case 6:
                   tranche.settlementFailed({
-                    kind: 'SYSTEM_FAULT',
+                    kind: 'REJECTED_NO_PAYMENT',
                     effect: before?.effect ?? 'CAPTURE',
                     authorizationId: tranche.currentHold.authorizationId,
                   });

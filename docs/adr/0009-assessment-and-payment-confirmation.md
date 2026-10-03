@@ -15,6 +15,7 @@ ADR-0007 permits inverted deposit effects. T03 previously required a capture for
 - Reserve CAPTURE_PENDING or VOID_PENDING before executing a payment. Persist that reservation and its stable provider request ID transactionally before the external call. Only confirmed effects produce terminal states. An ambiguous timeout remains pending for reconciliation.
 - Expiry can reserve a void from HELD, DECIDING or WAITING. It cannot race an already reserved capture. Reauthorisation begins from day four, following FR-12.
 - Settlement assessment takes a clock: at or after hold expiry it reserves an expiry void, including a late RELEASE decision. Confirmation must match the reserved effect and authorisation. Definite declined/system failures return to WAITING; ambiguous processor outcomes keep the reservation. A verified provider expiration response ends as EXPIRED with an `EXPIRE` record and provider reference, without claiming a capture or void succeeded. This is a confirmation record, not a callable payment effect.
+- New captures are blocked inside a five-minute operational expiry margin and wait without an early void. Recheck immediately before the external call. An already reserved or possibly submitted capture stays pending until resolved. The definite no-payment failure is named REJECTED_NO_PAYMENT; transport errors and 5xx remain AMBIGUOUS.
 
 ## Alternatives considered
 

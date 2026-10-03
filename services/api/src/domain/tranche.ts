@@ -1,4 +1,5 @@
 import { type Decision, getProfile, RULE_SET_VERSION } from './decision.js';
+import { assertHoldCurrency, captureAllowedAt } from './hold-policy.js';
 import type { Money } from './money.js';
 import type { Nonce } from './nonce.js';
 
@@ -28,7 +29,7 @@ export type SettlementConfirmation = Readonly<{
   reference: string;
 }>;
 export type SettlementFailure = Readonly<{
-  kind: 'AMBIGUOUS' | 'DECLINED' | 'SYSTEM_FAULT' | 'AUTHORIZATION_EXPIRED';
+  kind: 'AMBIGUOUS' | 'DECLINED' | 'REJECTED_NO_PAYMENT' | 'AUTHORIZATION_EXPIRED';
   effect: 'CAPTURE' | 'VOID';
   authorizationId: string;
   reference?: string;
@@ -43,6 +44,7 @@ export class Tranche {
   #settlement: Settlement | null = null;
   #settlements: Settlement[] = [];
   #settlementAttempt = 1;
+  #settlementBlock: 'CAPTURE_WINDOW_CLOSING' | null = null;
 
   constructor(
     readonly id: string,
@@ -50,6 +52,7 @@ export class Tranche {
     readonly profileId: string,
     readonly maxResubmits: number,
   ) {
+    assertHoldCurrency(amount.currency);
     if (!id.trim() || amount.minor === 0n || !Number.isInteger(maxResubmits) || maxResubmits < 0 || maxResubmits > 5) {
       throw new RangeError('Invalid tranche');
     }
@@ -74,6 +77,9 @@ export class Tranche {
   }
   get pendingOperation(): PaymentOperation | null {
     return this.#pending;
+  }
+  get settlementBlock(): 'CAPTURE_WINDOW_CLOSING' | null {
+    return this.#settlementBlock;
   }
   get currentHold(): HoldAttempt {
     const hold = this.#attempts.at(-1);
@@ -134,6 +140,12 @@ export class Tranche {
       }),
     );
     if (now >= this.currentHold.expiresAt) return this.reserve('VOID', 'EXPIRED');
+    this.#settlementBlock = null;
+    if (decision.effect === 'CAPTURE' && !captureAllowedAt(this.currentHold.expiresAt, now)) {
+      this.#state = 'WAITING';
+      this.#settlementBlock = 'CAPTURE_WINDOW_CLOSING';
+      return null;
+    }
     if (decision.outcome === 'WAIT') {
       this.#state = 'WAITING';
       return null;
@@ -156,7 +168,7 @@ export class Tranche {
 
   settlementFailed(failure: SettlementFailure): void {
     this.matchPending(failure);
-    if (!['AMBIGUOUS', 'DECLINED', 'SYSTEM_FAULT', 'AUTHORIZATION_EXPIRED'].includes(failure.kind))
+    if (!['AMBIGUOUS', 'DECLINED', 'REJECTED_NO_PAYMENT', 'AUTHORIZATION_EXPIRED'].includes(failure.kind))
       throw new Error('Unknown settlement failure');
     if (failure.kind === 'AMBIGUOUS') return;
     if (failure.kind === 'AUTHORIZATION_EXPIRED') {
@@ -202,6 +214,7 @@ export class Tranche {
   }
 
   private reserve(effect: 'CAPTURE' | 'VOID', target: PaymentOperation['target']): PaymentOperation {
+    this.#settlementBlock = null;
     this.#pending = Object.freeze({
       key: `${this.id}:${this.#attempts.length}:${effect}:${this.#settlementAttempt}`,
       effect,
