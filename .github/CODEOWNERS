@@ -1,0 +1,6 @@
+# Money path, CI and policy need owner review. See docs/WAYS_OF_WORKING.md §7.
+* @ma-za-kpe
+.github/ @ma-za-kpe
+docs/adr/ @ma-za-kpe
+docs/WAYS_OF_WORKING.md @ma-za-kpe
+.pre-commit-config.yaml @ma-za-kpe

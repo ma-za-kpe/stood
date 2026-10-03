@@ -11,7 +11,7 @@
 
 ## What it can't do (label, don't call) [U]
 
-- Settle cedis or naira, or pay MoMo / M-Pesa. → The local rail is a **labelled line**: "Builder paid locally by EyeOnSite."
+- Settle cedis or naira, or pay MoMo / M-Pesa. → The local rail is a **labelled line**: "Builder paid locally by [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)."
 - PayPal World wallet interoperability.
 - Pay Kojo on PayPal. Ghana accounts are send-only in real life, so the demo must not pretend otherwise.
 
@@ -24,14 +24,15 @@
 | 1 | Does the authorise → capture / void model work with a **vaulted** payment method, human not present? | It's the core of the money model | Spike in sandbox, week 1 |
 | 2 | Builders usually need a **mobilisation advance** before stage 1. How is the first tranche gated? | Construction pays in arrears, but stage 1 needs cash up front | Ask 3 builders in Accra |
 | 3 | Is "authorise per stage" enough, or will Ama's card / balance fail months later? | Failed capture = builder not paid = trust lost | Retry plus notify design |
-| 4 | Payee is the platform (EyeOnSite / Manti Labs LLC). Does disbursing to a builder locally make the platform a money transmitter / PSP in Ghana? | Regulatory | Talk to a Bank of Ghana PSP-licensed partner |
+| 4 | Payee is the platform ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) / Manti Labs LLC). Does disbursing to a builder locally make the platform a money transmitter / PSP in Ghana? | Regulatory | Talk to a Bank of Ghana PSP-licensed partner |
 | 5 | Exact copy for the authorisation hold on Ama's card statement | Hold confusion triggers disputes | Test |
 | 6 | Geofence tolerance: GPS error on cheap phones is often 10–50 m. Default radius? | False refusals hurt Kojo | Field test, start at 75 m |
-| 7 | Can the model reliably tell construction stages apart from 6 photos? | Core AI claim | Collect 50 real photos from EyeOnSite V0 |
+| 7 | Can the model reliably tell construction stages apart from 6 photos? | Core AI claim | Collect 50 real photos from [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) V0 |
 | 8 | Trademark / domain for "Stood" | Brand | Search USPTO, UKIPO, Ghana RGD |
 | 9 | Can one project win a main prize plus several sponsor prizes? | Prize strategy | Read the Devpost official rules |
 | 11 | Licences for AG Studio (and the AI Toolkit, an Enterprise feature) and Bryntum during the hackathon and in a public repo | Commercial components in an open-source repo | Ask at the 12 Oct workshop / sponsor Discord |
-| 12 | APIMatic MCP-server generation is alpha, by request | Needed for the "Stood MCP" | Email support@apimatic.io, week 1 |
+| 12 | APIMatic MCP-server generation is alpha, by request | Needed for the "Stood MCP" | Email <support@apimatic.io>, week 1 |
 | 13 | Does Channel3 image search identify fixtures from phone photos taken in Ghana? | The spec check depends on it | Test with 20 real fixture photos, week 1 |
+| 15 | Do vaulted PayPal wallet tokens support `AUTHORIZE` orders, human not present? | Core of the hold model ([T06](../tech/T06-paypal-integration.md)) | Week-1 spike. Fallback: buyer-present approval per stage |
 | 14 | Transaction Search lags up to 3 hours in sandbox too? | The reconciliation widget's timing | Spike, week 1 |
-| 10 | Kojo's capture: a native KMP app (EyeOnSite) or a PWA for the hackathon? | Build time | A PWA for the hackathon. KMP stays EyeOnSite's |
+| 10 | Kojo's capture: a native KMP app ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)) or a PWA for the hackathon? | Build time | **Answered (2026-10-03):** use the real [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) Android app. It already has offline upload, App Check and evidence signals. Judges without the app use the fixture replays ([T08](../tech/T08-eyeonsite-integration.md)) |

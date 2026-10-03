@@ -1,0 +1,23 @@
+name: Bug report
+description: Something behaves differently from the docs or specs
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce (sandbox only, no real data)
+    validations:
+      required: true
+  - type: dropdown
+    id: money
+    attributes:
+      label: Could this move, hold or release money incorrectly?
+      options: ["No", "Maybe", "Yes (also report privately, see SECURITY.md)"]
+    validations:
+      required: true

@@ -19,6 +19,7 @@ Deadline **12 Nov 2026, 2 pm PT**. Winners announced **21 Dec 2026**. Today is 3
 **Superseded:** the user decided to **use all ten partners** (2026-10-03), built in three tiers. The full map is in **[S13: sponsor integration](S13-sponsor-integration.md)** and the open-source lesson in **[S14](S14-open-source-plan.md)**.
 
 These principles from the earlier version still hold:
+
 - The video opens on the refusal. Sponsors appear as the file you open after the money stays.
 - Runtime LLMs never improvise money calls. Assistants (AG Studio, Bryntum chat) read and arrange, they don't decide.
 - Each sponsor's docs page says what we *refused* to use it for.

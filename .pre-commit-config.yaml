@@ -1,0 +1,127 @@
+# Cutthroat local gate. CI runs this same file on every PR. Never use --no-verify.
+# See docs/WAYS_OF_WORKING.md §8.   Install: pre-commit install
+minimum_pre_commit_version: "4.0.0"
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  # ---------- git + file hygiene ----------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, develop]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: forbid-submodules
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: fix-byte-order-marker
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-xml
+        name: check svg is valid xml
+        files: \.svg$
+        types: [file]
+      - id: detect-private-key
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+
+  - repo: local
+    hooks:
+      - id: branch-name
+        name: branch name follows GitFlow (docs/WAYS_OF_WORKING.md §7)
+        language: system
+        pass_filenames: false
+        always_run: true
+        entry: >-
+          bash -c 'b=$(git rev-parse --abbrev-ref HEAD);
+          [[ "$b" == "HEAD" || "$b" =~ ^(feature|fix|hotfix|release|docs|chore|ci|build|refactor|test|perf|revert|spike)/[a-z0-9][a-z0-9._-]*$ ]]
+          || { echo "Branch \"$b\" must be <type>/<slug>, e.g. feature/42-hold-timers"; exit 1; }'
+      - id: banned-words
+        name: banned words in user-facing copy (S06 voice)
+        language: pygrep
+        entry: '(?i)\b(escrow|verified|fraud)\b|something went wrong'
+        files: ^(site|apps)/
+      - id: dco-signoff
+        name: DCO Signed-off-by present
+        language: pygrep
+        entry: '^Signed-off-by: .+ <.+@.+>$'
+        args: [--negate]
+        stages: [commit-msg]
+
+  # ---------- secrets ----------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # ---------- GitHub Actions ----------
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: v1.30.1
+    hooks:
+      - id: zizmor
+        args: [--min-severity=low]
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.2
+    hooks:
+      - id: check-github-workflows
+      - id: check-dependabot
+
+  # ---------- docs ----------
+  # Node hooks run via pinned npx (npm 11 blocks pre-commit's git-based node installs)
+  - repo: local
+    hooks:
+      - id: markdownlint-cli2
+        name: markdownlint-cli2 (auto-fix)
+        language: system
+        entry: npx --yes markdownlint-cli2@0.23.3 --fix
+        types: [markdown]
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.50.3
+    hooks:
+      - id: typos
+        args: [--force-exclude]   # report only: never auto-rewrite names like Magentic
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        name: markdown links (offline, local files + anchors)
+        args: [--no-progress, --offline, --include-fragments]
+        files: \.md$
+
+  # ---------- web code ----------
+  - repo: local
+    hooks:
+      - id: biome-check
+        name: biome check (format + lint, auto-fix)
+        language: system
+        entry: npx --yes @biomejs/biome@2.5.15 check --write --files-ignore-unknown=true --no-errors-on-unmatched
+        files: \.(js|mjs|css|json|jsonc)$
+
+  # ---------- commit message ----------
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--strict, feat, fix, docs, test, refactor, perf, chore, ci, build, revert]
+
+  # --- Pre-registered for when product code lands (docs/WAYS_OF_WORKING.md §8) ---
+  # tsc --strict, dependency-cruiser money boundary, affected vitest suites,
+  # coverage floors, pnpm audit, OpenAPI breaking-change diff.

@@ -14,6 +14,7 @@
 ## Volume mix [U]
 
 About $1.9T total payment volume:
+
 - Unbranded processing (Braintree / Enterprise): about 44%. Largest share, lowest take rate.
 - Branded checkout: about 30%. Slowest-growing, highest margin.
 - P2P: about 26%. Venmo about 18% of total and nearly all US.

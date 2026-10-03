@@ -4,7 +4,7 @@
 
 Stood is the **release gate** a platform calls before a staged payment leaves. A payer abroad signs what "done" means (an *allowance*). An evidence source (an inspector's phone) submits a *package*. Stood decides **release**, **refuse**, or **wait**, and writes that decision onto the PayPal order. A dispute then becomes a file, not a story. The local payout stays on a local rail, and Stood never pretends to settle cedis.
 
-EyeOnSite ([11](11-africa-payments-and-eyeonsite.md)) is the **first consumer, not the owner**. The same API serves lenders, insurers, NGOs and input-finance programmes ([08](08-idea-bank.md) #24–26).
+[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) ([11](11-africa-payments-and-eyeonsite.md)) is the **first consumer, not the owner**. The same API serves lenders, insurers, NGOs and input-finance programmes ([08](08-idea-bank.md) #24–26).
 
 ## How the whole research thread ends up here [C]
 
@@ -27,9 +27,10 @@ The pasted plan said "capture a PayPal payout to the inspector" and "the platfor
 3. **Authorisations last 29 days** (3-day honour period). **Multiparty delayed disbursement maxes out at 28 days and then auto-releases.** House stages take months.
 
 **Recommended model: "authorise on dispatch, capture on proof".**
+
 - Ama signs the allowance once. PayPal **Vault** saves her payment method (the mandate stand-in).
 - When a stage is ready for inspection, Stood creates an Orders v2 order with **intent AUTHORIZE** for that tranche. This is the *hold*: "This tranche is in review until the photos match." Inspections take about 48 hours, inside the honour period.
-- **Release:** capture the authorisation. The payee is the **platform's** PayPal merchant account (EyeOnSite / Manti Labs LLC, a US entity that can receive).
+- **Release:** capture the authorisation. The payee is the **platform's** PayPal merchant account ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) / Manti Labs LLC, a US entity that can receive).
 - **Refuse:** **void** the authorisation. Ama's money never left her.
 - The platform then pays the builder and the inspector fee locally (Paystack or Flutterwave MoMo), outside Stood.
 
