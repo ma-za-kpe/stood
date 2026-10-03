@@ -234,6 +234,7 @@ Current ADRs:
 - [0002](adr/0002-trunk-based-with-release-please.md): trunk-based flow with release-please
 - [0003](adr/0003-rules-move-money.md): rules move money; hexagonal money boundary
 - [0004](adr/0004-authorise-on-dispatch-capture-on-proof.md): authorise on dispatch, capture on proof
+- [0005](adr/0005-design-system-v2-volt.md): design system v2, "Volt"
 
 ---
 

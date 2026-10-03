@@ -32,7 +32,7 @@ This started as "use a pyramid scheme to ignite a real agentic economy". Researc
 | S12 | [Hackathon plan](stood/S12-hackathon-plan.md) |
 | S13 | [Partner integration map: all ten partners + PayPal, build-time MCPs, run-time jobs, build tiers](stood/S13-sponsor-integration.md) |
 | S14 | [Open-source plan: "how we used every tool"](stood/S14-open-source-plan.md) |
-| S15 | [Design system: themes (Paper / Ledger / Field), tokens, type, components, logo, web / iOS / Android / social assets](stood/S15-design-system.md) |
+| S15 | [Design system v2 "Volt": palette, type, motion, components, logo, web / iOS / Android / social assets](stood/S15-design-system.md) |
 
 Brand assets (SVG): [`brand/`](brand/): logo, app icons, social, stamps.
 

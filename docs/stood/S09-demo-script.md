@@ -9,7 +9,7 @@
 | 0:00–0:10 | A WhatsApp photo of a half-finished house. Timestamps from months ago | "Ama is a nurse in London. She's paying for a house in Accra. The photos stopped in month four." |
 | 0:10–0:18 | Split screen: a phone notification "Payment on hold" with no reason (stylised, **not** Paga's real UI or branding [C]) | "When the money moves through the usual pipes, it's either sent blind, or held for weeks with no reason." |
 | 0:18–0:28 | The Allowance screen. Ama taps the PayPal approve button | "With Stood, Ama signs once what 'done' means: this plot, these photos, £4,000 for the foundation." |
-| 0:28–0:33 | Decision screen: **In review**, £4,000 in stamp red: "held, not paid" | "PayPal holds the money. It isn't paid." |
+| 0:28–0:33 | Decision screen: **In review**, £4,000 in Flare: "held, not paid" | "PayPal holds the money. It isn't paid." |
 | 0:33–0:50 | Kojo's package arrives: photos from the wrong place. Checks tick: plot ✗. **Refused**, red-ruled stamp. "Wrong plot. 1.4 km off. Nothing was paid." Cut to PayPal sandbox: authorisation **voided** | "An inspector sends photos. They're from the wrong plot. Stood refuses, and says why. The hold is voided. Nothing was paid." |
 | 0:50–1:05 | A new package: plot ✓, new photos ✓, nonce read ✓, stage = foundation ✓. **Released.** PayPal sandbox: **captured**, the order note says an agent captured it under allowance A-7 | "Kojo goes back. Right plot, fresh photos, the code he was given. Ama's agent releases the money, and PayPal records that an agent did it, and why." |
 | 1:05–1:15 | Receipt on Ama's phone. She taps "Dispute this". The packet builds | "If Ama ever disagrees, she doesn't argue. She files this." |

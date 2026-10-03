@@ -18,3 +18,7 @@ Evidence tiers: designed → implemented → unit-tested → contract-tested →
 - [x] T-0010 Link every EyeOnSite mention to https://github.com/ma-za-kpe/eyeonsite. Tier: designed.
 - [ ] T-0011 Open a matching issue / PR in EyeOnSite for the `stood/` functions and the removal of the 48h auto-accept ([T08](docs/tech/T08-eyeonsite-integration.md)).
 - [ ] T-0012 Create free-tier accounts: Neon (eu-central), Cloudflare (R2 + Workers AI), Render (Frankfurt), Astropods, Kernel; ask partners about hackathon credits (Render, Elastic, Zapier).
+- [x] T-0013 Design system v2 "Volt" (S15, ADR-0005) + regenerated brand assets with an outlined wordmark. Tier: designed.
+- [x] T-0014 Landing page `site/` with motion layer + GitHub Pages workflow (deploys on merge to `main`). Tier: implemented (local render checked at 1440 and 390 px).
+- [ ] T-0015 Move the brand generator script into `tools/brand/` (currently run from a scratch environment).
+- [ ] T-0016 Enable GitHub Pages (source: GitHub Actions) and verify the first deploy after merge.

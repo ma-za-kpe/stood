@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="docs/brand/logo/stood-lockup-stacked.svg" alt="Stood" width="160">
+  <img src="docs/brand/social/og-card-1200x630.svg" alt="Stood: money moves when someone stood there" width="720">
 </p>
+
+<p align="center"><a href="https://ma-za-kpe.github.io/stood/"><b>→ ma-za-kpe.github.io/stood</b></a></p>
 
 <h3 align="center">Money does not move until someone stood there.</h3>
 
@@ -33,11 +35,11 @@ Stood is the **gate** a platform calls before a staged payment leaves.
 4. **Decision:** rules decide, and the AI reports what it found:
 
 <p align="center">
-  <img src="docs/brand/logo/stamp-released.svg" alt="Released" width="200">
+  <img src="docs/brand/logo/stamp-released.svg" alt="Released" height="48">
   &nbsp;
-  <img src="docs/brand/logo/stamp-refused.svg" alt="Refused" width="200">
+  <img src="docs/brand/logo/stamp-refused.svg" alt="Refused" height="48">
   &nbsp;
-  <img src="docs/brand/logo/stamp-in-review.svg" alt="In review" width="200">
+  <img src="docs/brand/logo/stamp-in-review.svg" alt="In review" height="48">
 </p>
 
 | Outcome | What happens to the money | What the payer reads |
@@ -98,7 +100,7 @@ Everything decided so far is in **[`docs/`](docs/README.md)**: research, product
   <img src="docs/brand/logo/stood-lockup.svg" alt="Stood lockup" width="210">
 </p>
 
-A pin planted on a ledger line. Paper, stamp, and a red line: *a site report that can move money.* Assets are in [`docs/brand/`](docs/brand/). The system is in [S15](docs/stood/S15-design-system.md).
+**Volt**: deep night, electric violet, and three verdict colours (volt / flare / sun) that hit like stage lights. The mark is a pin standing on a ground line. Assets are in [`docs/brand/`](docs/brand/). The system is in [S15](docs/stood/S15-design-system.md). The landing page in [`site/`](site/) is deployed to GitHub Pages on every merge to `main`.
 
 ## Contributing
 

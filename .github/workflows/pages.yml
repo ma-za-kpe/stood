@@ -1,0 +1,48 @@
+name: landing-page
+
+# Publishes site/ (plus docs/brand assets) to GitHub Pages on every merge to main.
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "docs/brand/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Assemble site
+        run: |
+          mkdir -p _site/assets
+          cp -R site/. _site/
+          cp -R docs/brand _site/assets/brand
+          touch _site/.nojekyll
+      # actions/configure-pages v6.0.0
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
+      # actions/upload-pages-artifact v5.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # actions/deploy-pages v5.0.1
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346

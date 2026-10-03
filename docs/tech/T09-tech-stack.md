@@ -46,7 +46,7 @@
 | Framework / build | **React 19 + Vite** | MIT |
 | Routing / data | **TanStack Router + TanStack Query** | MIT |
 | Styling | CSS custom properties from [S15 tokens](../stood/S15-design-system.md) (no CSS framework needed) | — |
-| Fonts | Newsreader, Source Sans 3 (self-hosted woff2) | OFL |
+| Fonts | Bricolage Grotesque, Geist, Geist Mono (self-hosted woff2) | OFL |
 | Icons | **Lucide** | ISC |
 | Reviewer file | **AG Studio / AG Grid** (partner, trial or hackathon licence) | Commercial (keys from env) |
 | Stage timeline | **Bryntum Gantt** (partner, trial) | Commercial (keys from env) |

@@ -27,7 +27,7 @@ Six screens [U]. Each one lists its empty, loading and failed states. Rule: *if 
 
 ## 3. Decision
 
-- **Layout:** the decision word (40px Newsreader) and stamp. One reason sentence (20px). Amount in ink (held amount in stamp red). Below: the evidence strip (photos uncropped, metadata under each). Below that: the file (14px): allowance id, order id, capture or void id, agent flag, times.
+- **Layout:** the verdict chip (Bricolage Grotesque 800, S15 v2). One reason sentence (20px). Amount in text colour (held amount in Flare). Below: the evidence strip (photos uncropped, metadata under each). Below that: the file (14px): allowance id, order id, capture or void id, agent flag, times.
 - **States:** Released (pass), Refused (stamp plus red rule under the word), In review (dashed). Waiting for the model: "Checking 6 photos…" with each check ticking off as it finishes (plot ✓, reused ✓, stage …). This doubles as the demo moment.
 - **Failed (system):** "PayPal didn't answer. Nothing was paid. We'll try again at 14:05."
 

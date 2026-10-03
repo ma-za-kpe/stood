@@ -1,5 +1,7 @@
 # S07: Brand and design tokens
 
+> ⚠️ **Superseded visual direction (2026-10-03).** Colours, type, logo and motion are now defined by **[S15 v2 "Volt"](S15-design-system.md)** ([ADR-0005](../adr/0005-design-system-v2-volt.md)). This page is kept for history. Its voice and accessibility rules still apply.
+
 > The full design system (light / dark / Field themes, complete tokens, type scale, components, logo grid, and web / iOS / Android / social asset kit) is in **[S15](S15-design-system.md)**. Asset files are in `docs/brand/`.
 
 ## Stance [U]
