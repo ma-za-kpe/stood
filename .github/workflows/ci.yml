@@ -37,6 +37,9 @@ jobs:
       - run: pip install pre-commit==4.6.2
       - name: Prepare the Docker toolchain
         run: |
+          LOCAL_UID="$(id -u)"
+          LOCAL_GID="$(id -g)"
+          export LOCAL_UID LOCAL_GID
           docker compose build app
           docker compose run --rm app pnpm install --frozen-lockfile
       - name: Run every hook on every file

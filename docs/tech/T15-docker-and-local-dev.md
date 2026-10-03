@@ -69,3 +69,5 @@ A thin wrapper `scripts/dev` (`./scripts/dev test`, `./scripts/dev lint`) maps t
 Status: **initial stack implemented**. Run `docker compose build app`, then `./scripts/dev install` and `./scripts/dev validate`. Postgres, local S3 and Mailpit start with `./scripts/dev up`. The API starts with `docker compose up -d api` on port 3000. It serves liveness and explicitly synthetic decision fixtures; no payments execute. Product web, workflows and storage adapters are still queued.
 
 `docker build --target api -t stood-api:local .` validates and packages a non-root distroless API image. The host never installs Node dependencies. SDKs and the payment endpoints remain draft contracts.
+
+On Linux, set `LOCAL_UID` and `LOCAL_GID` to your host user/group IDs when building the development image. CI does this automatically, so its non-root container can write to the runner-owned checkout and dependency volume. The distroless runtime always uses UID/GID 65532.

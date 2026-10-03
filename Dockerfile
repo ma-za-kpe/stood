@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS dev
+ARG DEV_UID=1000
+ARG DEV_GID=1000
 RUN npm install --global pnpm@10.32.1 \
+    && groupmod --gid "$DEV_GID" node \
+    && usermod --uid "$DEV_UID" --gid "$DEV_GID" node \
     && mkdir -p /workspace/node_modules \
     && chown -R node:node /workspace
 WORKDIR /workspace

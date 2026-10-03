@@ -4,6 +4,9 @@ services:
     build:
       context: .
       target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
     init: true
     working_dir: /workspace
     volumes:
@@ -36,6 +39,9 @@ services:
     build:
       context: .
       target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
     init: true
     working_dir: /workspace
     command: [sh, -c, "pnpm --filter @stood/api build && pnpm --filter @stood/api start"]
