@@ -17,5 +17,6 @@ jobs:
       # googleapis/release-please-action v5.0.0, pinned to full SHA (docs/WAYS_OF_WORKING.md §11)
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
         with:
+          target-branch: main   # develop is the default branch; releases come from main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json

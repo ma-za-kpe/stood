@@ -161,7 +161,7 @@ Rulesets on `main` and `develop`:
 - checks `pre-commit` + `pr-title` + `dco`
 - conversations resolved
 - no force-push or deletion
-- linear history on `develop`
+- `develop` allows squash (features) and merge commits (back-merges only)
 
 Bot PRs don't trigger CI (a `GITHUB_TOKEN` limitation), so the admin merges them by bypass and notes it.
 

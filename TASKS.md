@@ -47,6 +47,7 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[ ]` T-0004 Decide whether `docs/12-judges.md` stays public.
 - `[ ]` T-0006 Raise required approvals to 1 + CODEOWNERS on the money path when a second maintainer joins.
 - `[ ]` T-0015 Move the brand generator script into `tools/brand/` (runs in Docker).
+- `[x]` T-0117 Release-please fixes: target `main` (the default branch is `develop`), `initial-version` 0.1.0. Allowed Actions to open PRs. `develop` ruleset now allows back-merge merge commits. The first release PR (#4, wrong target and 1.0.0) was closed.
 - `[ ]` T-0021 Replace `GITHUB_TOKEN` in release-please and back-merge with a GitHub App token, so bot PRs trigger CI and no admin bypass is needed.
 
 ## Milestone 0.2.0: Refuse path end to end (target 16 Oct)
