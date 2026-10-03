@@ -98,6 +98,9 @@ A pin planted on a ledger line. Paper, stamp, and a red line: *a site report tha
 
 ## Contributing
 
+How we work: **[Ways of working](docs/WAYS_OF_WORKING.md)** (test-first, domain-driven, trunk-based with release-please, pre-commit gates) · [ADRs](docs/adr/) · [Task ledger](TASKS.md) · [CONTRIBUTING](CONTRIBUTING.md).
+
+
 The project is in its design phase. Issues and discussion on the docs are welcome, especially from:
 - people who've sent money home for a build,
 - inspectors, surveyors and builders in Ghana, Nigeria, Kenya or Uganda,

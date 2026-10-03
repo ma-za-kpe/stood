@@ -56,6 +56,12 @@ Brand assets (SVG): [`brand/`](brand/): logo, app icons, social, stamps.
 | — | [Audit log](audit-log.md) | Every claim checked: confirmed, corrected, flagged |
 | — | [Sources](sources.md) | Links |
 
+## How we work
+
+- [Ways of working](WAYS_OF_WORKING.md): TDD, DDD, OOP, trunk-based branches, Conventional Commits, release-please, pre-commit, Definition of Done
+- [Architecture decisions (ADRs)](adr/)
+- [Task ledger](../TASKS.md)
+
 ## Provenance legend
 
 - **[U]**: from the user's pasted research.
