@@ -255,7 +255,7 @@ Need another? Open a **Feature or use case** issue. Profiles are compositions of
 
 | | |
 |---|---|
-| Hold length | Up to **29 days** per tranche (a PayPal authorisation limit). Reauthorised automatically from day 4 |
+| Hold length | Up to **29 days** per tranche (a PayPal authorisation limit). Automatic reauthorisation from day 4 is planned; the domain rules are unit-tested, but the scheduler and payment client are not implemented |
 | Photos per package | ≤ 10, ≤ 8 MB each (JPEG / HEIC / WebP) |
 | Rate limits (demo) | 60 req/min per key, 10 packages/min |
 | Idempotency | Required on every POST (`Idempotency-Key`, 24h) |

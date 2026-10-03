@@ -11,6 +11,7 @@ export type TrancheState =
   | 'WAITING'
   | 'CAPTURE_PENDING'
   | 'VOID_PENDING'
+  | 'REAUTHORIZE_PENDING'
   | 'RELEASED'
   | 'REFUSED'
   | 'EXPIRED'
@@ -34,6 +35,28 @@ export type SettlementFailure = Readonly<{
   authorizationId: string;
   reference?: string;
 }>;
+export type ReauthorizationOperation = Readonly<{
+  effect: 'REAUTHORIZE';
+  key: string;
+  authorizationId: string;
+  requestedAt: number;
+  previousState: 'HELD' | 'DECIDING' | 'WAITING';
+}>;
+export type ReauthorizationConfirmation = Readonly<{
+  effect: 'REAUTHORIZE';
+  key: string;
+  previousAuthorizationId: string;
+  authorizationId: string;
+  confirmedAt: number;
+  expiresAt: number;
+}>;
+export type ReauthorizationFailure = Readonly<{
+  effect: 'REAUTHORIZE';
+  key: string;
+  authorizationId: string;
+  kind: 'AMBIGUOUS' | 'REJECTED_NO_REAUTHORIZATION';
+}>;
+type Reauthorization = ReauthorizationConfirmation & Readonly<{ attempt: number }>;
 type Settlement = Readonly<{ effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string; attempt: number }>;
 
 export class Tranche {
@@ -45,6 +68,11 @@ export class Tranche {
   #settlements: Settlement[] = [];
   #settlementAttempt = 1;
   #settlementBlock: 'CAPTURE_WINDOW_CLOSING' | null = null;
+  #currentHold: HoldAttempt | null = null;
+  #authorizedAt = 0;
+  #reauthorizations: Reauthorization[] = [];
+  #pendingReauthorization: ReauthorizationOperation | null = null;
+  #reauthorizationAttempt = 1;
 
   constructor(
     readonly id: string,
@@ -82,9 +110,15 @@ export class Tranche {
     return this.#settlementBlock;
   }
   get currentHold(): HoldAttempt {
-    const hold = this.#attempts.at(-1);
+    const hold = this.#currentHold;
     if (!hold) throw new Error('No confirmed hold');
     return hold;
+  }
+  get pendingReauthorization(): ReauthorizationOperation | null {
+    return this.#pendingReauthorization;
+  }
+  get reauthorizations(): readonly Reauthorization[] {
+    return Object.freeze([...this.#reauthorizations]);
   }
 
   fundingFailed(): void {
@@ -100,11 +134,90 @@ export class Tranche {
       !Number.isFinite(expiresAt) ||
       expiresAt <= heldAt ||
       expiresAt - heldAt > 29 * 86400000 ||
-      this.#attempts.some((a) => a.authorizationId === authorizationId)
+      this.authorizationUsed(authorizationId)
     )
       throw new RangeError('Invalid authorisation');
-    this.#attempts.push(Object.freeze({ authorizationId, nonce: nonce.value, heldAt, expiresAt }));
+    this.#currentHold = Object.freeze({ authorizationId, nonce: nonce.value, heldAt, expiresAt });
+    this.#attempts.push(this.#currentHold);
+    this.#authorizedAt = heldAt;
     this.#state = 'HELD';
+  }
+
+  beginReauthorization(now: number): ReauthorizationOperation {
+    this.requireState(['HELD', 'DECIDING', 'WAITING']);
+    if (
+      !Number.isFinite(now) ||
+      now < this.#authorizedAt + 3 * 86400000 ||
+      !captureAllowedAt(this.currentHold.expiresAt, now)
+    )
+      throw new Error('Reauthorisation outside its safe window');
+    this.#pendingReauthorization = Object.freeze({
+      effect: 'REAUTHORIZE',
+      key: `${this.id}:${this.#attempts.length}:REAUTHORIZE:${this.#reauthorizations.length + 1}:${this.#reauthorizationAttempt}`,
+      authorizationId: this.currentHold.authorizationId,
+      requestedAt: now,
+      previousState: this.#state as ReauthorizationOperation['previousState'],
+    });
+    this.#state = 'REAUTHORIZE_PENDING';
+    return this.#pendingReauthorization;
+  }
+
+  confirmReauthorization(confirmation: ReauthorizationConfirmation): void {
+    const pending = this.matchReauthorization({
+      ...confirmation,
+      authorizationId: confirmation.previousAuthorizationId,
+    });
+    const original = this.#attempts.at(-1) as HoldAttempt;
+    if (
+      !confirmation.authorizationId.trim() ||
+      this.authorizationUsed(confirmation.authorizationId) ||
+      !Number.isFinite(confirmation.confirmedAt) ||
+      confirmation.confirmedAt < pending.requestedAt ||
+      !Number.isFinite(confirmation.expiresAt) ||
+      confirmation.expiresAt <= confirmation.confirmedAt ||
+      confirmation.expiresAt > original.expiresAt
+    )
+      throw new Error('Invalid renewed authorisation');
+    this.#reauthorizations.push(Object.freeze({ ...confirmation, attempt: this.#attempts.length }));
+    this.#currentHold = Object.freeze({
+      ...this.currentHold,
+      authorizationId: confirmation.authorizationId,
+      expiresAt: confirmation.expiresAt,
+    });
+    this.#authorizedAt = confirmation.confirmedAt;
+    this.#state = pending.previousState;
+    this.#pendingReauthorization = null;
+  }
+
+  reauthorizationFailed(failure: ReauthorizationFailure): void {
+    const pending = this.matchReauthorization(failure);
+    if (!['AMBIGUOUS', 'REJECTED_NO_REAUTHORIZATION'].includes(failure.kind))
+      throw new Error('Unknown reauthorisation failure');
+    if (failure.kind === 'AMBIGUOUS') return;
+    this.#reauthorizationAttempt++;
+    this.#state = pending.previousState;
+    this.#pendingReauthorization = null;
+  }
+
+  private matchReauthorization(
+    result: Pick<ReauthorizationOperation, 'key' | 'effect' | 'authorizationId'>,
+  ): ReauthorizationOperation {
+    this.requireState(['REAUTHORIZE_PENDING']);
+    const pending = this.#pendingReauthorization as ReauthorizationOperation;
+    if (
+      result.effect !== 'REAUTHORIZE' ||
+      result.key !== pending.key ||
+      result.authorizationId !== pending.authorizationId
+    )
+      throw new Error('Reauthorisation does not match the pending operation');
+    return pending;
+  }
+
+  private authorizationUsed(id: string): boolean {
+    return (
+      this.#attempts.some((attempt) => attempt.authorizationId === id) ||
+      this.#reauthorizations.some((renewal) => renewal.authorizationId === id)
+    );
   }
 
   startDeciding(): void {

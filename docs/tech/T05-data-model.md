@@ -52,6 +52,7 @@ Notes:
 - Money columns are `bigint` minor units. Money never uses floating-point columns.
 - Confidence and measured distances are non-money numeric values. Model confidence is required in [0,1]; rule confidence is NULL. Check details include `distance_m` and `matched_package_id`; the selected detail is copied into the immutable decision record (`reason_params`) for audit and sentence generation.
 - Decisions form an immutable history, including WAIT followed by a later rules or human decision ([ADR-0009](../adr/0009-assessment-and-payment-confirmation.md)). Hold attempts and payment-operation reservations need their own durable records before money endpoints are enabled; the schema above remains a logical draft, not an applied migration.
+- T-0132 must persist original hold attempts separately from renewals (prior/new authorisation ids, completion time, expiry, operation key, visit attempt), plus the current authorisation/honour clock, original deadline, pending renewal's prior state and independent retry counters. All capture/void/renewal reservations share one aggregate concurrency guard; an unresolved renewal blocks settlement. The in-memory domain history is not durable evidence.
 - Migrations use **Drizzle Kit**, forward-only, checked in, and run on deploy before traffic switches.
 
 ## R2 layout

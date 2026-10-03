@@ -39,7 +39,8 @@ The implemented creation-only `Allowance` is an immutable DRAFT with ordered mil
 | captureId | Required for a confirmed CAPTURE; retained after DISPUTED |
 | voidRef | Required for a confirmed VOID (including a successful deposit return) |
 | nonce: `Nonce` | Issued on dispatch, single use |
-| heldAt | Drives the timers |
+| heldAt | Original dispatch/evidence clock; never reset by renewal |
+| authorization time, expiry | Honour timer restarts on confirmed renewal; expiry never exceeds the original hold deadline |
 | attempts | ≤ allowance.maxResubmits + 1 |
 
 Methods: `dispatch(auth, nonce, at)`, `startDeciding(pkg)`, `release(capture, decision)`, `refuse(void, decision)`, `wait(reason)`, `expire(void)`, `redispatch()`. Each method checks its invariants and emits events.
@@ -112,6 +113,8 @@ The domain in `services/api/src/domain/` implements Money, GeoPoint, Geofence, N
 Missing check results and incomplete uploads are uncertain; a completed missing-item check is a hard failure. The pure core has no I/O. Hold timers, server-validated capture provenance, a real novelty index and durable payment orchestration remain queued.
 
 New capture reservations close five minutes before hold expiry (Stood's operational buffer). A passing assessment in that margin stays WAITING with `settlementBlock: CAPTURE_WINDOW_CLOSING`; it does not reserve a capture or an early expiry void. Actual expiry still reserves VOID. Refusal and deposit-return VOID effects remain eligible before expiry. An existing pending capture remains reserved for reconciliation; the future payment client must recheck the margin immediately before calling PayPal.
+
+`beginReauthorization(now)` reserves from day four (three elapsed days after the latest confirmed authorisation), outside the same five-minute expiry margin. Confirmation matches effect, operation key and prior authorisation; requires a distinct unused authorisation id and finite completion/expiry times within the original deadline; then restores the prior HELD/DECIDING/WAITING state. `currentHold` uses the new id for subsequent capture/void, while immutable original attempts, nonce, evidence clock and resubmission count remain unchanged. Renewals have separate immutable history. AMBIGUOUS retains its reservation/key; REJECTED_NO_REAUTHORIZATION restores the prior state and increments only the renewal retry counter. This is unit-tested domain behaviour; durable storage, timers and PayPal contracts remain queued.
 
 - Terminal states require a matching confirmed settlement reference. Construction release requires CAPTURE; rental return release requires VOID. EXPIRED requires a confirmed expiry VOID or a verified provider expiration (`EXPIRE` confirmation record). Confirmation matches the reserved effect and authorisation; assessment at or after hold expiry reserves VOID rather than CAPTURE. Ambiguous payment outcomes remain pending for reconciliation; definite failures return to WAITING.
 - Σ captured for an allowance ≤ cap.
