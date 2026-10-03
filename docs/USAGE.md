@@ -68,6 +68,8 @@ Planned response (not yet implemented):
 - Replay as the payer (Kernel drives the PayPal sandbox approval live): `POST $BASE/demo/approve`. It returns a live-view URL.
 - Postman: the public "Stood × PayPal" workspace has every scenario pre-built.
 
+The creation-only domain aggregate currently permits GBP/USD/EUR holds and validates the exact sum of milestones against the cap. Allowance signing and the financial HTTP endpoints below remain planned. The pure payment policy blocks new capture reservations five minutes before expiry; provider calls and durable reservations are not yet wired.
+
 ---
 
 ## Keys and configuration

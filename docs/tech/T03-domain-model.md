@@ -22,6 +22,8 @@ Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §
 | paymentToken | `VaultTokenRef` | Required when SIGNED |
 | version | int | Optimistic lock |
 
+The implemented creation-only `Allowance` is an immutable DRAFT with ordered milestones, exact single-currency cap/sum equality, unique trimmed names, known profiles, window 1–28 days and resubmit limit 0–5. Stood's current hold subset is GBP/USD/EUR at allowance and direct tranche creation; general Money still represents local currencies. This does not implement signature/Vault approval, persistence or the HTTP creation endpoint.
+
 ### `Stage` (entity in Allowance)
 
 `name`, `amount: Money`, `requiredShots: ShotSpec[]`, `checklist: ChecklistItem[]`, `fixtures?: FixtureSpec[]` (Channel3 product refs), `dependsOn?: StageName`.
@@ -108,6 +110,8 @@ Structured `detail` carries `distance_m` (distance from the pin in metres, not d
 The domain in `services/api/src/domain/` implements Money, GeoPoint, Geofence, Nonce, PhotoFingerprint, required-item and location checks, versioned profiles, the pure decision gate and tranche transitions. [ADR-0009](../adr/0009-assessment-and-payment-confirmation.md) separates assessment from payment effects and introduces pending-operation states. Profile stage recognition is WAIT-only until evaluation qualifies it.
 
 Missing check results and incomplete uploads are uncertain; a completed missing-item check is a hard failure. The pure core has no I/O. Hold timers, server-validated capture provenance, a real novelty index and durable payment orchestration remain queued.
+
+New capture reservations close five minutes before hold expiry (Stood's operational buffer). A passing assessment in that margin stays WAITING with `settlementBlock: CAPTURE_WINDOW_CLOSING`; it does not reserve a capture or an early expiry void. Actual expiry still reserves VOID. Refusal and deposit-return VOID effects remain eligible before expiry. An existing pending capture remains reserved for reconciliation; the future payment client must recheck the margin immediately before calling PayPal.
 
 - Terminal states require a matching confirmed settlement reference. Construction release requires CAPTURE; rental return release requires VOID. EXPIRED requires a confirmed expiry VOID or a verified provider expiration (`EXPIRE` confirmation record). Confirmation matches the reserved effect and authorisation; assessment at or after hold expiry reserves VOID rather than CAPTURE. Ambiguous payment outcomes remain pending for reconciliation; definite failures return to WAITING.
 - Σ captured for an allowance ≤ cap.

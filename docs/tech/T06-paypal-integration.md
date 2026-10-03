@@ -60,7 +60,26 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 | `INSTRUMENT_DECLINED` on authorise | `WAIT_FUNDING`. Sentence: "PayPal could not hold £4,000. Nothing was sent to inspect." |
 | Webhook missing | The poller checks open authorisations hourly (and on the tick endpoint) |
 
-`SYSTEM_FAULT` means a confirmed failure with no payment effect. A timeout, connection loss or PayPal 5xx is `AMBIGUOUS`, never `SYSTEM_FAULT`. The adapter's exact error-code mapping and capture-expiry safety margin remain blockers under T-0129 before payment calls are enabled.
+`REJECTED_NO_PAYMENT` replaces `SYSTEM_FAULT` and means a confirmed failure with no payment effect. A timeout, connection loss or PayPal 5xx is always `AMBIGUOUS`. `classifyPaymentFailure` is a pure response policy, not a payment client. It only accepts operation-correlated, authenticated responses; it makes no SDK/network calls.
+
+### Implemented response policy (T-0129)
+
+| Endpoint / response | Classification | Reference |
+|---|---|---|
+| Capture, HTTP 200/201 with resource status DECLINED and non-empty capture id | DECLINED | Capture id |
+| Capture, HTTP 422 UNPROCESSABLE_ENTITY, AUTHORIZATION_EXPIRED | AUTHORIZATION_EXPIRED | PayPal debug id |
+| Capture, HTTP 422, MAX_CAPTURE_AMOUNT_EXCEEDED | REJECTED_NO_PAYMENT | PayPal debug id |
+| Reauthorise, HTTP 422, AUTH_CURRENCY_MISMATCH or REAUTHORIZATION_TOO_SOON | REJECTED_NO_PAYMENT | PayPal debug id |
+| Void, PREVIOUSLY_CAPTURED | AMBIGUOUS; reconcile and alert, never infer successful void | Logged response |
+| Other endpoint/code/status combinations, transport failures, 5xx, missing or conflicting details | AMBIGUOUS | Logged response |
+
+HTTP 422 mappings require UNPROCESSABLE_ENTITY, non-empty message/debug id and a non-empty detail array. Every issue must map to the same known classification. Unknown errors keep the reservation; additional definite mappings need documented evidence and tests. These tests use synthetic bodies, not recorded sandbox responses. Sources checked 3 Oct 2026: [PayPal's official Payments v2 OpenAPI examples and capture statuses](https://github.com/paypal/paypal-rest-api-specifications/blob/main/openapi/payments_payment_v2.json), [capture reference](https://developer.paypal.com/api/payments/v2/authorizations-capture), [reauthorisation reference](https://developer.paypal.com/api/payments/v2/authorizations-reauthorize), [void reference](https://developer.paypal.com/api/payments/v2/authorizations-void).
+
+### Capture window and currencies
+
+Stood reserves no new capture within **five minutes** of the provider hold expiry. This is our operational buffer, not a PayPal guarantee. The payment client must recheck `captureAllowedAt` immediately before an external capture, after durable reservation. If no request was ever submitted and the window closed, record a local REJECTED_NO_PAYMENT failure; if it may have been submitted, preserve the reservation for reconciliation. Never race a void against an unresolved capture.
+
+Allowance and direct tranche creation accept only GBP/USD/EUR, Stood's current subset of the [PayPal currency codes](https://developer.paypal.com/reference/currency-codes/). General Money retains other currencies. No automatic conversion is implemented. Merchant capabilities and real sandbox funding still need contract tests. Durable counters and key/provider-UUID mappings are still mandatory before the payment client is wired.
 
 ## Sandbox setup
 
