@@ -32,7 +32,9 @@ describe('Money (FR-04, NFR-04)', () => {
     expect(() => pounds.subtract(dollars)).toThrow();
   });
   it('rejects negative results and overflow', () => {
-    expect(() => new Money(1n, 'GBP').subtract(new Money(2n, 'GBP'))).toThrow();
+    expect(() => new Money(1n, 'GBP').subtract(new Money(2n, 'GBP'))).toThrow(
+      'Subtraction would produce a negative amount',
+    );
     expect(() => new Money(BigInt(Number.MAX_SAFE_INTEGER), 'GBP').add(new Money(1n, 'GBP'))).toThrow();
   });
   it('adds exactly, commutatively, without mutating either input', () => {

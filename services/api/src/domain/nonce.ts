@@ -9,6 +9,6 @@ export class Nonce {
   }
 
   matches(text: string): boolean {
-    return text.toUpperCase() === this.value;
+    return text.replace(/\s/g, '').toUpperCase() === this.value;
   }
 }

@@ -65,7 +65,7 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[x]` T-0022 Docker dev stack: multi-stage digest-pinned Dockerfile, Compose (app, API, Postgres, local S3, Mailpit), wrapper and hadolint. Tier: implemented. Evidence: branch `feature/22-product-foundation`; dev and distroless builds succeed, API/DB/Mailpit healthy. MinIO image pulls failed; SeaweedFS substitute recorded in ADR-0008. Authenticated object-store contracts remain queued.
 - `[x]` T-0023 Monorepo skeleton (pnpm + Turborepo), strict types, dependency-cruiser boundary, Vitest and coverage in Docker and CI. Tier: unit-tested. Evidence: `docker compose run --rm app pnpm validate`; negative domain-I/O probe rejected by `pure-domain`.
 - `[x]` T-0024 TDD: Money, Geofence, Nonce property and boundary tests. Tier: unit-tested. Evidence: domain test files; red before implementation, then 100% branch coverage.
-- `[~]` T-0025 TDD: Tranche state machine, decision table, required items, location and 64-bit fingerprint distance implemented. Tier reached: unit-tested. Capture-window provenance, platform-signal validation and actual novelty search remain queued.
+- `[~]` T-0025 TDD: Tranche state machine, decision table, required items, location and 64-bit fingerprint distance implemented. Tier reached: unit-tested. Capture-window provenance, platform-signal validation and actual novelty search remain queued. Day-four reauthorisation and its durable attempt/operation identity must land before T-0027 is wired in.
 - `[x]` T-0026 Evidence profiles core (ADR-0007): immutable construction, freelance and rental profile registry, fixed precedence and explicit effect maps. Tier: unit-tested. Evidence: `decision.test.ts`; model stage failures stay WAIT pending evaluation. Profile parameter schemas and actual evidence adapters remain separate queued work.
 - `[ ]` T-0027 PayPal adapter (recorded sandbox contract tests): authorise / void / capture / reauthorise.
 - `[ ]` T-0028 API v1: allowances, dispatch, packages (HMAC + idempotency). Fixtures `wrong-plot` and `good`.
@@ -122,7 +122,7 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[ ]` T-0058 Reviewer override + payer acceptance (FR-39 / 40) with an audit log.
 - `[ ]` T-0059 Dispute packet PDF / JSON. Disputes API where the sandbox allows it.
 - `[ ]` T-0060 Receipt signed links (JWT), distance-only display.
-- `[ ]` T-0061 Demo endpoints + fixtures (good, wrong-plot, recycled, wrong-stage, substituted-fitting, nonce-unreadable, mock-location, funding-declined, hold-expiry, freelance-missing-screen).
+- `[~]` T-0061 Seven synthetic scenarios implemented under T-0122. `substituted-fitting`, `funding-declined` and `hold-expiry` remain queued, along with real sandbox replay and product sentences.
 
 ### Evidence
 
@@ -217,6 +217,11 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[x]` T-0122 API bootstrap and explicitly synthetic fixture routes (`good`, `wrong-plot`, `recycled`, `wrong-stage`, `nonce-unreadable`, `mock-location`, `freelance-missing-screen`). Tier: unit-tested. HTTP tests and container smoke checks verify `payment.executed: false` and no PayPal IDs. No financial endpoints are enabled.
 - `[x]` T-0123 Expand Biome to product TypeScript and enforce 85% overall / 100% domain coverage. Fix discovered landing-page accessibility lint errors (decorative SVG, button types, semantic fieldset). Tier: implemented; full product validation passes.
 - `[x]` T-0124 Fix Linux bind-mount ownership by parameterising the non-root development UID/GID and building with runner IDs. Tier: implemented. Evidence: commit `615d84b`; local full pre-commit and UID 1001 container check pass; GitHub Actions run `37152475582` passes every required check.
+
+- `[~]` T-0125 PR #9 settlement corrections: expiry clock, matched confirmation, definite failure exits and ambiguous reconciliation; failing regression tests first, followed by arbitrary-sequence property tests. Full Docker validation and CI required before marking complete.
+- `[!]` T-0126 Blocks T-0027: add RULE/MODEL provenance and confidence to check results; enforce nonce refusal >= 0.9 in the rule set, not adapters, and fail closed for missing/invalid confidence. Test threshold boundaries and prohibit model source relabelling. OCR whitespace normalization is fixed separately in T-0125. No model adapter may supply automatic refusal before this lands.
+- `[!]` T-0127 Blocks T-0027: structured immutable evidence details (`distance_m`, matched package reference), propagated through decisions and sentence generation. Current location/novelty outputs lack those fields; they cannot yet generate S06's complete refusal sentence.
+- `[!]` T-0128 Blocks T-0028 allowance creation and T-0027: allow only the validated PayPal hold currency subset (initially GBP/USD/EUR), before creating tranches. General Money may represent local currencies; unsupported hold currencies must be rejected at the allowance boundary. Add boundary tests when that aggregate/API lands.
 
 ## Success gates (hackathon)
 

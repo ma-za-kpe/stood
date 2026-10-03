@@ -6,6 +6,7 @@ describe('Nonce (FR-11)', () => {
     const nonce = new Nonce('k7q');
     expect(nonce.value).toBe('K7Q');
     expect(nonce.matches('k7Q')).toBe(true);
+    expect(nonce.matches(' K7 Q\n')).toBe(true);
     expect(nonce.matches('K7R')).toBe(false);
     expect(Object.isFrozen(nonce)).toBe(true);
   });

@@ -32,7 +32,7 @@ Stood **never holds money**, never pays anyone locally, and never knows your ind
 
 **Current local implementation:** start `docker compose up -d api`. `POST http://localhost:3000/v1/demo/scenarios/wrong-plot` runs synthetic check results through the real rule and returns `payment.executed: false`. It does not authorise, capture or void. The hosted sandbox replay and SDK below are planned contracts, not shipped capabilities.
 
-No account is needed. These demo endpoints run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs.
+**Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
 
 ```bash
 BASE=https://stood-api.onrender.com/v1
@@ -44,7 +44,7 @@ curl -s $BASE/../health
 curl -s -X POST $BASE/demo/scenarios/wrong-plot | jq '{outcome, named_field, sentence, paypal}'
 ```
 
-Expected:
+Planned response (not yet implemented):
 
 ```json
 { "outcome": "REFUSE", "named_field": "plot",

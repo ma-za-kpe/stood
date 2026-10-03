@@ -18,10 +18,14 @@ allowances           (id, platform_id, platform_ref UNIQUE(platform_id, platform
 stages               (allowance_id, idx, name, amount_minor, required_shots jsonb, checklist jsonb,
                       fixtures jsonb, depends_on, PRIMARY KEY(allowance_id, idx))
 tranches             (id, allowance_id, stage_idx, state, amount_minor, currency,
-                      paypal_order_id, authorization_id, capture_id, void_ref,
+                      paypal_order_id, authorization_id, capture_id, void_ref, settlement_effect, settlement_ref,
                       nonce_hash, held_at, attempts, version, updated_at,
-                      CHECK (state <> 'RELEASED' OR capture_id IS NOT NULL),
-                      CHECK (state NOT IN ('REFUSED','EXPIRED') OR void_ref IS NOT NULL))
+                      CHECK (state NOT IN ('RELEASED','REFUSED','EXPIRED','DISPUTED') OR
+                             (settlement_ref IS NOT NULL AND settlement_effect IS NOT NULL)),
+                      CHECK (state <> 'RELEASED' OR settlement_effect IN ('CAPTURE','VOID')),
+                      CHECK (state <> 'REFUSED' OR settlement_effect = 'VOID'),
+                      CHECK (state <> 'EXPIRED' OR settlement_effect IN ('VOID','EXPIRE')),
+                      CHECK (state <> 'DISPUTED' OR settlement_effect IN ('CAPTURE','VOID')))
 packages             (id, tranche_id, platform_ref, status, submitted_at, completed_at,
                       platform_signals jsonb, UNIQUE(tranche_id, platform_ref))
 photos               (id, package_id, shot, r2_key, sha256, phash, lat, lng, accuracy_m,

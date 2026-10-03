@@ -1,4 +1,4 @@
-import { type Decision, getProfile } from './decision.js';
+import { type Decision, getProfile, RULE_SET_VERSION } from './decision.js';
 import type { Money } from './money.js';
 import type { Nonce } from './nonce.js';
 
@@ -22,7 +22,18 @@ export type PaymentOperation = Readonly<{
   target: 'RELEASED' | 'REFUSED' | 'EXPIRED';
 }>;
 type DecisionRecord = Readonly<{ id: string; decision: Decision }>;
-type Settlement = Readonly<{ effect: 'CAPTURE' | 'VOID'; reference: string; attempt: number }>;
+export type SettlementConfirmation = Readonly<{
+  effect: 'CAPTURE' | 'VOID';
+  authorizationId: string;
+  reference: string;
+}>;
+export type SettlementFailure = Readonly<{
+  kind: 'AMBIGUOUS' | 'DECLINED' | 'SYSTEM_FAULT' | 'AUTHORIZATION_EXPIRED';
+  effect: 'CAPTURE' | 'VOID';
+  authorizationId: string;
+  reference?: string;
+}>;
+type Settlement = Readonly<{ effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string; attempt: number }>;
 
 export class Tranche {
   #state: TrancheState = 'PENDING';
@@ -94,7 +105,7 @@ export class Tranche {
     this.#state = 'DECIDING';
   }
 
-  beginSettlement(decision: Decision, decisionId: string): PaymentOperation | null {
+  beginSettlement(decision: Decision, decisionId: string, now: number): PaymentOperation | null {
     this.requireState(['DECIDING', 'WAITING']);
     const profile = getProfile(this.profileId);
     if (
@@ -102,7 +113,9 @@ export class Tranche {
       this.#decisions.some((d) => d.id === decisionId) ||
       decision.profileId !== this.profileId ||
       !['RELEASE', 'REFUSE', 'WAIT'].includes(decision.outcome) ||
-      decision.ruleSetVersion !== '1.0.0' ||
+      decision.ruleSetVersion !== RULE_SET_VERSION ||
+      !Number.isFinite(now) ||
+      now < this.currentHold.heldAt ||
       !decision.reason.trim() ||
       (decision.outcome === 'REFUSE' && !decision.namedField?.trim()) ||
       (decision.outcome === 'RELEASE' && decision.effect !== profile.passEffect) ||
@@ -111,6 +124,7 @@ export class Tranche {
     )
       throw new Error('Invalid decision');
     this.#decisions.push(Object.freeze({ id: decisionId, decision: Object.freeze({ ...decision }) }));
+    if (now >= this.currentHold.expiresAt) return this.reserve('VOID', 'EXPIRED');
     if (decision.outcome === 'WAIT') {
       this.#state = 'WAITING';
       return null;
@@ -118,14 +132,45 @@ export class Tranche {
     return this.reserve(decision.effect as 'CAPTURE' | 'VOID', decision.outcome === 'RELEASE' ? 'RELEASED' : 'REFUSED');
   }
 
-  confirmSettlement(reference: string): void {
-    this.requireState(['CAPTURE_PENDING', 'VOID_PENDING']);
-    if (!reference.trim()) throw new Error('Payment confirmation requires a reference');
-    const pending = this.#pending as PaymentOperation;
-    this.#settlement = Object.freeze({ effect: pending.effect, reference, attempt: this.#attempts.length });
+  confirmSettlement(confirmation: SettlementConfirmation): void {
+    const pending = this.matchPending(confirmation);
+    if (!confirmation.reference.trim()) throw new Error('Payment confirmation requires a reference');
+    this.#settlement = Object.freeze({
+      effect: pending.effect,
+      reference: confirmation.reference,
+      attempt: this.#attempts.length,
+    });
     this.#settlements.push(this.#settlement);
     this.#state = pending.target;
     this.#pending = null;
+  }
+
+  settlementFailed(failure: SettlementFailure): void {
+    this.matchPending(failure);
+    if (!['AMBIGUOUS', 'DECLINED', 'SYSTEM_FAULT', 'AUTHORIZATION_EXPIRED'].includes(failure.kind))
+      throw new Error('Unknown settlement failure');
+    if (failure.kind === 'AMBIGUOUS') return;
+    if (failure.kind === 'AUTHORIZATION_EXPIRED') {
+      if (!failure.reference?.trim()) throw new Error('Confirmed expiration requires a provider reference');
+      this.#settlement = Object.freeze({
+        effect: 'EXPIRE',
+        reference: failure.reference,
+        attempt: this.#attempts.length,
+      });
+      this.#settlements.push(this.#settlement);
+      this.#state = 'EXPIRED';
+    } else {
+      this.#state = 'WAITING';
+    }
+    this.#pending = null;
+  }
+
+  private matchPending(result: Pick<SettlementConfirmation, 'effect' | 'authorizationId'>): PaymentOperation {
+    this.requireState(['CAPTURE_PENDING', 'VOID_PENDING']);
+    const pending = this.#pending as PaymentOperation;
+    if (result.effect !== pending.effect || result.authorizationId !== pending.authorizationId)
+      throw new Error('Settlement does not match the pending operation');
+    return pending;
   }
 
   expire(now: number): PaymentOperation {

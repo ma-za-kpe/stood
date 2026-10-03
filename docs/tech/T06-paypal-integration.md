@@ -53,9 +53,10 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 
 | Failure | Handling |
 |---|---|
-| Timeout / 5xx | Retry with the **same** `PayPal-Request-Id` (PayPal idempotency), up to 3 times with backoff. Then `WAIT_SYSTEM` and the reconciliation job |
+| Timeout / 5xx (ambiguous outcome) | Retry with the **same** `PayPal-Request-Id` (PayPal idempotency), up to 3 times with backoff. Keep the pending reservation for reconciliation; surface an operational system wait, without permitting a competing payment |
+| Definite declined / system failure, confirmed no payment | `settlementFailed` matches the reserved effect and authorisation, clears the reservation and returns to `WAITING`. Expiry rules can then run |
 | Capture succeeded, DB write failed | Reconciler sees `PAYMENT.CAPTURE.COMPLETED` / Transaction Search and completes the state transition |
-| `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, notify. Requires a re-signature or new authorisation |
+| `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, with an `EXPIRE` confirmation record and provider response reference; notify. Requires a re-signature or new authorisation |
 | `INSTRUMENT_DECLINED` on authorise | `WAIT_FUNDING`. Sentence: "PayPal could not hold £4,000. Nothing was sent to inspect." |
 | Webhook missing | The poller checks open authorisations hourly (and on the tick endpoint) |
 

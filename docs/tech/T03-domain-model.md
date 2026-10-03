@@ -105,7 +105,7 @@ The domain in `services/api/src/domain/` implements Money, GeoPoint, Geofence, N
 
 Missing check results and incomplete uploads are uncertain; a completed missing-item check is a hard failure. The pure core has no I/O. Hold timers, server-validated capture provenance, a real novelty index and durable payment orchestration remain queued.
 
-- Terminal decisions require a confirmed reference for the profile's declared effect (CAPTURE or VOID). Construction release requires a capture; rental return release requires a void.
+- Terminal states require a matching confirmed settlement reference. Construction release requires CAPTURE; rental return release requires VOID. EXPIRED requires a confirmed expiry VOID or a verified provider expiration (`EXPIRE` confirmation record). Confirmation matches the reserved effect and authorisation; assessment at or after hold expiry reserves VOID rather than CAPTURE. Ambiguous payment outcomes remain pending for reconciliation; definite failures return to WAITING.
 - Σ captured for an allowance ≤ cap.
 - Same inputs + same rule-set version → same decision (determinism).
 - WAIT never results from complete, confident, passing inputs. RELEASE never results from any missing input.

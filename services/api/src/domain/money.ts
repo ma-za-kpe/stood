@@ -21,6 +21,7 @@ export class Money {
 
   subtract(other: Money): Money {
     this.requireCurrency(other);
+    if (other.minor > this.minor) throw new RangeError('Subtraction would produce a negative amount');
     return new Money(this.minor - other.minor, this.currency);
   }
 

@@ -1,3 +1,4 @@
+export const RULE_SET_VERSION = '1.0.0';
 export type Outcome = 'RELEASE' | 'REFUSE' | 'WAIT';
 export type PaymentEffect = 'CAPTURE' | 'VOID' | 'NONE';
 export type CheckResult = Readonly<{
@@ -90,7 +91,7 @@ export function decide(profileId: string, checks: readonly CheckResult[]): Decis
       outcome,
       effect,
       profileId,
-      ruleSetVersion: '1.0.0',
+      ruleSetVersion: RULE_SET_VERSION,
       namedField,
       reason,
     });
