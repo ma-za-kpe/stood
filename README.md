@@ -64,6 +64,7 @@ Everything decided so far is in **[`docs/`](docs/README.md)**: research, product
 
 | Start here | |
 |---|---|
+| **[Usage manual](docs/USAGE.md)** | Install, keys, quickstart, webhooks, profiles, self-hosting. **Judges: start here** |
 | [Stood overview](docs/09-stood.md) | Vision, money model, where the AI is |
 | [Product docs S01–S15](docs/README.md#stood-product-docs-stood) | Problem, boundary, personas, outcomes, features, voice, screens, demo, evidence integrity |
 | [Partner integration map](docs/stood/S13-sponsor-integration.md) | How every hackathon partner tool is used, and what we refused to use it for |

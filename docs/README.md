@@ -61,6 +61,10 @@ Requirements, architecture, domain model, API, data, PayPal integration, evidenc
 | — | [Audit log](audit-log.md) | Every claim checked: confirmed, corrected, flagged |
 | — | [Sources](sources.md) | Links |
 
+## Use it
+
+- **[Usage manual](USAGE.md)**: judges' 2-minute path, keys and config, SDK quickstart, webhooks, evidence profiles, limits, errors, FAQ
+
 ## How we work
 
 - [Ways of working](WAYS_OF_WORKING.md): TDD, DDD, OOP, trunk-based branches, Conventional Commits, release-please, pre-commit, Definition of Done

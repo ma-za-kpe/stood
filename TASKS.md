@@ -40,6 +40,7 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[x]` T-0013 Design system v2 "Volt" + regenerated brand assets with an outlined wordmark. Tier: designed.
 - `[x]` T-0014 Landing page (`site/`) with motion, use cases, changelog page, and Pages workflow. Tier: implemented (rendered locally at 1440 px and 390 px).
 - `[x]` T-0017 Cutthroat pre-commit + CI (`pre-commit`, `pr-title`, `dco`). The gate found and fixed a real JS syntax bug in `site/app.js`. Tier: implemented.
+- `[x]` T-0116 Usage manual `docs/USAGE.md` (package-page style: judges' path, keys, quickstart, webhooks, profiles, self-hosting). Tier: designed. **Must be kept in sync with the implemented API (review item on every API PR).**
 - `[x]` T-0018 GitFlow branching (ADR-0006), SECURITY.md, CODE_OF_CONDUCT.md, issue templates.
 - `[~]` T-0019 Set up `develop` as the default branch, rulesets on `main` and `develop`, merge settings (squash for features, merge commit for promotion), repo homepage.
 - `[~]` T-0020 Merge PR #1 → `develop` → promote to `main` → release-please v0.1.0 → back-merge. Verify <https://ma-za-kpe.github.io/stood/> and the changelog page.
