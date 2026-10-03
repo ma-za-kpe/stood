@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+docker compose run --rm app pnpm validate
+docker compose up -d --wait db
+exec docker compose run --rm app pnpm test:db

@@ -55,6 +55,14 @@ Notes:
 - T-0132 must persist original hold attempts separately from renewals (prior/new authorisation ids, completion time, expiry, operation key, visit attempt), plus the current authorisation/honour clock, original deadline, pending renewal's prior state and independent retry counters. All capture/void/renewal reservations share one aggregate concurrency guard; an unresolved renewal blocks settlement. The in-memory domain history is not durable evidence.
 - Migrations use **Drizzle Kit**, forward-only, checked in, and run on deploy before traffic switches.
 
+## Implemented payment schema (T-0139)
+
+`services/api/drizzle/` contains forward Drizzle migrations for `payment_streams`, `payment_operations` and `payment_operation_events`. The schema persists operation intent, stable provider UUID, reservation/current versions and outcome reference. A partial unique index excludes competing RESERVED/AMBIGUOUS operations; triggers protect identity, resolved rows and append-only events. See [ADR-0010](../adr/0010-durable-payment-operation-ledger.md).
+
+The migration is integration-tested on local Postgres, including fresh connections and replay. It has not been deployed. `./scripts/dev test:db` creates and removes a randomly named test database on the fixed Compose `db` service; it does not use arbitrary DATABASE_URL. `docker compose run --rm app pnpm db:migrate` explicitly applies the checked-in migrations to the configured local database. No HTTP route invokes them or enables payments.
+
+The transaction adapter remains T-0140; this schema does not persist/rehydrate a tranche, original holds, renewal history or domain retry counters. T-0132 stays open until those writes and operation reservation/confirmation share one transaction. Ledger versions are not yet aggregate versions, and a ledger outcome alone must never authorise a financial effect.
+
 ## R2 layout
 
 ```text

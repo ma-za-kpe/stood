@@ -120,11 +120,11 @@ repos:
         pass_filenames: false
         files: ^Dockerfile$
       - id: product-validation
-        name: strict types, money boundary, tests, coverage and build (Docker)
+        name: strict types, money boundary, unit/Postgres tests, coverage and build (Docker)
         language: system
-        entry: docker compose run --rm app pnpm validate
+        entry: scripts/check-product
         pass_filenames: false
-        files: ^(services/|packages/|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig|vitest|turbo|Dockerfile|compose.yaml|\.dependency-cruiser)
+        files: ^(services/|packages/|scripts/check-product$|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|drizzle.config.ts|tsconfig|vitest|turbo|Dockerfile|compose.yaml|\.dependency-cruiser)
 
   # ---------- commit message ----------
   - repo: https://github.com/compilerla/conventional-pre-commit

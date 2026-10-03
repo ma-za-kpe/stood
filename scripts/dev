@@ -5,5 +5,9 @@ if [ "$#" -eq 0 ]; then set -- validate; fi
 case "$1" in
   up) exec docker compose up -d db s3 mail ;;
   install) exec docker compose run --rm app pnpm install --frozen-lockfile ;;
+  validate) exec scripts/check-product ;;
+  test:db)
+    docker compose up -d --wait db
+    exec docker compose run --rm app pnpm test:db ;;
   *) exec docker compose run --rm app pnpm "$@" ;;
 esac

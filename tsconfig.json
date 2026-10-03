@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["services/**/*.ts", "packages/**/*.ts", "vitest.config.ts"],
+  "include": ["services/**/*.ts", "packages/**/*.ts", "vitest*.config.ts", "drizzle.config.ts"],
   "exclude": ["**/dist", "**/node_modules"]
 }

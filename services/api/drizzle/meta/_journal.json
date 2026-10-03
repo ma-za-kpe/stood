@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791069575397,
+      "tag": "0000_payment_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791069623158,
+      "tag": "0001_immutable_payment_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791070336684,
+      "tag": "0002_payment_event_identity",
+      "breakpoints": true
+    }
+  ]
+}
