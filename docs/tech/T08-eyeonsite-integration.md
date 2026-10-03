@@ -48,7 +48,8 @@ Stood changes [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) from "escrow t
 | `tranche.released` | `ACCEPTED` | `initiateInspectorPayout` (fee) + **new** `initiateBuilderDraw`. Ledger entries `PAYOUT`. FCM to inspector and client with the sentence |
 | `tranche.refused` | `REVISION_REQUESTED` (reuses the existing revision flow!) | Show the named field and redo instruction to the inspector. Fee not paid for this visit |
 | `tranche.waiting` | `UNDER_REVIEW` | Notify. The reviewer acts in Stood |
-| `tranche.hold_expiring` / `expired` | `EXPIRED` | Notify the client |
+| `tranche.hold_expiring` | Keep the current held / review state | Warn the client; the hold has not ended |
+| `tranche.expired` | `EXPIRED` | Notify the client |
 | `dispute.opened` | `DISPUTED` | Link the packet in the admin view |
 
 ## 5. Data and type changes in [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)

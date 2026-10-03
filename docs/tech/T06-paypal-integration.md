@@ -30,7 +30,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 - `intent: AUTHORIZE`
 - `purchase_units[0]`: `amount`, `custom_id = tranche_id`, `invoice_id = alw_id:stage`, `description = "Stood hold: <stage>, released only on evidence"`
 - `payment_source.paypal.vault_id`
-- Header `PayPal-Request-Id: <tranche_id>:authorize:<attempt>`
+- Header `PayPal-Request-Id`: a persisted UUID for this attempt's order-creation operation. Order authorisation has its own stable request UUID.
 
 Then authorise the order and record the `authorization_id` and `expiration_time`.
 
@@ -38,14 +38,14 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 
 ### Release / refuse
 
-- Release: `POST /v2/payments/authorizations/{id}/capture` with `final_capture: true`, `invoice_id`, `note_to_payer = sentence`, and `PayPal-Request-Id: <tranche_id>:capture`.
-- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with `PayPal-Request-Id: <tranche_id>:void`.
+- Release: `POST /v2/payments/authorizations/{id}/capture` with `final_capture: true`, `invoice_id`, `note_to_payer = sentence`, and a stable operation UUID as `PayPal-Request-Id`.
+- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with its own stable operation UUID. Persist request identities per authorisation attempt and action, reuse them for retries, and never reuse an old hold's identity after redispatch.
 
 ### Timers (Render Workflows or pg-boss)
 
 | When | Action |
 |---|---|
-| Day 3 + still undecided | `reauthorize` (allowed days 4–29). Records a new authorisation id |
+| From day 4 + still undecided | `reauthorize` (allowed days 4–29). Records a new authorisation id |
 | Day 27 | Emit `tranche.hold_expiring`. Notify the payer and reviewer |
 | Day 29 | Void. State `EXPIRED`. Sentence: "The hold ended. Nothing was paid." |
 

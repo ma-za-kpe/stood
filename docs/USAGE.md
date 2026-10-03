@@ -30,6 +30,8 @@ Stood **never holds money**, never pays anyone locally, and never knows your ind
 
 ## For hackathon judges: try it in 2 minutes
 
+**Current local implementation:** start `docker compose up -d api`. `POST http://localhost:3000/v1/demo/scenarios/wrong-plot` runs synthetic check results through the real rule and returns `payment.executed: false`. It does not authorise, capture or void. The hosted sandbox replay and SDK below are planned contracts, not shipped capabilities.
+
 No account is needed. These demo endpoints run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs.
 
 ```bash
@@ -167,20 +169,32 @@ Register one HTTPS URL. Every event is signed: `Stood-Signature: t=<unix>,v1=<he
 ```ts
 import { verifyStoodSignature } from '@stood/sdk/webhooks';
 
-app.post('/stood/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/stood/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!verifyStoodSignature(req.body, req.header('Stood-Signature'), process.env.STOOD_WEBHOOK_SECRET)) {
     return res.sendStatus(400);
   }
-  const event = JSON.parse(req.body);
-  // Deduplicate on event.id (delivery is at-least-once)
-  switch (event.type) {
-    case 'tranche.released': payBuilderLocally(event.data); break;      // your local rail
-    case 'tranche.refused':  askInspectorToRedo(event.data.named_field); break;
-    case 'tranche.waiting':  showInReview(event.data.sentence.payer); break;
+  try {
+    const event = JSON.parse(req.body);
+    // Your durable inbox adapter must insert the event and jobs in ONE transaction.
+    await db.transaction(async (tx) => {
+      if (!await tx.events.insertIfAbsent(event.id, event)) return;
+      if (event.type === 'tranche.released' && event.data.effect === 'CAPTURE') {
+        const captureId = event.data.paypal.capture_id;
+        if (!captureId || event.data.paypal.capture_status !== 'COMPLETED') {
+          throw new Error('A payout requires confirmed capture');
+        }
+        await tx.payoutJobs.enqueueOnce(`capture:${captureId}`, event.data);
+      }
+      await tx.notificationJobs.enqueueOnce(`event:${event.id}`, event);
+    });
+    return res.sendStatus(200); // acknowledge only after the transaction commits
+  } catch {
+    return res.sendStatus(503); // Stood retries; do not lose an unpersisted event
   }
-  res.sendStatus(200);
 });
 ```
+
+`db` and its inbox/job methods are caller-owned pseudocode, not SDK exports. Jobs run after acknowledgement. The payout worker must reuse the capture-based key with the local processor and reconcile ambiguous results. Event-id deduplication alone cannot prevent two different events from paying the same capture twice. VOID effects (including a successful deposit return) never enqueue a payout. Financial webhook fields remain draft until the payment API is implemented.
 
 | Event | Meaning | Typical action |
 |---|---|---|

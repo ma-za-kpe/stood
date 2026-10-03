@@ -62,11 +62,11 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[ ]` T-0012 Free-tier accounts:
   - Create Neon (eu-central), Cloudflare (R2 + Workers AI), Render (Frankfurt), Astropods and Kernel.
   - Ask partners about credits.
-- `[ ]` T-0022 Docker dev stack: `Dockerfile` (multi-stage, pinned digest), `compose.yaml` (app, Postgres, MinIO, Mailpit), `scripts/dev` wrapper. Add `hadolint` to pre-commit.
-- `[ ]` T-0023 Monorepo skeleton (pnpm + Turborepo) in Docker. Enable the pre-registered hooks: `tsc --strict`, dependency-cruiser money boundary, Vitest.
-- `[ ]` T-0024 TDD: `Money`, `Geofence`, `Nonce` value objects (property tests).
-- `[ ]` T-0025 TDD: `Tranche` state machine and `decide()` table (C1–C5) ([T03](docs/tech/T03-domain-model.md)).
-- `[ ]` T-0026 Evidence profiles core (ADR-0007): `construction.stage@1`, `freelance.milestone@1`.
+- `[x]` T-0022 Docker dev stack: multi-stage digest-pinned Dockerfile, Compose (app, API, Postgres, local S3, Mailpit), wrapper and hadolint. Tier: implemented. Evidence: branch `feature/22-product-foundation`; dev and distroless builds succeed, API/DB/Mailpit healthy. MinIO image pulls failed; SeaweedFS substitute recorded in ADR-0008. Authenticated object-store contracts remain queued.
+- `[x]` T-0023 Monorepo skeleton (pnpm + Turborepo), strict types, dependency-cruiser boundary, Vitest and coverage in Docker and CI. Tier: unit-tested. Evidence: `docker compose run --rm app pnpm validate`; negative domain-I/O probe rejected by `pure-domain`.
+- `[x]` T-0024 TDD: Money, Geofence, Nonce property and boundary tests. Tier: unit-tested. Evidence: domain test files; red before implementation, then 100% branch coverage.
+- `[~]` T-0025 TDD: Tranche state machine, decision table, required items, location and 64-bit fingerprint distance implemented. Tier reached: unit-tested. Capture-window provenance, platform-signal validation and actual novelty search remain queued.
+- `[x]` T-0026 Evidence profiles core (ADR-0007): immutable construction, freelance and rental profile registry, fixed precedence and explicit effect maps. Tier: unit-tested. Evidence: `decision.test.ts`; model stage failures stay WAIT pending evaluation. Profile parameter schemas and actual evidence adapters remain separate queued work.
 - `[ ]` T-0027 PayPal adapter (recorded sandbox contract tests): authorise / void / capture / reauthorise.
 - `[ ]` T-0028 API v1: allowances, dispatch, packages (HMAC + idempotency). Fixtures `wrong-plot` and `good`.
 - `[ ]` T-0029 Deploy to Render (Docker image) + Neon + R2. `/health`. Postman monitor.
@@ -207,6 +207,15 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[ ]` T-0113 Ghana Data Protection Commission registration and a DPIA for evidence photos.
 - `[ ]` T-0114 Device attestation in the capture SDK. Random second inspections. Inspector record (accepted visits only).
 - `[ ]` T-0115 Production SLOs, on-call, incident process. Move bot tokens to a GitHub App.
+
+## Engineering audit follow-ups (2026-10-03)
+
+- `[~]` T-0118 Reconcile technical contracts before implementation: distinguish missing results (WAIT) from a completed required-item check (REFUSE); separate verdict from payment effect; preserve authorisation attempts and human decision history. Test list: no vacuous release, no conflicting capture/void, no reused operation identity after redispatch, immutable prior decisions.
+- `[x]` T-0119 Usage webhook example now describes transactional inbox/job insertion, confirmed CAPTURE-only payout jobs, capture-based idempotency and post-commit acknowledgement. Tier: designed; caller-owned adapters are explicitly pseudocode. Runtime webhook dispatch and payout processing are still queued.
+- `[ ]` T-0120 Synchronise draft SDK and HTTP examples (`item` / `shot`, completion, response shape), contribution branch names, and day-four timers across docs.
+- `[!]` T-0121 Sandbox credentials for T-0007 have not been supplied. Smallest next step: identify their local secret-store/file location without pasting secrets. Domain and fixture work continue; no sandbox contract evidence is claimed.
+- `[x]` T-0122 API bootstrap and explicitly synthetic fixture routes (`good`, `wrong-plot`, `recycled`, `wrong-stage`, `nonce-unreadable`, `mock-location`, `freelance-missing-screen`). Tier: unit-tested. HTTP tests and container smoke checks verify `payment.executed: false` and no PayPal IDs. No financial endpoints are enabled.
+- `[x]` T-0123 Expand Biome to product TypeScript and enforce 85% overall / 100% domain coverage. Fix discovered landing-page accessibility lint errors (decorative SVG, button types, semantic fieldset). Tier: implemented; full product validation passes.
 
 ## Success gates (hackathon)
 

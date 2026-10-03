@@ -35,6 +35,10 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
       - run: pip install pre-commit==4.6.2
+      - name: Prepare the Docker toolchain
+        run: |
+          docker compose build app
+          docker compose run --rm app pnpm install --frozen-lockfile
       - name: Run every hook on every file
         env:
           SKIP: no-commit-to-branch,branch-name
