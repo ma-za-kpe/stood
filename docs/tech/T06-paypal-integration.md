@@ -39,7 +39,7 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 ### Release / refuse
 
 - Release: `POST /v2/payments/authorizations/{id}/capture` with `final_capture: true`, `invoice_id`, `note_to_payer = sentence`, and a stable operation UUID as `PayPal-Request-Id`.
-- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with its own stable operation UUID. Persist request identities per authorisation attempt and action, reuse them for retries, and never reuse an old hold's identity after redispatch.
+- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with its own stable operation UUID. Persist request identities per authorisation attempt, action and settlement attempt. Reuse them for ambiguous retries; after a confirmed definite failure, increment the settlement-attempt counter and allocate a fresh operation UUID. Never reuse an old hold's identity after redispatch. The pure domain key includes this counter; the adapter must persist its mapping to the provider UUID and the counter before calling PayPal.
 
 ### Timers (Render Workflows or pg-boss)
 
@@ -59,6 +59,8 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 | `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, with an `EXPIRE` confirmation record and provider response reference; notify. Requires a re-signature or new authorisation |
 | `INSTRUMENT_DECLINED` on authorise | `WAIT_FUNDING`. Sentence: "PayPal could not hold £4,000. Nothing was sent to inspect." |
 | Webhook missing | The poller checks open authorisations hourly (and on the tick endpoint) |
+
+`SYSTEM_FAULT` means a confirmed failure with no payment effect. A timeout, connection loss or PayPal 5xx is `AMBIGUOUS`, never `SYSTEM_FAULT`. The adapter's exact error-code mapping and capture-expiry safety margin remain blockers under T-0129 before payment calls are enabled.
 
 ## Sandbox setup
 

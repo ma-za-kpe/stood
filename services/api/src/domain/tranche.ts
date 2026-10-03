@@ -42,6 +42,7 @@ export class Tranche {
   #pending: PaymentOperation | null = null;
   #settlement: Settlement | null = null;
   #settlements: Settlement[] = [];
+  #settlementAttempt = 1;
 
   constructor(
     readonly id: string,
@@ -162,6 +163,7 @@ export class Tranche {
     } else {
       this.#state = 'WAITING';
     }
+    this.#settlementAttempt++;
     this.#pending = null;
   }
 
@@ -193,7 +195,7 @@ export class Tranche {
 
   private reserve(effect: 'CAPTURE' | 'VOID', target: PaymentOperation['target']): PaymentOperation {
     this.#pending = Object.freeze({
-      key: `${this.id}:${this.#attempts.length}:${effect}`,
+      key: `${this.id}:${this.#attempts.length}:${effect}:${this.#settlementAttempt}`,
       effect,
       authorizationId: this.currentHold.authorizationId,
       target,

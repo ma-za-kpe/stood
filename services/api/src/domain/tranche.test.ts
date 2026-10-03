@@ -19,6 +19,34 @@ const held = () => {
 };
 
 describe('Settlement review regressions', () => {
+  it.each(['CAPTURE', 'VOID'] as const)('allocates a new %s key after definite failures', (effect) => {
+    const tranche = held();
+    const decision = effect === 'CAPTURE' ? release() : refuse();
+    tranche.startDeciding();
+    const first = tranche.beginSettlement(decision, 'dec_first', at);
+    tranche.settlementFailed({ kind: 'DECLINED', effect, authorizationId: 'auth_1' });
+    const second = tranche.beginSettlement(decision, 'dec_retry', at);
+    expect(second?.key).not.toBe(first?.key);
+    expect(second?.authorizationId).toBe(first?.authorizationId);
+    tranche.settlementFailed({ kind: 'SYSTEM_FAULT', effect, authorizationId: 'auth_1' });
+    const third = tranche.beginSettlement(decision, 'dec_retry_again', at);
+    expect(new Set([first?.key, second?.key, third?.key]).size).toBe(3);
+  });
+  it.each(['CAPTURE', 'VOID'] as const)('retains the %s key through ambiguous or rejected failures', (effect) => {
+    const tranche = held();
+    tranche.startDeciding();
+    const operation = tranche.beginSettlement(effect === 'CAPTURE' ? release() : refuse(), 'dec_first', at);
+    for (let retry = 0; retry < 3; retry++) {
+      tranche.settlementFailed({ kind: 'AMBIGUOUS', effect, authorizationId: 'auth_1' });
+      expect(tranche.pendingOperation).toBe(operation);
+      expect(() => tranche.settlementFailed({ kind: 'DECLINED', effect, authorizationId: 'other' })).toThrow();
+      expect(tranche.pendingOperation?.key).toBe(operation?.key);
+    }
+    tranche.settlementFailed({ kind: 'DECLINED', effect, authorizationId: 'auth_1' });
+    expect(tranche.beginSettlement(effect === 'CAPTURE' ? release() : refuse(), 'dec_retry', at)?.key).not.toBe(
+      operation?.key,
+    );
+  });
   it.each([expiry, expiry + 1])('reserves expiry void rather than capture at %s', (now) => {
     const tranche = held();
     tranche.startDeciding();
