@@ -216,7 +216,7 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[!]` T-0121 Sandbox credentials for T-0007 have not been supplied. Smallest next step: identify their local secret-store/file location without pasting secrets. Domain and fixture work continue; no sandbox contract evidence is claimed.
 - `[x]` T-0122 API bootstrap and explicitly synthetic fixture routes (`good`, `wrong-plot`, `recycled`, `wrong-stage`, `nonce-unreadable`, `mock-location`, `freelance-missing-screen`). Tier: unit-tested. HTTP tests and container smoke checks verify `payment.executed: false` and no PayPal IDs. No financial endpoints are enabled.
 - `[x]` T-0123 Expand Biome to product TypeScript and enforce 85% overall / 100% domain coverage. Fix discovered landing-page accessibility lint errors (decorative SVG, button types, semantic fieldset). Tier: implemented; full product validation passes.
-- `[~]` T-0124 GitHub CI exposed a Linux bind-mount permission failure (runner-owned checkout vs container UID 1000). Parameterise the non-root development UID/GID and build with runner IDs. Revalidate locally and in GitHub CI before marking done.
+- `[x]` T-0124 Fix Linux bind-mount ownership by parameterising the non-root development UID/GID and building with runner IDs. Tier: implemented. Evidence: commit `615d84b`; local full pre-commit and UID 1001 container check pass; GitHub Actions run `37152475582` passes every required check.
 
 ## Success gates (hackathon)
 
