@@ -3,9 +3,13 @@
 Thanks for helping. Stood decides whether someone's money moves, so we work carefully.
 
 1. Read **[docs/WAYS_OF_WORKING.md](docs/WAYS_OF_WORKING.md)**: TDD, DDD, branches, commits, Definition of Done.
-2. Install the hooks: `pre-commit install --hook-type pre-commit --hook-type commit-msg`.
-3. Branch from `main` as `type/short-description`, write the failing test first, and keep PRs small.
-4. Give the PR a Conventional-Commit title (`feat(decision): …`). It's squash-merged, and release-please handles versions and the changelog.
-5. Never commit secrets, real coordinates, faces, phone numbers or account identifiers.
+2. Install the hooks: `pre-commit install`.
+3. Open or pick an issue. **Fork**, then branch as `<type>/<issue>-<slug>` (for example `feat/42-hold-timers`).
+4. Write the failing test first. Keep PRs small.
+5. **Sign off every commit** (`git commit -s`, the [DCO](https://developercertificate.org/)). Forgot? Run `git rebase --signoff main` and force-push your branch.
+6. Give the PR a Conventional-Commit title (`feat(decision): …`). It's squash-merged, and release-please handles versions and the changelog.
+
+By contributing you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see [SECURITY.md](SECURITY.md).
+7. Never commit secrets, real coordinates, faces, phone numbers or account identifiers.
 
 Design-phase contributions (docs, research, field knowledge from Ghana, Nigeria, Kenya or Uganda) are very welcome. Open an issue.

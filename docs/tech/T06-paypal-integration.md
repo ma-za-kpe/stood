@@ -26,6 +26,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 ### Hold (dispatch)
 
 `POST /v2/checkout/orders`:
+
 - `intent: AUTHORIZE`
 - `purchase_units[0]`: `amount`, `custom_id = tranche_id`, `invoice_id = alw_id:stage`, `description = "Stood hold: <stage>, released only on evidence"`
 - `payment_source.paypal.vault_id`

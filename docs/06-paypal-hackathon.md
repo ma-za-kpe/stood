@@ -87,6 +87,7 @@ Workshop notes: AG Grid and Bryntum are one group ("AG Grid × Bryntum"). APIMat
 ## Competitors already building [C, new]
 
 Public repos already tagged for this hackathon:
+
 - **Mandat** (`blanco1er/mandat`): an agent with a budget that you sign a **PayPal mandate** for once (Vault v3 setup and payment tokens). It holds deposits as **authorisations** (Orders v2), captures on merchant confirmation, issues invoices through the Agent Toolkit, and uses Channel3, AG Grid and Bryntum. **Deployed and well along.**
 - **subscription-killer:** finds and cancels forgotten subscriptions.
 - **Pr1meGG/paypal-ai-hackathon:** payment-aware agents for RTO (return-to-origin) reduction and lead conversion.

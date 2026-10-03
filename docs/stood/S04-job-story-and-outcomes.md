@@ -6,7 +6,7 @@
 
 ## Lifecycle [C, adds the money model from [09](../09-stood.md)]
 
-```
+```text
 Allowance signed ──► Stage dispatched ──► Package submitted ──► Decision
    (Vault mandate)    (PayPal AUTHORIZE:      (evidence)          ├─ Release ─► CAPTURE
                        "in review")                               ├─ Refuse  ─► VOID

@@ -9,7 +9,7 @@
 
 ## Repo layout (planned; no code yet)
 
-```
+```text
 stood/
 ├─ README.md                  ← the story + "5 MCPs, 5 jobs" table
 ├─ LICENSE
@@ -52,7 +52,7 @@ stood/
 | kernel | Kernel API / SDK (MCP if offered, to confirm) | Browser sessions for sandbox approval |
 | astropods | Astropods Claude plugin + CLI | Deploying the evidence agent |
 
-*(Exact endpoint and command strings to be confirmed when the file is written. Keys come from env.)*
+Note: exact endpoint and command strings are confirmed when the file is written. Keys come from env.
 
 ## Template for each `docs/sponsors/<tool>.md` page
 

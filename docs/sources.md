@@ -3,6 +3,7 @@
 Accessed 2026-10-03 unless noted.
 
 ## Hackathon
+
 - [PayPal AI Hackathon on Devpost](https://paypalaihackathon.devpost.com/) · [Resources](https://paypalaihackathon.devpost.com/resources)
 - [Mandat (competitor)](https://github.com/blanco1er/mandat) · [callcheck (competitor)](https://github.com/jo2980958-hub/callcheck) · [Pr1meGG entry](https://github.com/Pr1meGG/paypal-ai-hackathon)
 - [APIMatic Context Plugin for PayPal (PayPal blog)](https://developer.paypal.com/community/blog/A%20New%20Context%20Plugin%20for%20AI-Assisted%20Coding%20with%20PayPal%20SDKs/) · [Preview repo](https://github.com/paypaldev/server-sdk-context-plugin-preview)
@@ -12,6 +13,7 @@ Accessed 2026-10-03 unless noted.
 - [Channel3 seed round](https://siliconangle.com/2025/12/10/channel3-raises-6m-make-every-single-product-sold-web-discoverable-ai-agents/)
 
 ## Sponsors: agent surfaces
+
 - [PayPal Agent Toolkit and MCP](https://paypal.gitbook.com/agent-toolkit-and-mcp-server) · [Review: no human-confirmation gate (Vorp Labs)](https://vorplabs.com/agent-tools/paypal-agent-toolkit)
 - [APIMatic Context Plugin preview repo](https://github.com/paypaldev/server-sdk-context-plugin-preview) · [APIMatic MCP server generation](https://docs.apimatic.io/generate-mcp-servers/mcp-server-overview/) · [APIMatic Validator MCP](https://github.com/apimatic/apimatic-validator-mcp)
 - [ag-mcp](https://github.com/ag-grid/ag-mcp) · [AG Grid MCP docs](https://www.ag-grid.com/javascript-data-grid/mcp-server/) · [AG Studio 3](https://www.ag-grid.com/blog/ag-studio-3-is-here-dashboards-for-humans-and-ai/) · [AG Studio async data](https://www.ag-grid.com/studio/javascript/async-data/) · [AG Grid AI Toolkit](https://www.ag-grid.com/blog/ai-toolkit-control-ag-grid-with-natural-language-commands/) · [Hackathon: PayPal and AG Studio](https://www.ag-grid.com/blog/hackathon-paypal-and-ag-studio/)
@@ -29,11 +31,13 @@ Accessed 2026-10-03 unless noted.
 - [Competitor: paypal-a2a-commerce (AG Studio)](https://github.com/adamm285-dev/paypal-a2a-commerce)
 
 ## PayPal developer docs
+
 - [Authorisation and honour period](https://developer.paypal.com/docs/checkout/advanced/authorization-honor/) · [Authorise and capture later](https://developer.paypal.com/docs/checkout/standard/customize/authorization/)
 - [Multiparty delayed disbursement](https://developer.paypal.com/docs/multiparty/checkout/delayed-disbursement/)
 - [Acceptable Use Policy (escrow pre-approval)](https://www.paypal.com/us/legalhub/paypal/acceptableuse-full)
 
 ## PayPal company
+
 - [PayPal 8-K: CEO change](https://www.sec.gov/Archives/edgar/data/1633917/000119312526035860/d68718d8k.htm) · [Bloomberg](https://www.bloomberg.com/news/articles/2026-02-03/paypal-names-hp-s-enrique-lores-to-replace-ceo-alex-chriss)
 - [Reorganisation (PYMNTS)](https://www.pymnts.com/personnel/2026/paypal-reorganizes-around-3-business-units/) · [8-K](https://www.sec.gov/Archives/edgar/data/0001633917/000119312526197533/d128781dex991.htm)
 - [Cymbio acquisition](https://newsroom.paypal-corp.com/2026-01-22-PayPal-to-Acquire-Cymbio,-Accelerating-Agentic-Commerce-Capabilities)
@@ -43,11 +47,13 @@ Accessed 2026-10-03 unless noted.
 - [Banks warn on AI shopping agents (Insurance Journal)](https://www.insurancejournal.com/news/national/2026/09/23/886472.htm)
 
 ## Standards and security
+
 - [AP2 donated to FIDO Alliance](https://fidoalliance.org/google-donates-agent-payments-protocol-to-fido-alliance/)
 - [Whisper attacks on AP2 (arXiv 2609.11757)](https://arxiv.org/abs/2609.11757)
 - [x402 adoption (Chainalysis)](https://www.chainalysis.com/blog/x402-agentic-payments-adoption/) · [CoinDesk July 2026](https://www.coindesk.com/tech/2026/07/15/visa-mastercard-and-ripple-join-the-standard-letting-ai-agents-pay-in-stablecoins) · [165M transactions (DEV)](https://dev.to/t49qnsx7qtkpanks/x402-hit-165-million-transactions-heres-what-it-still-cant-do-4f4d)
 
 ## Agent economy
+
 - [Cursor $2B ARR (Bloomberg)](https://www.bloomberg.com/news/articles/2026-03-02/cursor-recurring-revenue-doubles-in-three-months-to-2-billion) · [Cursor $4B (Dealroom)](https://dealroom.co/news/134107-cursor-tops-4b-annualized-revenue/)
 - [Autonomous agent made $0 (Automaton Agency)](https://automatonagency.com/insights/autonomous-agent-revenue-experiment-teardown)
 - [Project Vend phase two (Anthropic)](https://www.anthropic.com/research/project-vend-2)
@@ -60,10 +66,12 @@ Accessed 2026-10-03 unless noted.
 - [Virtual Agent Economies (arXiv 2509.10147)](https://arxiv.org/abs/2509.10147)
 
 ## Pyramid / legal
+
 - [FTC business guidance on MLM](https://www.ftc.gov/business-guidance/resources/business-guidance-concerning-multi-level-marketing)
 - William F. Sharpe, "The Arithmetic of Active Management", *Financial Analysts Journal*, 1991
 
 ## Africa
+
 - [PayPal returns to Nigeria via Paga (TechCabal)](https://techcabal.com/2026/01/27/paypal-returns-to-nigeria-after-two-decades-this-time-through-paga/) · [User complaints (WeeTracker)](https://weetracker.com/2026/02/24/paypal-nigeria-return-user-complaints-paga/) · [Technext](https://technext24.com/2026/01/28/paypal-still-blacklisting-nigerians/)
 - [Xoom × Flutterwave Nigeria](https://www.techarena.co.ke/2026/07/13/flutterwave-partners-paypal-xoom-speed-up-money-transfers-nigeria/)
 - [PayPal World Africa 2026](https://www.techloy.com/paypal-plans-wallet-to-wallet-payments-in-africa-with-paypal-world/)

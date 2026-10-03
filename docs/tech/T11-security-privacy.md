@@ -22,6 +22,7 @@ Evidence attacks (GPS spoofing, recycled photos, collusion, prompt injection) ar
 | **E**levation of privilege | A prompt-injected model triggers a capture | **Runtime separation:** the evidence agent has no PayPal credentials. Model output is schema-validated. The money call is reachable only through the pure rule ([ADR-0003](../adr/0003-rules-move-money.md)) |
 
 Additional money-specific controls:
+
 - **Double capture:** `PayPal-Request-Id` idempotency + DB uniqueness + state checks.
 - **Gate bypass:** reconciliation flags any PayPal capture without a Stood release decision.
 - **Sandbox-only guard:** the app refuses to boot with a non-sandbox PayPal base URL.

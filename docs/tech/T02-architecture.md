@@ -75,7 +75,7 @@ flowchart TB
 
 ## 3. Components inside `stood-api` (C4 level 3)
 
-```
+```text
 src/
   domain/            ← pure. No I/O imports (enforced by dependency-cruiser)
     allowance/       Allowance aggregate, Stage, Geofence, Money
@@ -97,6 +97,7 @@ src/
 ```
 
 **Import rules (CI-enforced):**
+
 - `domain` → nothing outside `domain`.
 - `application` → `domain`, `ports`.
 - `adapters/*` → `ports`, `domain` types. Only `payments-paypal` may import `@paypal/*`.

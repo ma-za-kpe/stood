@@ -52,6 +52,15 @@
 | Stage timeline | **Bryntum Gantt** (partner, trial) | Commercial (keys from env) |
 | Static map | **MapLibre GL** + **OpenFreeMap** tiles (no key) | BSD / free |
 
+## Containers
+
+| Concern | Choice | Licence |
+|---|---|---|
+| Dev and prod containers | **Docker** + Compose ([T15](T15-docker-and-local-dev.md)) | Apache-2.0 |
+| Local services | postgres:17 + pgvector, MinIO, Mailpit | PostgreSQL / AGPL / MIT |
+| Runtime base | distroless nodejs24 (non-root) | Apache-2.0 |
+| Image lint / scan | hadolint, Trivy | GPL-3.0 / Apache-2.0 |
+
 ## Quality and tooling
 
 | Concern | Choice | Licence |

@@ -37,7 +37,9 @@
       <ul class="nav__links">
         <li><a href="#how">How it works</a></li>
         <li><a href="#try">Try the gate</a></li>
+        <li><a href="#use-cases">Use cases</a></li>
         <li><a href="#platforms">For platforms</a></li>
+        <li><a href="changelog.html">Changelog</a></li>
         <li><a href="https://github.com/ma-za-kpe/stood/tree/main/docs">Docs</a></li>
       </ul>
     </nav>
@@ -49,7 +51,7 @@
     <section class="hero" data-spot>
       <div class="hero__glow" aria-hidden="true"></div>
       <div class="hero__copy">
-        <p class="eyebrow"><span class="dot"></span> Open source · PayPal AI Hackathon 2026</p>
+        <p class="eyebrow"><span class="dot"></span> Open source · {{VERSION}} · PayPal AI Hackathon 2026</p>
         <h1 class="display">Money moves when someone <em>stood</em> there.</h1>
         <p class="lede">Stood is the gate between a staged payment and proof on the ground. A payer abroad signs what “done” means. PayPal holds the money. An inspector stands on the plot. <strong>Rules decide. The money moves, or it doesn’t, and you’re told why.</strong></p>
         <div class="hero__ctas">
@@ -165,6 +167,22 @@
       </div>
     </section>
 
+    <!-- USE CASES -->
+    <section class="section" id="use-cases" aria-labelledby="uc-h">
+      <p class="reveal kicker kicker--volt">Works anywhere</p>
+      <h2 class="reveal h2" id="uc-h">One endpoint. Many checklists.</h2>
+      <p class="reveal sub">Stood never learns your industry. You send a definition of done and a package of evidence. Stood returns release, refuse, or wait.</p>
+      <div class="usecases reveal-group">
+        <article class="uc"><span class="uc__tag">construction</span><h3>Diaspora builds</h3><p>Pay the next stage when someone stood on the plot.</p></article>
+        <article class="uc"><span class="uc__tag">freelance</span><h3>Milestones</h3><p>Pay when the three screens and the Figma link are delivered, and they’re not last week’s files.</p></article>
+        <article class="uc"><span class="uc__tag">insurance · lending</span><h3>Claims and draws</h3><p>Release when the field visit shows the damage, the stock or the shop.</p></article>
+        <article class="uc"><span class="uc__tag">rentals</span><h3>Deposits</h3><p>Return the deposit when the return photos match the checkout photos.</p></article>
+        <article class="uc"><span class="uc__tag">grants · NGOs</span><h3>Tranches</h3><p>Fund the next phase when the site matches the proposal.</p></article>
+        <article class="uc"><span class="uc__tag">agents</span><h3>AI that pays</h3><p>Agents pay suppliers only when the delivery passes the checks, via the Stood MCP.</p></article>
+      </div>
+      <p class="reveal sub"><a class="link" href="https://github.com/ma-za-kpe/stood/blob/main/docs/stood/S16-use-cases-and-evidence-profiles.md">Evidence profiles: how one gate fits every industry →</a></p>
+    </section>
+
     <!-- PLATFORMS -->
     <section class="section" id="platforms" aria-labelledby="pl-h">
       <p class="reveal kicker kicker--volt">For platforms</p>
@@ -218,7 +236,7 @@ POST /v1/tranches/trn_7Q/dispatch
 
   <footer class="foot">
     <img src="assets/brand/logo/stood-mark-on-dark.svg" alt="" width="40" height="40">
-    <p>Stood · MIT licensed · Built for the PayPal AI Hackathon 2026 · Sandbox only, no real money moves here.</p>
+    <p>Stood {{VERSION}} · MIT licensed · <a href="changelog.html">Changelog</a> · Built for the PayPal AI Hackathon 2026 · Sandbox only, no real money moves here.</p>
     <p class="muted">Ama, Kojo and all figures on this page are illustrative.</p>
   </footer>
 

@@ -27,6 +27,7 @@ The pasted plan said "capture a PayPal payout to the inspector" and "the platfor
 3. **Authorisations last 29 days** (3-day honour period). **Multiparty delayed disbursement maxes out at 28 days and then auto-releases.** House stages take months.
 
 **Recommended model: "authorise on dispatch, capture on proof".**
+
 - Ama signs the allowance once. PayPal **Vault** saves her payment method (the mandate stand-in).
 - When a stage is ready for inspection, Stood creates an Orders v2 order with **intent AUTHORIZE** for that tranche. This is the *hold*: "This tranche is in review until the photos match." Inspections take about 48 hours, inside the honour period.
 - **Release:** capture the authorisation. The payee is the **platform's** PayPal merchant account ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) / Manti Labs LLC, a US entity that can receive).

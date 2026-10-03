@@ -1,0 +1,22 @@
+[default.extend-words]
+# Names and domain words that are correct
+Kojo = "Kojo"
+Esi = "Esi"
+Ama = "Ama"
+cedi = "cedi"
+cedis = "cedis"
+Paga = "Paga"
+Xoom = "Xoom"
+Koscot = "Koscot"
+ser = "ser"
+Magentic = "Magentic"
+RTO = "RTO"
+wdth = "wdth"
+opsz = "opsz"
+
+[default]
+# STRIDE-style bold initials: **I**nformation, **R**epudiation
+extend-ignore-re = ["\\*\\*[A-Z]\\*\\*[a-z]+"]
+
+[files]
+extend-exclude = ["docs/brand/**/*.svg", "*.lock", "CHANGELOG.md"]

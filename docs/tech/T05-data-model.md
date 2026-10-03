@@ -10,7 +10,7 @@
 
 ## Postgres schema (logical)
 
-```
+```text
 platforms            (id, name, webhook_url, key_hash, hmac_secret_ref, created_at)
 allowances           (id, platform_id, platform_ref UNIQUE(platform_id, platform_ref), status,
                       plot_lat, plot_lng, radius_m, currency, cap_minor, payee_ref,
@@ -40,6 +40,7 @@ audit_log            (id, actor, action, target, detail jsonb, at)   -- append-o
 ```
 
 Notes:
+
 - **The CHECK constraints mirror the domain invariants**, as a second line of defence.
 - `nonce_hash` stores a hash of the nonce, not the nonce itself. The nonce is returned once, at dispatch.
 - `paypal_calls.request_id` = the `PayPal-Request-Id`. Its uniqueness prevents duplicate mutations.
@@ -48,7 +49,7 @@ Notes:
 
 ## R2 layout
 
-```
+```text
 stood-evidence/
   pkg/{package_id}/{photo_id}.jpg          originals (private)
   pkg/{package_id}/{photo_id}.thumb.webp   thumbnails (private, signed URLs)

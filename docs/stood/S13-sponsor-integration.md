@@ -4,6 +4,7 @@
 **Rule that keeps it from becoming a toolbox tour:** *each tool gets one job Stood already needed, and the docs say what we refused to use it for.* The video still opens on the refusal. The sponsors appear as the file you open after the money stays.
 
 Every sponsor has **two surfaces**. The open-source lesson is the map of both:
+
 - **Build-time:** an MCP server or skills that ground the *coding agent* (Claude Code / Cursor), so it writes correct code instead of guessing.
 - **Run-time:** a feature inside Stood, usually with an AI interface, doing a job in the product.
 
@@ -21,6 +22,7 @@ Every sponsor has **two surfaces**. The open-source lesson is the map of both:
 ## Each sponsor's job in detail
 
 ### PayPal (the required one)
+
 - **Server SDK** (APIMatic-generated) for the money path: create the order with `intent=AUTHORIZE` on dispatch, **capture** on release, **void** on refuse, reauthorise near day 3.
   > Finding [C]: the Agent Toolkit **has no authorise or void tools** (it has create_order, capture, refund, invoices, disputes, tracking, subscriptions). The money path must use the SDK.
 - **Agent Toolkit MCP (read-only)** in the reviewer agent: it pulls dispute status and transaction history into the Reviewer file.
@@ -29,6 +31,7 @@ Every sponsor has **two surfaces**. The open-source lesson is the map of both:
 ### APIMatic: two jobs, both real
 
 **APIMatic Context Plugins [C, verified]:**
+
 - **Install:** `npx context-plugins install https://github.com/paypaldev/server-sdk-context-plugin-preview`
 - **Contents:** **skill sets** (one per language: C#, Java, PHP, Python, Ruby, **TypeScript**; 8 skills each), covering authentication, getting started / client init, API calls, error handling, configuration, models, and testing. Every fact is grounded in the SDK's own source and generated docs.
 - **APIMatic's claimed results:** about 37% better token efficiency, 83% integration success on complex APIs, about 70% fewer security issues per KLOC. Quote them as *APIMatic's* figures, not ours.
@@ -42,10 +45,12 @@ Every sponsor has **two surfaces**. The open-source lesson is the map of both:
    - a **Stood MCP server**, so *any* agent (Claude, a Muse-like assistant, PayPal's own agent) can call `stood.create_allowance`, `stood.submit_package` and `stood.get_decision`.
 
    The story becomes: **"Before an agent pays a contractor, it asks Stood."** Use the APIMatic **Validator MCP** to lint the spec.
-   > ⚠️ MCP generation is in **alpha, by request** (support@apimatic.io). **Email them in week 1.** Fallback: the generated SDK plus a thin hand-written MCP wrapper over it (still APIMatic-powered).
+   > ⚠️ MCP generation is in **alpha, by request** (<support@apimatic.io>). **Email them in week 1.** Fallback: the generated SDK plus a thin hand-written MCP wrapper over it (still APIMatic-powered).
 
 ### AG Grid → AG Studio
+>
 > ⚠️ Correction [C]: AG Grid's own hackathon post names the prize **"Best Use of AG Studio"**, so the Reviewer file must be an **AG Studio** dashboard, not just a data grid.
+
 - **Reviewer file = an AG Studio dashboard.** Widgets:
   - a grid of decisions: plot, stage, allowance, package, **failed field**, confidence, hold time left, PayPal order id, capture or void id
   - KPI tiles: money held now, % refused by field, **false-refusal rate**, median hold time
@@ -66,24 +71,30 @@ Every sponsor has **two surfaces**. The open-source lesson is the map of both:
 - Licensing: AG Studio and the AI Toolkit are commercial / Enterprise. Check the hackathon licence or trial terms (see [S10](S10-sandbox-limits-and-open-questions.md)).
 
 ### Bryntum: its own brief describes Stood
+>
 > Verified [C]: Bryntum's hackathon post suggests *"an agency delivery board where **late payments block workflow phases**"* and *"a calendar that **locks a slot until payment clears**"*. Stood is exactly that, for construction tranches.
+
 - **Gantt** on the Allowance and Receipt: Foundation → Blockwork → Roof → Finishes with dependencies. **Each successor bar is locked until Stood releases the predecessor.** The authorisation window is drawn as a constraint (day 3 honour period, day 29 expiry). A refusal pushes dependants and the critical path shows Ama the delay.
 - **AI chat (Bryntum's experimental AI feature)**, LLM-agnostic tool calls. Demo line: **"Why is blockwork blocked?"** → "Foundation was refused: wrong plot, 1.4 km off. Nothing was paid."
 - **Scheduler (narrow):** the **inspection window** for each stage, i.e. the slot during which the PayPal hold is live. It can't be marked done until a capture or void id exists. This isn't dispatch or matching, which stay [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite).
 - Build with the **Bryntum MCP and skills**.
 
 ### Channel3: the spec check (not price, not shopping)
+>
 > ⚠️ Correction [C]: the pasted plan says to refuse a tranche when the builder's material price is far from a Channel3 offer. **Channel3 doesn't support Ghana, Nigeria or Kenya** (19 locales: North America, Europe, UK, Australia…). UK or US cement prices say nothing about Accra prices, so this would **refuse honest builders**. It also turns a model-ish comparison into a money decision. **Rejected.**
 
 **The use that survives** (a real diaspora complaint: *"I paid for good fittings and they installed cheap ones"*):
+
 1. **At allowance time:** for the finishes stage, Ama (or the builder's quote) lists specified items by **product URL**, for example a specific tap, WC, tile, paint, or roofing-sheet brand. **Channel3 Lookup Product** turns each URL into structured attributes plus **reference images**, which become checklist items.
 2. **At inspection:** Kojo photographs each fitted item. **Channel3 Image Search** on the photo returns its closest catalog matches.
 3. **Rule:** if the specified product (or the same brand / model family) is among the top matches → ✓. If not → **WAIT** ("Fitted tap doesn't look like the one specified. A person is checking."). **Never an automatic refuse.**
 4. **Advisory only:** the UK (GB locale) price of the specified item is shown to Ama for context ("this tap is about £180 in the UK"). It never decides anything.
+
 - Works because branded fixtures are global products even when the shops are local. Coverage of African-only brands (for example local cement) will be poor, so it's limited to fixtures and finishes.
 - Build with the **Channel3 MCP**.
 
 ### Render: so the judge can click, and holds survive restarts
+
 - Web, API, Postgres and Key Value on Render. The URL goes in the submission and is kept warm.
 - **Render Workflows**, one workflow: `dispatch → authorise → await package → checks → capture | void | wait`, plus timers: **reauthorise at day 3**, warn at day 27, void at day 29. That's genuinely durable, long-running work.
 - **Render MCP for ops:** the coding agent deploys, reads **logs** and **metrics**, and queries Postgres during development. Publish the transcript snippets as a lesson. (This also covers the "monitor the logs" habit, on Render rather than AWS.)
@@ -101,11 +112,13 @@ These have **no sponsor prize**, only credits and support. They earn their place
 | **Zapier** | **Zapier MCP** (9,000+ apps; agentic meta-tools in beta) | **Delivers "the sentence"**: decision events → email / SMS / WhatsApp to Ama and Kojo, Slack to the reviewer, Google Sheets for an NGO consumer | **Anything inbound that could move money.** Zapier is outbound only |
 
 ### Astropods: the agent that looks can't pay
+
 - Declared in `astropods.yml`: model (any provider), a **knowledge store** (construction-stage reference guide, checklists per stage, the nonce rules), tools (Channel3 image search, Elastic kNN), and **observability** (a trace of every finding).
 - **Security argument [C]:** splitting the runtimes enforces the core principle *"the model reports findings, rules move money"* at the **infrastructure** level. The evidence agent can return findings to Stood. It **can't** reach PayPal, because no credentials exist in its runtime. That's a strong defence against prompt injection in photos (attack A8, [S11](S11-evidence-integrity.md)).
 - Its traces feed the "model findings" section of the dispute packet.
 
 ### Elastic: evidence memory
+
 - An index of every package photo: `dense_vector` image embedding, perceptual hash, plot id, stage, time. **kNN** answers "has this photo, or one very like it, been seen before on *any* plot?" This catches attacks A3 and A4.
 - **Seed it with public construction images** so "a photo downloaded from the internet" is caught too. That makes it useful from day one, even with a small corpus.
 - **Hybrid search** for the reviewer: "refused for missing north wall in Kumasi".
@@ -113,6 +126,7 @@ These have **no sponsor prize**, only credits and support. They earn their place
 - Replaces the earlier "pgvector is enough" note: Elastic gives us image *and* text search with one tool.
 
 ### Kernel: keeps the demo honest and clickable
+
 - PayPal sandbox orders need a **buyer to approve** in a browser. Kernel runs that approval headlessly with a sandbox buyer account. So:
   - **fixtures replay end to end** (good / wrong plot / recycled / wrong stage / substituted fitting),
   - **judges can press "Replay as Ama"** and watch a real sandbox approval happen, with Kernel's **live view** embedded,
@@ -120,12 +134,14 @@ These have **no sponsor prize**, only credits and support. They earn their place
 - Optional, advisory only: a browser check of the **builder's business registration** on a public registry when the allowance is created. Show it as information, never as a gate. ⚠️ Check the registry's terms of use first.
 
 ### Postman: the learnable surface
+
 - Public workspace "Stood × PayPal": Stood's API (imported from OpenAPI), PayPal sandbox calls (authorise / capture / void), and environment templates.
 - A **fixtures collection** that triggers every outcome. This answers the "judges must be able to test it" requirement.
 - **Postman Monitors**, every 15 minutes against the hosted demo: an uptime proof and a keep-warm for Render.
 - Build-time: **Postman MCP server** in `.mcp.json`. Optionally test the Stood MCP server in Postman's MCP client.
 
 ### Zapier: the sentence reaches people where they are
+
 - Stood emits decision events. A Zap fans them out:
   - Ama gets an email or WhatsApp with the one-line reason and the receipt link.
   - Kojo gets an SMS: "Accepted. Your fee is on its way." / "Photos were taken 1.4 km from the pin…"
@@ -147,6 +163,7 @@ These have **no sponsor prize**, only credits and support. They earn their place
 ## How it shows up in the 90-second video
 
 No new beats. The sponsor work appears inside existing ones ([S09](S09-demo-script.md)):
+
 - **Allowance:** the Bryntum Gantt is the allowance (3s).
 - **Refusal:** "Why is blockwork blocked?" in Bryntum chat (5s).
 - **Release on finishes (optional):** the Channel3 spec check ticks "tap matches spec" (3s).

@@ -27,6 +27,7 @@
 | **Prizes, grants, subsidies, token-launch fees** | Sponsors and speculators | Nothing past the seeding stage | Expiry. Survival depends on the next round |
 
 **Tiers [U]:**
+
 - **Cleanest:** a human pays again for a delivered output, with no recruitment bonus and no token.
 - **Fine as seed money, bad as a success metric:** ads, affiliates, trading, subsidies.
 - **An internal loop in disguise:** agents paying agents with money that was just granted from outside. That's float, not income.

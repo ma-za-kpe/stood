@@ -4,7 +4,7 @@ Goal: turn a package into **check results + findings** that the pure decision ru
 
 ## Pipeline (one Render Workflow run per package)
 
-```
+```text
 1. ingest       copy / validate photos → R2. Compute sha256, pHash (sharp + dHash/pHash), strip nothing
 2. rules        C1 completeness · C2 window · C3 plot · C4 platform signals          (stood-api, pure)
 3. index        C5 near-duplicate query (EvidenceIndex) → then index this package's photos
@@ -54,6 +54,7 @@ Steps 2 and 3 run before step 4. **If a hard rule already refuses, the model ste
 ## What Stood reuses from [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) (don't duplicate)
 
 [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)'s `onEvidenceSubmitted` already computes these signals:
+
 - `MOCK_LOCATION`, `LOW_ACCURACY`, `GPS_EXIF_MISMATCH`, `TIMESTAMP_DRIFT`, `IMPOSSIBLE_TRAVEL`, `PHASH_DUPLICATE`, `GPS_OFF_SITE`, `CONTENT_UNSAFE`, `ATTESTATION_FAILED`
 - a Firebase App Check attestation verdict
 - a provenance manifest hash

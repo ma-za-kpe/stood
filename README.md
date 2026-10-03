@@ -50,7 +50,8 @@ Stood is the **gate** a platform calls before a staged payment leaves.
 
 Every decision writes onto the PayPal order and leaves a **file**: who allowed it, what was captured, what stood on the plot. A dispute becomes evidence, not an argument.
 
-**Principles**
+### Principles
+
 - **Rules move money; models only report findings.** The AI that looks at photos runs without PayPal credentials.
 - **Stood never holds funds** and never pays anyone locally. Platforms (like [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)) own users, matching and local payouts.
 - **No silent holds.** Every state has one plain sentence.
@@ -106,8 +107,8 @@ Everything decided so far is in **[`docs/`](docs/README.md)**: research, product
 
 How we work: **[Ways of working](docs/WAYS_OF_WORKING.md)** (test-first, domain-driven, trunk-based with release-please, pre-commit gates) · [ADRs](docs/adr/) · [Task ledger](TASKS.md) · [CONTRIBUTING](CONTRIBUTING.md).
 
-
 The project is in its design phase. Issues and discussion on the docs are welcome, especially from:
+
 - people who've sent money home for a build,
 - inspectors, surveyors and builders in Ghana, Nigeria, Kenya or Uganda,
 - payments and risk folks.

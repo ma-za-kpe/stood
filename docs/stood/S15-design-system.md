@@ -109,6 +109,7 @@ Motion is the brand. It must **feel quick and land with certainty**: ease `cubic
 | Ambient | Slow violet glow drift. Ticker marquee of (synthetic) decisions |
 
 Rules:
+
 - `prefers-reduced-motion` → **no intro, no grain, no movement**. Everything is shown in its final state.
 - Content never depends on animation to be visible. There's a no-JS fallback, plus a 3.8s failsafe that settles everything.
 - **Product screens** (allowance, decision, receipt, reviewer) use only the verdict pop, the check ticks and fades. No grain, tilt or marquee where money is decided.
@@ -140,6 +141,7 @@ Rules:
 ## 8. Asset kit
 
 Unchanged paths, regenerated for v2 in [`docs/brand/`](../brand/):
+
 - `logo/`: mark (light / dark / mono / refused), wordmark, lockups, favicon (adapts to the colour scheme), verdict chips.
 - `app-icons/`: iOS light / dark / tinted 1024, Android adaptive fg / bg / monochrome, PWA maskable.
 - `social/`: avatar (light / dark), OG card 1200×630, X header, LinkedIn banner.

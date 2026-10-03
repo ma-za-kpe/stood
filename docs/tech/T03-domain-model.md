@@ -1,10 +1,13 @@
 # T03: Domain model and decision rules
 
+> **Generalisation pending ([ADR-0007](../adr/0007-domain-agnostic-evidence-profiles.md), [S16](../stood/S16-use-cases-and-evidence-profiles.md)):** `Plot` becomes an optional `location` check, `Stage` becomes `Milestone`, and `requiredShots` becomes `required_items`. Checks are composed per milestone through an **evidence profile**. The construction names below describe the `construction.stage@1` profile.
+
 Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §5–6](../WAYS_OF_WORKING.md#5-domain-driven-design).
 
 ## Aggregates
 
 ### `Allowance`
+
 | Field | Type | Invariant |
 |---|---|---|
 | id | `AllowanceId` (ULID) | — |
@@ -20,9 +23,11 @@ Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §
 | version | int | Optimistic lock |
 
 ### `Stage` (entity in Allowance)
+
 `name`, `amount: Money`, `requiredShots: ShotSpec[]`, `checklist: ChecklistItem[]`, `fixtures?: FixtureSpec[]` (Channel3 product refs), `dependsOn?: StageName`.
 
 ### `Tranche`
+
 | Field | Invariant |
 |---|---|
 | id, allowanceId, stageName | — |
@@ -38,9 +43,11 @@ Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §
 Methods: `dispatch(auth, nonce, at)`, `startDeciding(pkg)`, `release(capture, decision)`, `refuse(void, decision)`, `wait(reason)`, `expire(void)`, `redispatch()`. Each method checks its invariants and emits events.
 
 ### `Package`
+
 `id`, `trancheId`, `platformRef` (idempotency), `photos: Photo[]`, `checklistAnswers`, `platformSignals: PlatformSignal[]` (untrusted inputs), `submittedAt`. Immutable once complete.
 
 ### `Decision` (immutable record)
+
 `id`, `packageId`, `outcome: RELEASE | REFUSE | WAIT`, `namedField?` (required for REFUSE), `reason` (the sentence key + params), `checks: CheckResult[]`, `findings: Finding[]`, `ruleSetVersion`, `modelRefs` (model id + version), `decidedBy: RULES | REVIEWER | PAYER`, `decidedAt`.
 
 ## Value objects
@@ -78,7 +85,7 @@ Each becomes an outbound webhook `<aggregate>.<verb>` ([T04](T04-api-spec.md#web
 
 ## Decision rule (pure function)
 
-```
+```text
 decide(checks, findings, ruleSet):
   hard = first failing check in precedence order [C1, C2, C3, C5, C6, C7]
   if hard exists        → REFUSE(hard.namedField)

@@ -1,0 +1,18 @@
+name: Feature or use case
+description: Propose a capability or a new evidence profile
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Who is the payer, who is the payee, and what does "done" mean?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What evidence proves it? Which generic checks (S16) would it use?
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else

@@ -130,90 +130,106 @@ The words in [S06](stood/S06-voice-and-states.md) are the words in code: `Allowa
 
 ---
 
-## 7. Branches, commits and pull requests
+## 7. Branching, commits and pull requests (open-source GitFlow)
 
-### Trunk-based, with release-please
+Rationale: [ADR-0006](adr/0006-open-source-branching-strategy.md) (supersedes the trunk-based ADR-0002).
 
-- `main` is the only long-lived branch. It's always releasable and protected. **No direct commits to `main`.**
-- Short-lived branches (≤ 2 days), named `type/short-description`. Types: `feat/`, `fix/`, `docs/`, `test/`, `refactor/`, `chore/`, `ci/`, `spike/` (throwaway learning, never merged as-is).
-- Merge by **squash**. **The PR title must be a Conventional Commit**, because that title becomes the commit release-please reads.
-- Delete the branch after merge.
+### Branch model: `main` ← `develop` ← `feature/*`
 
-> **Why not speedo's `develop` + `main`?** release-please releases from the default branch, and a 5.5-week build with one integrator doesn't need a separate integration branch. If we add more contributors or a staged deployment, we revisit this in an ADR.
-
-### Conventional Commits
-
+```text
+main     ●──────────────●(v0.2.0)──────────●(hotfix v0.2.1)──────────●(v0.3.0)
+          \            ↑ promotion PR      ↑ hotfix/…  ↓ back-merge   ↑
+develop    ●──●──●──●──●──────●──●──●──────●──────────●──●──●──●─────●
+              ↑  ↑  ↑            ↑  ↑                     ↑  ↑
+       feature/… fix/… docs/…  (squash-merged, one Conventional Commit each)
 ```
+
+| Branch | From → into | Merge | Notes |
+|---|---|---|---|
+| `develop` | **Default branch** | — | All work targets it |
+| `feature/<issue>-<slug>` (also `fix/ docs/ chore/ ci/ build/ refactor/ test/ perf/ revert/`) | `develop` → `develop` | **Squash** | ≤ 3 days. Validated by the `branch-name` hook |
+| Promotion PR `develop → main` | `develop` → `main` | **Merge commit** | Title `chore: promote develop to main`. Triggers release-please and a Pages deploy |
+| Release PR (release-please bot) | → `main` | Squash | Bumps the version and CHANGELOG, tags `vX.Y.Z`. Plays GitFlow's `release/*` role |
+| `hotfix/<slug>` | `main` → `main` | Squash | Then the automatic back-merge |
+| Back-merge PR `main → develop` | `main` → `develop` | **Merge commit** | Opened automatically by `back-merge.yml` |
+| `release/vX.Y` | tag → | Cherry-pick | Only after 1.0.0, security backports |
+| `spike/<slug>` | `develop` | **Never merged** | Learnings → docs / ADR |
+
+Rulesets on `main` and `develop`:
+
+- PR required
+- checks `pre-commit` + `pr-title` + `dco`
+- conversations resolved
+- no force-push or deletion
+- linear history on `develop`
+
+Bot PRs don't trigger CI (a `GITHUB_TOKEN` limitation), so the admin merges them by bypass and notes it.
+
+### Commits
+
+```text
 <type>(<scope>): <imperative summary, ≤ 72 chars>
 
 <why, not what: the reason and the evidence>
 
-Refs: TASKS.md#<id>
+Refs: #<issue>
+Signed-off-by: Your Name <you@example.com>     ← DCO, add with `git commit -s`
 ```
 
-- Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`, `ci`, `build`, `revert`.
-- Scopes = bounded contexts or areas: `allowance`, `evidence`, `decision`, `payments`, `records`, `notifications`, `web`, `capture`, `brand`, `docs`, `infra`.
-- **Breaking change:** `feat(decision)!: …` plus a `BREAKING CHANGE:` footer.
-- Enforced at `commit-msg` by pre-commit (§8).
+- Types as above. Scopes = bounded contexts or areas: `allowance`, `evidence`, `decision`, `payments`, `records`, `notifications`, `profiles`, `web`, `site`, `brand`, `docs`, `infra`, `deps`.
+- Breaking change: `feat(decision)!:` plus a `BREAKING CHANGE:` footer.
+- Enforced locally at `commit-msg` (Conventional + DCO) and in CI (PR title + DCO on every commit).
 
 ### Pull requests
 
-- Small (aim for < 400 changed lines, excluding generated files and fixtures).
-- Fill in the [PR template](../.github/pull_request_template.md): scope, the tests written first, evidence tier reached, money-safety checklist, docs updated.
-- A PR that changes behaviour updates its spec doc in the same PR.
-- CODEOWNERS review is required on money-path code (`payments`, `decision`) and on CI.
+- Open an issue first for anything non-trivial. The PR links it.
+- Small: < 400 changed lines excluding generated files and fixtures. Split otherwise.
+- The **PR title is the changelog line.** It must be a Conventional Commit (CI-checked).
+- Use the [PR template](../.github/pull_request_template.md): scope, the tests written first, the evidence tier, the money-safety checklist, docs updated.
+- A behaviour change updates its spec in the same PR.
+- Reviews: required approvals are 0 while there's a solo maintainer. **This becomes 1, plus CODEOWNERS on `payments` / `decision` / `.github`, when a second maintainer joins.**
+- Admin bypass of the ruleset must be explained in the PR and logged in `TASKS.md`.
 
----
+## 8. Validation before commit (pre-commit is cutthroat)
 
-## 8. Validation before commit (pre-commit)
-
-The [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) is the local gate. **Never use `--no-verify`.** If a hook is wrong, fix the hook in its own PR.
-
-Install once:
+The [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) is the local gate, and CI runs **the same config on every PR**. **Never `--no-verify`.** If a hook is wrong, fix the hook in its own PR.
 
 ```console
 pip install pre-commit        # or: brew install pre-commit
-pre-commit install --hook-type pre-commit --hook-type commit-msg
+pre-commit install            # installs pre-commit + commit-msg hooks
+git commit -s                 # always sign off (DCO)
 ```
 
-Before committing a material change:
+Before pushing:
 
 ```console
 pre-commit run --all-files --show-diff-on-failure
-git add <exact files>         # stage exact files, never `git add -A` blindly
-git diff --cached --check
 ```
 
-### Hooks today (docs phase)
+### The gate today
 
-| Hook | Why |
-|---|---|
-| Trailing whitespace, end-of-file, mixed line endings | Clean diffs |
-| YAML / JSON / XML (SVG) validity | Config and brand assets parse |
-| Merge-conflict markers, large files (> 500 KB) | Repo hygiene |
-| Private-key detection + **gitleaks** secret scan | Open-source repo: a leaked key is public immediately |
-| **No commit to `main`** | Trunk discipline |
-| **Lychee offline link check** on Markdown | Docs stay navigable |
-| **Conventional Commit message** (`commit-msg` stage) | release-please needs it |
+| Area | Hooks | Fails when |
+|---|---|---|
+| Git hygiene | `no-commit-to-branch` (main), **`branch-name`**, merge-conflict, case-conflict, symlinks, submodules forbidden | You're on `main`, a branch name is off-pattern, conflict markers remain, … |
+| File hygiene | trailing whitespace, EOF, LF line endings, BOM, executable / shebang consistency, large files > 500 KB | Any drift (most are auto-fixed, and the commit still fails so you see the fix) |
+| Formats | YAML, JSON, TOML, XML / SVG validity. **GitHub workflow and Dependabot schema** (check-jsonschema) | Invalid syntax or schema |
+| GitHub Actions | **actionlint**, **zizmor** (security: unpinned actions, credential persistence, injection, over-broad permissions) | Any finding |
+| Secrets | **gitleaks**, private-key and AWS-credential detection | Anything that looks like a secret |
+| Docs | **markdownlint-cli2** (auto-fix), **lychee** offline links with fragments, **typos** | Broken links or anchors, lint errors, misspellings |
+| Web code | **Biome** (format + lint for `site/` and `tools/` JS / CSS / JSON) | Unformatted or lint errors |
+| Product voice | **banned-words** in user-facing copy (`site/`, later `apps/`): `escrow`, `verified`, `fraud`, "Something went wrong" | Any hit |
+| Commit message | **Conventional Commits** (strict types) + **DCO `Signed-off-by`** | Non-conforming message or missing sign-off |
 
-### Hooks added when code lands (pre-registered here so they can't be skipped)
+### Pre-registered for when product code lands (added in the same PR as the first code)
 
-| Hook | Gate |
-|---|---|
-| Formatter check, linter, **strict** type check | Style and type safety |
-| Affected unit tests (domain + application) | TDD stays honest |
-| **Money-boundary check** | Only `payments` imports the PayPal SDK. `evidence` / LLM code never imports `payments`. No float arithmetic on `Money` |
-| **Banned-words check** in UI copy (`escrow`, `verified`, `fraud`, "Something went wrong") | Voice ([S06](stood/S06-voice-and-states.md)) |
-| Dependency vulnerability audit | Supply chain |
+`tsc --strict`, **dependency-cruiser money boundary**, affected Vitest suites, coverage floors, `pnpm audit`, and an OpenAPI breaking-change diff.
 
-**CI runs the same hooks plus the full test suite and coverage floor.** Green locally isn't the same as green in CI, and only CI green merges.
-
----
+**CI ([`ci.yml`](../.github/workflows/ci.yml)):** `pre-commit` (all files), `pr-title` (Conventional), `dco` (every non-bot commit signed off). Only green CI merges.
 
 ## 9. Releases (release-please)
 
 - [release-please](https://github.com/googleapis/release-please) watches `main`. From the Conventional Commits it keeps a **release PR** open with the next version and a generated `CHANGELOG.md`.
-- **Merging the release PR** tags `vX.Y.Z` and publishes a GitHub Release. Nothing else deploys automatically from a tag. Deployment to Render is a separate, deliberate step.
+- **Merging the release PR** tags `vX.Y.Z`, publishes a GitHub Release, and the `landing-page` workflow republishes <https://ma-za-kpe.github.io/stood/> including the **changelog page** rendered from `CHANGELOG.md`. Nothing else deploys automatically from a tag. Deployment to Render is a separate, deliberate step.
 - **Versioning:** SemVer, starting at `0.1.0`. Before 1.0, `feat` bumps the minor version and `fix` bumps the patch.
 - **Planned milestones:**
   - `0.1.0`: docs and brand foundation.
@@ -230,11 +246,14 @@ git diff --cached --check
 Material decisions get an ADR in [`docs/adr/`](adr/) using the [template](adr/0000-template.md): **context with evidence → decision → alternatives considered → risks and controls → reversal condition.** ADRs are append-only. To change one, add a new ADR that supersedes it.
 
 Current ADRs:
+
 - [0001](adr/0001-record-architecture-decisions.md): record decisions as ADRs
 - [0002](adr/0002-trunk-based-with-release-please.md): trunk-based flow with release-please
 - [0003](adr/0003-rules-move-money.md): rules move money; hexagonal money boundary
 - [0004](adr/0004-authorise-on-dispatch-capture-on-proof.md): authorise on dispatch, capture on proof
 - [0005](adr/0005-design-system-v2-volt.md): design system v2, "Volt"
+- [0006](adr/0006-open-source-branching-strategy.md): open-source branching and release strategy
+- [0007](adr/0007-domain-agnostic-evidence-profiles.md): Stood is domain-agnostic, with evidence profiles
 
 ---
 
@@ -276,6 +295,7 @@ A slice is **done** when all of these are true:
 ## 14. Safe handoff (end of every material slice)
 
 Report:
+
 - branch and exact commit
 - clean / dirty worktree
 - task ids and status

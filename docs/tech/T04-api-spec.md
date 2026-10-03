@@ -13,6 +13,8 @@ The **OpenAPI 3.1** document is the source of truth (`openapi/stood.yaml`, gener
 
 ## Endpoints
 
+> Before 0.2.0, the allowance body generalises to `milestones[]{ name, amount, profile: "construction.stage@1", params: { location, required_items, … } }` ([S16 §5](../stood/S16-use-cases-and-evidence-profiles.md#5-what-this-changes-in-the-technical-docs)). The construction example below shows the profile's params inlined for readability.
+
 ### Allowances
 
 | Method | Path | Purpose | FR |
@@ -109,6 +111,7 @@ Event types: `allowance.signed`, `allowance.signature_failed`, `tranche.held`, `
 `POST /webhooks/paypal`. Verified with `POST /v1/notifications/verify-webhook-signature` (simulator events can't be verified that way, so they're accepted only when `DEMO_MODE` is on), then deduplicated on event id.
 
 Subscribed events:
+
 - `VAULT.PAYMENT-TOKEN.CREATED`
 - `PAYMENT.AUTHORIZATION.CREATED`
 - `PAYMENT.AUTHORIZATION.VOIDED`

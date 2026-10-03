@@ -1,6 +1,6 @@
 # ADR-0002: Trunk-based flow with release-please
 
-- **Status:** accepted
+- **Status:** superseded by [ADR-0006](0006-open-source-branching-strategy.md) (GitFlow)
 - **Date:** 2026-10-03
 
 ## Context and evidence

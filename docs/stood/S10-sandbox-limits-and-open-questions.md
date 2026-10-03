@@ -31,7 +31,7 @@
 | 8 | Trademark / domain for "Stood" | Brand | Search USPTO, UKIPO, Ghana RGD |
 | 9 | Can one project win a main prize plus several sponsor prizes? | Prize strategy | Read the Devpost official rules |
 | 11 | Licences for AG Studio (and the AI Toolkit, an Enterprise feature) and Bryntum during the hackathon and in a public repo | Commercial components in an open-source repo | Ask at the 12 Oct workshop / sponsor Discord |
-| 12 | APIMatic MCP-server generation is alpha, by request | Needed for the "Stood MCP" | Email support@apimatic.io, week 1 |
+| 12 | APIMatic MCP-server generation is alpha, by request | Needed for the "Stood MCP" | Email <support@apimatic.io>, week 1 |
 | 13 | Does Channel3 image search identify fixtures from phone photos taken in Ghana? | The spec check depends on it | Test with 20 real fixture photos, week 1 |
 | 15 | Do vaulted PayPal wallet tokens support `AUTHORIZE` orders, human not present? | Core of the hold model ([T06](../tech/T06-paypal-integration.md)) | Week-1 spike. Fallback: buyer-present approval per stage |
 | 14 | Transaction Search lags up to 3 hours in sandbox too? | The reconciliation widget's timing | Spike, week 1 |

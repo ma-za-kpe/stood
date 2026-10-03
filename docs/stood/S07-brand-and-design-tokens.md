@@ -1,12 +1,13 @@
 # S07: Brand and design tokens
 
 > ⚠️ **Superseded visual direction (2026-10-03).** Colours, type, logo and motion are now defined by **[S15 v2 "Volt"](S15-design-system.md)** ([ADR-0005](../adr/0005-design-system-v2-volt.md)). This page is kept for history. Its voice and accessibility rules still apply.
-
+>
 > The full design system (light / dark / Field themes, complete tokens, type scale, components, logo grid, and web / iOS / Android / social asset kit) is in **[S15](S15-design-system.md)**. Asset files are in `docs/brand/`.
 
 ## Stance [U]
 
 **Paper, stamp, and a red line.** Not a fintech gradient, not a marketplace. The interface should feel like **a site report that can move money**.
+
 - Large type for the decision. Small type for ids.
 - Photos are evidence. They stay **rectangular and uncropped**.
 - No illustrations of happy families. No house icons.
@@ -51,6 +52,7 @@ Rules [U]: money is ink. Failure is red. No second green for money.
 | **stamp vs pass** | **1.01:1** | ⚠️ **The same luminance.** For about 8% of men (red-green colour blindness) and in greyscale, *release and refuse look identical by colour.* |
 
 **Mandatory fix:** colour is **never** the only signal. Every decision carries:
+
 1. **The word** in 40px Newsreader ("Released" / "Refused" / "In review").
 2. **A shape:** release = a solid stamp outline with a tick; refuse = a stamp with a **red rule under the word** (the brand's "red line"; striking *through* the word hurt legibility); wait = a dashed outline.
 3. Test every screen in greyscale before shipping.

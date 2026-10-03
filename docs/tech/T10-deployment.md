@@ -46,7 +46,7 @@ There's no production environment during the hackathon. Going live would need a 
 
 | Service | Type | Plan | Build | Start | Health |
 |---|---|---|---|---|---|
-| `stood-api` | Web service (Node 24) | Free | `pnpm i --frozen-lockfile && pnpm -F api build` | `node dist/server.js` (runs migrations first) | `GET /health` (DB + R2 + PayPal token check) |
+| `stood-api` | Web service (**Docker runtime**, image from [T15](T15-docker-and-local-dev.md)) | Free | `pnpm i --frozen-lockfile && pnpm -F api build` | `node dist/server.js` (runs migrations first) | `GET /health` (DB + R2 + PayPal token check) |
 | `stood-web` | Static site | Free | `pnpm -F web build` | — (served from `dist`) | — |
 | `stood-workflows` | Workflows (beta) | Free | `pnpm -F workflows build` | Render registers tasks from the repo | Task run status |
 
@@ -85,7 +85,7 @@ Infrastructure as code: `render.yaml` (a Blueprint) is committed. Every service 
 
 ## CI/CD pipeline
 
-```
+```text
 PR:      pre-commit hooks → biome → tsc --strict → dependency-cruiser (money boundary)
          → vitest (unit + application) → contract tests (recorded PayPal) → coverage gates
          → build api/web/workflows → OpenAPI diff check
