@@ -35,7 +35,7 @@ The release-please release PR plays GitFlow's `release/*` role.
   - required checks `pre-commit`, `pr-title` and `dco`
   - conversation resolution required
   - no force-push or deletion
-  - `develop` additionally requires linear history
+  - `develop` allows squash (features) and merge commits (back-merges from `main`). Linear history isn't enforced, because back-merges are merge commits by design
 - **DCO sign-off** on every human commit. Conventional-Commit PR titles.
 - Only release-please creates `vX.Y.Z` tags.
 
