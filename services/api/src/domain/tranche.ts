@@ -124,7 +124,15 @@ export class Tranche {
       (decision.outcome === 'WAIT' && decision.effect !== 'NONE')
     )
       throw new Error('Invalid decision');
-    this.#decisions.push(Object.freeze({ id: decisionId, decision: Object.freeze({ ...decision }) }));
+    this.#decisions.push(
+      Object.freeze({
+        id: decisionId,
+        decision: Object.freeze({
+          ...decision,
+          detail: decision.detail ? Object.freeze({ ...decision.detail }) : null,
+        }),
+      }),
+    );
     if (now >= this.currentHold.expiresAt) return this.reserve('VOID', 'EXPIRED');
     if (decision.outcome === 'WAIT') {
       this.#state = 'WAITING';

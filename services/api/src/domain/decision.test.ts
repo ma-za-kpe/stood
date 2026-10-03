@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { type CheckResult, decide, getProfile } from './decision.js';
 
 const passing = (id = 'construction.stage@1'): CheckResult[] =>
-  getProfile(id).checks.map((check) => ({ code: check.code, status: 'PASS', reason: 'passed' }));
+  getProfile(id).checks.map((check) => ({
+    code: check.code,
+    ...(check.source === 'MODEL' ? { source: 'MODEL' as const, confidence: 1 } : { source: 'RULE' as const }),
+    status: 'PASS',
+    reason: 'passed',
+  }));
 
 describe('Versioned evidence profiles and decisions (FR-37, NFR-02)', () => {
   it('releases only a complete passing construction package', () => {
@@ -11,7 +16,7 @@ describe('Versioned evidence profiles and decisions (FR-37, NFR-02)', () => {
       outcome: 'RELEASE',
       effect: 'CAPTURE',
       profileId: 'construction.stage@1',
-      ruleSetVersion: '1.0.0',
+      ruleSetVersion: '1.1.0',
     });
   });
   it('supports digital evidence without a location check', () => {
@@ -51,7 +56,15 @@ describe('Versioned evidence profiles and decisions (FR-37, NFR-02)', () => {
     'refuses a completed hard failure for %s',
     (code) => {
       const checks = passing().map((c) =>
-        c.code === code ? { ...c, status: 'FAIL' as const, namedField: code, reason: 'failed' } : c,
+        c.code === code
+          ? {
+              ...c,
+              status: 'FAIL' as const,
+              namedField: code,
+              reason: 'failed',
+              detail: { distance_m: 1400, matched_package_id: 'pkg_prior' },
+            }
+          : c,
       );
       expect(decide('construction.stage@1', checks)).toMatchObject({
         outcome: 'REFUSE',
@@ -62,8 +75,21 @@ describe('Versioned evidence profiles and decisions (FR-37, NFR-02)', () => {
   );
   it('uses fixed refusal precedence regardless of arrival order', () => {
     const checks: CheckResult[] = [
-      { code: 'location', status: 'FAIL', namedField: 'plot', reason: 'wrong_plot' },
-      { code: 'required_items', status: 'FAIL', namedField: 'missing:overview', reason: 'missing_item' },
+      {
+        code: 'location',
+        source: 'RULE',
+        status: 'FAIL',
+        namedField: 'plot',
+        detail: { distance_m: 1400 },
+        reason: 'wrong_plot',
+      },
+      {
+        code: 'required_items',
+        source: 'RULE',
+        status: 'FAIL',
+        namedField: 'missing:overview',
+        reason: 'missing_item',
+      },
     ];
     expect(decide('construction.stage@1', checks).namedField).toBe('missing:overview');
     expect(decide('construction.stage@1', [...checks].reverse()).namedField).toBe('missing:overview');
@@ -78,10 +104,10 @@ describe('Versioned evidence profiles and decisions (FR-37, NFR-02)', () => {
     const checks = passing();
     const invalid: CheckResult[][] = [
       [...checks, checks[0] as CheckResult],
-      [...checks, { code: 'capture_now', status: 'PASS', reason: 'passed' }],
+      [...checks, { code: 'capture_now', source: 'RULE', status: 'PASS', reason: 'passed' }],
       checks.map((c) => ({ ...c, status: 'BROKEN' as 'PASS' })),
       checks.map((c) => ({ ...c, reason: '' })),
-      [{ code: 'location', status: 'FAIL', reason: 'failed' }],
+      [{ code: 'location', source: 'RULE', status: 'FAIL', reason: 'failed' }],
     ];
     for (const result of invalid) expect(decide('construction.stage@1', result).outcome).toBe('WAIT');
   });

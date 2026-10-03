@@ -8,10 +8,24 @@ import { Tranche } from './tranche.js';
 const at = Date.parse('2026-10-03T00:00:00Z');
 const expiry = at + 29 * 86400000;
 const checks = (): CheckResult[] =>
-  getProfile('construction.stage@1').checks.map((c) => ({ code: c.code, status: 'PASS', reason: 'passed' }));
+  getProfile('construction.stage@1').checks.map((c) => ({
+    code: c.code,
+    ...(c.source === 'MODEL' ? { source: 'MODEL' as const, confidence: 1 } : { source: 'RULE' as const }),
+    status: 'PASS',
+    reason: 'passed',
+  }));
 const release = () => decide('construction.stage@1', checks());
 const refuse = () =>
-  decide('construction.stage@1', [{ code: 'location', status: 'FAIL', reason: 'wrong_plot', namedField: 'plot' }]);
+  decide('construction.stage@1', [
+    {
+      code: 'location',
+      source: 'RULE',
+      status: 'FAIL',
+      reason: 'wrong_plot',
+      namedField: 'plot',
+      detail: { distance_m: 1400 },
+    },
+  ]);
 const held = () => {
   const tranche = new Tranche('trn_test', new Money(400000n, 'GBP'), 'construction.stage@1', 2);
   tranche.dispatch('auth_1', new Nonce('K7Q'), at, expiry);
@@ -325,6 +339,7 @@ describe('Tranche (FR-10–13, FR-38)', () => {
     tranche.startDeciding();
     const passing: CheckResult[] = getProfile('rental.return@1').checks.map((c) => ({
       code: c.code,
+      ...(c.source === 'MODEL' ? { source: 'MODEL' as const, confidence: 1 } : { source: 'RULE' as const }),
       status: 'PASS',
       reason: 'passed',
     }));

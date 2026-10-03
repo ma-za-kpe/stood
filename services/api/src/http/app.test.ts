@@ -44,6 +44,12 @@ describe('API bootstrap and fixture preview', () => {
       source: 'synthetic_check_results',
     });
     expect(payload.paypal).toBeUndefined();
+    expect(payload.sentence).toContain('No payment was executed.');
+    if (name === 'wrong-plot') {
+      expect(payload.sentence).toBe('Wrong plot. 1.4 km off. No payment was executed.');
+      expect(payload.detail).toEqual({ distance_m: 1400 });
+    }
+    if (name === 'recycled') expect(payload.detail).toEqual({ matched_package_id: 'fixture_pkg_prior' });
   });
   it('returns problem+json for unknown scenarios', async () => {
     const app = createApp({ appEnv: 'local', paypalBaseUrl: 'https://api-m.sandbox.paypal.com', demoMode: true });
