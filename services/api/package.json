@@ -1,0 +1,15 @@
+{
+  "name": "@stood/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --outDir dist",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.3",
+    "hono": "4.13.12"
+  }
+}

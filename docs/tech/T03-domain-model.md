@@ -34,8 +34,8 @@ Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §
 | amount: Money | = stage.amount |
 | state | See the state machine ([T02 §5](T02-architecture.md#5-tranche-state-machine)) |
 | authorizationId | Required in HELD / DECIDING / WAITING |
-| captureId | **Required iff RELEASED** |
-| voidRef | Required iff REFUSED / EXPIRED |
+| captureId | Required for a confirmed CAPTURE; retained after DISPUTED |
+| voidRef | Required for a confirmed VOID (including a successful deposit return) |
 | nonce: `Nonce` | Issued on dispatch, single use |
 | heldAt | Drives the timers |
 | attempts | ≤ allowance.maxResubmits + 1 |
@@ -99,7 +99,13 @@ decide(checks, findings, ruleSet):
 
 ## Invariant tests (property-based)
 
-- `release` is impossible without a capture id. `refuse` is impossible without a void ref.
+### Implemented baseline
+
+The domain in `services/api/src/domain/` implements Money, GeoPoint, Geofence, Nonce, PhotoFingerprint, required-item and location checks, versioned profiles, the pure decision gate and tranche transitions. [ADR-0009](../adr/0009-assessment-and-payment-confirmation.md) separates assessment from payment effects and introduces pending-operation states. Profile stage recognition is WAIT-only until evaluation qualifies it.
+
+Missing check results and incomplete uploads are uncertain; a completed missing-item check is a hard failure. The pure core has no I/O. Hold timers, server-validated capture provenance, a real novelty index and durable payment orchestration remain queued.
+
+- Terminal states require a matching confirmed settlement reference. Construction release requires CAPTURE; rental return release requires VOID. EXPIRED requires a confirmed expiry VOID or a verified provider expiration (`EXPIRE` confirmation record). Confirmation matches the reserved effect and authorisation; assessment at or after hold expiry reserves VOID rather than CAPTURE. Ambiguous payment outcomes remain pending for reconciliation; definite failures return to WAITING.
 - Σ captured for an allowance ≤ cap.
 - Same inputs + same rule-set version → same decision (determinism).
 - WAIT never results from complete, confident, passing inputs. RELEASE never results from any missing input.

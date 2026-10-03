@@ -21,7 +21,7 @@
 </head>
 <body>
   <div class="intro" id="intro" aria-hidden="true">
-    <svg class="intro__mark" viewBox="0 0 64 64" width="120" height="120">
+    <svg class="intro__mark" viewBox="0 0 64 64" width="120" height="120" aria-hidden="true">
       <g class="intro__fig"><circle cx="22" cy="17" r="11" fill="#FFF7EC"/><rect x="18" y="22" width="8" height="28" fill="#FFF7EC"/></g>
       <rect class="intro__ground" x="6" y="50" width="52" height="8" rx="4" fill="#C8FF3D"/>
     </svg>
@@ -134,12 +134,12 @@
       <h2 class="reveal h2" id="try-h">Send a package. Watch the money.</h2>
       <p class="reveal sub">A simulation of Stood’s rules on fixture data. No real money, no real plot.</p>
       <div class="try reveal-group">
-        <div class="try__pick" role="group" aria-label="Choose an evidence package">
-          <button class="pick" data-scenario="good" aria-pressed="false"><b>Fresh photos on the pin</b><span>8 m away · new · code read</span></button>
-          <button class="pick" data-scenario="plot" aria-pressed="false"><b>Wrong plot</b><span>taken 1.4 km away</span></button>
-          <button class="pick" data-scenario="reused" aria-pressed="false"><b>Recycled photos</b><span>same as 12 March</span></button>
-          <button class="pick" data-scenario="blurry" aria-pressed="false"><b>Code unreadable</b><span>model isn’t sure</span></button>
-        </div>
+        <fieldset class="try__pick" aria-label="Choose an evidence package" style="border:0;padding:0;margin:0;min-width:0">
+          <button type="button" class="pick" data-scenario="good" aria-pressed="false"><b>Fresh photos on the pin</b><span>8 m away · new · code read</span></button>
+          <button type="button" class="pick" data-scenario="plot" aria-pressed="false"><b>Wrong plot</b><span>taken 1.4 km away</span></button>
+          <button type="button" class="pick" data-scenario="reused" aria-pressed="false"><b>Recycled photos</b><span>same as 12 March</span></button>
+          <button type="button" class="pick" data-scenario="blurry" aria-pressed="false"><b>Code unreadable</b><span>model isn’t sure</span></button>
+        </fieldset>
         <div class="try__panel">
           <ul class="checks checks--live" id="live-checks">
             <li data-k="plot"><span>Plot</span><b>—</b></li>
@@ -198,7 +198,7 @@
           </ul>
           <a class="btn btn--volt" data-magnet href="https://github.com/ma-za-kpe/stood/blob/main/docs/tech/T04-api-spec.md">Read the API →</a>
         </div>
-<pre class="code" aria-label="Example API call"><code><span class="c"># hold the next stage</span>
+<pre class="code"><code><span class="c"># hold the next stage</span>
 POST /v1/tranches/trn_7Q/dispatch
 <span class="c"># → 200</span>
 { <span class="k">"state"</span>: <span class="s">"HELD"</span>, <span class="k">"nonce"</span>: <span class="s">"K7Q"</span> }

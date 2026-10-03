@@ -30,7 +30,7 @@ Dockerfile rules:
 | `api` | `stood-dev` running `pnpm -F api dev` | 3000 | `stood-api` on Render |
 | `web` | `stood-dev` running `pnpm -F web dev` | 5173 | `stood-web` static site |
 | `db` | `postgres:17` (+ pgvector) | 5432 | Neon |
-| `s3` | `minio/minio` | 9000 / 9001 | Cloudflare R2 |
+| `s3` | SeaweedFS 4.17 (digest-pinned; [ADR-0008](../adr/0008-local-s3-substitute.md)) | 9000 → 8333 | Cloudflare R2 |
 | `mail` | `axllent/mailpit` | 8025 | Email notifier |
 | `site` | `node:24-bookworm-slim` running `node tools/site/build.mjs` + a static server | 8080 | GitHub Pages landing page |
 
@@ -66,4 +66,8 @@ A thin wrapper `scripts/dev` (`./scripts/dev test`, `./scripts/dev lint`) maps t
 | PayPal | Sandbox / recorded | Recorded (live nightly) | Sandbox |
 | Vision model | Workers AI or a fake | Fake | Workers AI |
 
-Status: **designed**. Implementation is task T-0022 / T-0023 in [TASKS.md](../../TASKS.md).
+Status: **initial stack implemented**. Run `docker compose build app`, then `./scripts/dev install` and `./scripts/dev validate`. Postgres, local S3 and Mailpit start with `./scripts/dev up`. The API starts with `docker compose up -d api` on port 3000. It serves liveness and explicitly synthetic decision fixtures; no payments execute. Product web, workflows and storage adapters are still queued.
+
+`docker build --target api -t stood-api:local .` validates and packages a non-root distroless API image. The host never installs Node dependencies. SDKs and the payment endpoints remain draft contracts.
+
+On Linux, set `LOCAL_UID` and `LOCAL_GID` to your host user/group IDs when building the development image. CI does this automatically, so its non-root container can write to the runner-owned checkout and dependency volume. The distroless runtime always uses UID/GID 65532.

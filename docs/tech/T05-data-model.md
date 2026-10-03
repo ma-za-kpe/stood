@@ -18,17 +18,21 @@ allowances           (id, platform_id, platform_ref UNIQUE(platform_id, platform
 stages               (allowance_id, idx, name, amount_minor, required_shots jsonb, checklist jsonb,
                       fixtures jsonb, depends_on, PRIMARY KEY(allowance_id, idx))
 tranches             (id, allowance_id, stage_idx, state, amount_minor, currency,
-                      paypal_order_id, authorization_id, capture_id, void_ref,
+                      paypal_order_id, authorization_id, capture_id, void_ref, settlement_effect, settlement_ref,
                       nonce_hash, held_at, attempts, version, updated_at,
-                      CHECK (state <> 'RELEASED' OR capture_id IS NOT NULL),
-                      CHECK (state NOT IN ('REFUSED','EXPIRED') OR void_ref IS NOT NULL))
+                      CHECK (state NOT IN ('RELEASED','REFUSED','EXPIRED','DISPUTED') OR
+                             (settlement_ref IS NOT NULL AND settlement_effect IS NOT NULL)),
+                      CHECK (state <> 'RELEASED' OR settlement_effect IN ('CAPTURE','VOID')),
+                      CHECK (state <> 'REFUSED' OR settlement_effect = 'VOID'),
+                      CHECK (state <> 'EXPIRED' OR settlement_effect IN ('VOID','EXPIRE')),
+                      CHECK (state <> 'DISPUTED' OR settlement_effect IN ('CAPTURE','VOID')))
 packages             (id, tranche_id, platform_ref, status, submitted_at, completed_at,
                       platform_signals jsonb, UNIQUE(tranche_id, platform_ref))
 photos               (id, package_id, shot, r2_key, sha256, phash, lat, lng, accuracy_m,
                       captured_at_device, received_at_server, mock_location, exif jsonb)
 check_results        (package_id, check_code, status, detail jsonb, PRIMARY KEY(package_id, check_code))
 findings             (id, package_id, kind, value jsonb, confidence, model_id, model_version, latency_ms)
-decisions            (id, package_id UNIQUE, tranche_id, outcome, named_field, reason_key, reason_params jsonb,
+decisions            (id, package_id, supersedes_decision_id, tranche_id, outcome, effect, named_field, reason_key, reason_params jsonb,
                       rule_set_version, decided_by, actor_ref, decided_at)
 paypal_calls         (id, tranche_id, action, request_id UNIQUE, status, paypal_debug_id, http_status, at)
 outbox_events        (id, type, aggregate_id, payload jsonb, created_at, published_at)
@@ -45,6 +49,7 @@ Notes:
 - `nonce_hash` stores a hash of the nonce, not the nonce itself. The nonce is returned once, at dispatch.
 - `paypal_calls.request_id` = the `PayPal-Request-Id`. Its uniqueness prevents duplicate mutations.
 - Money columns are `bigint` minor units. There are no float columns anywhere.
+- Decisions form an immutable history, including WAIT followed by a later rules or human decision ([ADR-0009](../adr/0009-assessment-and-payment-confirmation.md)). Hold attempts and payment-operation reservations need their own durable records before money endpoints are enabled; the schema above remains a logical draft, not an applied migration.
 - Migrations use **Drizzle Kit**, forward-only, checked in, and run on deploy before traffic switches.
 
 ## R2 layout

@@ -67,7 +67,7 @@ Requirements, architecture, domain model, API, data, PayPal integration, evidenc
 
 ## How we work
 
-- [Ways of working](WAYS_OF_WORKING.md): TDD, DDD, OOP, trunk-based branches, Conventional Commits, release-please, pre-commit, Definition of Done
+- [Ways of working](WAYS_OF_WORKING.md): TDD, DDD, OOP, GitFlow branches, Conventional Commits, release-please, pre-commit, Definition of Done
 - [Architecture decisions (ADRs)](adr/)
 - [Task ledger](../TASKS.md)
 

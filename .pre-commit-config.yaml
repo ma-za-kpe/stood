@@ -112,7 +112,19 @@ repos:
         name: biome check (format + lint, auto-fix)
         language: system
         entry: npx --yes @biomejs/biome@2.5.15 check --write --files-ignore-unknown=true --no-errors-on-unmatched
-        files: \.(js|mjs|css|json|jsonc)$
+        files: \.(js|mjs|cjs|ts|css|json|jsonc)$
+      - id: hadolint
+        name: Dockerfile lint (pinned container)
+        language: system
+        entry: scripts/check-docker
+        pass_filenames: false
+        files: ^Dockerfile$
+      - id: product-validation
+        name: strict types, money boundary, tests, coverage and build (Docker)
+        language: system
+        entry: docker compose run --rm app pnpm validate
+        pass_filenames: false
+        files: ^(services/|packages/|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig|vitest|turbo|Dockerfile|compose.yaml|\.dependency-cruiser)
 
   # ---------- commit message ----------
   - repo: https://github.com/compilerla/conventional-pre-commit

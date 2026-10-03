@@ -30,7 +30,7 @@
 
 ---
 
-> ⚠️ **Status: design phase.** The specs, API contract, brand and landing page are complete. Product code starts with milestone **0.2.0**. Everything runs on the **PayPal sandbox**: no real money, no real personal data. See the [roadmap](#roadmap).
+> ⚠️ **Status: early implementation.** Docker tooling, the tested pure domain and a local synthetic-fixture API are implemented. Payments, SDKs, hosted replay and product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap).
 
 ## The problem
 
@@ -206,8 +206,11 @@ What the gate checks ([WoW §8](docs/WAYS_OF_WORKING.md#8-validation-before-comm
 
 ```bash
 git clone https://github.com/ma-za-kpe/stood && cd stood
-docker compose up -d db s3 mail        # Postgres, MinIO (S3), Mailpit (from 0.2.0)
+docker compose build app
+./scripts/dev install
+docker compose up -d db s3 mail        # Postgres, local S3, Mailpit
 docker compose run --rm app pnpm test  # every command runs in a container
+docker compose up -d api              # synthetic fixtures, no payment execution
 ```
 
 ### 3. Branch, commit and open a PR (GitFlow)
@@ -216,7 +219,7 @@ docker compose run --rm app pnpm test  # every command runs in a container
 git switch develop && git pull
 git switch -c feature/42-hold-timers   # <type>/<issue>-<slug>, validated by the gate
 # … write the failing test first, then the code …
-git commit -s -m "feat(tranche): reauthorise holds on day 3"
+git commit -s -m "feat(tranche): reauthorise holds from day 4"
 git push -u origin feature/42-hold-timers   # open a PR into develop
 ```
 

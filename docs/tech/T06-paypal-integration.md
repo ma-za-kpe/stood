@@ -30,7 +30,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 - `intent: AUTHORIZE`
 - `purchase_units[0]`: `amount`, `custom_id = tranche_id`, `invoice_id = alw_id:stage`, `description = "Stood hold: <stage>, released only on evidence"`
 - `payment_source.paypal.vault_id`
-- Header `PayPal-Request-Id: <tranche_id>:authorize:<attempt>`
+- Header `PayPal-Request-Id`: a persisted UUID for this attempt's order-creation operation. Order authorisation has its own stable request UUID.
 
 Then authorise the order and record the `authorization_id` and `expiration_time`.
 
@@ -38,14 +38,14 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 
 ### Release / refuse
 
-- Release: `POST /v2/payments/authorizations/{id}/capture` with `final_capture: true`, `invoice_id`, `note_to_payer = sentence`, and `PayPal-Request-Id: <tranche_id>:capture`.
-- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with `PayPal-Request-Id: <tranche_id>:void`.
+- Release: `POST /v2/payments/authorizations/{id}/capture` with `final_capture: true`, `invoice_id`, `note_to_payer = sentence`, and a stable operation UUID as `PayPal-Request-Id`.
+- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with its own stable operation UUID. Persist request identities per authorisation attempt, action and settlement attempt. Reuse them for ambiguous retries; after a confirmed definite failure, increment the settlement-attempt counter and allocate a fresh operation UUID. Never reuse an old hold's identity after redispatch. The pure domain key includes this counter; the adapter must persist its mapping to the provider UUID and the counter before calling PayPal.
 
 ### Timers (Render Workflows or pg-boss)
 
 | When | Action |
 |---|---|
-| Day 3 + still undecided | `reauthorize` (allowed days 4–29). Records a new authorisation id |
+| From day 4 + still undecided | `reauthorize` (allowed days 4–29). Records a new authorisation id |
 | Day 27 | Emit `tranche.hold_expiring`. Notify the payer and reviewer |
 | Day 29 | Void. State `EXPIRED`. Sentence: "The hold ended. Nothing was paid." |
 
@@ -53,11 +53,14 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 
 | Failure | Handling |
 |---|---|
-| Timeout / 5xx | Retry with the **same** `PayPal-Request-Id` (PayPal idempotency), up to 3 times with backoff. Then `WAIT_SYSTEM` and the reconciliation job |
+| Timeout / 5xx (ambiguous outcome) | Retry with the **same** `PayPal-Request-Id` (PayPal idempotency), up to 3 times with backoff. Keep the pending reservation for reconciliation; surface an operational system wait, without permitting a competing payment |
+| Definite declined / system failure, confirmed no payment | `settlementFailed` matches the reserved effect and authorisation, clears the reservation and returns to `WAITING`. Expiry rules can then run |
 | Capture succeeded, DB write failed | Reconciler sees `PAYMENT.CAPTURE.COMPLETED` / Transaction Search and completes the state transition |
-| `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, notify. Requires a re-signature or new authorisation |
+| `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, with an `EXPIRE` confirmation record and provider response reference; notify. Requires a re-signature or new authorisation |
 | `INSTRUMENT_DECLINED` on authorise | `WAIT_FUNDING`. Sentence: "PayPal could not hold £4,000. Nothing was sent to inspect." |
 | Webhook missing | The poller checks open authorisations hourly (and on the tick endpoint) |
+
+`SYSTEM_FAULT` means a confirmed failure with no payment effect. A timeout, connection loss or PayPal 5xx is `AMBIGUOUS`, never `SYSTEM_FAULT`. The adapter's exact error-code mapping and capture-expiry safety margin remain blockers under T-0129 before payment calls are enabled.
 
 ## Sandbox setup
 

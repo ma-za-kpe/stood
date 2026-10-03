@@ -97,7 +97,7 @@ Reviewer endpoints use **reviewer session auth** (GitHub OAuth via Better Auth),
 { "id": "evt_…", "type": "tranche.refused", "schema_version": "1",
   "created_at": "2026-11-02T10:43:10Z",
   "data": { "tranche_id": "trn_…", "allowance_id": "alw_…", "platform_ref": "eos-task-…",
-            "outcome": "REFUSE", "named_field": "plot", "distance_m": 1400,
+            "outcome": "REFUSE", "effect": "VOID", "named_field": "plot", "distance_m": 1400,
             "sentence": { "payer": "Wrong plot. 1.4 km off. Nothing was paid.",
                           "inspector": "Photos were taken 1.4 km from the pin. Go back and capture again." },
             "paypal": { "order_id": "…", "authorization_id": "…", "void_status": "VOIDED" },
@@ -105,6 +105,8 @@ Reviewer endpoints use **reviewer session auth** (GitHub OAuth via Better Auth),
 ```
 
 Event types: `allowance.signed`, `allowance.signature_failed`, `tranche.held`, `tranche.funding_failed`, `tranche.deciding`, `tranche.released`, `tranche.refused`, `tranche.waiting`, `tranche.hold_expiring`, `tranche.expired`, `dispute.opened`, `reconciliation.mismatch`.
+
+Financial events explicitly identify the confirmed effect. A CAPTURE release includes `data.effect: CAPTURE`, `data.paypal.capture_id` and `data.paypal.capture_status: COMPLETED`. Only that confirmed effect can initiate a local payout. A rental return RELEASE with effect VOID cannot ([ADR-0009](../adr/0009-assessment-and-payment-confirmation.md)). These webhook contracts are not implemented by the fixture-preview API.
 
 ## Webhooks in (PayPal)
 
