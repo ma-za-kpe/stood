@@ -49,6 +49,8 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 | Day 27 | Emit `tranche.hold_expiring`. Notify the payer and reviewer |
 | Day 29 | Void. State `EXPIRED`. Sentence: "The hold ended. Nothing was paid." |
 
+The domain now reserves REAUTHORIZE_PENDING with its own effect/key/result types. Start after three elapsed days from the latest confirmed authorisation and before the expiry margin. Confirm using the new id, prior id, operation key, completion timestamp and expiry; preserve the original dispatch/nonce/deadline and visit count. Reject a returned expiry beyond the original deadline. Later captures/voids use the new id. Completion time denotes when PayPal confirmed the renewal, not when a delayed reconciliation received it. These rules follow [PayPal's authorisation/honour-period guidance](https://developer.paypal.com/payment-methods/auth-honor/), checked 3 Oct 2026. Timer execution, durable operations and live contracts remain unimplemented.
+
 ### Failure handling
 
 | Failure | Handling |
@@ -69,15 +71,17 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 | Capture, HTTP 200/201 with resource status DECLINED and non-empty capture id | DECLINED | Capture id |
 | Capture, HTTP 422 UNPROCESSABLE_ENTITY, AUTHORIZATION_EXPIRED | AUTHORIZATION_EXPIRED | PayPal debug id |
 | Capture, HTTP 422, MAX_CAPTURE_AMOUNT_EXCEEDED | REJECTED_NO_PAYMENT | PayPal debug id |
-| Reauthorise, HTTP 422, AUTH_CURRENCY_MISMATCH or REAUTHORIZATION_TOO_SOON | REJECTED_NO_PAYMENT | PayPal debug id |
+| Reauthorise, HTTP 422, AUTH_CURRENCY_MISMATCH or REAUTHORIZATION_TOO_SOON | REJECTED_NO_REAUTHORIZATION (separate renewal result) | PayPal debug id |
 | Void, PREVIOUSLY_CAPTURED | AMBIGUOUS; reconcile and alert, never infer successful void | Logged response |
 | Other endpoint/code/status combinations, transport failures, 5xx, missing or conflicting details | AMBIGUOUS | Logged response |
 
 HTTP 422 mappings require UNPROCESSABLE_ENTITY, non-empty message/debug id and a non-empty detail array. Every issue must map to the same known classification. Unknown errors keep the reservation; additional definite mappings need documented evidence and tests. These tests use synthetic bodies, not recorded sandbox responses. Sources checked 3 Oct 2026: [PayPal's official Payments v2 OpenAPI examples and capture statuses](https://github.com/paypal/paypal-rest-api-specifications/blob/main/openapi/payments_payment_v2.json), [capture reference](https://developer.paypal.com/api/payments/v2/authorizations-capture), [reauthorisation reference](https://developer.paypal.com/api/payments/v2/authorizations-reauthorize), [void reference](https://developer.paypal.com/api/payments/v2/authorizations-void).
 
+`classifyPaymentFailure` accepts only CAPTURE/VOID; `classifyReauthorizationFailure` returns effect REAUTHORIZE and its own failure kind. A definite renewal rejection restores the prior state and gets a fresh retry key; ambiguous renewal outcomes block all competing operations for reconciliation. A PENDING capture is neither confirmation nor a definite failure: keep CAPTURE_PENDING until completion is confirmed. T-0056 must provide status reconciliation before wiring voids, because every void error is ambiguous; it must also resolve uncertain renewals.
+
 ### Capture window and currencies
 
-Stood reserves no new capture within **five minutes** of the provider hold expiry. This is our operational buffer, not a PayPal guarantee. The payment client must recheck `captureAllowedAt` immediately before an external capture, after durable reservation. If no request was ever submitted and the window closed, record a local REJECTED_NO_PAYMENT failure; if it may have been submitted, preserve the reservation for reconciliation. Never race a void against an unresolved capture.
+Stood reserves no new capture within **five minutes** of the provider hold expiry. This is our operational buffer, not a PayPal guarantee. The payment client must recheck `captureAllowedAt` immediately before an external capture, after durable reservation, using the same server Clock as assessment. If no request was ever submitted and the window closed, record a local REJECTED_NO_PAYMENT failure; if it may have been submitted, preserve the reservation for reconciliation. Never race a void against an unresolved capture.
 
 Allowance and direct tranche creation accept only GBP/USD/EUR, Stood's current subset of the [PayPal currency codes](https://developer.paypal.com/reference/currency-codes/). General Money retains other currencies. No automatic conversion is implemented. Merchant capabilities and real sandbox funding still need contract tests. Durable counters and key/provider-UUID mappings are still mandatory before the payment client is wired.
 

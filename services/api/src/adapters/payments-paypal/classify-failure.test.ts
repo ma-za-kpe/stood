@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyPaymentFailure } from './classify-failure.js';
+import { classifyPaymentFailure, classifyReauthorizationFailure } from './classify-failure.js';
 
 const error = (issue: string) => ({
   name: 'UNPROCESSABLE_ENTITY',
@@ -18,11 +18,36 @@ describe('PayPal failure classification (T-0129, synthetic contracts)', () => {
       reference: 'debug_fixture',
     });
     for (const issue of ['AUTH_CURRENCY_MISMATCH', 'REAUTHORIZATION_TOO_SOON']) {
-      expect(classifyPaymentFailure('REAUTHORIZE', 422, error(issue)).kind).toBe('REJECTED_NO_PAYMENT');
+      expect(classifyReauthorizationFailure(422, error(issue))).toEqual({
+        effect: 'REAUTHORIZE',
+        kind: 'REJECTED_NO_REAUTHORIZATION',
+        reference: 'debug_fixture',
+      });
       expect(classifyPaymentFailure('CAPTURE', 422, error(issue)).kind).toBe('AMBIGUOUS');
     }
     expect(classifyPaymentFailure('VOID', 422, error('PREVIOUSLY_CAPTURED')).kind).toBe('AMBIGUOUS');
     expect(classifyPaymentFailure('VOID', 422, error('AUTHORIZATION_EXPIRED')).kind).toBe('AMBIGUOUS');
+  });
+  it('keeps reauthorisation outcomes separate and uncertain unless definitely rejected', () => {
+    for (const [status, body] of [
+      [null, null],
+      [500, error('REAUTHORIZATION_TOO_SOON')],
+      [422, error('AUTHORIZATION_EXPIRED')],
+      [422, error('UNKNOWN')],
+      [
+        422,
+        { ...error('AUTH_CURRENCY_MISMATCH'), details: [{ issue: 'AUTH_CURRENCY_MISMATCH' }, { issue: 'UNKNOWN' }] },
+      ],
+      [201, { id: 'auth_new', status: 'CREATED' }],
+    ] as const)
+      expect(classifyReauthorizationFailure(status, body)).toEqual({
+        effect: 'REAUTHORIZE',
+        kind: 'AMBIGUOUS',
+        reference: null,
+      });
+    expect(classifyPaymentFailure('REAUTHORIZE' as 'CAPTURE', 422, error('REAUTHORIZATION_TOO_SOON')).kind).toBe(
+      'AMBIGUOUS',
+    );
   });
   it('recognises a terminal declined capture resource with a reference', () => {
     for (const status of [200, 201])
