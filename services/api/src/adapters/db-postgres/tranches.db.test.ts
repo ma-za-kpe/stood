@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { reconcile } from '../../application/reconcile.js';
 import { RULE_SET_VERSION } from '../../domain/decision.js';
 import { createTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../../domain/tranche-record.js';
 import { PostgresPaymentOperations } from './payment-operations.js';
@@ -57,6 +58,86 @@ afterAll(async () => {
   await admin.end();
 });
 describe('Atomic tranche persistence', () => {
+  it('returns a safe retry when concurrent expiry lookups carry different clocks', async () => {
+    const id = 'provider_clock_race';
+    await held(id);
+    const before = await store.apply(id, 1, 'renew', cmd('beginReauthorization', [at + 3 * 86400000]));
+    let readers = 0;
+    let release: (() => void) | undefined;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const reader = {
+      read: async () => {
+        if (++readers === 2) release?.();
+        await barrier;
+        return {
+          complete: true,
+          operationKey: before.pending?.operation.key,
+          authorizationId: 'auth_fixture',
+          providerRequestId: before.pending?.providerRequestId,
+          reference: 'same_lookup',
+          outcome: 'EXPIRED',
+          noCapture: true,
+          noRenewal: true,
+        };
+      },
+    };
+    const results = await Promise.all([reconcile(store, reader, id, expiry), reconcile(store, reader, id, expiry + 1)]);
+    expect(results.map((result) => result.status).sort()).toEqual(['RESOLVED', 'RETRY']);
+    expect((await store.load(id)).version).toBe(3);
+    expect(restoreTrancheRecord((await store.load(id)).record).state).toBe('EXPIRED');
+  });
+  it('reconciles a capture from matched fake-provider proof atomically and reads no provider after settlement', async () => {
+    const before = await pending('provider_capture');
+    let reads = 0;
+    const reader = {
+      read: async () => {
+        reads++;
+        return {
+          complete: true,
+          operationKey: before.pending?.operation.key,
+          authorizationId: 'auth_fixture',
+          providerRequestId: before.pending?.providerRequestId,
+          reference: 'fake_capture',
+          outcome: 'CAPTURED',
+          noCapture: false,
+          noRenewal: true,
+          amount: { minor: 1000, currency: 'GBP' },
+        };
+      },
+    };
+    expect((await reconcile(store, reader, 'provider_capture', at)).status).toBe('RESOLVED');
+    expect(restoreTrancheRecord((await store.load('provider_capture')).record).state).toBe('RELEASED');
+    expect((await reconcile(store, reader, 'provider_capture', at)).status).toBe('IDLE');
+    expect(reads).toBe(1);
+  });
+  it.each(['EXPIRED', 'RENEWED'])(
+    'resolves ambiguous renewal %s using fake provider and real atomic storage',
+    async (outcome) => {
+      const id = `provider_renewal_${outcome}`;
+      await held(id);
+      const before = await store.apply(id, 1, 'renew', cmd('beginReauthorization', [at + 3 * 86400000]));
+      const unknown = await reconcile(store, { read: async () => ({ outcome: 'UNKNOWN' }) }, id, expiry);
+      expect(unknown).toEqual({ status: 'WAIT', alert: true });
+      expect(await store.load(id)).toEqual(before);
+      const proof = {
+        complete: true,
+        operationKey: before.pending?.operation.key,
+        authorizationId: 'auth_fixture',
+        providerRequestId: before.pending?.providerRequestId,
+        reference: 'fake_lookup',
+        outcome,
+        noCapture: true,
+        noRenewal: outcome === 'EXPIRED',
+        renewed: { authorizationId: 'renewed_fixture', confirmedAt: at + 3 * 86400000, expiresAt: expiry },
+      };
+      expect((await reconcile(store, { read: async () => proof }, id, expiry)).status).toBe('RESOLVED');
+      const after = await store.load(id);
+      if (outcome === 'EXPIRED') expect(restoreTrancheRecord(after.record).state).toBe('EXPIRED');
+      else expect(after.pending?.operation).toMatchObject({ effect: 'VOID', authorizationId: 'renewed_fixture' });
+    },
+  );
   it('persists an old-rule safe cancellation and preserves its original header', async () => {
     const record = readFileSync(new URL('../../domain/fixtures/old-rule-held.json', import.meta.url), 'utf8');
     const first = await store.create(record);
