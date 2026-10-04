@@ -7,6 +7,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  timestamp,
   unique,
   uniqueIndex,
   uuid,
@@ -38,6 +39,9 @@ export const paymentOperations = pgTable(
     reference: text(),
     reservedFromVersion: integer('reserved_from_version').notNull(),
     version: integer().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
   },
   (table) => [
     unique('payment_operation_tranche_key').on(table.trancheId, table.key),
@@ -72,9 +76,18 @@ export const paymentOperationEvents = pgTable(
     version: integer().notNull(),
     status: text().$type<OperationStatus>().notNull(),
     reference: text(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
   },
   (table) => [
     primaryKey({ columns: [table.trancheId, table.version] }),
+    check('event_status_valid', sql`${table.status} IN ('RESERVED', 'AMBIGUOUS', 'CONFIRMED', 'FAILED')`),
+    check('event_version_valid', sql`${table.version} > 0`),
+    check(
+      'resolved_event_has_reference',
+      sql`${table.status} NOT IN ('CONFIRMED', 'FAILED') OR length(trim(${table.reference})) > 0 AND ${table.reference} IS NOT NULL`,
+    ),
     foreignKey({
       columns: [table.trancheId, table.key],
       foreignColumns: [paymentOperations.trancheId, paymentOperations.key],

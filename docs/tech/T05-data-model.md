@@ -63,6 +63,10 @@ The migration is integration-tested on local Postgres, including fresh connectio
 
 The transaction adapter remains T-0140; this schema does not persist/rehydrate a tranche, original holds, renewal history or domain retry counters. T-0132 stays open until those writes and operation reservation/confirmation share one transaction. Ledger versions are not yet aggregate versions, and a ledger outcome alone must never authorise a financial effect.
 
+Operation updates require increasing versions. RESERVED can become AMBIGUOUS, CONFIRMED or FAILED; AMBIGUOUS can receive further ambiguous observations or become CONFIRMED/FAILED. Resolved rows reject every update. Idempotent callers must return the stored result without rewriting it. Events accept only these four statuses, positive versions, and nonblank references for resolved outcomes.
+
+`created_at` on operations and `recorded_at` on events are immutable `timestamptz` values set by the database clock on insert, overriding any caller-supplied value. The store port exposes them as strings. An ambiguous operation's age can be measured from its first AMBIGUOUS event; provider event time is a separate future field. Existing rows acquire migration-time timestamps when these columns are added, not reconstructed historical times. The reviewer timeline and three-hour unresolved alert remain T-0142 work.
+
 ## R2 layout
 
 ```text

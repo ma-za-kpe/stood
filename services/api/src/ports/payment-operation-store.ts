@@ -10,6 +10,7 @@ export type StoredOperation = Readonly<{
   reference: string | null;
   version: number;
   reservedFromVersion: number;
+  createdAt: string;
 }>;
 export type OperationEvent = Readonly<{
   trancheId: string;
@@ -17,6 +18,7 @@ export type OperationEvent = Readonly<{
   version: number;
   status: OperationStatus;
   reference: string | null;
+  recordedAt: string;
 }>;
 export interface PaymentOperationStore {
   createStream(trancheId: string): Promise<void>;

@@ -22,6 +22,20 @@
       "when": 1791070336684,
       "tag": "0002_payment_event_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791072377479,
+      "tag": "0003_payment_timestamps_and_event_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791072385580,
+      "tag": "0004_payment_progress_guards",
+      "breakpoints": true
     }
   ]
 }
