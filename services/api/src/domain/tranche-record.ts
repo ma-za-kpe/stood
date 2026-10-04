@@ -23,6 +23,7 @@ const arity = {
   redispatch: 0,
   dispute: 0,
   cancel: 1,
+  confirmNoRenewalExpiry: 1,
 } as const;
 type Method = keyof typeof arity;
 export type TrancheCommand = {
@@ -120,5 +121,7 @@ function replay(tranche: Tranche, command: TrancheCommand) {
       return tranche.dispute(...command.args);
     case 'cancel':
       return tranche.cancel(...command.args);
+    case 'confirmNoRenewalExpiry':
+      return tranche.confirmNoRenewalExpiry(...command.args);
   }
 }

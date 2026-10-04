@@ -83,6 +83,10 @@ Older rule versions in the same transition format restore in safe mode, retainin
 
 Dispatch must check `canSubmitPendingOperation` and the unresolved ledger status. Ordinary aggregate writes must preserve the original rule header and prior transitions. T-0145 and T-0056 must honour this restriction before deployment.
 
+### Renewal reconciliation at expiry (T-0138)
+
+`confirmNoRenewalExpiry` accepts a matched renewal key/authorisation, provider reference and clock at or after the hold expiry. It records EXPIRED with an EXPIRE fact, without claiming a void or capture. Unknown outcomes keep REAUTHORIZE_PENDING. A confirmed renewal is adopted through normal confirmation before expiry is applied to the renewed id. Status verification and atomic recording are T-0056/T-0145 work.
+
 ## R2 layout
 
 ```text

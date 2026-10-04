@@ -56,6 +56,15 @@ export type ReauthorizationFailure = Readonly<{
   key: string;
   authorizationId: string;
   kind: 'AMBIGUOUS' | 'REJECTED_NO_REAUTHORIZATION';
+  reference?: string;
+}>;
+export type NoRenewalExpiry = Readonly<{
+  effect: 'REAUTHORIZE';
+  key: string;
+  authorizationId: string;
+  kind: 'NO_RENEWAL_EXPIRED';
+  reference: string;
+  now: number;
 }>;
 type Reauthorization = ReauthorizationConfirmation & Readonly<{ attempt: number }>;
 type Settlement = Readonly<{ effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string; attempt: number }>;
@@ -238,6 +247,21 @@ export class Tranche {
     this.#reauthorizationAttempt++;
     this.#state = pending.previousState;
     this.#pendingReauthorization = null;
+  }
+  confirmNoRenewalExpiry(proof: NoRenewalExpiry): void {
+    this.matchReauthorization(proof);
+    if (
+      proof.kind !== 'NO_RENEWAL_EXPIRED' ||
+      !proof.reference.trim() ||
+      !Number.isFinite(proof.now) ||
+      proof.now < this.currentHold.expiresAt
+    )
+      throw new Error('Invalid no-renewal expiry proof');
+    this.#settlement = Object.freeze({ effect: 'EXPIRE', reference: proof.reference, attempt: this.#attempts.length });
+    this.#settlements.push(this.#settlement);
+    this.#pendingReauthorization = null;
+    this.#reauthorizationAttempt++;
+    this.#state = 'EXPIRED';
   }
 
   private matchReauthorization(
