@@ -71,6 +71,12 @@ New operations and each operation's first event must be RESERVED with a null ref
 
 `created_at` on operations and `recorded_at` on events are immutable `timestamptz` values set by the database clock on insert, overriding any caller-supplied value. The store port exposes them as strings. An ambiguous operation's age can be measured from its first AMBIGUOUS event; provider event time is a separate future field. Existing rows acquire migration-time timestamps when these columns are added, not reconstructed historical times. The reviewer timeline and three-hour unresolved alert remain T-0142 work.
 
+## Tranche recovery record (T-0144)
+
+The pure codec in `domain/tranche-record.ts` creates, advances and restores version-1 JSON records. Each contains the immutable definition, current rule-set version and ordered accepted commands with recorded arguments. Replaying validated domain methods recovers private retry counters, hold/renewal history, decisions, pending operations and terminal settlements; it never reruns evidence checks or processor calls. Unknown/incompatible records and illegal sequences fail closed. See [ADR-0011](../adr/0011-tranche-recovery-record.md).
+
+This format is unit-tested and not yet stored in Postgres. T-0145 must persist immutable prior history and couple each new state change with the operation reservation/outcome under one transaction. T-0132 stays open. Compatibility migrations must precede replay-semantic or rule-version changes (T-0148).
+
 ## R2 layout
 
 ```text
