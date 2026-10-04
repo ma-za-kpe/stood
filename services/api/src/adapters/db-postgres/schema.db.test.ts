@@ -163,6 +163,9 @@ describe('Payment schema (real local Postgres)', () => {
   it('accepts only valid event statuses and nonblank resolved references', async () => {
     await db.insert(schema.paymentStreams).values({ trancheId: 'event_checks' });
     await db.insert(schema.paymentOperations).values(row('event_checks', 'event_checks_key'));
+    await db
+      .insert(schema.paymentOperationEvents)
+      .values({ trancheId: 'event_checks', key: 'event_checks_key', version: 1, status: 'RESERVED' });
     for (const [status, reference] of [
       ['UNKNOWN', null],
       ['CONFIRMED', null],
@@ -170,14 +173,14 @@ describe('Payment schema (real local Postgres)', () => {
     ])
       await expect(
         pool.query(
-          'INSERT INTO payment_operation_events (tranche_id, key, version, status, reference) VALUES ($1, $2, 1, $3, $4)',
+          'INSERT INTO payment_operation_events (tranche_id, key, version, status, reference) VALUES ($1, $2, 2, $3, $4)',
           ['event_checks', 'event_checks_key', status, reference],
         ),
       ).rejects.toMatchObject({ code: '23514' });
     for (const [index, status] of ['RESERVED', 'AMBIGUOUS', 'CONFIRMED', 'FAILED'].entries())
       await pool.query(
         'INSERT INTO payment_operation_events (tranche_id, key, version, status, reference) VALUES ($1, $2, $3, $4, $5)',
-        ['event_checks', 'event_checks_key', index + 1, status, index > 1 ? 'provider_reference' : null],
+        ['event_checks', 'event_checks_key', index + 2, status, index > 1 ? 'provider_reference' : null],
       );
     await expect(
       pool.query(
@@ -191,10 +194,17 @@ describe('Payment schema (real local Postgres)', () => {
       for (const to of statuses) {
         const key = `matrix_${from}_${to}`;
         await db.insert(schema.paymentStreams).values({ trancheId: key });
-        await db
-          .insert(schema.paymentOperations)
-          .values({ ...row(key, key), status: from, reference: 'provider_reference' });
-        const update = pool.query('UPDATE payment_operations SET status = $1, version = 2 WHERE key = $2', [to, key]);
+        await db.insert(schema.paymentOperations).values(row(key, key));
+        if (from !== 'RESERVED')
+          await pool.query('UPDATE payment_operations SET status = $1, reference = $2, version = 2 WHERE key = $3', [
+            from,
+            'provider_reference',
+            key,
+          ]);
+        const update = pool.query(
+          'UPDATE payment_operations SET status = $1, reference = $2, version = 3 WHERE key = $3',
+          [to, 'provider_reference', key],
+        );
         if (from === 'CONFIRMED' || from === 'FAILED')
           await expect(update).rejects.toThrow('Operation already resolved');
         else if (to === 'RESERVED') await expect(update).rejects.toThrow('Invalid operation transition');
@@ -232,5 +242,30 @@ describe('Payment schema (real local Postgres)', () => {
       ['timestamp_override', 'timestamps', row('timestamps', 'timestamp_override').operation, randomUUID()],
     );
     expect(supplied.rows[0].created_at.getUTCFullYear()).toBe(before.rows[0].time.getUTCFullYear());
+  });
+  const invalidStarts = [
+    { status: 'AMBIGUOUS' },
+    { status: 'CONFIRMED', reference: 'capture' },
+    { status: 'FAILED', reference: 'decline' },
+    { reference: '' },
+    { reference: 'provided' },
+  ] as const;
+  it.each(invalidStarts)('rejects an invalid operation start: %j', async (change) => {
+    const key = randomUUID();
+    await db.insert(schema.paymentStreams).values({ trancheId: key });
+    await expect(db.insert(schema.paymentOperations).values({ ...row(key, key), ...change })).rejects.toMatchObject({
+      cause: { message: 'New operation must be reserved without reference' },
+    });
+  });
+  it.each(invalidStarts)('rejects an invalid first event: %j', async (change) => {
+    const key = randomUUID();
+    await db.insert(schema.paymentStreams).values({ trancheId: key });
+    await db.insert(schema.paymentOperations).values(row(key, key));
+    await expect(
+      db
+        .insert(schema.paymentOperationEvents)
+        .values({ trancheId: key, key, version: 1, status: 'RESERVED', ...change }),
+    ).rejects.toMatchObject({ cause: { message: 'First event must be reserved without reference' } });
+    await db.insert(schema.paymentOperationEvents).values({ trancheId: key, key, version: 1, status: 'RESERVED' });
   });
 });

@@ -36,6 +36,13 @@
       "when": 1791072385580,
       "tag": "0004_payment_progress_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791111253764,
+      "tag": "0005_reservation_insert_guards",
+      "breakpoints": true
     }
   ]
 }
