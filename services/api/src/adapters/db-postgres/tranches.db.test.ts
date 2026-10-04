@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { executePayment } from '../../application/execute-payment.js';
 import { reconcile } from '../../application/reconcile.js';
 import { RULE_SET_VERSION } from '../../domain/decision.js';
 import { createTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../../domain/tranche-record.js';
@@ -58,6 +59,81 @@ afterAll(async () => {
   await admin.end();
 });
 describe('Atomic tranche persistence', () => {
+  it('persists possible submission before a fake provider call and never resubmits a confirmed key', async () => {
+    const id = 'durable_execution';
+    await pending(id);
+    let calls = 0;
+    const executor = {
+      execute: async () => {
+        calls++;
+        expect((await store.load(id)).pending?.status).toBe('AMBIGUOUS');
+        return {
+          method: 'confirmSettlement',
+          args: [{ effect: 'CAPTURE', authorizationId: 'auth_fixture', reference: 'fake_completed' }],
+        } as const;
+      },
+    };
+    expect(await executePayment(store, executor, id, randomUUID(), () => at)).toBe('RESOLVED');
+    expect(await executePayment(store, executor, id, randomUUID(), () => at)).toBe('DONE');
+    expect(calls).toBe(1);
+    expect(restoreTrancheRecord((await store.load(id)).record).state).toBe('RELEASED');
+  });
+  it('recovers a provider success followed by an audit-write failure without another money call', async () => {
+    const id = 'execution_audit_failure';
+    const before = await pending(id);
+    await pool.query(
+      "CREATE FUNCTION reject_execution_confirmation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tranche_id = 'execution_audit_failure' AND NEW.status = 'CONFIRMED' THEN RAISE EXCEPTION 'Synthetic confirmation audit failure'; END IF; RETURN NEW; END; $$; CREATE TRIGGER reject_execution_confirmation BEFORE INSERT ON payment_operation_events FOR EACH ROW EXECUTE FUNCTION reject_execution_confirmation()",
+    );
+    const executor = {
+      execute: async () =>
+        ({
+          method: 'confirmSettlement',
+          args: [{ effect: 'CAPTURE', authorizationId: 'auth_fixture', reference: 'fake_capture' }],
+        }) as const,
+    };
+    await expect(executePayment(store, executor, id, randomUUID(), () => at)).rejects.toThrow();
+    expect((await store.load(id)).pending).toMatchObject({
+      status: 'AMBIGUOUS',
+      providerRequestId: before.pending?.providerRequestId,
+    });
+    expect(
+      await executePayment(
+        store,
+        {
+          execute: async () => {
+            throw new Error('Must not resubmit');
+          },
+        },
+        id,
+        randomUUID(),
+        () => at,
+      ),
+    ).toBe('WAIT');
+    await pool.query('DROP TRIGGER reject_execution_confirmation ON payment_operation_events');
+    expect(
+      (
+        await reconcile(
+          store,
+          {
+            read: async () => ({
+              complete: true,
+              operationKey: before.pending?.operation.key,
+              authorizationId: 'auth_fixture',
+              providerRequestId: before.pending?.providerRequestId,
+              reference: 'fake_capture',
+              outcome: 'CAPTURED',
+              noCapture: false,
+              noRenewal: true,
+              amount: { minor: 1000, currency: 'GBP' },
+            }),
+          },
+          id,
+          at,
+        )
+      ).status,
+    ).toBe('RESOLVED');
+    expect(restoreTrancheRecord((await store.load(id)).record).state).toBe('RELEASED');
+  });
   it('returns a safe retry when concurrent expiry lookups carry different clocks', async () => {
     const id = 'provider_clock_race';
     await held(id);
