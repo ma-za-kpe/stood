@@ -122,7 +122,7 @@ describe('Payment schema (real local Postgres)', () => {
     expect(await db.select().from(schema.paymentOperationEvents)).toHaveLength(1);
   });
   it('keeps the declared foreign keys and migrated constraints consistent', async () => {
-    for (const table of [schema.paymentOperations, schema.paymentOperationEvents])
+    for (const table of [schema.paymentOperations, schema.paymentOperationEvents, schema.trancheCommands])
       for (const foreignKey of getTableConfig(table).foreignKeys)
         expect(foreignKey.reference().foreignColumns).toHaveLength(foreignKey.reference().columns.length);
     await expect(

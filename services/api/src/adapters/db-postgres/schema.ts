@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { TrancheCommand } from '../../domain/tranche-record.js';
 import type { OperationIntent, OperationStatus } from '../../ports/payment-operation-store.js';
 
 export const paymentStreams = pgTable(
@@ -19,10 +20,33 @@ export const paymentStreams = pgTable(
   {
     trancheId: text('tranche_id').primaryKey(),
     version: integer().notNull().default(0),
+    record: text(),
+    initialRecord: text('initial_record'),
   },
   (table) => [
     check('stream_version_valid', sql`${table.version} >= 0`),
     check('stream_id_valid', sql`length(trim(${table.trancheId})) > 0`),
+  ],
+);
+
+export const trancheCommands = pgTable(
+  'tranche_commands',
+  {
+    trancheId: text('tranche_id')
+      .notNull()
+      .references(() => paymentStreams.trancheId),
+    commandId: text('command_id').notNull(),
+    version: integer().notNull(),
+    command: jsonb().$type<TrancheCommand>().notNull(),
+    record: text().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.trancheId, table.version] }),
+    unique('tranche_command_identity').on(table.trancheId, table.commandId),
+    check(
+      'tranche_command_valid',
+      sql`${table.version} > 0 AND length(trim(${table.commandId})) > 0 AND jsonb_typeof(${table.command}) = 'object'`,
+    ),
   ],
 );
 

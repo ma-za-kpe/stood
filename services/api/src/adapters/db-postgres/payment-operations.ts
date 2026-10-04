@@ -110,6 +110,7 @@ export class PostgresPaymentOperations implements PaymentOperationStore {
   private async lock(tx: Transaction, trancheId: string): Promise<number> {
     const [stream] = await tx.select().from(streams).where(eq(streams.trancheId, trancheId)).for('update');
     if (!stream) throw new Error('Unknown payment stream');
+    if (stream.record !== null) throw new Error('Aggregate-managed stream requires atomic tranche writes');
     return stream.version;
   }
   private async append(tx: Transaction, row: Row): Promise<void> {

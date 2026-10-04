@@ -50,6 +50,20 @@
       "when": 1791114314965,
       "tag": "0006_cancelled_hold",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791114921902,
+      "tag": "0007_tranche_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791114922829,
+      "tag": "0008_immutable_tranche_history",
+      "breakpoints": true
     }
   ]
 }
