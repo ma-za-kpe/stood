@@ -133,7 +133,7 @@ export class PostgresPaymentOperations implements PaymentOperationStore {
     }
     if (
       (effect !== 'CAPTURE' && effect !== 'VOID') ||
-      !['RELEASED', 'REFUSED', 'EXPIRED'].includes(operation.target) ||
+      !['RELEASED', 'REFUSED', 'EXPIRED', 'CANCELLED'].includes(operation.target) ||
       (effect === 'CAPTURE' && operation.target !== 'RELEASED')
     )
       throw new Error('Invalid settlement intent');

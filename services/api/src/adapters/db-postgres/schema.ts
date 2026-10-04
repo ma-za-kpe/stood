@@ -52,7 +52,7 @@ export const paymentOperations = pgTable(
     ),
     check(
       'operation_effect_valid',
-      sql`COALESCE((${table.operation}->>'effect' = 'CAPTURE' AND ${table.operation}->>'target' = 'RELEASED') OR (${table.operation}->>'effect' = 'VOID' AND ${table.operation}->>'target' IN ('RELEASED', 'REFUSED', 'EXPIRED')) OR (${table.operation}->>'effect' = 'REAUTHORIZE' AND ${table.operation}->>'previousState' IN ('HELD', 'DECIDING', 'WAITING') AND jsonb_typeof(${table.operation}->'requestedAt') = 'number'), false)`,
+      sql`COALESCE((${table.operation}->>'effect' = 'CAPTURE' AND ${table.operation}->>'target' = 'RELEASED') OR (${table.operation}->>'effect' = 'VOID' AND ${table.operation}->>'target' IN ('RELEASED', 'REFUSED', 'EXPIRED', 'CANCELLED')) OR (${table.operation}->>'effect' = 'REAUTHORIZE' AND ${table.operation}->>'previousState' IN ('HELD', 'DECIDING', 'WAITING') AND jsonb_typeof(${table.operation}->'requestedAt') = 'number'), false)`,
     ),
     check('operation_status_valid', sql`${table.status} IN ('RESERVED', 'AMBIGUOUS', 'CONFIRMED', 'FAILED')`),
     check(

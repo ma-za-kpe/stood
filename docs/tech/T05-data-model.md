@@ -77,6 +77,12 @@ The pure codec in `domain/tranche-record.ts` creates, advances and restores vers
 
 This format is unit-tested and not yet stored in Postgres. T-0145 must persist immutable prior history and couple each new state change with the operation reservation/outcome under one transaction. T-0132 stays open. Compatibility migrations must precede replay-semantic or rule-version changes (T-0148).
 
+### Safe recovery across decision-rule versions (T-0148)
+
+Older rule versions in the same transition format restore in safe mode, retaining the original decision versions and effects. Future/malformed versions still fail. New captures, assessments, authorisations and renewals are blocked; expiry and a matched cancellation remain available. A cancellation reaches `CANCELLED` only after VOID confirmation. Existing capture/renewal reservations remain for reconciliation and cannot be submitted or raced by another effect. A confirmation of an already-completed capture records a fact, not a new payment. See [ADR-0012](../adr/0012-safe-recovery-across-rule-changes.md).
+
+Dispatch must check `canSubmitPendingOperation` and the unresolved ledger status. Ordinary aggregate writes must preserve the original rule header and prior transitions. T-0145 and T-0056 must honour this restriction before deployment.
+
 ## R2 layout
 
 ```text
