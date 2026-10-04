@@ -52,6 +52,12 @@ services:
       APP_ENV: local
       PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
       DEMO_MODE: "true"
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      STOOD_API_KEY: ${STOOD_API_KEY:-}
+      STOOD_HMAC_SECRET: ${STOOD_HMAC_SECRET:-}
+      STOOD_WEBHOOK_SECRET: ${STOOD_WEBHOOK_SECRET:-}
       PORT: "3000"
     ports:
       - "127.0.0.1:3000:3000"

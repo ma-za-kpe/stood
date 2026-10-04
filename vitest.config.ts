@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['services/api/src/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/server.ts', '**/adapters/db-postgres/**'],
+      exclude: ['**/*.test.ts', '**/server.ts', '**/setup-cli.ts', '**/adapters/db-postgres/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {
         branches: 85,
