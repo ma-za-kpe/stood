@@ -72,7 +72,7 @@ describe('Payment schema (real local Postgres)', () => {
         expect(result.reason).toMatchObject({ cause: { code: '23505', constraint: 'one_unresolved_payment' } });
     await db
       .update(schema.paymentOperations)
-      .set({ status: 'AMBIGUOUS' })
+      .set({ status: 'AMBIGUOUS', version: 2 })
       .where(eq(schema.paymentOperations.trancheId, 'race'));
     await expect(db.insert(schema.paymentOperations).values(row('race', 'race_late'))).rejects.toMatchObject({
       cause: { constraint: 'one_unresolved_payment' },
@@ -108,7 +108,7 @@ describe('Payment schema (real local Postgres)', () => {
     ).rejects.toThrow('Operation identity is immutable');
     await db
       .update(schema.paymentOperations)
-      .set({ status: 'CONFIRMED', reference: 'capture_completed' })
+      .set({ status: 'CONFIRMED', reference: 'capture_completed', version: 2 })
       .where(eq(schema.paymentOperations.key, 'history_key'));
     await expect(
       pool.query('UPDATE payment_operations SET status = $1 WHERE key = $2', ['AMBIGUOUS', 'history_key']),
@@ -138,5 +138,99 @@ describe('Payment schema (real local Postgres)', () => {
         .insert(schema.paymentOperationEvents)
         .values({ trancheId: 'invalid', key: 'valid_key', version: 10, status: 'RESERVED' }),
     ).rejects.toMatchObject({ cause: { code: '23503' } });
+  });
+  it('rejects backward transitions and non-increasing versions while allowing unresolved progress', async () => {
+    await db.insert(schema.paymentStreams).values({ trancheId: 'transitions' });
+    await db.insert(schema.paymentOperations).values(row('transitions', 'transitions_key'));
+    for (const version of [0, 1])
+      await expect(
+        pool.query("UPDATE payment_operations SET status = 'AMBIGUOUS', version = $1 WHERE key = 'transitions_key'", [
+          version,
+        ]),
+      ).rejects.toThrow('Operation version must increase');
+    await pool.query("UPDATE payment_operations SET status = 'AMBIGUOUS', version = 2 WHERE key = 'transitions_key'");
+    await expect(
+      pool.query("UPDATE payment_operations SET status = 'RESERVED', version = 3 WHERE key = 'transitions_key'"),
+    ).rejects.toThrow('Invalid operation transition');
+    await pool.query("UPDATE payment_operations SET status = 'AMBIGUOUS', version = 3 WHERE key = 'transitions_key'");
+    await pool.query(
+      "UPDATE payment_operations SET status = 'FAILED', reference = 'declined', version = 4 WHERE key = 'transitions_key'",
+    );
+    await expect(
+      pool.query("UPDATE payment_operations SET status = 'RESERVED', version = 5 WHERE key = 'transitions_key'"),
+    ).rejects.toThrow('Operation already resolved');
+  });
+  it('accepts only valid event statuses and nonblank resolved references', async () => {
+    await db.insert(schema.paymentStreams).values({ trancheId: 'event_checks' });
+    await db.insert(schema.paymentOperations).values(row('event_checks', 'event_checks_key'));
+    for (const [status, reference] of [
+      ['UNKNOWN', null],
+      ['CONFIRMED', null],
+      ['FAILED', ' '],
+    ])
+      await expect(
+        pool.query(
+          'INSERT INTO payment_operation_events (tranche_id, key, version, status, reference) VALUES ($1, $2, 1, $3, $4)',
+          ['event_checks', 'event_checks_key', status, reference],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+    for (const [index, status] of ['RESERVED', 'AMBIGUOUS', 'CONFIRMED', 'FAILED'].entries())
+      await pool.query(
+        'INSERT INTO payment_operation_events (tranche_id, key, version, status, reference) VALUES ($1, $2, $3, $4, $5)',
+        ['event_checks', 'event_checks_key', index + 1, status, index > 1 ? 'provider_reference' : null],
+      );
+    await expect(
+      pool.query(
+        "INSERT INTO payment_operation_events (tranche_id, key, version, status) VALUES ('event_checks', 'event_checks_key', 0, 'RESERVED')",
+      ),
+    ).rejects.toMatchObject({ constraint: 'event_version_valid' });
+  });
+  it('enforces the complete operation transition matrix', async () => {
+    const statuses = ['RESERVED', 'AMBIGUOUS', 'CONFIRMED', 'FAILED'] as const;
+    for (const from of statuses)
+      for (const to of statuses) {
+        const key = `matrix_${from}_${to}`;
+        await db.insert(schema.paymentStreams).values({ trancheId: key });
+        await db
+          .insert(schema.paymentOperations)
+          .values({ ...row(key, key), status: from, reference: 'provider_reference' });
+        const update = pool.query('UPDATE payment_operations SET status = $1, version = 2 WHERE key = $2', [to, key]);
+        if (from === 'CONFIRMED' || from === 'FAILED')
+          await expect(update).rejects.toThrow('Operation already resolved');
+        else if (to === 'RESERVED') await expect(update).rejects.toThrow('Invalid operation transition');
+        else await expect(update).resolves.toMatchObject({ rowCount: 1 });
+      }
+  });
+  it('sets timestamps with the database clock despite supplied values and keeps them immutable', async () => {
+    await db.insert(schema.paymentStreams).values({ trancheId: 'timestamps' });
+    const before = await pool.query('SELECT clock_timestamp() AS time');
+    await db.insert(schema.paymentOperations).values(row('timestamps', 'timestamps_key'));
+    const operation = await pool.query("SELECT created_at FROM payment_operations WHERE key = 'timestamps_key'");
+    const event = await pool.query(
+      "INSERT INTO payment_operation_events (tranche_id, key, version, status, recorded_at) VALUES ('timestamps', 'timestamps_key', 1, 'RESERVED', '2100-01-01') RETURNING recorded_at",
+    );
+    const after = await pool.query('SELECT clock_timestamp() AS time');
+    for (const timestamp of [operation.rows[0].created_at, event.rows[0].recorded_at]) {
+      expect(timestamp.getTime()).toBeGreaterThanOrEqual(before.rows[0].time.getTime());
+      expect(timestamp.getTime()).toBeLessThanOrEqual(after.rows[0].time.getTime());
+    }
+    await expect(
+      pool.query(
+        "UPDATE payment_operations SET created_at = '2100-01-01', status = 'AMBIGUOUS', version = 2 WHERE key = 'timestamps_key'",
+      ),
+    ).rejects.toThrow('Operation timestamp is immutable');
+    await expect(
+      pool.query("UPDATE payment_operation_events SET recorded_at = '2100-01-01' WHERE key = 'timestamps_key'"),
+    ).rejects.toThrow('Payment history is append-only');
+    await pool.query(
+      "UPDATE payment_operations SET status = 'FAILED', reference = 'declined', version = 2 WHERE key = 'timestamps_key'",
+    );
+    const unchanged = await pool.query("SELECT created_at FROM payment_operations WHERE key = 'timestamps_key'");
+    expect(unchanged.rows[0].created_at).toEqual(operation.rows[0].created_at);
+    const supplied = await pool.query(
+      "INSERT INTO payment_operations (key, tranche_id, operation, provider_request_id, status, reserved_from_version, version, created_at) VALUES ($1, $2, $3, $4, 'RESERVED', 2, 3, '2100-01-01') RETURNING created_at",
+      ['timestamp_override', 'timestamps', row('timestamps', 'timestamp_override').operation, randomUUID()],
+    );
+    expect(supplied.rows[0].created_at.getUTCFullYear()).toBe(before.rows[0].time.getUTCFullYear());
   });
 });
