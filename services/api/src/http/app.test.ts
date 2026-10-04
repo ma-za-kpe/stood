@@ -45,6 +45,9 @@ describe('API bootstrap and fixture preview', () => {
     });
     expect(payload.paypal).toBeUndefined();
     expect(payload.sentence).toContain('No payment was executed.');
+    expect(payload.sentences.payer).toContain('No payment was executed.');
+    expect(payload.sentences.inspector).toContain('No payment was executed.');
+    expect(payload.sentences.payer).not.toBe(payload.sentences.inspector);
     if (name === 'wrong-plot') {
       expect(payload.sentence).toBe('Wrong plot. 1.4 km off. No payment was executed.');
       expect(payload.detail).toEqual({ distance_m: 1400 });

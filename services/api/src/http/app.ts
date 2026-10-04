@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { missingPaymentKeys, type PaymentKeys, SETUP_GUIDANCE } from '../application/payment-readiness.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
+import { recipientAssessment } from '../domain/recipient-sentences.js';
 
 export type AppConfig = Readonly<{
   appEnv: string;
@@ -119,9 +120,14 @@ export function createApp(config: AppConfig): Hono {
             },
       );
       const decision = decide(scenario.profileId, checks);
+      const copy = recipientAssessment(decision);
       return c.json({
         ...decision,
         sentence: `${assessmentSentence(decision)} No payment was executed.`,
+        sentences: {
+          payer: `${copy.payer} No payment was executed.`,
+          inspector: `${copy.inspector} No payment was executed.`,
+        },
         checks,
         evidenceTier: 'fixture',
         source: 'synthetic_check_results',

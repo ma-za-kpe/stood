@@ -42,7 +42,7 @@ The local response includes assessment copy and structured evidence details:
   "payment": { "executed": false } }
 ```
 
-This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
+This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. The local response also exposes `sentences.payer` and `sentences.inspector`, each ending with "No payment was executed." Missing-item copy names the item. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
 
 **Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, payment-confirmed sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
 

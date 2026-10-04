@@ -15,11 +15,12 @@ describe('Assessment sentences describe evidence before payment (T-0127)', () =>
   it('formats pin distance in metres or kilometres', () => {
     expect(assessmentSentence(refusal('plot', 1400))).toBe('Wrong plot. 1.4 km off.');
     expect(assessmentSentence(refusal('plot', 750.4))).toBe('Wrong plot. 750 m off.');
+    expect(assessmentSentence(refusal('plot', 999.6))).toBe('Wrong plot. 1.0 km off.');
     expect(assessmentSentence(refusal('plot'))).toBe('Wrong plot.');
   });
   it.each([
     ['reused', 'Old photos. These match a prior package.'],
-    ['missing:screen_contact', 'Missing evidence. Add the required item.'],
+    ['missing:screen_contact', 'Missing evidence. Add screen contact.'],
     ['nonce', 'The visit code does not match.'],
     ['expired', 'The evidence arrived after the capture window.'],
     ['unknown', 'The evidence does not meet the requirements.'],

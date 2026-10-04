@@ -8,7 +8,8 @@ export function assessmentSentence(decision: Decision): string {
     case 'plot': {
       const distance = decision.detail?.distance_m;
       if (distance === undefined) return 'Wrong plot.';
-      const display = distance >= 1000 ? `${(distance / 1000).toFixed(1)} km` : `${Math.round(distance)} m`;
+      const rounded = Math.round(distance);
+      const display = rounded >= 1000 ? `${(rounded / 1000).toFixed(1)} km` : `${rounded} m`;
       return `Wrong plot. ${display} off.`;
     }
     case 'reused':
@@ -19,7 +20,7 @@ export function assessmentSentence(decision: Decision): string {
       return 'The evidence arrived after the capture window.';
     default:
       return decision.namedField?.startsWith('missing:')
-        ? 'Missing evidence. Add the required item.'
+        ? `Missing evidence. Add ${decision.namedField.slice(8).replaceAll('_', ' ')}.`
         : 'The evidence does not meet the requirements.';
   }
 }
