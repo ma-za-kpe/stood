@@ -1,0 +1,6 @@
+ALTER TABLE "payment_operations" DROP CONSTRAINT "operation_identity_valid";--> statement-breakpoint
+ALTER TABLE "payment_operation_events" DROP CONSTRAINT "payment_operation_events_key_payment_operations_key_fk";
+--> statement-breakpoint
+ALTER TABLE "payment_operations" ADD CONSTRAINT "payment_operation_tranche_key" UNIQUE("tranche_id","key");--> statement-breakpoint
+ALTER TABLE "payment_operation_events" ADD CONSTRAINT "payment_operation_events_tranche_id_key_payment_operations_tranche_id_key_fk" FOREIGN KEY ("tranche_id","key") REFERENCES "public"."payment_operations"("tranche_id","key") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_operations" ADD CONSTRAINT "operation_identity_valid" CHECK (COALESCE(length(trim("payment_operations"."key")) > 0 AND jsonb_typeof("payment_operations"."operation") = 'object' AND jsonb_typeof("payment_operations"."operation"->'key') = 'string' AND "payment_operations"."operation"->>'key' = "payment_operations"."key" AND jsonb_typeof("payment_operations"."operation"->'authorizationId') = 'string' AND length(trim("payment_operations"."operation"->>'authorizationId')) > 0 AND "payment_operations"."operation"->>'effect' IN ('CAPTURE', 'VOID', 'REAUTHORIZE'), false));

@@ -47,6 +47,8 @@ Photos in fixtures are **synthetic or public-domain**, with GPS values that are 
 
 ## TDD order for the first slices (milestone 0.2.0)
 
+The implemented Docker hook (`scripts/check-product`) runs unit/domain validation, then starts the pinned Compose Postgres and runs `pnpm test:db`. Database tests use isolated temporary databases and real migrations, never an in-memory substitute. `vitest.config.ts` excludes DB tests/adapters from its unit report; `vitest.db.config.ts` covers them separately with an enforced 85% floor for statements, branches, functions and lines. Domain coverage remains 100%. A missing database is a failing integration run, not a skipped check. Standalone container image builds run `pnpm validate`; local pre-commit and CI additionally require the DB suite.
+
 1. `Money` (properties) → `Geofence` → `Nonce`.
 2. `Tranche` state machine (illegal transitions throw; release requires capture).
 3. `decide()` table tests from [T03](T03-domain-model.md#checks) (C1–C5 first).

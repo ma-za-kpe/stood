@@ -3,10 +3,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['services/**/*.test.ts', 'packages/**/*.test.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.db.test.ts'],
     coverage: {
       provider: 'v8',
       include: ['services/api/src/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/server.ts'],
+      exclude: ['**/*.test.ts', '**/server.ts', '**/adapters/db-postgres/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {
         branches: 85,

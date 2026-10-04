@@ -50,9 +50,11 @@ docker compose run --rm site                 # build + serve the landing page
 
 A thin wrapper `scripts/dev` (`./scripts/dev test`, `./scripts/dev lint`) maps to these commands.
 
+`./scripts/dev validate` runs the complete gate, including real Postgres migrations/constraint tests. `./scripts/dev test:db` runs just that suite, starting `db` first. The tests create/drop only a randomly named database on the fixed Compose service and leave the normal development database intact. `pnpm db:generate` and `pnpm db:migrate` now exist; run them inside the tooling container. Other draft commands above remain planned.
+
 ## CI and deploy
 
-- CI runs the same `stood-dev` image for tests (identical toolchain), plus Testcontainers for Postgres where needed.
+- CI runs the same development image and pinned Compose Postgres as local validation. The operation-schema integration tests do not require Testcontainers or a Docker socket inside the tooling container ([ADR-0010](../adr/0010-durable-payment-operation-ledger.md)).
 - Render deploys **`stood-api` from its Dockerfile** (Render supports Docker on the free web-service plan), built from the release tag. That means the same image locally, in CI and in the demo.
 - The landing page is built in CI by the Pages workflow (`tools/site/build.mjs`). Locally, `docker compose run --rm site` reproduces it.
 
@@ -60,7 +62,7 @@ A thin wrapper `scripts/dev` (`./scripts/dev test`, `./scripts/dev lint`) maps t
 
 | Concern | Local (Docker) | CI | Demo (Render) |
 |---|---|---|---|
-| Postgres | `db` container | Testcontainers | Neon |
+| Postgres | `db` container | Same pinned Compose `db` | Neon |
 | Object storage | MinIO | MinIO container | R2 |
 | Email | Mailpit | — | Resend free |
 | PayPal | Sandbox / recorded | Recorded (live nightly) | Sandbox |
