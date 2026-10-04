@@ -15,13 +15,14 @@ export type TrancheState =
   | 'RELEASED'
   | 'REFUSED'
   | 'EXPIRED'
+  | 'CANCELLED'
   | 'DISPUTED';
 export type HoldAttempt = Readonly<{ authorizationId: string; nonce: string; heldAt: number; expiresAt: number }>;
 export type PaymentOperation = Readonly<{
   key: string;
   effect: 'CAPTURE' | 'VOID';
   authorizationId: string;
-  target: 'RELEASED' | 'REFUSED' | 'EXPIRED';
+  target: 'RELEASED' | 'REFUSED' | 'EXPIRED' | 'CANCELLED';
 }>;
 type DecisionRecord = Readonly<{ id: string; decision: Decision }>;
 export type SettlementConfirmation = Readonly<{
@@ -55,11 +56,22 @@ export type ReauthorizationFailure = Readonly<{
   key: string;
   authorizationId: string;
   kind: 'AMBIGUOUS' | 'REJECTED_NO_REAUTHORIZATION';
+  reference?: string;
+}>;
+export type NoRenewalExpiry = Readonly<{
+  effect: 'REAUTHORIZE';
+  key: string;
+  authorizationId: string;
+  kind: 'NO_RENEWAL_EXPIRED';
+  reference: string;
+  now: number;
 }>;
 type Reauthorization = ReauthorizationConfirmation & Readonly<{ attempt: number }>;
 type Settlement = Readonly<{ effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string; attempt: number }>;
 
 export class Tranche {
+  #safeRecovery = false;
+  #replayRuleVersion = RULE_SET_VERSION;
   #state: TrancheState = 'PENDING';
   #attempts: HoldAttempt[] = [];
   #decisions: DecisionRecord[] = [];
@@ -90,6 +102,41 @@ export class Tranche {
 
   get state(): TrancheState {
     return this.#state;
+  }
+  static recover(
+    id: string,
+    amount: Money,
+    profileId: string,
+    maxResubmits: number,
+    version: string,
+    replay: (tranche: Tranche) => void,
+  ): Tranche {
+    const tranche = new Tranche(id, amount, profileId, maxResubmits);
+    tranche.#replayRuleVersion = version;
+    try {
+      replay(tranche);
+    } finally {
+      tranche.#safeRecovery = version !== RULE_SET_VERSION;
+      tranche.#replayRuleVersion = RULE_SET_VERSION;
+    }
+    return tranche;
+  }
+  get safeRecovery(): boolean {
+    return this.#safeRecovery;
+  }
+  get canSubmitPendingOperation(): boolean {
+    const operation = this.#pending ?? this.#pendingReauthorization;
+    return operation !== null && (!this.#safeRecovery || operation.effect === 'VOID');
+  }
+  cancel(now: number): PaymentOperation {
+    if (!this.#safeRecovery && this.#replayRuleVersion === RULE_SET_VERSION)
+      throw new Error('Cancellation requires safe recovery');
+    this.requireState(['HELD', 'DECIDING', 'WAITING']);
+    if (!Number.isFinite(now) || now < this.currentHold.heldAt) throw new Error('Invalid cancellation clock');
+    return this.reserve('VOID', 'CANCELLED');
+  }
+  private requireActive(): void {
+    if (this.#safeRecovery) throw new Error('Safe recovery only permits cancellation, expiry and reconciliation');
   }
   get attempts(): readonly HoldAttempt[] {
     return Object.freeze([...this.#attempts]);
@@ -122,11 +169,13 @@ export class Tranche {
   }
 
   fundingFailed(): void {
+    this.requireActive();
     this.requireState(['PENDING', 'WAIT_FUNDING']);
     this.#state = 'WAIT_FUNDING';
   }
 
   dispatch(authorizationId: string, nonce: Nonce, heldAt: number, expiresAt: number): void {
+    this.requireActive();
     this.requireState(['PENDING', 'WAIT_FUNDING']);
     if (
       !authorizationId.trim() ||
@@ -144,6 +193,7 @@ export class Tranche {
   }
 
   beginReauthorization(now: number): ReauthorizationOperation {
+    this.requireActive();
     this.requireState(['HELD', 'DECIDING', 'WAITING']);
     if (
       !Number.isFinite(now) ||
@@ -198,6 +248,21 @@ export class Tranche {
     this.#state = pending.previousState;
     this.#pendingReauthorization = null;
   }
+  confirmNoRenewalExpiry(proof: NoRenewalExpiry): void {
+    this.matchReauthorization(proof);
+    if (
+      proof.kind !== 'NO_RENEWAL_EXPIRED' ||
+      !proof.reference.trim() ||
+      !Number.isFinite(proof.now) ||
+      proof.now < this.currentHold.expiresAt
+    )
+      throw new Error('Invalid no-renewal expiry proof');
+    this.#settlement = Object.freeze({ effect: 'EXPIRE', reference: proof.reference, attempt: this.#attempts.length });
+    this.#settlements.push(this.#settlement);
+    this.#pendingReauthorization = null;
+    this.#reauthorizationAttempt++;
+    this.#state = 'EXPIRED';
+  }
 
   private matchReauthorization(
     result: Pick<ReauthorizationOperation, 'key' | 'effect' | 'authorizationId'>,
@@ -221,11 +286,13 @@ export class Tranche {
   }
 
   startDeciding(): void {
+    this.requireActive();
     this.requireState(['HELD']);
     this.#state = 'DECIDING';
   }
 
   beginSettlement(decision: Decision, decisionId: string, now: number): PaymentOperation | null {
+    this.requireActive();
     this.requireState(['DECIDING', 'WAITING']);
     const profile = getProfile(this.profileId);
     if (
@@ -233,13 +300,17 @@ export class Tranche {
       this.#decisions.some((d) => d.id === decisionId) ||
       decision.profileId !== this.profileId ||
       !['RELEASE', 'REFUSE', 'WAIT'].includes(decision.outcome) ||
-      decision.ruleSetVersion !== RULE_SET_VERSION ||
+      decision.ruleSetVersion !== this.#replayRuleVersion ||
       !Number.isFinite(now) ||
       now < this.currentHold.heldAt ||
       !decision.reason.trim() ||
       (decision.outcome === 'REFUSE' && !decision.namedField?.trim()) ||
-      (decision.outcome === 'RELEASE' && decision.effect !== profile.passEffect) ||
-      (decision.outcome === 'REFUSE' && (profile.failEffect !== 'VOID' || decision.effect !== 'VOID')) ||
+      (decision.outcome === 'RELEASE' &&
+        (!['CAPTURE', 'VOID'].includes(decision.effect) ||
+          (this.#replayRuleVersion === RULE_SET_VERSION && decision.effect !== profile.passEffect))) ||
+      (decision.outcome === 'REFUSE' &&
+        ((this.#replayRuleVersion === RULE_SET_VERSION && profile.failEffect !== 'VOID') ||
+          decision.effect !== 'VOID')) ||
       (decision.outcome === 'WAIT' && decision.effect !== 'NONE')
     )
       throw new Error('Invalid decision');
@@ -315,6 +386,7 @@ export class Tranche {
   }
 
   redispatch(): void {
+    this.requireActive();
     this.requireState(['REFUSED']);
     if (this.#attempts.length >= this.maxResubmits + 1) throw new Error('Resubmission limit reached');
     this.#settlement = null;
@@ -322,6 +394,7 @@ export class Tranche {
   }
 
   dispute(): void {
+    this.requireActive();
     this.requireState(['RELEASED']);
     this.#state = 'DISPUTED';
   }

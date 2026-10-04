@@ -74,13 +74,15 @@ The creation-only domain aggregate currently permits GBP/USD/EUR holds and valid
 
 ## Keys and configuration
 
-### First run (planned, T-0135)
+### First run (local tool implemented, T-0135)
 
-**Stood will ask for your keys.** The planned setup tool (`scripts/dev setup` or `stood init`; neither exists yet) will prompt for `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` and platform configuration, with links to each source. It will hide secret input, write only to your git-ignored `.env` and validate the client credentials by fetching a **sandbox** OAuth token. No keys or tokens will appear in logs, URLs or committed examples.
+Run `scripts/dev setup` from an interactive terminal. Docker builds the API and prompts for `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `STOOD_API_KEY`, `STOOD_HMAC_SECRET` and `STOOD_WEBHOOK_SECRET`. Every entry is hidden. Supply your existing local platform configuration; this tool does not issue hosted platform keys.
 
-Create the PayPal credentials in your [sandbox app](https://developer.paypal.com/dashboard/applications/sandbox); see [PayPal authentication](https://developer.paypal.com/api/rest/authentication/). Obtain the webhook id from that app's [webhook configuration](https://developer.paypal.com/api/rest/webhooks/). Hosted platform onboarding will ask for your webhook URL and issue `STOOD_API_KEY` / `STOOD_HMAC_SECRET` with a copy-once display and rotation. Those onboarding flows are planned, not available today.
+Create the PayPal credentials in your [sandbox app](https://developer.paypal.com/dashboard/applications/sandbox); see [PayPal authentication](https://developer.paypal.com/api/rest/authentication/). Obtain the webhook id from that app's [webhook configuration](https://developer.paypal.com/api/rest/webhooks/). The tool validates the client id/secret using sandbox OAuth, discards the access token and writes only the six keys into git-ignored `.env`, with private file permissions. Other configuration is preserved. Invalid input or failed OAuth validation leaves existing configuration untouched. Values containing whitespace, quotes, backslashes or interpolation characters are rejected; keys are never altered silently. Symlinks and hard links are refused. The webhook id and platform keys are collected, but their provider ownership is not checked by this local tool.
 
-The current local `/health` always reports `paymentReady: false`. T-0135 will add `missing` (variable **names** only) and the sentence: "Payments are off: add your PayPal sandbox keys, see docs/USAGE.md#keys-and-configuration". Planned money endpoints will return `503 payments_not_configured` with the same guidance when credentials are missing or invalid. Supplying keys alone will not enable payments: durable operations and reconciliation must also be ready. The sandbox-only boot guard remains in place.
+Restart the API with `docker compose up -d --force-recreate api` after setup. Compose passes these six named variables to the API only. The local `/health` returns `paymentReady: false`, `missing` (variable **names** only) and setup guidance. Presence of every variable is not proof of valid credentials or payment readiness. Writes under `/v1/allowances`, `/v1/tranches` and `/v1/payments` return `503 payments_not_configured` with the same guidance. They remain unavailable even with valid keys; the PayPal adapter and sandbox qualification are still required. Synthetic demo scenarios remain available. No financial request is executed by setup or these guards.
+
+Hosted onboarding, webhook URL registration, copy-once platform key issuance and rotation remain planned under T-0150. Tests for the local tool use fake OAuth responses; no real sandbox credentials were supplied or verified during development. The sandbox-only boot guard remains in place.
 
 ### A. Calling Stood from your platform (hosted)
 
@@ -102,7 +104,7 @@ You **don't** give Stood your users' PayPal passwords or card details. Payers ap
 | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | ✓ | From a **sandbox** app at developer.paypal.com (merchant = the platform's business account) |
 | `PAYPAL_WEBHOOK_ID` | ✓ | From the sandbox app's webhook settings (used to verify PayPal webhooks) |
 | `DATABASE_URL` | ✓ | Postgres 17 (local: the `db` container. Demo: Neon) |
-| `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | ✓ | Local: MinIO. Demo: Cloudflare R2 (a bucket-scoped token) |
+| `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | ✓ | Local: SeaweedFS. Demo: Cloudflare R2 (a bucket-scoped token) |
 | `RECEIPT_SIGNING_KEY` | ✓ | Random 32+ bytes. Signs public receipt links |
 | `PLATFORM_KEYS_JSON` | ✓ | Platform id → hashed API key, HMAC secret ref, webhook URL |
 | `EVIDENCE_AGENT_URL` / `EVIDENCE_AGENT_TOKEN` | ✓ | The evidence agent (Astropods or a separate container). **The agent itself gets no PayPal keys** |

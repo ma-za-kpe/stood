@@ -183,7 +183,7 @@ Signed-off-by: Your Name <you@example.com>     ← DCO, add with `git commit -s`
 ### Pull requests
 
 - Open an issue first for anything non-trivial. The PR links it.
-- Small: < 400 changed lines excluding generated files and fixtures. Split otherwise.
+- Batched review rounds deliver at least five tasks in one PR, with one signed Conventional commit per task (`Refs: T-xxxx`). Each task lists evidence, tests first and files touched in the PR. The 400-line guideline is waived for these rounds (product-owner direction, 2026-10-04).
 - The **PR title is the changelog line.** It must be a Conventional Commit (CI-checked).
 - Use the [PR template](../.github/pull_request_template.md): scope, the tests written first, the evidence tier, the money-safety checklist, docs updated.
 - A behaviour change updates its spec in the same PR.

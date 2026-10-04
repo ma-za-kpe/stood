@@ -22,6 +22,8 @@ const arity = {
   expire: 1,
   redispatch: 0,
   dispute: 0,
+  cancel: 1,
+  confirmNoRenewalExpiry: 1,
 } as const;
 type Method = keyof typeof arity;
 export type TrancheCommand = {
@@ -45,24 +47,42 @@ export function createTrancheRecord(definition: TrancheDefinition): string {
 
 export function advanceTrancheRecord(record: string, command: TrancheCommand): string {
   const document = JSON.parse(record) as RecordDocument;
-  const next = JSON.stringify({ ...document, commands: [...document.commands, command] });
-  restoreTrancheRecord(next);
-  return next;
+  const copy = JSON.parse(JSON.stringify(command)) as TrancheCommand;
+  replay(restoreTrancheRecord(record), copy);
+  return JSON.stringify({ ...document, commands: [...document.commands, copy] });
 }
 
 export function restoreTrancheRecord(record: string): Tranche {
   const document = JSON.parse(record) as RecordDocument;
   if (
     document?.schemaVersion !== 1 ||
-    document.ruleSetVersion !== RULE_SET_VERSION ||
+    !supportedVersion(document.ruleSetVersion) ||
     !Array.isArray(document.commands) ||
     !Number.isSafeInteger(document.definition?.amount?.minor)
   )
     throw new RangeError('Invalid or incompatible tranche record');
   const { id, amount, profileId, maxResubmits } = document.definition;
-  const tranche = new Tranche(id, new Money(BigInt(amount.minor), amount.currency), profileId, maxResubmits);
-  for (const command of document.commands) replay(tranche, command);
-  return tranche;
+  return Tranche.recover(
+    id,
+    new Money(BigInt(amount.minor), amount.currency),
+    profileId,
+    maxResubmits,
+    document.ruleSetVersion,
+    (tranche) => {
+      for (const command of document.commands) replay(tranche, command);
+    },
+  );
+}
+
+function supportedVersion(version: unknown): boolean {
+  if (typeof version !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) return false;
+  const parts = version.split('.').map(Number);
+  if (!parts.every(Number.isSafeInteger)) return false;
+  const current = RULE_SET_VERSION.split('.').map(Number);
+  for (let index = 0; index < 3; index++) {
+    if (parts[index] !== current[index]) return (parts[index] as number) < (current[index] as number);
+  }
+  return true;
 }
 
 function replay(tranche: Tranche, command: TrancheCommand) {
@@ -99,5 +119,9 @@ function replay(tranche: Tranche, command: TrancheCommand) {
       return tranche.redispatch(...command.args);
     case 'dispute':
       return tranche.dispute(...command.args);
+    case 'cancel':
+      return tranche.cancel(...command.args);
+    case 'confirmNoRenewalExpiry':
+      return tranche.confirmNoRenewalExpiry(...command.args);
   }
 }

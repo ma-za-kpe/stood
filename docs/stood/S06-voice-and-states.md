@@ -28,6 +28,7 @@
 | Wait: system | "PayPal did not answer. Nothing was paid. We'll try again at 14:05." | — | `WAIT_SYSTEM` |
 | Hold expiring [C] | "The hold ends in 1 day. If the stage isn't seen, nothing is paid and the hold is released." | — | `HOLD_EXPIRING` |
 | Dispute opened | "Your dispute is filed with the record of what Kojo saw." | — | `DISPUTED` |
+| Rules changed; cancellation confirmed | "The rules changed. Your hold is cancelled. Nothing was paid." | "The hold is cancelled. Ask the platform before starting again." | `CANCELLED` |
 
 ## Words we use / avoid
 

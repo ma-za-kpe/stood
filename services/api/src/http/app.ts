@@ -1,8 +1,14 @@
 import { Hono } from 'hono';
+import { missingPaymentKeys, type PaymentKeys, SETUP_GUIDANCE } from '../application/payment-readiness.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
 
-export type AppConfig = Readonly<{ appEnv: string; paypalBaseUrl: string; demoMode: boolean }>;
+export type AppConfig = Readonly<{
+  appEnv: string;
+  paypalBaseUrl: string;
+  demoMode: boolean;
+  paymentKeys?: PaymentKeys;
+}>;
 
 const scenarios: Readonly<Record<string, { profileId: string; changed?: CheckResult }>> = Object.freeze({
   good: { profileId: 'construction.stage@1' },
@@ -63,7 +69,34 @@ export function createApp(config: AppConfig): Hono {
     throw new Error('Only explicitly configured sandbox environments are supported');
   }
   const app = new Hono();
-  app.get('/health', (c) => c.json({ status: 'ok', paymentReady: false, environment: config.appEnv }));
+  app.get('/health', (c) =>
+    c.json({
+      status: 'ok',
+      paymentReady: false,
+      environment: config.appEnv,
+      missing: missingPaymentKeys(config.paymentKeys),
+      sentence: SETUP_GUIDANCE,
+    }),
+  );
+  app.use('/v1/*', async (c, next) => {
+    if (
+      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(c.req.method) &&
+      /^\/v1\/(allowances|tranches|payments)(?:\/|$)/.test(c.req.path)
+    ) {
+      return c.newResponse(
+        JSON.stringify({
+          type: 'urn:stood:problem:payments_not_configured',
+          title: 'Payments not configured',
+          status: 503,
+          code: 'payments_not_configured',
+          detail: SETUP_GUIDANCE,
+        }),
+        503,
+        { 'Content-Type': 'application/problem+json' },
+      );
+    }
+    await next();
+  });
   if (config.demoMode) {
     app.post('/v1/demo/scenarios/:name', (c) => {
       const name = c.req.param('name');

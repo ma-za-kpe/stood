@@ -63,7 +63,7 @@ The migration is integration-tested on local Postgres, including fresh connectio
 
 The T-0140 transaction store locks the stream row, checks its expected version and commits the operation, stable provider request UUID, stream version and event atomically before returning. Reusing a key requires the same tranche, original reservation version and canonical intent; JSONB field order is irrelevant. Definite resolution permits a fresh operation key/UUID, while ambiguous outcomes block it. Immutable timestamp strings survive reload. No HTTP/PayPal executor is wired.
 
-This store does not persist/rehydrate a tranche, original holds, renewal history or domain retry counters. T-0132 stays open until those writes and operation reservation/confirmation share one transaction. Ledger versions are not yet aggregate versions, and a ledger outcome alone must never authorise a financial effect.
+The original ledger-only store remains for isolated ledger tests. Managed tranche streams use the atomic aggregate store below; ledger outcomes alone never authorise financial effects.
 
 Operation updates require increasing versions. RESERVED can become AMBIGUOUS, CONFIRMED or FAILED; AMBIGUOUS can receive further ambiguous observations or become CONFIRMED/FAILED. Resolved rows reject every update. Idempotent callers must return the stored result without rewriting it. Events accept only these four statuses, positive versions, and nonblank references for resolved outcomes.
 
@@ -75,7 +75,23 @@ New operations and each operation's first event must be RESERVED with a null ref
 
 The pure codec in `domain/tranche-record.ts` creates, advances and restores version-1 JSON records. Each contains the immutable definition, current rule-set version and ordered accepted commands with recorded arguments. Replaying validated domain methods recovers private retry counters, hold/renewal history, decisions, pending operations and terminal settlements; it never reruns evidence checks or processor calls. Unknown/incompatible records and illegal sequences fail closed. See [ADR-0011](../adr/0011-tranche-recovery-record.md).
 
-This format is unit-tested and not yet stored in Postgres. T-0145 must persist immutable prior history and couple each new state change with the operation reservation/outcome under one transaction. T-0132 stays open. Compatibility migrations must precede replay-semantic or rule-version changes (T-0148).
+The atomic store below now persists this format with immutable prior history and coupled operation writes. T-0132 awaits batch approval/merge. Compatibility migrations must precede replay-semantic or rule-version changes (T-0148).
+
+### Safe recovery across decision-rule versions (T-0148)
+
+Older rule versions in the same transition format restore in safe mode, retaining the original decision versions and effects. Future/malformed versions still fail. New captures, assessments, authorisations and renewals are blocked; expiry and a matched cancellation remain available. A cancellation reaches `CANCELLED` only after VOID confirmation. Existing capture/renewal reservations remain for reconciliation and cannot be submitted or raced by another effect. A confirmation of an already-completed capture records a fact, not a new payment. See [ADR-0012](../adr/0012-safe-recovery-across-rule-changes.md).
+
+Dispatch must check `canSubmitPendingOperation` and the unresolved ledger status. Ordinary aggregate writes must preserve the original rule header and prior transitions. T-0145 and T-0056 must honour this restriction before deployment.
+
+### Renewal reconciliation at expiry (T-0138)
+
+`confirmNoRenewalExpiry` accepts a matched renewal key/authorisation, provider reference and clock at or after the hold expiry. It records EXPIRED with an EXPIRE fact, without claiming a void or capture. Unknown outcomes keep REAUTHORIZE_PENDING. A confirmed renewal is adopted through normal confirmation before expiry is applied to the renewed id. Status verification and atomic recording are T-0056/T-0145 work.
+
+### Atomic aggregate store (T-0145 / T-0132)
+
+`PostgresTranches` persists the complete recovery record, original record and append-only command journal. `apply` locks the stream and commits state, aggregate version, reservation/outcome, provider UUID and operation event in one transaction. Matching command retries are read-only; changed commands or original versions conflict. Reads take a shared lock so state and pending operation remain consistent. Direct rewrites and incomplete managed journal/event commits are rejected by database guards. Legacy ledger-only writers cannot mutate managed streams. See [ADR-0013](../adr/0013-atomic-tranche-and-operation-storage.md).
+
+Integration tests cover restart identity, competing transitions, safe-mode cancellation, renewal expiry, confirmation rollback and failure at each write boundary. No payment executor or HTTP money endpoint is enabled. This completes the aggregate-persistence implementation required by T-0132; merge/review evidence remains pending.
 
 ## R2 layout
 
