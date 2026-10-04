@@ -42,7 +42,9 @@ The local response includes assessment copy and structured evidence details:
   "payment": { "executed": false } }
 ```
 
-This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. The local response also exposes `sentences.payer` and `sentences.inspector`, each ending with "No payment was executed." Missing-item copy names the item. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
+This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. Local scenarios: `good`, `wrong-plot`, `recycled`, `wrong-stage`, `substituted-fitting`, `nonce-unreadable`, `mock-location`, `freelance-missing-screen`, `funding-declined` and `hold-expiry`. The last two return `state: WAIT_FUNDING | EXPIRED`, `outcome: WAIT` and `source: synthetic_domain_transitions`. Expiry uses simulated provider proof; its fixture settlement reference is not a PayPal ID.
+
+The local response also exposes `sentences.payer` and `sentences.inspector`, each ending with "No payment was executed." Missing-item copy names the item. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
 
 **Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, payment-confirmed sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
 

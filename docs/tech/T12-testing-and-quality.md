@@ -55,3 +55,5 @@ The implemented Docker hook (`scripts/check-product`) runs unit/domain validatio
 4. `submitPackage` use case with fake `PaymentGateway` (refuse → void exactly once).
 5. PayPal adapter contract tests (recorded sandbox) → wire the real adapter.
 6. HTTP layer + fixtures `wrong-plot` and `good` end to end.
+
+The ten local demo scenarios are unit-tested fixtures. `funding-declined` and `hold-expiry` expose lifecycle state separately from the assessment outcome; both use outcome WAIT and execute no payment. Expiry advances the explicit domain clock, reserves cancellation, then supplies a simulated provider-expiry proof. It never confirms expiry from elapsed time alone. Hosted/sandbox replay remains separate qualification.

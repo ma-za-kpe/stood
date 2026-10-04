@@ -122,7 +122,7 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[ ]` T-0058 Reviewer override + payer acceptance (FR-39 / 40) with an audit log.
 - `[ ]` T-0059 Dispute packet PDF / JSON. Disputes API where the sandbox allows it.
 - `[ ]` T-0060 Receipt signed links (JWT), distance-only display.
-- `[~]` T-0061 Seven synthetic scenarios implemented under T-0122. `substituted-fitting`, `funding-declined` and `hold-expiry` remain queued, along with real sandbox replay and product sentences.
+- `[~]` T-0061 All ten synthetic scenarios implemented: substituted fitting stays WAIT for review, funding-declined demonstrates WAIT_FUNDING, and hold-expiry demonstrates EXPIRED using explicitly simulated provider proof. Tier: unit-tested; route regressions failed first. Separate recipient sentences and payment.executed false throughout. Real sandbox replay remains blocked on T-0121 / T-0027; no synthetic reference is a PayPal ID. Review pending.
 
 ### Evidence
 

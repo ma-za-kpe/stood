@@ -2,7 +2,10 @@ import { Hono } from 'hono';
 import { missingPaymentKeys, type PaymentKeys, SETUP_GUIDANCE } from '../application/payment-readiness.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
-import { recipientAssessment } from '../domain/recipient-sentences.js';
+import { Money } from '../domain/money.js';
+import { Nonce } from '../domain/nonce.js';
+import { recipientAssessment, trancheSentences } from '../domain/recipient-sentences.js';
+import { Tranche } from '../domain/tranche.js';
 
 export type AppConfig = Readonly<{
   appEnv: string;
@@ -13,6 +16,17 @@ export type AppConfig = Readonly<{
 
 const scenarios: Readonly<Record<string, { profileId: string; changed?: CheckResult }>> = Object.freeze({
   good: { profileId: 'construction.stage@1' },
+  'substituted-fitting': {
+    profileId: 'construction.stage@1',
+    changed: {
+      code: 'classifier_label',
+      source: 'MODEL',
+      confidence: 0.95,
+      status: 'FAIL',
+      namedField: 'fixtures',
+      reason: 'fitting_needs_review',
+    },
+  },
   'wrong-plot': {
     profileId: 'construction.stage@1',
     changed: {
@@ -101,6 +115,40 @@ export function createApp(config: AppConfig): Hono {
   if (config.demoMode) {
     app.post('/v1/demo/scenarios/:name', (c) => {
       const name = c.req.param('name');
+      if (name === 'funding-declined' || name === 'hold-expiry') {
+        const tranche = new Tranche('fixture_lifecycle', new Money(400000n, 'GBP'), 'construction.stage@1', 1);
+        const at = 1790985600000;
+        const expiry = at + 29 * 86400000;
+        if (name === 'funding-declined') tranche.fundingFailed();
+        else {
+          tranche.dispatch('fixture_auth', new Nonce('K7Q'), at, expiry);
+          tranche.expire(expiry);
+          // Simulated provider proof, not a real cancellation or a clock-only confirmation.
+          tranche.settlementFailed({
+            effect: 'VOID',
+            authorizationId: 'fixture_auth',
+            kind: 'AUTHORIZATION_EXPIRED',
+            reference: 'fixture_expiry',
+          });
+        }
+        const copy = trancheSentences(tranche, expiry);
+        const sentences = {
+          payer: `${copy.payer} No payment was executed.`,
+          inspector: `${copy.inspector} No payment was executed.`,
+        };
+        return c.json({
+          outcome: 'WAIT',
+          effect: 'NONE',
+          namedField: name === 'funding-declined' ? 'funding' : 'expired',
+          state: tranche.state,
+          settlement: tranche.settlement,
+          sentence: sentences.payer,
+          sentences,
+          evidenceTier: 'fixture',
+          source: 'synthetic_domain_transitions',
+          payment: { executed: false },
+        });
+      }
       const scenario = Object.hasOwn(scenarios, name) ? scenarios[name] : undefined;
       if (!scenario) {
         return c.newResponse(

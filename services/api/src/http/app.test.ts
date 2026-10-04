@@ -32,6 +32,7 @@ describe('API bootstrap and fixture preview', () => {
     ['nonce-unreadable', 'WAIT'],
     ['mock-location', 'WAIT'],
     ['freelance-missing-screen', 'REFUSE'],
+    ['substituted-fitting', 'WAIT'],
   ])('runs %s through the real pure rule as %s, without a payment', async (name, outcome) => {
     const app = createApp({ appEnv: 'local', paypalBaseUrl: 'https://api-m.sandbox.paypal.com', demoMode: true });
     const response = await app.request(`/v1/demo/scenarios/${name}`, { method: 'POST' });
@@ -59,5 +60,25 @@ describe('API bootstrap and fixture preview', () => {
     const response = await app.request('/v1/demo/scenarios/unknown', { method: 'POST' });
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/problem+json');
+  });
+  it.each([
+    ['funding-declined', 'WAIT_FUNDING'],
+    ['hold-expiry', 'EXPIRED'],
+  ])('simulates %s as %s without a provider payment', async (name, state) => {
+    const app = createApp({ appEnv: 'local', paypalBaseUrl: 'https://api-m.sandbox.paypal.com', demoMode: true });
+    const response = await app.request(`/v1/demo/scenarios/${name}`, { method: 'POST' });
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toMatchObject({
+      state,
+      outcome: 'WAIT',
+      evidenceTier: 'fixture',
+      source: 'synthetic_domain_transitions',
+      payment: { executed: false },
+    });
+    expect(payload.sentences.payer).toContain('No payment was executed.');
+    expect(payload.paypal).toBeUndefined();
+    if (state === 'EXPIRED')
+      expect(payload.settlement).toMatchObject({ effect: 'EXPIRE', reference: 'fixture_expiry' });
   });
 });
