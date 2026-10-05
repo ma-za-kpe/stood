@@ -1,5 +1,7 @@
 # 06: PayPal AI Hackathon (verified rules)
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 Source: [paypalaihackathon.devpost.com](https://paypalaihackathon.devpost.com/), checked 2026-10-03.
 
 ## Facts

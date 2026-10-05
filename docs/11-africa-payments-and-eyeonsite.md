@@ -1,5 +1,7 @@
 # 11: Africa payments climate and [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 ## The payments weather [U, audited]
 
 - **Remittances to Africa:** about $95–100B a year ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) cites World Bank / KNOMAD 2024). Thick corridors are Nigeria, Egypt, Ghana and Kenya. *Not independently re-verified [C]. See [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)'s EOS-13 sources.*

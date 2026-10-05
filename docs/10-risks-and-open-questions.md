@@ -1,5 +1,7 @@
 # 10: Risks and open questions
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 Product-level sandbox questions live in [S10](stood/S10-sandbox-limits-and-open-questions.md). This doc covers project-level risks.
 
 ## Top risks (ranked) [C]

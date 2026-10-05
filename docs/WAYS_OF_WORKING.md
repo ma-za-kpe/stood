@@ -59,7 +59,7 @@ If code and docs disagree, **stop and reconcile**. Update the doc in the same PR
 
 ### The loop
 
-1. **Test list first.** Before coding a slice, write the list of behaviours as test names in the task (for example "refuses when the package is 1.4 km outside the geofence").
+1. **Test list first.** Before coding a slice, write the list of behaviours as test names in the task (for example "refuses when frozen signed tests were changed").
 2. **Red.** Write one failing test. Run it and see it fail for the right reason.
 3. **Green.** Write the simplest code that passes.
 4. **Refactor.** Clean up with tests green: names from the domain, no duplication, small objects.
@@ -68,8 +68,8 @@ If code and docs disagree, **stop and reconcile**. Update the doc in the same PR
 ### Rules
 
 - **Every bug starts as a failing test** that reproduces it. The fix PR contains that test.
-- **Acceptance tests come from the specs.** Each outcome in [S04](stood/S04-job-story-and-outcomes.md) and each state in [S06](stood/S06-voice-and-states.md) is a Given / When / Then scenario, using the shared **fixtures**: good, wrong-plot, recycled, wrong-stage, substituted-fitting. The same fixtures power the demo, the Postman collection and CI.
-- **Property-based tests** for invariants: money never goes negative or changes currency silently, `captured ≤ allowance cap`, geofence distance is symmetric, a tranche can never be both released and refused.
+- **Acceptance tests come from the specs.** Each outcome in [S04](stood/S04-job-story-and-outcomes.md) and each state in [S06](stood/S06-voice-and-states.md) is a Given / When / Then scenario, using the shared **fixtures**: code-good, signed-tests-changed, tests-skipped, weak-tests, usage-pending. The same fixtures power the demo, the Postman collection and CI.
+- **Property-based tests** for invariants: money never goes negative or changes currency silently, `captured ≤ allowance cap`, frozen test hashes cannot be replaced by a builder report, a tranche can never be both released and refused.
 - **The test pyramid:**
 
   | Layer | Speed | Touches | Share |
@@ -92,7 +92,7 @@ If code and docs disagree, **stop and reconcile**. Update the doc in the same PR
 
 | Context | Owns | Doesn't own |
 |---|---|---|
-| **Allowance** | What the payer agreed: plot + geofence, stages, caps, payee, required shots, window | Users, KYC (the platform's job) |
+| **Allowance** | What the payer agreed: repository + frozen tests, milestones, cap, operator/payee, usage condition, window | Users, KYC (the platform's job) |
 | **Evidence** | Package intake, nonce, photo metadata, evidence findings | Decisions |
 | **Decision** (the core) | Rules that turn findings into **release / refuse / wait** with a named field | Calling PayPal, calling models |
 | **Payments** | The PayPal anti-corruption layer: authorise, capture, void, reauthorise, disputes, reconciliation | Business rules |

@@ -26,7 +26,7 @@ stood/
 │  ├─ evidence-index/         ← Elastic mappings + seeding scripts
 │  └─ approver/               ← Kernel: headless PayPal sandbox buyer approval
 ├─ zaps/                      ← exported Zap definitions + message templates (Zapier)
-├─ fixtures/                  ← good / wrong-plot / recycled / wrong-stage / substituted-fitting
+├─ fixtures/                  ← code-good / signed-tests-changed / tests-skipped / weak-tests / usage-pending; field scenarios separate
 ├─ postman/                   ← public collection to replay every outcome
 └─ docs/
    ├─ (these research and product docs)

@@ -1,5 +1,7 @@
 # ADR-0010: Persist payment operation identity before submission
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](../stood/S17-agent-payments-positioning.md).
+
 - **Status:** accepted
 - **Date:** 2026-10-03
 

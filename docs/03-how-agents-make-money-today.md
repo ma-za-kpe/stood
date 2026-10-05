@@ -1,5 +1,7 @@
 # 03: How agents make money today (audited, Oct 2026)
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 **Bottom line [U, confirmed]:** almost no agent makes money with humans fully out of the loop. Machine-to-machine *settlement* works. Machine-to-machine *demand* that sustains itself barely exists.
 
 ## Layer 1: humans are the customer

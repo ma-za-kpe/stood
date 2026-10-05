@@ -1,5 +1,7 @@
 # 05: Simulation design principles
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 **Status:** paused as a product. **Kept as the test harness** for the hackathon trust logic ([09](09-stood.md)) and as the long-term research track.
 
 ## Core principles [U]

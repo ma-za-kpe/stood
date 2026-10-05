@@ -1,5 +1,7 @@
 # 01: Vision and phases
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 ## The original idea [U]
 
 - What is called the "agentic economy" today isn't one. An economy is where money is exchanged, so an agentic economy should mean **AI agents holding money and doing things with it**.
