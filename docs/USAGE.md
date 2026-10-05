@@ -1,7 +1,7 @@
 # Stood: usage manual
 
-> **Money does not move until someone stood there.**
-> An open-source release gate for staged payments, built on PayPal and AI.
+> **Agents pay agents. Only when the work stands.**
+> An open-source release gate for code milestones and staged payments, built on PayPal.
 
 | | |
 |---|---|
@@ -16,11 +16,11 @@
 
 ## What Stood does, in 20 seconds
 
-You run a platform where someone pays for work in **stages**: a house build, a freelance milestone, an insurance repair, a grant tranche. Stood sits between "the stage is done" and "the money moves":
+Your buyer or buying agent pays an operator for a code milestone against frozen signed acceptance tests and a budget mandate. Stood sits between "the stage is done" and "the money moves":
 
-1. **Allowance:** the payer signs, once, what "done" means for each milestone (via PayPal).
+1. **Allowance:** the buyer agrees frozen tests, repository, operator and budget once. Provider approval binding remains planned.
 2. **Hold:** when a milestone is ready, Stood asks PayPal to **authorise** (hold) the amount.
-3. **Package:** you send the evidence: photos, files, recordings, coordinates.
+3. **Commit package:** send the exact commit and authenticated test report; trusted runner ingestion remains planned.
 4. **Decision:** Stood's rules return **`RELEASE`** (PayPal capture), **`REFUSE`** (PayPal void, plus the named reason), or **`WAIT`** (a human reviews).
 5. **File:** every decision leaves a receipt and a dispute packet.
 
@@ -30,7 +30,29 @@ The lead product direction is now code milestones and agent-to-agent payments: *
 
 ---
 
+## Code-milestone quickstart (local DRAFT)
+
+Create a signed local DRAFT using the bearer/HMAC conventions in [T04](tech/T04-api-spec.md). The request body is:
+
+```json
+{ "payee_ref": "yard-operator", "cap": { "minor": 400000, "currency": "USD" },
+  "milestones": [
+    { "name": "build", "amount": { "minor": 120000, "currency": "USD" },
+      "profile": "code.milestone@1",
+      "params": { "repository": "owner/repo", "base_commit": "full-commit-sha",
+                  "frozen_tests_manifest": "sha256-manifest", "usage_required": false } },
+    { "name": "usage release", "amount": { "minor": 280000, "currency": "USD" },
+      "profile": "code.milestone@1", "params": { "usage_required": true } }
+  ], "window_days": 7, "max_resubmits": 2 }
+```
+
+These params are draft metadata. This endpoint does not freeze/sign tests, validate a runner, approve a mandate or fund a hold. The future signed contract must replace the illustrative hashes with exact values and explicitly agree any usage exemption; a client flag cannot waive proof. The response is DRAFT with PENDING tranche IDs, no approval URL. Yard is planned.
+
 ## For hackathon judges: try it in 2 minutes
+
+The live landing page has four illustrative commit scenarios. They execute no tests or payments.
+
+### Scenario: site visits (local synthetic fixtures)
 
 **Current local implementation:** start `docker compose up -d api`. `POST http://localhost:3000/v1/demo/scenarios/wrong-plot` runs synthetic check results through the real rule and returns `payment.executed: false`. It does not authorise, capture or void. The hosted sandbox replay and SDK below are planned contracts, not shipped capabilities.
 
@@ -147,12 +169,12 @@ cp .env.example .env            # fill the sandbox values above
 docker compose up -d db s3 mail
 docker compose run --rm app pnpm install
 docker compose run --rm app pnpm db:migrate
-docker compose up api web       # API on :3000, web on :5173
+docker compose up -d api        # local API on :3000; product web app is planned
 ```
 
 ---
 
-## Quickstart (TypeScript SDK)
+## Scenario: site visits (planned TypeScript SDK)
 
 ```ts
 import { Stood } from '@stood/sdk';
@@ -204,7 +226,7 @@ const t = await stood.tranches.get(held.id); // t.state: RELEASED | REFUSED | WA
 ### Freelance example (same endpoint, different profile)
 
 ```ts
-{ name: 'homepage', amount: { minor: 120000, currency: 'EUR' },
+{ name: 'homepage', amount: { minor: 120000, currency: 'USD' },
   profile: 'freelance.milestone@1',
   params: { required_items: ['screen_home', 'screen_pricing', 'screen_contact', 'figma_link'],
             artifact_hash: { must_differ_from: 'previous_deliveries' } } }
@@ -212,7 +234,7 @@ const t = await stood.tranches.get(held.id); // t.state: RELEASED | REFUSED | WA
 
 ---
 
-## Webhooks you'll receive
+## Webhooks you'll receive (planned)
 
 Register one HTTPS URL. Every event is signed: `Stood-Signature: t=<unix>,v1=<hex hmac_sha256(secret, t + "." + body)>`.
 
@@ -265,6 +287,7 @@ Every event includes `sentence.payer` and `sentence.inspector`, plain-language t
 
 | Profile | Use it for | Key params |
 |---|---|---|
+| `code.milestone@1` | Code milestones (lead) | Frozen tests, commit, runner report, mutation, mandate and outside usage; ingestion planned |
 | `construction.stage@1` | Build stages verified on site | `location`, `required_items`, stage label |
 | `freelance.milestone@1` | Digital deliverables | `required_items`, `artifact_hash`, `link_check` |
 | `claims.field_visit@1` | Insurance / lending field visits | `location`, `pair_match` (before / after) |
@@ -276,7 +299,7 @@ Need another? Open a **Feature or use case** issue. Profiles are compositions of
 
 ---
 
-## Other ways to plug in
+## Other ways to plug in (planned)
 
 | Path | How |
 |---|---|
@@ -287,7 +310,7 @@ Need another? Open a **Feature or use case** issue. Profiles are compositions of
 
 ---
 
-## Limits and guarantees
+## Target limits and guarantees (financial API planned)
 
 | | |
 |---|---|

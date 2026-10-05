@@ -1,18 +1,18 @@
 # Stood: project docs
 
-> **Money does not move until someone stood there.**
+> **Agents pay agents. Only when the work stands.**
 
-**Status:** research and design. No code yet.
-**Last updated:** 2026-10-03
+**Status:** early implementation. Domain, durable storage, guarded sandbox adapter and signed local DRAFT API are tested. Trusted runner ingestion, funding HTTP, Yard and A2A/AP2 remain planned.
+**Last updated:** 2026-10-05
 **Target:** PayPal AI Hackathon. Submissions close **12 Nov 2026, 2:00 pm PT**. Winners announced 21 Dec 2026.
 
 ## Where the thinking is now
 
-This started as "use a pyramid scheme to ignite a real agentic economy". Research showed that a pyramid can't be the seed. Its harms are how it works. What survived is the test it fails: **money should move only for something actually delivered, to someone outside the payer's recruitment tree.** The PayPal AI Hackathon, PayPal's stalled push into Africa (the Paga holds), and the user's existing project **[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)** turned that test into a product.
+Adaeze delegates a code milestone to a human builder or, in the planned agent flow, Yard. Stood binds payment to frozen signed acceptance tests, a new commit, trustworthy execution and a budget mandate. A final **usage release** needs an independent **outside signal**; agents paying one another cannot create their own evidence of demand. The operator is the payee behind an agent.
 
-**Stood** is a release gate that platforms call before a staged payment leaves. A payer abroad signs what "done" means. An inspector's evidence is checked. Stood **releases** (PayPal capture), **refuses** (void, with a named reason), or **waits** (a human reviews), and every decision leaves a file a dispute can use.
+The original research asked whether an agent economy could fund itself. The surviving rule is delivery to an outside user, not recruitment or circular transfers. Research and ADRs remain historical records. [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is a linked site-visit scenario.
 
-**Start here:** [09: Stood overview](09-stood.md), then [S12: hackathon plan](stood/S12-hackathon-plan.md).
+**Start here:** [09: overview](09-stood.md), [S17: positioning](stood/S17-agent-payments-positioning.md), then the [usage manual](USAGE.md).
 
 ## Stood product docs (`stood/`)
 
@@ -32,6 +32,7 @@ This started as "use a pyramid scheme to ignite a real agentic economy". Researc
 | S12 | [Hackathon plan](stood/S12-hackathon-plan.md) |
 | S13 | [Partner integration map: all ten partners + PayPal, build-time MCPs, run-time jobs, build tiers](stood/S13-sponsor-integration.md) |
 | S14 | [Open-source plan: "how we used every tool"](stood/S14-open-source-plan.md) |
+| S17 | [Agent payments, mandates and outside signals](stood/S17-agent-payments-positioning.md) |
 | S16 | [Use cases beyond housing and evidence profiles: freelance, claims, lending, rentals, grants, trade, agents](stood/S16-use-cases-and-evidence-profiles.md) |
 | S15 | [Design system v2 "Volt": palette, type, motion, components, logo, web / iOS / Android / social assets](stood/S15-design-system.md) |
 
