@@ -252,7 +252,7 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 
 - `[x]` T-0151 Local setup follow-up: generate STOOD_API_KEY, STOOD_HMAC_SECRET and STOOD_WEBHOOK_SECRET with a cryptographically secure generator; display once, preserve existing configuration and test rotation separately from hosted issuance.
 - `[x]` T-0152 Classify setup failures safely: distinguish rejected sandbox credentials, PayPal unavailable/timeout and invalid provider responses; never expose secrets, OAuth bodies or tokens.
-- `[ ]` T-0153 Atomic .env persistence: write a private temporary file in the same directory, sync and rename; test interruption leaves the previous configuration intact, with link/permission guards.
+- `[x]` T-0153 Atomic .env persistence: write a private temporary file in the same directory, sync and rename; test interruption leaves the previous configuration intact, with link/permission guards.
 
 - `[ ]` T-0154 Initial funding and Vault durability before full T-0027 / financial HTTP activation: reserve separate stable request IDs before order/setup-token creation and order authorisation; persist approval phases and provider identities; commit confirmed hold plus funding outcome in one transaction, exclude competing operations and reconcile ambiguous creation/authorisation across restart. Test before calling the provider and qualify against actual sandbox accounts. The current adapter intentionally handles existing confirmed holds only.
 
@@ -544,3 +544,5 @@ T-0238 implementation evidence: submission.reserved commits the exact actor/clai
 T-0151 evidence: two failing secret-generation/preservation tests preceded implementation. Only three provider prompts remain; three separate 256-bit platform secrets are generated after successful sandbox validation, saved before copy-once display, restored from guarded .env and rotated only with --rotate-platform. Fake OAuth responses exercise this without provider keys.
 
 T-0152 evidence: four named-error regressions failed first. Setup now reports rejected sandbox credentials, unavailable/timeout transport and malformed provider responses separately via typed codes; CLI messages are fixed copy and never include exceptions, response bodies or keys. No save occurs on these failures.
+
+T-0153 evidence: interruption regression failed first (old implementation truncated/replaced config and ignored the injection). Persistence writes a 0600 same-directory exclusive temporary file, fsyncs, checks the destination has not changed, renames and syncs the directory. Symlink/hard-link guards remain; ordinary failures clean temporary files and leave the prior configuration intact before replacement.

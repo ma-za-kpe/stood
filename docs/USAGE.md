@@ -414,3 +414,5 @@ Run `scripts/dev site` to build and serve Stood at <http://localhost:8082/> and 
 Run `scripts/check-site` to build the static site and check it in a dedicated Docker Chromium browser on Node 24. It checks desktop/mobile layout, keyboard fixture selection, both-way navigation, missing assets, reduced motion and simulation disclosure. Screenshots go to `artifacts/site/`. The separate `site-browser` CI job runs the same command; it is a page smoke test, not a full accessibility audit or the remaining Yard application E2E suite.
 
 Local setup distinguishes rejected sandbox credentials, sandbox unavailability/timeouts and invalid provider responses. These failures save nothing and never print provider response bodies, OAuth tokens or entered credentials.
+
+Setup writes a private temporary .env file, syncs it and replaces the destination atomically. It refuses linked files or configuration changed by another writer during setup. An interruption before replacement preserves the previous configuration.

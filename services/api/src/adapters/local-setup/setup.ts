@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { lstat, open, rename, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PAYMENT_KEYS, type PaymentKeys } from '../../application/payment-readiness.js';
 
@@ -87,28 +87,75 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
   io.print('Sandbox credentials checked. Keys saved to .env. Payments remain off until adapter qualification.');
 }
 
-export async function persistEnv(directory: string, keys: PaymentKeys): Promise<void> {
+export async function persistEnv(
+  directory: string,
+  keys: PaymentKeys,
+  beforeReplace?: (temporary: string) => Promise<void>,
+): Promise<void> {
   if (PAYMENT_KEYS.some((name) => !valid(keys[name]))) throw new Error('Invalid key input');
-  const file = await open(
-    resolve(directory, '.env'),
-    constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW,
+  const destination = resolve(directory, '.env');
+  let previous = '';
+  let identity: Awaited<ReturnType<typeof lstat>> | null = null;
+  try {
+    const file = await open(destination, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const info = await file.stat();
+      if (!info.isFile() || info.nlink !== 1) throw new Error('Expected private regular .env');
+      identity = info;
+      previous = await file.readFile('utf8');
+    } finally {
+      await file.close();
+    }
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'ENOENT') throw error;
+  }
+  const lines = previous
+    .split(/\r?\n/)
+    .filter((line) => !PAYMENT_KEYS.some((name) => new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`).test(line)));
+  while (lines.at(-1) === '') lines.pop();
+  const next = [...lines, ...PAYMENT_KEYS.map((name) => `${name}=${JSON.stringify(keys[name])}`), ''].join('\n');
+  const temporary = resolve(directory, `.env.${randomBytes(16).toString('hex')}.tmp`);
+  const staged = await open(
+    temporary,
+    constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW,
     0o600,
   );
   try {
-    const info = await file.stat();
-    if (!info.isFile() || info.nlink !== 1) throw new Error('Expected private regular .env');
-    const previous = await file.readFile('utf8');
-    const lines = previous
-      .split(/\r?\n/)
-      .filter((line) => !PAYMENT_KEYS.some((name) => new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`).test(line)));
-    while (lines.at(-1) === '') lines.pop();
-    const next = [...lines, ...PAYMENT_KEYS.map((name) => `${name}=${JSON.stringify(keys[name])}`), ''].join('\n');
-    await file.chmod(0o600);
-    await file.truncate(0);
-    await file.write(next, 0, 'utf8');
-    await file.sync();
+    try {
+      await staged.writeFile(next, 'utf8');
+      await staged.sync();
+    } finally {
+      await staged.close();
+    }
+    await beforeReplace?.(temporary);
+    let current: Awaited<ReturnType<typeof lstat>> | null = null;
+    try {
+      current = await lstat(destination);
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'ENOENT') throw error;
+    }
+    if (
+      identity
+        ? !current ||
+          !current.isFile() ||
+          current.nlink !== 1 ||
+          current.ino !== identity.ino ||
+          current.mtimeMs !== identity.mtimeMs ||
+          current.size !== identity.size
+        : current !== null
+    )
+      throw new Error('Configuration changed during setup');
+    await rename(temporary, destination);
+    const parent = await open(resolve(directory), constants.O_RDONLY | constants.O_DIRECTORY);
+    try {
+      await parent.sync();
+    } finally {
+      await parent.close();
+    }
   } finally {
-    await file.close();
+    await unlink(temporary).catch((error) => {
+      if ((error as { code?: string }).code !== 'ENOENT') throw error;
+    });
   }
 }
 

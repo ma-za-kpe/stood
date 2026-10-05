@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
@@ -196,4 +196,22 @@ it.each([
     code,
   });
   expect(save).not.toHaveBeenCalled();
+});
+
+it('leaves the old configuration intact when interrupted before atomic replacement', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'stood_atomic_'));
+  try {
+    await writeFile(join(directory, '.env'), 'DEMO_MODE=true\nPAYPAL_CLIENT_ID=old\n');
+    await expect(
+      persistEnv(directory, keys, async (temporary) => {
+        expect((await stat(temporary)).mode & 0o777).toBe(0o600);
+        expect(await readFile(join(directory, '.env'), 'utf8')).toContain('PAYPAL_CLIENT_ID=old');
+        throw new Error('simulated crash before rename');
+      }),
+    ).rejects.toThrow('simulated crash');
+    expect(await readFile(join(directory, '.env'), 'utf8')).toBe('DEMO_MODE=true\nPAYPAL_CLIENT_ID=old\n');
+    expect(await readdir(directory)).toEqual(['.env']);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
