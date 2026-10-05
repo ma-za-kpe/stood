@@ -79,7 +79,10 @@ controls.onError((error) => {
 });
 controls.post('/sessions/:id', (c) => {
   const id = c.req.param('id'),
-    scenario = fixtures.find((s) => s.id === id);
+    scenario =
+      id === 'yard-first'
+        ? scenarioDefinition({ ...fixtures.find((s) => s.id === 'code-good'), id })
+        : fixtures.find((s) => s.id === id);
   if (!scenario || sessions.has(id)) return c.json({ code: 'invalid_session' }, 409);
   sessions.set(id, new NetworkFlow(scenario, runtime.transport!, runtime.clock));
   return c.json({ id, simulated: true });
@@ -87,7 +90,8 @@ controls.post('/sessions/:id', (c) => {
 controls.post('/sessions/:id/steps', async (c) => {
   const flow = sessions.get(c.req.param('id'));
   if (!flow) return c.json({ code: 'unknown_session' }, 404);
-  const body = await c.req.json<{ step: ScenarioStep }>();
+  const body = await c.req.json<{ step: ScenarioStep; packageId?: string }>();
+  if (body.step === 'PACKAGE' && body.packageId) await flow.bindPackage(body.packageId);
   await flow.step(body.step);
   return c.json({ accepted: true, trancheId: flow.trancheId, packageId: flow.packageId, simulated: true });
 });

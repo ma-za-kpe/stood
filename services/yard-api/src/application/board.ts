@@ -213,6 +213,33 @@ export class Board {
       simulated: true,
     };
   }
+  async submissionTerms(
+    id: string,
+    wo: string,
+    actor: Operator,
+    commit: string,
+    version: number,
+    key: string,
+    now: number,
+  ) {
+    const snapshot = await this.read(id, actor);
+    const d = data(snapshot.data);
+    const { work, order } = workOrder(d, wo);
+    if (actor.kind !== 'BUILDER' || work.snapshot.currentClaim?.builderId !== actor.id)
+      throw new YardError('FORBIDDEN');
+    if (work.snapshot.state !== 'BUILDING') {
+      const packageId = work.snapshot.submission?.packageId;
+      if (!packageId) throw new YardError('FORBIDDEN');
+      try {
+        return { receipt: await this.submit(id, wo, commit, packageId, actor, version, key, now) };
+      } catch (error) {
+        if (error instanceof YardError) throw error;
+        throw new YardError('FORBIDDEN');
+      }
+    }
+    if (snapshot.version !== version) throw new YardError('STALE_VERSION');
+    return { trancheId: order.trancheId, repository: d.blueprint.repository, baseCommit: d.blueprint.baseCommit };
+  }
   // Only an authenticated Stood integration calls this after matching provider-backed read proof.
   settlement(id: string, wo: string, proof: SettlementProof, version: number) {
     return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {

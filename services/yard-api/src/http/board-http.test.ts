@@ -38,6 +38,7 @@ it('binds signatures to method/path/body, owns identities on the server and deni
 it('runs signed Board commands, keeps submissions checking and requires matching signed Stood proof', async () => {
   const store = new MemoryEvents();
   const board = new Board(store);
+  const submissions: unknown[] = [];
   let proof = {
     trancheId: 'tranche',
     packageId: 'package',
@@ -56,6 +57,12 @@ it('runs signed Board commands, keeps submissions checking and requires matching
         { key: 'buyer-key', secret: 'buyer-secret', actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' } },
         { key: 'builder-key', secret: 'builder-secret', actor: { id: 'builder', root: 'buyer-root', kind: 'BUILDER' } },
       ],
+      packages: {
+        submit: async (input) => {
+          submissions.push(input);
+          return 'package';
+        },
+      },
       stood: { mode: 'sim', secret: 'sim-stood-webhook-secret', read: async () => proof },
     },
   });
@@ -133,10 +140,21 @@ it('runs signed Board commands, keeps submissions checking and requires matching
   expect((await request(`${base}/claim`, 'POST', {}, 3, 'claim', 'builder')).status).toBe(200);
   expect((await request(`${base}/build`, 'POST', {}, 4, 'build', 'buyer')).status).toBe(403);
   expect((await request(`${base}/build`, 'POST', {}, 4, 'build', 'builder')).status).toBe(200);
-  expect(
-    (await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40), packageId: 'package' }, 5, 'submit', 'builder'))
-      .status,
-  ).toBe(200);
+  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 5, 'submit', 'builder')).status).toBe(
+    200,
+  );
+  expect(submissions).toHaveLength(1);
+  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 5, 'submit', 'builder')).status).toBe(
+    200,
+  );
+  expect(submissions).toHaveLength(1);
+  expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 5, 'submit', 'builder')).status).toBe(
+    409,
+  );
+  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 6, 'different', 'builder')).status).toBe(
+    403,
+  );
+  expect(submissions).toHaveLength(1);
   const before = await (await request(base)).json();
   expect(before).toMatchObject({ state: 'CHECKING', payment: null, currentClaim: { outsideOperator: false } });
   const event = {
@@ -167,10 +185,9 @@ it('runs signed Board commands, keeps submissions checking and requires matching
   expect((await webhook(event)).status).toBe(200);
   expect((await (await request(base)).json()).state).toBe('PAID');
   expect((await (await request('/yard/v1/board')).json()).orders).toHaveLength(0);
-  expect(
-    (await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40), packageId: 'other' }, 7, 'changed', 'builder'))
-      .status,
-  ).toBe(403);
+  expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 7, 'changed', 'builder')).status).toBe(
+    403,
+  );
   await expect(board.settlement('p', 'one', { ...proof, eventId: 'different' }, 7)).rejects.toThrow('INVALID');
   await expect(
     board.create({ ...input, id: '__proto__' } as never, { id: 'buyer', root: 'buyer-root', kind: 'BUYER' }, 'bad'),

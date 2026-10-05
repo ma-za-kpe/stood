@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import pg from 'pg';
+import { StoodClient } from '../../../packages/stood-sdk/src/client.js';
 import { PostgresYardEvents } from '../src/adapters/db-postgres/events.js';
 import type { SettlementProof } from '../src/application/board.js';
 import { Board } from '../src/application/board.js';
@@ -24,6 +25,31 @@ const app = createYardApp({
   board: {
     board: new Board(new PostgresYardEvents(pool)),
     clock,
+    packages: {
+      submit: async (input) => {
+        const now = await clock();
+        const client = new StoodClient({
+          baseUrl: 'https://stood.mock.invalid',
+          key: 'mock-key',
+          secret: 'mock-secret',
+          clock: () => now,
+          transport: (request) => fetch(new Request(`http://api:3000${new URL(request.url).pathname}`, request)),
+        });
+        return (
+          await client.submitPackage(
+            input.trancheId,
+            {
+              repository: input.repository,
+              base_commit: input.baseCommit,
+              commit_sha: input.commit,
+              report_ref: 'reports/yard-first.json',
+              report_sha256: 'c'.repeat(64),
+            },
+            input.key,
+          )
+        ).id;
+      },
+    },
     operators: [
       {
         key: 'sim-buyer-key',

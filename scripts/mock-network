@@ -18,5 +18,5 @@ trap finish EXIT INT TERM
 compose build runner
 compose run --rm runner pnpm install --frozen-lockfile
 compose run --rm runner scripts/build-mock
-compose up -d --wait --wait-timeout 120 db paypal-sim api yard-api
+compose up -d --wait --wait-timeout 120 db paypal-sim api yard-api crew
 compose run --rm runner pnpm test:mock:network

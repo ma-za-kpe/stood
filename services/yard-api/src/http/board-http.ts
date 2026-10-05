@@ -9,6 +9,11 @@ export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
   operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
+  packages?: Readonly<{
+    submit(
+      input: Readonly<{ trancheId: string; repository: string; baseCommit: string; commit: string; key: string }>,
+    ): Promise<string>;
+  }>;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number, prefix = ''): boolean {
@@ -130,7 +135,18 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
         wo = c.req.param('wo');
       const input = body(c, action === 'submit' ? ['commit', 'packageId'] : []);
       if (action === 'submit') {
-        if (typeof input.commit !== 'string' || typeof input.packageId !== 'string') throw new YardError('INVALID');
+        if (typeof input.commit !== 'string' || !/^[a-f0-9]{40}$/.test(input.commit)) throw new YardError('INVALID');
+        if (config.packages) {
+          if (input.packageId !== undefined) throw new YardError('INVALID');
+          const terms = await config.board.submissionTerms(id, wo, actor, input.commit, version, key, now);
+          if ('receipt' in terms) return c.json(ack(terms.receipt));
+          input.packageId = await config.packages.submit({
+            ...terms,
+            commit: input.commit,
+            key: `yard:${id}:${wo}:${key}`,
+          });
+        }
+        if (typeof input.packageId !== 'string') throw new YardError('INVALID');
         return c.json(ack(await config.board.submit(id, wo, input.commit, input.packageId, actor, version, key, now)));
       }
       return c.json(ack(await config.board[action](id, wo, actor, version, key, now)));

@@ -125,6 +125,10 @@ export class NetworkFlow {
         await this.apply({ method: 'dispatch', args: [this.authorizationId, 'K7Q', this.at, this.at + 29 * 86400000] });
         break;
       case 'PACKAGE': {
+        if (this.packageId) {
+          await this.client().getPackage(this.trancheId, this.packageId);
+          break;
+        }
         const pkg = await this.client().submitPackage(
           this.trancheId,
           {
@@ -293,6 +297,9 @@ export class NetworkFlow {
     };
   }
   async proof() {
+    this.at = await this.clock();
+    // The package remains bound to the tranche through the signed public API.
+    await this.client().getPackage(this.trancheId, this.packageId);
     const value = await this.store.load(this.trancheId),
       tranche = restoreTrancheRecord(value.record);
     assert.equal(tranche.state, 'RELEASED');
@@ -307,5 +314,10 @@ export class NetworkFlow {
       currency: 'USD',
       simulated: true,
     };
+  }
+  async bindPackage(id: string) {
+    this.at = await this.clock();
+    const pkg = await this.client().getPackage(this.trancheId, id);
+    this.packageId = pkg.id;
   }
 }
