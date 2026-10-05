@@ -440,3 +440,25 @@ Rules: production code imports ports only; fakes and simulators never ship in a 
 - `[ ]` T-0229 Stood fake for Yard: a local server implementing Stood's public `/v1` and signed webhooks from the same contracts as `packages/stood-sdk` (T-0179), with scripted RELEASE / REFUSE / WAIT. Yard's tests and demo run with no Stood database or PayPal at all.
 - `[ ]` T-0230 Switching guide in `docs/USAGE.md`: "Run everything without keys" (one command, simulators on), then "Switch a provider to live": the keys needed, where they come from, `scripts/dev setup`, the readiness output, and how to switch back. The README badge and `/health` show which providers are simulated.
 - `[ ]` T-0231 Crew simulator, the fake engineering team (product owner request): a local service implementing the full Y21 dispatch API (`/health`, agent card, `/nudges`, `/jobs/{id}`, cancel) **and** acting as an ordinary Board builder: it evaluates fit, clocks in, streams site-log lines, pushes commits to the GitHub fake (T-0225), submits SHAs and reacts to punch lists. Scenario files script each run (passes first time, fails then fixes, tampers with signed tests, skips tests, abandons honestly, declines on price, lease expires, endpoint down). It reports simulated GPU minutes and cost so Y13 economics and the operator dashboard can be built now. Selected by `PROVIDER_CREW=fake|sim|live`. When the real Crew project ships, `live` points at its endpoint and must pass the same Y21 contract suite (T-0221) before it's enabled. Extends T-0191; no model, GPU or Vast code in this repo.
+
+### End-to-end integration tests: mock and live (product owner request, 2026-10-05)
+
+Two suites run the **same scenario scripts** through the complete Stood and Yard flows. Only the provider configuration differs. The mock suite must pass now and on every PR. The live suite is written now and enabled once every key and real service exists.
+
+**Scenarios both suites cover:**
+
+- **Stood:**
+  - allowance draft → buyer approval → dispatch hold ("held, not paid")
+  - commit package → signed runner report → RELEASE (capture), REFUSE (void + punch list) and WAIT (in review)
+  - day-four reauthorisation, expiry, ambiguous capture → reconciliation, signed webhooks and receipts
+- **Yard:**
+  - intake → Foreman blueprint → buyer edits and approves → Stood allowance → work orders posted
+  - Crew claims → builds → Stood check → milestone paid
+  - a refused attempt → punch list → rework → paid
+  - lease expiry → reposted
+  - preview deployed → handover in the buyer's own account → final usage release → rotation checklist → CLOSED
+- **Money consistency, asserted at the end of every scenario:** Stood's ledger, Yard's projection, the event stream and the provider's state (simulator or sandbox) all agree. Nothing is paid twice, and nothing is shown as paid that wasn't captured.
+
+- `[ ]` T-0232 Shared E2E scenario definitions: one scenario file per flow above (steps, expected events, expected money state), plus Playwright page objects for the Yard and Stood screens. Both suites import the same files, so mock and live can't drift apart.
+- `[ ]` T-0233 **Mock E2E suite (required, must pass):** `docker compose` brings up Stood, Yard, Postgres and every simulator (PayPal T-0222, GitHub T-0225, Render T-0226, Crew T-0231, Stood webhooks, email, storage, planner replay) with a controllable clock. It runs every T-0232 scenario through the HTTP APIs **and** the browser (Playwright), including fault-injected runs (T-0223). It runs on every PR as a required check and in under 10 minutes, with traces, screenshots and the event log uploaded on failure. Also the judges' one-command demo.
+- `[ ]` T-0234 **Live E2E suite (enabled when keys exist):** the same T-0232 scenarios against the PayPal sandbox, a real GitHub App on a test org, a real Render preview workspace with spend caps, and the real Crew endpoint once it passes its contract suite. Manual trigger plus nightly; skipped with a clear "keys not configured" result until T-0121 and the other credentials are in place. Sandbox only, never live money. It tears down every resource it creates and records sanitised exchanges for T-0224.
