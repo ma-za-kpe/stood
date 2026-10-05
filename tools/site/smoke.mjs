@@ -55,6 +55,25 @@ try {
     await page.screenshot({ path: `artifacts/site/yard-${name}.png`, fullPage: true });
     await page.screenshot({ path: `artifacts/site/yard-${name}-hero.png` });
     await page.getByRole('link', { name: '← Back to Stood' }).click();
+    await page.waitForURL('http://127.0.0.1:4173/');
+    await page.waitForLoadState('load');
+    const family = page.getByRole('link', {
+      name: 'Yard builds. Stood pays. Explore the simulated Yard preview.',
+      exact: true,
+    });
+    assert.equal(await family.count(), 1, 'Stood shows the linked family lockup');
+    await family.scrollIntoViewIfNeeded();
+    await page.waitForFunction(
+      () => {
+        const img = document.querySelector('img[src$="family-lockup-on-dark.svg"]');
+        return img?.complete && img.naturalWidth > 0;
+      },
+      null,
+      { timeout: 5000 },
+    );
+    await family.click();
+    assert.equal(new URL(page.url()).pathname, '/yard/');
+    await page.getByRole('link', { name: '← Back to Stood' }).click();
     await page.getByRole('link', { name: 'Yard →', exact: true }).click();
     assert.equal(new URL(page.url()).pathname, '/yard/');
     assert.deepEqual(errors, [], `${name}: browser errors or missing assets`);

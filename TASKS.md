@@ -399,7 +399,7 @@ Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The
 - `[ ]` T-0205 Builder Board and work-order screens (Y10 #7, #8): filters, keyboard navigation across columns, lease timer, read-only signed tests, submit SHA, punch list. Qualify AG Grid terms before adopting it.
 - `[ ]` T-0206 Site log (Y21 §4, Y10 #9): per-work-order stream with its own sequence, at most 1 write per second per builder, fixed kinds, every line secret-scanned before storage, 90-day retention then summary. Not an aria-live region.
 - `[ ]` T-0207 Handover screen and rotation checklist (Y20 §5): Deploy to Render button from `render.yaml`, `HANDOVER.md` generator listing every variable, the nine checklist items (auto items shown done), and `handover.rotation_confirmed` gating CLOSED, independent of Stood's final release. Depends on T-0196.
-- `[~]` T-0208 Yard page assets: wire the `docs/brand/yard/` mark, family lockup, favicon and OG card into `site/yard/` (with T-0180) and add the "Yard →" link and family lockup to Stood's landing page.
+- `[x]` T-0208 Yard page assets: wire the `docs/brand/yard/` mark, family lockup, favicon and OG card into `site/yard/` (with T-0180) and add the "Yard →" link and family lockup to Stood's landing page.
 
 ### Yard: Board, operators and protocol
 
@@ -521,3 +521,5 @@ T-0232 first Yard network slice: the connected scenario uses frozen local fixtur
 T-0180: the Yard static page uses Y17 colours/type, drafting grid, crane motion, outlined Yard logo/favicon/social card and Stood’s existing money stamps. Connected navigation joins both pages; T-0208 finishes the Stood footer family lockup. A missing-page presentation test failed first, then passed; real Docker Chromium checks cover desktop/mobile, keyboard scenario controls, reduced motion and missing assets, with screenshots. Both-page simulation notices precede sample verdicts. The page is illustrative, not a live Board; full Yard application screens and browser flow definitions remain open. Publishing awaits promotion to main.
 
 - `[ ]` T-0238 Durable Yard submission outbox before enabling the SDK submission bridge outside the mock stack: persist the exact tenant/claim/terms-bound request before sending, reuse one key on recovery, attach only a matching package receipt, and resolve orphaned package intake. Test crashes on both sides of the HTTP call, duplicate/racing workers and changed terms/identity. This bridge has no payment authority.
+
+T-0208: outlined Yard assets and the family lockup now join both landing pages. A Docker browser regression failed on the missing Stood footer lockup before wiring it; desktop/mobile checks load the actual SVG and follow its link back to Yard. The existing nav link remains available on mobile. All examples remain simulated; no promotion to main or payment activation.
