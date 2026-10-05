@@ -128,7 +128,7 @@ it('posts frozen terms and serialises real claims using authenticated operator i
 
 it('paginates beyond project 100 and keeps buyer repository out of discovery', async () => {
   for (let i = 0; i < 105; i++) {
-    const id = `page-${String(i).padStart(3, '0')}`;
+    const id = `${i % 2 ? 'Page' : 'page'}-${String(i).padStart(3, '0')}`;
     await board.create({ ...input, id }, buyer, 'create');
     await board.freeze(
       id,
@@ -157,6 +157,7 @@ it('paginates beyond project 100 and keeps buyer repository out of discovery', a
   expect(orders).toHaveLength(105);
   expect(new Set(orders.map((o) => o.projectId)).size).toBe(105);
   expect(orders.some((o) => o.projectId === 'page-104')).toBe(true);
+  expect(orders.map((o) => o.projectId)).toEqual(orders.map((o) => o.projectId).sort());
   expect(second.nextCursor).toBeNull();
   for (const o of orders) {
     expect(o).not.toHaveProperty('repository');

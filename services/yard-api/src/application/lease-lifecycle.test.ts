@@ -61,3 +61,12 @@ it('keeps discovery identities distinct when projects use the same milestone nam
   expect(new Set(offers.map((o) => o.id)).size).toBe(2);
   expect(offers.map((o) => o.workOrderId)).toEqual(['one', 'one']);
 });
+
+it('uses the same byte ordering for discovery cursors in the in-memory provider', async () => {
+  const { store, board } = await claimedFixture(undefined, 'Z-project');
+  await claimedFixture(store, 'a-project');
+  await claimedFixture(store, 'A-project');
+  expect((await store.list()).map((p) => p.id)).toEqual(['A-project', 'Z-project', 'a-project']);
+  expect((await store.list('Z-project')).map((p) => p.id)).toEqual(['a-project']);
+  expect(await board.discoverPage('Z-project')).toMatchObject({ orders: [], nextCursor: null });
+});

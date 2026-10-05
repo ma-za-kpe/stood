@@ -27,7 +27,7 @@ export class MemoryEvents implements YardEvents {
   async list(after = '') {
     return [...this.snapshots.values()]
       .filter((s) => s.id > after)
-      .sort((a, b) => a.id.localeCompare(b.id))
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, 101)
       .map((s) => structuredClone(s));
   }

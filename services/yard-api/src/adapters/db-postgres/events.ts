@@ -21,7 +21,9 @@ export async function migrateYardEvents(pool: pg.Pool, owner: string): Promise<v
       BEGIN RAISE EXCEPTION 'Yard events are append-only'; END $$;
       DROP TRIGGER IF EXISTS immutable_event ON yard.events;
       CREATE TRIGGER immutable_event BEFORE UPDATE OR DELETE ON yard.events FOR EACH ROW EXECUTE FUNCTION yard.immutable_event();
-      INSERT INTO yard.schema_migrations(version) VALUES(1) ON CONFLICT DO NOTHING;`);
+      INSERT INTO yard.schema_migrations(version) VALUES(1) ON CONFLICT DO NOTHING;
+      CREATE INDEX IF NOT EXISTS projects_cursor_byte_order ON yard.projects (id COLLATE "C");
+      INSERT INTO yard.schema_migrations(version) VALUES(2) ON CONFLICT DO NOTHING;`);
     await c.query('COMMIT');
   } catch (error) {
     await c.query('ROLLBACK');
@@ -164,9 +166,12 @@ export class PostgresYardEvents implements YardEvents {
     return snapshot(rows[0]);
   }
   async list(after = ''): Promise<readonly YardSnapshot[]> {
-    return (await this.pool.query('SELECT * FROM yard.projects WHERE id>$1 ORDER BY id LIMIT 101', [after])).rows.map(
-      snapshot,
-    );
+    return (
+      await this.pool.query(
+        'SELECT * FROM yard.projects WHERE id COLLATE "C">$1 COLLATE "C" ORDER BY id COLLATE "C" LIMIT 101',
+        [after],
+      )
+    ).rows.map(snapshot);
   }
   async read(id: string, after: number): Promise<readonly YardEvent[]> {
     if (!Number.isSafeInteger(after) || after < 0) throw new YardError('INVALID');
