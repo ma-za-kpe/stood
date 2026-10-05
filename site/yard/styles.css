@@ -1,18 +1,4 @@
-:root {
-  --navy: #071a33;
-  --surface: #0c2547;
-  --grid: #16355f;
-  --cyan: #3fd0ff;
-  --amber: #ffb000;
-  --green: #7cf5c4;
-  --orange: #ff6b3d;
-  --steel: #8fa3bf;
-  --chalk: #f4f8fc;
-  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
-  --mono: "IBM Plex Mono", monospace;
-  --body: "IBM Plex Sans", Arial, sans-serif;
-  color-scheme: dark;
-}
+@import "./tokens.css";
 * {
   box-sizing: border-box;
 }

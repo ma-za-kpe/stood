@@ -391,7 +391,7 @@ Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The
 
 ### Yard: design system and web app (Y17, Y18, Y10)
 
-- `[ ]` T-0200 Yard design tokens (Y17 §2, §9): one CSS token file shared by `site/yard/` and `apps/yard-web`, dark default + paper theme, font fallbacks. A CI test recomputes every documented contrast ratio and fails below AA.
+- `[x]` T-0200 Yard design tokens (Y17 §2, §9): one CSS token file shared by `site/yard/` and `apps/yard-web`, dark default + paper theme, font fallbacks. A CI test recomputes every documented contrast ratio and fails below AA.
 - `[ ]` T-0201 Yard component kit with every Y17 §5 state: button (pending), status chips, Stood verdict chip imported from Stood's kit (never restyled), work-order card (optimistic/stale), milestone row, lease timer, progress rail, site log, connection pill, secret field, Foreman message, punch list, empty state. Reduced-motion, greyscale and axe checks.
 - `[ ]` T-0202 `apps/yard-web` shell (React + Vite): TanStack Query, XState, Zustand and React Hook Form + Zod wired per Y18 §4; the client event applier consumes T-0194 (pure `applyEvent`, gap → snapshot, shared transition table from `packages/yard-domain`). Money states are never optimistic: a test asserts no PAID/REFUSED render without a Stood-originated event.
 - `[ ]` T-0203 Intake wizard UI (Y19 steps 1–8): XState wizard, autosave via `intake.saved`, shared Zod schemas, "Let the Foreman decide" on every step, plain-language summary before signing, and the free-text secret scanner that blocks a pasted key. Step 9 (keys) waits for T-0195.
@@ -546,3 +546,5 @@ T-0151 evidence: two failing secret-generation/preservation tests preceded imple
 T-0152 evidence: four named-error regressions failed first. Setup now reports rejected sandbox credentials, unavailable/timeout transport and malformed provider responses separately via typed codes; CLI messages are fixed copy and never include exceptions, response bodies or keys. No save occurs on these failures.
 
 T-0153 evidence: interruption regression failed first (old implementation truncated/replaced config and ignored the injection). Persistence writes a 0600 same-directory exclusive temporary file, fsyncs, checks the destination has not changed, renames and syncs the directory. Symlink/hard-link guards remain; ordinary failures clean temporary files and leave the prior configuration intact before replacement.
+
+T-0200 evidence: the missing-token regression failed first. One shared CSS source supplies the landing page and React app, dark/paper semantic colours and system font fallbacks. The unit check recomputes every published Y17 dark foreground contrast ratio against both canvases, and paper foregrounds against their canvas, requiring AA. Docker Chromium renders both themes at desktop/mobile sizes; visual review confirms the simulation notice precedes the payment projection.
