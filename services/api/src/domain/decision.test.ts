@@ -16,7 +16,7 @@ describe('Versioned evidence profiles and decisions (FR-37, NFR-02)', () => {
       outcome: 'RELEASE',
       effect: 'CAPTURE',
       profileId: 'construction.stage@1',
-      ruleSetVersion: '1.1.0',
+      ruleSetVersion: '1.2.0',
     });
   });
   it('supports digital evidence without a location check', () => {

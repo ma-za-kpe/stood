@@ -297,7 +297,7 @@ T-0157 includes the approved landing repositioning (PR #24, 9eebf39) and unit-te
 - `[ ]` T-0165 GitHub read-only adapter: pin repository/base/new commit, recompute test hashes, detect reused diffs, limit dependencies and paths; no write, push or merge credentials. Qualify immutable fetch and archive/path attacks.
 - `[ ]` T-0166 Usage-release receipt: independent outside authority, allowance/commit/milestone binding, freshness/replay protection, human acceptance where required; reject builder self-attestation and circular demand.
 - `[ ]` T-0167 A2A/AP2 surfaces: pin protocol contracts, identity/mandate/operator and tenant boundaries, conformance tests; never claim certification from positioning alone.
-- `[ ]` T-0168 Yard integration in its separate repo: accountable operator, bounded test-agent subcontract and budget, traceable new commit, outside usage proof. Yard remains planned.
+- `[-]` T-0168 Superseded by ADR-0016 and T-0174–T-0192: Yard is a separate product in this monorepo, with accountable operator, bounded test-agent subcontract and budget, traceable new commit, outside usage proof. Yard remains planned.
 
 The documentation review round is T-0157 and T-0160–T-0163. The funding/evidence implementation round above remains queued; this audit does not close issue #25 or qualification blockers.
 
@@ -306,3 +306,55 @@ The documentation review round is T-0157 and T-0160–T-0163. The funding/eviden
 Issue #29 provenance audit: 27 historical research/source/ADR records receive banner-only changes; ADR-0015 records the pivot without replacing ADR-0014. T-0163 also completes the code attack table and audits scenario/process boundaries. Issue closure follows code-fixture addendum T-0169 and full CI. Other open implementation issues remain open until their scope is met.
 
 T-0169 evidence: 11 fixture regressions failed first (new routes/copy and field labels absent); all 16 new cases then pass, including demo-off visibility. Synthetic code fixtures expose separate payer/builder sentences and never claim a runner/payment ran. Weak/usage WAIT retains the existing null namedField and named reason. Full Docker gate/CI is required before closing issue #29.
+
+## Payment contracts and Yard foundation round (2026-10-05)
+
+Approved PR #30 merged as 0f9b6bb; Yard docs PR #31 merged as 37d2bac. All previously open issues were closed at the product owner's request; #25 closed as tracker cleanup, not implementation completion. Its unfinished tasks remain open here. Latest Yard direction is one monorepo with separate product/runtime/database permissions, replacing the earlier separate-repository plan in T-0168.
+
+- `[x]` T-0170 Final-only usage scoping: code.milestone@1 intermediate checks auto-release when trusted build evidence passes; code.final@1 adds outside usage/buyer acceptance. Bump rules to 1.2.0, prove 1.1.0 records restore cancellation/reconciliation-only, update default fixtures/docs. Tier target: unit-tested; no actual runner or money call.
+- `[x]` T-0171 Signed runner report contract and fake runner adapter (T-0159 slice): bind tenant/allowance/package/repository/base/new commit and frozen test manifest; verify trusted signer, complete execution/counts/skips and bounded mutation/budget/usage facts. Reject malformed/tampered/replayed proof before deriving RULE findings. No code execution.
+- `[x]` T-0172 T-0156 commit-package intake slice: durable tenant-owned repo/SHA/report references, idempotency and immutable body; no client-authored PASS, network fetch or execution. Durably queue during renewal; processing via a trusted verifier and wake-up worker remain required. Tier: HTTP unit-tested and real-Postgres integration-tested references only. Qualification remains separate.
+- `[x]` T-0173 Fix worktree commit-time link validation: isolate the hook's own git environment, keep its pinned revision and all-files gate; reproduce in a throwaway worktree with inherited GIT_DIR. No skipped hooks.
+- `[x]` T-0174 Yard monorepo foundations ADR and enforced no-shortcut dependency boundaries; allocate Y-A–Y-E ledger tasks, preserve separate schema/roles, caller-only SDK and side-effect-free Foreman. No new GPU spend or technology/model claims.
+
+Next money tasks remain T-0158, T-0154 and full T-0156; local setup trio, renewal queue and qualification also remain required. A contract/fake adapter is not a durable funding implementation.
+
+T-0170 evidence: all three regressions failed first; intermediate auto-release, final missing/supplied usage and 1.1.0 safe recovery now pass. Rules are 1.2.0; existing records must be cancelled/expired/reconciled, never silently upgraded into capturable records. This does not implement authenticated usage receipt intake.
+
+T-0171: 18 signed fake-report cases pass after the missing verifier initially failed. Ed25519 signature verifies exact bounded payload, binding, runner/image, hashes, full test identities/skips, mutation and budget; stale/future/wrong-signer/tampered reports return no findings. Fixture proof is refused by default. The runner cannot supply usage_release. No repository code executes, no authenticated payer contract adapter exists yet, and this verifier is not wired to payments. T-0159 remains open for qualification and trusted agreement/usage intake.
+
+T-0173 evidence: the original hook failed with exit 100 under inherited worktree GIT_DIR. The pinned 0.24.2 hook now runs with Git context variables removed; an actual signed documentation commit in an isolated worktree passed the link hook without skips. Same offline/file/anchor flags and CI gate.
+
+## Yard implementation rounds (ADR-0016)
+
+Y-A foundations: T-0174 supplies the designed ADR and tested import rules. The remaining five tasks form the next Yard foundation round; money blockers remain ahead of payment activation.
+
+- `[ ]` T-0175 Yard Hono skeleton and health endpoint, separate configuration; no money endpoints or Stood imports.
+- `[ ]` T-0176 Separate yard Postgres schema/role and migration owner; real-database tests prove no Stood-table grants or cross-schema writes.
+- `[ ]` T-0177 Blueprint/Milestone domain: versions, immutable signed terms, test hashes, intermediate/final profile binding; tests first.
+- `[ ]` T-0178 WorkOrder/Claim domain: one current claim, 48-hour lease, explicit expiry/recovery and outside-operator identity; property tests.
+- `[ ]` T-0179 Public HTTP Stood SDK contract: signed requests, typed errors and truthful DRAFT/QUEUED semantics, contract tests against local API. No internal imports.
+- `[ ]` T-0180 Y0 Yard page with Y09 tokens/voice and Stood nav link; accessible fixtures, planned-capability labels.
+
+Y-B Foreman (depends on tested domains and runner isolation):
+
+- `[ ]` T-0181 PlannerModel port and paused Foreman graph; no action tools, external-write credentials or automatic approval.
+- `[ ]` T-0182 Blueprint validation and red-first acceptance-test gate in a qualified isolated runner; empty scaffold must fail.
+- `[ ]` T-0183 Intake/repository prompt-injection corpus and tool-capability tests; reject tampering with signed terms.
+- `[ ]` T-0184 Buyer-approved blueprint to Stood mandate after T-0154/full T-0156; frozen test bundle and final-only usage condition.
+- `[ ]` T-0185 Blueprint review UI: edit/merge/split/reprice and explicit approval, accessible timeline; qualify partner component terms.
+
+Y-C Board (depends on funding/dispatch and qualified runner):
+
+- `[ ]` T-0186 Work-order posting, tenant-scoped discovery and atomic claim/lease storage; concurrent claimant tests.
+- `[ ]` T-0187 Lease-to-confirmed-hold dispatch through public Stood API; durable intent/recovery, no invented hold.
+- `[ ]` T-0188 GitHub App bootstrap and brokered branch/test permissions; prove token/repository/path attacks and branch restrictions.
+- `[ ]` T-0189 Submit SHA to Stood package, trusted webhook projection and punch list; signed deduplication, never infer paid from a passing assessment.
+- `[ ]` T-0190 Handover and outside-operator reputation: independent final usage signal, refund/dispute projection and anti-self-dealing tests.
+
+Y-D/Y-E:
+
+- `[ ]` T-0191 Scripted demo Crew: ordinary Board caller, pass/tamper/skip/expired-lease fixtures and site log; clearly synthetic without sandbox evidence.
+- `[ ]` T-0192 Real Crew stretch: select model deliberately, qualify isolated execution, bounded Vast lifecycle/cost guard/teardown and metrics before GPU spend.
+
+T-0174 evidence: six forbidden-import fixtures failed first, then pass with the dependency rules; the allowed HTTP SDK/contracts fixture passes. Runtime/database permission boundaries are designed and remain separate open tasks.

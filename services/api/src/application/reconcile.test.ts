@@ -30,7 +30,7 @@ function fixture(effect: 'CAPTURE' | 'VOID' | 'REAUTHORIZE' = 'REAUTHORIZE') {
           outcome: effect === 'CAPTURE' ? 'RELEASE' : 'REFUSE',
           effect,
           profileId: 'construction.stage@1',
-          ruleSetVersion: '1.1.0',
+          ruleSetVersion: '1.2.0',
           namedField: effect === 'VOID' ? 'plot' : null,
           reason: 'fixture',
           detail: null,

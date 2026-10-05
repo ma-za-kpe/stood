@@ -17,7 +17,7 @@ site/yard/                    Yard landing page (own CSS tokens, linked from Sto
 docs/yard/                    These docs
 ```
 
-## Boundaries (dependency-cruiser rules to add)
+## Boundaries (import rules implemented; runtimes planned)
 
 - `services/yard-*` and `apps/yard-web` **may not import** `services/api/**`. They talk to Stood only through `packages/stood-sdk` over HTTP. Yard must work against a hosted Stood exactly like EyeOnSite does.
 - `services/yard-foreman` may not import the GitHub App, Stood SDK or payment code. It returns blueprints. The Yard API acts on them after buyer approval.
@@ -60,3 +60,5 @@ The WoW applies unchanged:
 - release-please
 
 Yard gets its own **bounded contexts**: Blueprint, Board (work orders, claims, leases), Builders (identity, reputation) and Handover. Its ubiquitous language is the vocabulary in the [README](README.md).
+
+[ADR-0016](../adr/0016-yard-monorepo-caller-boundaries.md) records this boundary. Real dependency-graph fixtures test forbidden imports and allowed contracts. Import rules do not prove runtime tool isolation or database grants; those remain T-0176 and T-0181–T-0183.

@@ -4,7 +4,7 @@
 
 Allowance = buyer agreement; milestone = staged amount/profile; operator = payee behind a builder agent; commit package = bound source/report evidence; usage release = milestone requiring an independent outside signal. Generalisation into profile-based DRAFT milestones is implemented.
 
-`code.milestone@1` requires seven RULE findings in fixed precedence: signed_tests, test_integrity, test_execution, new_commit, mutation_score, budget_mandate, usage_release. The first four and budget failures are hard; mutation and usage failures/uncertainty stay WAIT. No model can supply these RULE facts. The trusted signature/runner/usage verifier is planned; client-authored PASS has no authority.
+`code.milestone@1` requires six RULE findings: signed_tests, test_integrity, test_execution, new_commit, mutation_score, budget_mandate. `code.final@1` adds usage_release for final handover. The first four and budget failures are hard; mutation and usage failures/uncertainty stay WAIT. No model can supply these RULE facts. The trusted signature/runner/usage verifier is planned; client-authored PASS has no authority.
 
 DRAFT creation and persistence are implemented, including exact cap/sum equality and GBP/USD/EUR subset. Signature/Vault approval, versioned contracts and financial HTTP are planned. USD examples use a $4,000 cap and $1,200 milestone.
 
@@ -108,7 +108,7 @@ decide(checks, findings, ruleSet):
 - **Never refuse on model uncertainty.** Never release on missing data.
 - The rule set is versioned. Changing a threshold is a `feat(decision)` with an ADR when it loosens safety.
 
-Implemented rule set **1.1.0** requires each check to declare `source: RULE | MODEL`; profiles fix the expected source so a model result cannot be relabelled as a rule. Model confidence must be finite and in [0,1]. Nonce PASS requires >= 0.8, stage PASS >= 0.75, and rental pair-match PASS >= 0.9 (a conservative threshold pending model evaluation). Every model FAIL below 0.9 becomes uncertain centrally. Stage FAIL remains WAIT even above that threshold until evaluation qualifies it. Rule results do not accept a confidence field. Malformed or absent provenance/confidence yields WAIT.
+Implemented rule set **1.2.0** requires each check to declare `source: RULE | MODEL`; profiles fix the expected source so a model result cannot be relabelled as a rule. Model confidence must be finite and in [0,1]. Nonce PASS requires >= 0.8, stage PASS >= 0.75, and rental pair-match PASS >= 0.9 (a conservative threshold pending model evaluation). Every model FAIL below 0.9 becomes uncertain centrally. Stage FAIL remains WAIT even above that threshold until evaluation qualifies it. Rule results do not accept a confidence field. Malformed or absent provenance/confidence yields WAIT.
 
 Structured `detail` carries `distance_m` (distance from the pin in metres, not distance beyond the geofence edge) and `matched_package_id` for reuse. A location/novelty FAIL without its required detail yields WAIT. Decisions and tranche history copy/freeze the detail. Assessment sentences describe evidence; only payment confirmation may produce copy claiming capture/void completion.
 

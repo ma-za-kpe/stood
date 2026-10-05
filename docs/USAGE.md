@@ -5,7 +5,7 @@
 
 | | |
 |---|---|
-| **Status** | ⚠️ **Sandbox implementation in progress.** Local signed DRAFT creation and reads, synthetic demos and status polling are implemented; financial API workflows below are planned. This manual describes the API being built for the PayPal AI Hackathon 2026. Every example uses the **PayPal sandbox**. Check the [changelog](https://ma-za-kpe.github.io/stood/changelog.html) for what has shipped |
+| **Status** | ⚠️ **Sandbox implementation in progress.** Local signed DRAFT creation/reads and metadata-only commit-package intake, synthetic demos and status polling are implemented; financial API workflows below are planned. This manual describes the API being built for the PayPal AI Hackathon 2026. Every example uses the **PayPal sandbox**. Check the [changelog](https://ma-za-kpe.github.io/stood/changelog.html) for what has shipped |
 | **Licence** | MIT |
 | **Hosted demo** | `https://stood-api.onrender.com/v1` (sandbox, free tier: the first request after idle can take about 1 min) |
 | **SDK (planned)** | `npm i @stood/sdk` (TypeScript, APIMatic-generated). Kotlin and Python later |
@@ -26,7 +26,7 @@ Your buyer or buying agent pays an operator for a code milestone against frozen 
 
 Stood **never holds money**, never pays anyone locally, and never knows your industry. You choose an **evidence profile** (`construction.stage@1`, `freelance.milestone@1`, …).
 
-The lead product direction is now code milestones and agent-to-agent payments: **Agents pay agents. Only when the work stands.** `code.milestone@1` adds deterministic signed-test, integrity, execution, new-commit, mutation, mandate and usage findings. The profile is unit-tested; authentic runner/usage ingestion, Yard and A2A/AP2 remain planned. See [S17](stood/S17-agent-payments-positioning.md). A signed DRAFT is not a payer-approved mandate, and a synthetic passing finding is not actual execution evidence.
+The lead product direction is now code milestones and agent-to-agent payments: **Agents pay agents. Only when the work stands.** `code.milestone@1` adds deterministic signed-test, integrity, execution, new-commit, mutation and mandate findings; `code.final@1` additionally requires usage release. The profile is unit-tested; authentic runner/usage ingestion, Yard and A2A/AP2 remain planned. See [S17](stood/S17-agent-payments-positioning.md). A signed DRAFT is not a payer-approved mandate, and a synthetic passing finding is not actual execution evidence.
 
 ---
 
@@ -42,7 +42,7 @@ Create a signed local DRAFT using the bearer/HMAC conventions in [T04](tech/T04-
       "params": { "repository": "owner/repo", "base_commit": "full-commit-sha",
                   "frozen_tests_manifest": "sha256-manifest", "usage_required": false } },
     { "name": "usage release", "amount": { "minor": 280000, "currency": "USD" },
-      "profile": "code.milestone@1", "params": { "usage_required": true } }
+      "profile": "code.final@1", "params": { "usage_required": true } }
   ], "window_days": 7, "max_resubmits": 2 }
 ```
 
@@ -64,7 +64,7 @@ Changed-test response (excerpt):
 
 ```json
 { "outcome": "REFUSE", "effect": "VOID", "namedField": "signed_tests_changed",
-  "profileId": "code.milestone@1", "ruleSetVersion": "1.1.0", "scenario": "code_milestone",
+  "profileId": "code.milestone@1", "ruleSetVersion": "1.2.0", "scenario": "code_milestone",
   "sentence": "The signed tests were changed. Nothing was paid. No payment was executed.",
   "sentences": {
     "payer": "The signed tests were changed. Nothing was paid. No payment was executed.",
@@ -104,7 +104,7 @@ Run `scripts/dev setup` from an interactive terminal. Docker builds the API and 
 
 Create the PayPal credentials in your [sandbox app](https://developer.paypal.com/dashboard/applications/sandbox); see [PayPal authentication](https://developer.paypal.com/api/rest/authentication/). Obtain the webhook id from that app's [webhook configuration](https://developer.paypal.com/api/rest/webhooks/). The tool validates the client id/secret using sandbox OAuth, discards the access token and writes only the six keys into git-ignored `.env`, with private file permissions. Other configuration is preserved. Invalid input or failed OAuth validation leaves existing configuration untouched. Values containing whitespace, quotes, backslashes or interpolation characters are rejected; keys are never altered silently. Symlinks and hard links are refused. The webhook id and platform keys are collected, but their provider ownership is not checked by this local tool.
 
-Restart the API with `docker compose up -d --force-recreate api` after setup. Compose passes named variables only; the API also gets its fixed local database connection and STOOD_PLATFORM_ID (default local-platform). The local `/health` returns `paymentReady: false`, `missing` (variable **names** only) and setup guidance. Presence of every variable is not proof of valid credentials or payment readiness. With STOOD_API_KEY and STOOD_HMAC_SECRET configured, POST `/v1/allowances` creates a DRAFT and signed reads are available after migrations. Other allowance, tranche and payment writes return `503 payments_not_configured`; initial funding, evidence processing and real sandbox qualification are still required. Synthetic demo scenarios remain available. No financial request is executed by setup or these guards.
+Restart the API with `docker compose up -d --force-recreate api` after setup. Compose passes named variables only; the API also gets its fixed local database connection and STOOD_PLATFORM_ID (default local-platform). The local `/health` returns `paymentReady: false`, `missing` (variable **names** only) and setup guidance. Presence of every variable is not proof of valid credentials or payment readiness. With STOOD_API_KEY and STOOD_HMAC_SECRET configured, POST `/v1/allowances` creates a DRAFT and signed reads are available after migrations. Metadata-only commit-package intake is available; other allowance, tranche and payment writes return `503 payments_not_configured`; initial funding, evidence processing and real sandbox qualification are still required. Synthetic demo scenarios remain available. No financial request is executed by setup or these guards.
 
 Hosted onboarding, webhook URL registration, copy-once platform key issuance and rotation remain planned under T-0150. Tests for the local tool use fake OAuth responses; no real sandbox credentials were supplied or verified during development. The sandbox-only boot guard remains in place.
 
@@ -128,7 +128,7 @@ Response: `201 { "id": "alw_…", "status": "DRAFT", "tranches": [{ "id": "trn_�
 
 `GET /v1/allowances/{id}` returns the owned draft. `GET /v1/tranches/{id}` returns recovered state, version, amount, profile, decision, hold age/expiry, pending effect/status/creation time, settlement and `sentences.payer` / `sentences.inspector`. A missing or foreign record returns the same 404. Identical POST bytes with the same platform/key replay the stored response across restart; changed bytes return 409. The local implementation retains keys indefinitely (at least the promised 24 hours). JSON formatting changes count as changed bytes.
 
-Dispatch, versions, packages and uploads are still guarded. The allowance examples and approval URLs in the hosted sections below describe the **planned full API**, not this draft subset. Fixtures remain public synthetic previews and execute no payment.
+Dispatch, versions and uploads are still guarded. The allowance examples and approval URLs in the hosted sections below describe the **planned full API**, not this draft subset. Fixtures remain public synthetic previews and execute no payment.
 
 ### A. Calling Stood from your platform (hosted)
 
@@ -285,7 +285,8 @@ Every event includes `sentence.payer` and `sentence.inspector`, plain-language t
 
 | Profile | Use it for | Key params |
 |---|---|---|
-| `code.milestone@1` | Code milestones (lead) | Frozen tests, commit, runner report, mutation, mandate and outside usage; ingestion planned |
+| `code.milestone@1` | Intermediate code milestones | Frozen tests, commit, runner report, mutation and mandate; authentic ingestion planned |
+| `code.final@1` | Final handover | Intermediate code checks plus independent outside usage / buyer acceptance |
 | `construction.stage@1` | Build stages verified on site | `location`, `required_items`, stage label |
 | `freelance.milestone@1` | Digital deliverables | `required_items`, `artifact_hash`, `link_check` |
 | `claims.field_visit@1` | Insurance / lending field visits | `location`, `pair_match` (before / after) |
@@ -351,3 +352,9 @@ After database migrations and sandbox key setup, run `scripts/dev reconcile` in 
 The worker ticks every 15 seconds, claims up to ten due jobs, retries unresolved status checks after 60 seconds and idle states after an hour. Database leases expire after 90 seconds and require a matching token to finish. It reserves cancellation of old-rule holds automatically and records reviewer-owned `SAFE_CANCEL_REQUESTED`, `PROVIDER_UNKNOWN`, `UNRESOLVED_3H` and `WORKER_FAILURE` rows in `payment_alerts`; resolved rows remain available. The reviewer must investigate unknown outcomes and any pending safe-mode cancellation.
 
 This command reads PayPal status and writes local state and alerts. It does **not** submit captures, cancellations or renewals. A reserved safe-mode cancellation therefore remains pending until a qualified executor submits it or the reviewer cancels it through PayPal and matching provider proof confirms the outcome. Transaction Search auditing, dashboard presentation and email/Slack notification delivery remain planned (T-0155 / T-0142). No raw provider responses or credentials are logged.
+
+## Local commit-package references (T-0172)
+
+After migrations and platform authentication are configured, `POST /v1/tranches/:id/packages` accepts exactly `repository` (`owner/repo`), `base_commit` and `commit_sha` (40 lowercase hex characters), `report_ref` (an opaque private object key such as `reports/package.json`) and `report_sha256` (64 lowercase hex characters). Use the same bearer/HMAC headers and an Idempotency-Key. A signed request returns 202 with `id`, `trancheId`, `status: QUEUED`, immutable `metadata`, server `createdAt` and `waitingFor: HOLD | RENEWAL | RUNNER`. Signed `GET /v1/tranches/:id/packages/:packageId` returns that stored intake receipt; missing or foreign records return 404. Changed bodies under the same key return 409.
+
+This stores references only: no report upload/fetch, repository execution, assessment or payment occurs. Intake during renewal is durable, but renewal wake-up and trusted runner processing remain planned. `waitingFor` records the intake reason, not a live worker status. URLs and client-authored PASS findings are rejected. Full T-0156 and T-0137 remain open.

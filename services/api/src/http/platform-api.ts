@@ -3,12 +3,15 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { allowanceDraft } from '../application/allowance-draft.js';
+import { commitPackage } from '../application/commit-package.js';
 import { trancheSentences } from '../domain/recipient-sentences.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
+import { CommitPackageError, type CommitPackageStore } from '../ports/commit-package-store.js';
 import { type PlatformApiStore, PlatformApiStoreError } from '../ports/platform-api-store.js';
 
 export type PlatformApiConfig = Readonly<{
   store: PlatformApiStore;
+  packages?: CommitPackageStore;
   platformId: string;
   key: string;
   secret: string;
@@ -47,10 +50,38 @@ export function platformApi(config: PlatformApiConfig): Hono {
     await next();
   });
   app.onError((error) =>
-    error instanceof PlatformApiStoreError
-      ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
-      : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
+    error instanceof CommitPackageError
+      ? problem(
+          error.code === 'NOT_FOUND' ? 404 : error.code === 'CONFLICT' ? 409 : 422,
+          error.code.toLowerCase(),
+          'Package request cannot be accepted.',
+        )
+      : error instanceof PlatformApiStoreError
+        ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
+        : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
   );
+  app.post('/tranches/:id/packages', async (c) => {
+    if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
+    const key = c.req.header('Idempotency-Key') ?? '';
+    if (!key.trim() || key.length > 200 || !/^application\/json(?:;|$)/i.test(c.req.header('Content-Type') ?? ''))
+      return problem(422, 'validation', 'JSON and an idempotency key are required.');
+    const body = await c.req.text();
+    let input: ReturnType<typeof commitPackage>;
+    try {
+      input = commitPackage(JSON.parse(body));
+    } catch {
+      return problem(422, 'validation', 'The commit package references are invalid.');
+    }
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify([c.req.method, `/v1${c.req.path}`, body]))
+      .digest('hex');
+    return c.json(await config.packages.submit(config.platformId, c.req.param('id'), key, fingerprint, input), 202);
+  });
+  app.get('/tranches/:id/packages/:packageId', async (c) => {
+    if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
+    const value = await config.packages.get(config.platformId, c.req.param('id'), c.req.param('packageId'));
+    return value ? c.json(value) : problem(404, 'not_found', 'Package not found.');
+  });
   app.post('/allowances', async (c) => {
     const key = c.req.header('Idempotency-Key') ?? '';
     if (!key.trim() || key.length > 200 || !/^application\/json(?:;|$)/i.test(c.req.header('Content-Type') ?? ''))

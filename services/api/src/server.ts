@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import { PostgresCommitPackages } from './adapters/db-postgres/commit-packages.js';
 import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { PAYMENT_KEYS } from './application/payment-readiness.js';
@@ -15,6 +16,7 @@ const app = createApp({
     ? {
         api: {
           store: new PostgresPlatformApi(drizzle(pool, { schema })),
+          packages: new PostgresCommitPackages(drizzle(pool, { schema })),
           platformId: process.env.STOOD_PLATFORM_ID ?? 'local-platform',
           key: process.env.STOOD_API_KEY ?? '',
           secret: process.env.STOOD_HMAC_SECRET ?? '',

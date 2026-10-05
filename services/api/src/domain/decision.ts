@@ -1,4 +1,4 @@
-export const RULE_SET_VERSION = '1.1.0';
+export const RULE_SET_VERSION = '1.2.0';
 export const MODEL_REFUSAL_CONFIDENCE = 0.9;
 export type Outcome = 'RELEASE' | 'REFUSE' | 'WAIT';
 export type PaymentEffect = 'CAPTURE' | 'VOID' | 'NONE';
@@ -51,6 +51,20 @@ const profile = (
   });
 
 const profiles: Readonly<Record<string, EvidenceProfile>> = Object.freeze({
+  'code.final@1': profile(
+    'code.final@1',
+    [
+      ['signed_tests', true, 'RULE', null],
+      ['test_integrity', true, 'RULE', null],
+      ['test_execution', true, 'RULE', null],
+      ['new_commit', true, 'RULE', null],
+      ['mutation_score', false, 'RULE', null],
+      ['budget_mandate', true, 'RULE', null],
+      ['usage_release', false, 'RULE', null],
+    ],
+    'CAPTURE',
+    'VOID',
+  ),
   'code.milestone@1': profile(
     'code.milestone@1',
     [
@@ -60,7 +74,6 @@ const profiles: Readonly<Record<string, EvidenceProfile>> = Object.freeze({
       ['new_commit', true, 'RULE', null],
       ['mutation_score', false, 'RULE', null],
       ['budget_mandate', true, 'RULE', null],
-      ['usage_release', false, 'RULE', null],
     ],
     'CAPTURE',
     'VOID',

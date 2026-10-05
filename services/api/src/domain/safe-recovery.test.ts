@@ -67,7 +67,7 @@ describe('Old-rule safe recovery', () => {
     const current = restoreTrancheRecord(JSON.stringify(document));
     expect(current.safeRecovery).toBe(false);
     expect(() => current.cancel(at)).toThrow();
-    for (const version of [null, 'future', '01.0.0', '9.0.0', '1.9.0', '1.1.9', '9007199254740992.0.0'])
+    for (const version of [null, 'future', '01.0.0', '9.0.0', '1.9.0', '1.2.9', '9007199254740992.0.0'])
       expect(() => restoreTrancheRecord(JSON.stringify({ ...document, ruleSetVersion: version }))).toThrow();
   });
 });
