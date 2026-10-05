@@ -16,6 +16,8 @@
 
 ## What Stood does, in 20 seconds
 
+**Current demos are simulated. No payment is executed.** Provider keys do not change synthetic fixture results into real results. The isolated PayPal HTTP simulator can run without keys; see [the simulator guide](../services/simulators/README.md). Full provider switching and the complete Yard demo remain T-0230/T-0233. Actual PayPal connections remain sandbox-only and require qualification.
+
 Your buyer or buying agent pays an operator for a code milestone against frozen signed acceptance tests and a budget mandate. Stood sits between "the stage is done" and "the money moves":
 
 1. **Allowance:** the buyer agrees frozen tests, repository, operator and budget once. Provider approval binding remains planned.

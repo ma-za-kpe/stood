@@ -116,6 +116,30 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  paypal-sim:
+    profiles: [simulators]
+    build:
+      context: .
+      target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
+    init: true
+    working_dir: /workspace
+    command: [sh, -c, "pnpm --filter @stood/provider-simulators build && pnpm --filter @stood/provider-simulators start"]
+    volumes:
+      - .:/workspace
+      - dependencies:/workspace/node_modules
+    environment:
+      APP_ENV: local
+      PORT: "8080"
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
   s3:
     image: chrislusf/seaweedfs:4.17@sha256:186de7ef977a20343ee9a5544073f081976a29e2d29ecf8379891e7bf177fbe9
     command: [server, -dir=/data, -s3, -ip=s3, -volume.max=1]

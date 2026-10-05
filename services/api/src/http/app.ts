@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { missingPaymentKeys, type PaymentKeys, SETUP_GUIDANCE } from '../application/payment-readiness.js';
+import type { ProviderHealth } from '../application/provider-registry.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
 import { Money } from '../domain/money.js';
@@ -14,6 +15,7 @@ export type AppConfig = Readonly<{
   demoMode: boolean;
   paymentKeys?: PaymentKeys;
   api?: PlatformApiConfig;
+  providerHealth?: () => readonly ProviderHealth[];
 }>;
 
 type Scenario = Readonly<{ profileId: string; changed?: CheckResult }>;
@@ -125,6 +127,7 @@ export function createApp(config: AppConfig): Hono {
       status: 'ok',
       paymentReady: false,
       environment: config.appEnv,
+      providers: config.providerHealth?.() ?? [],
       missing: missingPaymentKeys(config.paymentKeys),
       sentence: SETUP_GUIDANCE,
     }),

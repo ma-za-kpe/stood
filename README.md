@@ -30,7 +30,9 @@
 
 ---
 
-> ⚠️ **Status: early implementation.** Docker tooling, the tested pure domain and a local synthetic-fixture API are implemented. Payments, SDKs, hosted replay and product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap).
+> **Simulated demos. No payment is executed.** Current demo evidence and outcomes are synthetic. An isolated PayPal HTTP simulator exercises the real SDK without keys; real-provider connections require sandbox keys and qualification. Keys alone do not qualify an adapter or turn fixtures into real results.
+>
+> ⚠️ **Status: early implementation.** Docker tooling, tested Stood/Yard domains, a server-side HTTP SDK, durable DRAFT/package intake and a synthetic-fixture API are implemented. Full funding, trusted execution, hosted replay and product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap) and [simulator guide](services/simulators/README.md).
 
 ## The problem
 
