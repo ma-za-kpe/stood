@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "yard-first",
+  "profile": "code.milestone@1",
+  "steps": [
+    "FREEZE_TERMS_FIXTURE",
+    "POST",
+    "CREW_CLAIM",
+    "AUTHORIZE_FIXTURE",
+    "CREW_BUILD_SUBMIT",
+    "ASSESS_FIXTURE",
+    "CONFIRM_CAPTURE",
+    "SIGNED_STOOD_PROOF",
+    "PAID_PROJECTION"
+  ],
+  "expected": {
+    "yardState": "PAID",
+    "captures": 1,
+    "stoodState": "RELEASED",
+    "simulated": true,
+    "moneyExecuted": false
+  }
+}

@@ -1,0 +1,91 @@
+x-node: &node
+  build:
+    context: .
+    target: dev
+    args:
+      DEV_UID: ${LOCAL_UID:-1000}
+      DEV_GID: ${LOCAL_GID:-1000}
+  init: true
+  working_dir: /workspace
+  volumes:
+    - .:/workspace
+    - dependencies:/workspace/node_modules
+  environment:
+    APP_ENV: ci
+    NETWORK_MOCK: "true"
+  networks: [mock]
+services:
+  runner:
+    <<: *node
+    networks: [mock, toolchain]
+    command: [pnpm, test:mock:network]
+  db:
+    image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+    environment:
+      POSTGRES_USER: stood
+      POSTGRES_PASSWORD: stood_mock_only
+      POSTGRES_DB: stood_mock
+    volumes:
+      - database:/var/lib/postgresql/data
+    networks: [mock]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U stood -d stood_mock"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  initialize:
+    <<: *node
+    command: [node, .mock-dist/services/api/test/network/init.js]
+    depends_on:
+      db:
+        condition: service_healthy
+  paypal-sim:
+    <<: *node
+    command: [node, .mock-dist/services/simulators/test/network-server.js]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  api:
+    <<: *node
+    command: [node, .mock-dist/services/api/test/network/server.js]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+      paypal-sim:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  yard-api:
+    <<: *node
+    command: [node, .mock-dist/services/yard-api/test/network-server.js]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  crew:
+    <<: *node
+    command: [node, .mock-dist/services/yard-api/test/fakes/crew-server.js]
+    depends_on:
+      yard-api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+networks:
+  mock:
+    internal: true
+  toolchain: {}
+volumes:
+  dependencies:
+  database:

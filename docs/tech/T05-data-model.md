@@ -1,5 +1,18 @@
 # T05: Data model and storage
 
+## Code evidence model (logical, not migrated)
+
+Keep implemented payment tables below authoritative. Future evidence tables must bind tenant, allowance version, milestone/package and exact repository/base/new commit.
+
+| Record | Required immutable fields |
+|---|---|
+| frozen_test_manifest | Contract digest/signature, hashes, test identities, allowed paths/dependencies, mutation policy, runner keys |
+| commit_artifact | Repository, base/new SHA, canonical diff digest, source archive digest and private object reference |
+| runner_report | Package/commit/manifest binding, signer/image digest, execution counts/skips, mutation scope/score, bounded output digest, signature and received time |
+| usage_receipt | Independent outside authority, allowance/commit/milestone, event/demand reference, freshness and signature; uniqueness prevents replay |
+
+Verify signatures over canonical bounded payloads before deriving RULE findings. Recompute source/test hashes rather than trusting builder metadata. Artifact/report storage stays private; redact logs and public receipts. No new tables or verifiers are implied by this design.
+
 ## Stores
 
 | Store | What | Why this store |
@@ -75,7 +88,7 @@ New operations and each operation's first event must be RESERVED with a null ref
 
 The pure codec in `domain/tranche-record.ts` creates, advances and restores version-1 JSON records. Each contains the immutable definition, current rule-set version and ordered accepted commands with recorded arguments. Replaying validated domain methods recovers private retry counters, hold/renewal history, decisions, pending operations and terminal settlements; it never reruns evidence checks or processor calls. Unknown/incompatible records and illegal sequences fail closed. See [ADR-0011](../adr/0011-tranche-recovery-record.md).
 
-The atomic store below now persists this format with immutable prior history and coupled operation writes. T-0132 awaits batch approval/merge. Compatibility migrations must precede replay-semantic or rule-version changes (T-0148).
+The atomic store below now persists this format with immutable prior history and coupled operation writes. T-0132 was approved and merged in PR #21. Compatibility migrations must precede replay-semantic or rule-version changes (T-0148).
 
 ### Safe recovery across decision-rule versions (T-0148)
 
@@ -91,7 +104,7 @@ Dispatch must check `canSubmitPendingOperation` and the unresolved ledger status
 
 `PostgresTranches` persists the complete recovery record, original record and append-only command journal. `apply` locks the stream and commits state, aggregate version, reservation/outcome, provider UUID and operation event in one transaction. Matching command retries are read-only; changed commands or original versions conflict. Reads take a shared lock so state and pending operation remain consistent. Direct rewrites and incomplete managed journal/event commits are rejected by database guards. Legacy ledger-only writers cannot mutate managed streams. See [ADR-0013](../adr/0013-atomic-tranche-and-operation-storage.md).
 
-Integration tests cover restart identity, competing transitions, safe-mode cancellation, renewal expiry, confirmation rollback and failure at each write boundary. No payment executor or HTTP money endpoint is enabled. This completes the aggregate-persistence implementation required by T-0132; merge/review evidence remains pending.
+Integration tests cover restart identity, competing transitions, safe-mode cancellation, renewal expiry, confirmation rollback and failure at each write boundary. No payment executor or HTTP money endpoint is enabled. This completes the aggregate-persistence implementation required by T-0132; Approved merge evidence is PR #21, f5020ec.
 
 ## R2 layout
 

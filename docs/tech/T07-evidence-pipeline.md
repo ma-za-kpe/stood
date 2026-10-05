@@ -1,5 +1,21 @@
 # T07: Evidence pipeline
 
+## Code evidence pipeline (planned)
+
+1. Authenticate tenant/package, freeze exact allowance version and enqueue durably; renewal-pending evidence must wait in storage, not be dropped.
+2. Fetch exact base/new commits through the GitHub read-only supervisor; verify archive paths/sizes and dependency digests. Builder code never runs in the API.
+3. Recompute acceptance-test hashes and identities against the signed manifest; reject edits, deletions, skips/selective execution and replayed canonical diffs.
+4. Mount sealed inputs into the qualified no-network/no-secret sandbox; enforce CPU/memory/time/process/disk/output caps and required test enumeration.
+5. Run the agreed mutation scope; incomplete, unsigned or weak results mean WAIT. Signing occurs outside builder control.
+6. Verify report signature and exact package/commit/manifest binding; verify mandate/operator/budget and independent outside usage receipt where required.
+7. Derive RULE findings and call the pure gate. Persist aggregate and reserved payment operation atomically; only the guarded qualified executor may submit. Confirm/reconcile before publishing settlement copy.
+
+The profile is implemented; runner, fetch, signature verification and usage ingestion are planned. Repository instructions are untrusted data, including prompt injection aimed at any reviewing agent. A model summary cannot replace execution proof.
+
+## Scenario: site visits
+
+The remaining photo pipeline is the EyeOnSite scenario, not the lead code demo. Its adapters/model evaluation are plans unless separately qualified.
+
 Goal: turn a package into **check results + findings** that the pure decision rule ([T03](T03-domain-model.md#decision-rule-pure-function)) can use. Threats: [S11](../stood/S11-evidence-integrity.md).
 
 ## Pipeline (one Render Workflow run per package)
@@ -60,3 +76,9 @@ Steps 2 and 3 run before step 4. **If a hard rule already refuses, the model ste
 - a provenance manifest hash
 
 Stood accepts these as `platform_signals`: **any HIGH-severity signal → WAIT**. Stood independently re-runs the checks it can (plot, window, pHash). [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) has device attestation, which Stood can't do. Stood has the cross-plot and cross-platform index, which [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) can't have.
+
+## Signed report contract (T-0171, unit-tested)
+
+The runner verifier checks an Ed25519 signature over a bounded exact payload, trusted runner/image, tenant/allowance/package/repository/base/new commit and frozen manifest. It derives only the six build RULE findings after validating tests, mutation and budget. A runner never asserts outside usage. Unknown, stale, future, tampered or incompatible reports yield no findings, so the gate waits.
+
+The fake runner signs synthetic reports without executing any source. Fixture reports are rejected by default and require explicit test-mode allowance. Signature verification is not sandbox attestation or payer approval: production wiring still requires a qualified signer/runtime and a trusted frozen agreement, separate outside-usage proof and immutable package/replay binding. Report freshness is checked against the ingest server clock; queued work must preserve its immutable received/verified time rather than treating processing time as new evidence. No HTTP payment path consumes these reports yet.

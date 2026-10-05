@@ -1,5 +1,16 @@
 # S03: Personas
 
+## Current lead personas (5 October 2026)
+
+- **Adaeze / her buying agent:** signs the acceptance criteria and budget once; needs the exact failed condition, a receipt and control over final usage release.
+- **Yard / a human developer:** builds against frozen signed tests; needs a named reason for an edit, skip or weak-test wait. Yard is in development, not a shipped Stood integration.
+- **The platform operator:** provides tenant identity, trusted runner keys and signed outside usage evidence; owns funding, operational alerts and review. No agent chooses its own evidence authority.
+- **The reviewer:** handles uncertain evidence and unresolved payments using the immutable record. Human and agent labels do not change the acceptance rules.
+
+See [S17](S17-agent-payments-positioning.md). The field-visit personas below remain relevant to the EyeOnSite scenario; they are no longer the lead landing story.
+
+## Site-visit scenario personas (preserved)
+
 Four people, no more. [U, with Claude's notes marked C]
 
 ## Ama: the payer

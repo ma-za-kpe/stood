@@ -5,5 +5,8 @@
   "description": "Builds the GitHub Pages landing page and changelog",
   "dependencies": {
     "marked": "18.0.14"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
   }
 }

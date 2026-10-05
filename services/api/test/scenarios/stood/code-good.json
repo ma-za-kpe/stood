@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "code-good",
+  "profile": "code.milestone@1",
+  "assessment": "PASS",
+  "steps": ["DRAFT", "AUTHORIZE_FIXTURE", "DISPATCH", "PACKAGE", "ASSESS_FIXTURE", "EXECUTE", "RECONCILE", "VERIFY"],
+  "expected": {
+    "domainState": "RELEASED",
+    "providerState": "CAPTURED",
+    "captures": 1,
+    "settlementEffect": "CAPTURE",
+    "ledgerStatus": "CONFIRMED"
+  }
+}

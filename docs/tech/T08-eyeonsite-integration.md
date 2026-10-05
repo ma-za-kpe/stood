@@ -1,4 +1,4 @@
-# T08: [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) integration: where it calls Stood, and how payments change
+# T08: EyeOnSite: example scenario integration
 
 Repo: **[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)** (Kotlin Multiplatform app + Firebase Cloud Functions in TypeScript, region `africa-south1`). Read on 2026-10-03 at `main`: `functions/src/{escrow,evidence,payments,review}`, `app/shared/.../domain/{EscrowContracts,EvidencePackage,TaskStatus}.kt`, `docs/EOS-08-ESCROW-AND-PAYMENTS.md`.
 

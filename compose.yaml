@@ -1,5 +1,19 @@
 name: stood
 services:
+  site:
+    profiles: [site]
+    image: node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+    working_dir: /workspace
+    command: [node, tools/site/serve.mjs]
+    volumes:
+      - ./:/workspace:ro
+    ports:
+      - "127.0.0.1:8082:8082"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8082/yard/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   app:
     build:
       context: .
@@ -53,6 +67,8 @@ services:
       PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
       DATABASE_URL: postgres://stood:stood_local_only@db:5432/stood
       STOOD_PLATFORM_ID: ${STOOD_PLATFORM_ID:-local-platform}
+      PROVIDER_PAYPAL: ${PROVIDER_PAYPAL:-}
+      PAYPAL_SIM_URL: http://paypal-sim:8080
       DEMO_MODE: "true"
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
@@ -84,6 +100,8 @@ services:
       - dependencies:/workspace/node_modules
     environment:
       APP_ENV: local
+      PROVIDER_PAYPAL: ${PROVIDER_PAYPAL:-}
+      PAYPAL_SIM_URL: http://paypal-sim:8080
       PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
       DATABASE_URL: postgres://stood:stood_local_only@db:5432/stood
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
@@ -92,6 +110,55 @@ services:
     depends_on:
       db:
         condition: service_healthy
+  yard-api:
+    profiles: [yard]
+    build:
+      context: .
+      target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
+    init: true
+    working_dir: /workspace
+    command: [sh, -c, "pnpm --filter @stood/yard-api build && pnpm --filter @stood/yard-api start"]
+    volumes:
+      - .:/workspace
+      - dependencies:/workspace/node_modules
+    environment:
+      YARD_ENV: local
+      YARD_PORT: "3001"
+    ports:
+      - "127.0.0.1:3001:3001"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  paypal-sim:
+    profiles: [simulators]
+    build:
+      context: .
+      target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
+    init: true
+    working_dir: /workspace
+    command: [sh, -c, "pnpm --filter @stood/provider-simulators build && pnpm --filter @stood/provider-simulators start"]
+    volumes:
+      - .:/workspace
+      - dependencies:/workspace/node_modules
+    environment:
+      APP_ENV: local
+      PORT: "8080"
+      SIM_BIND_HOST: "0.0.0.0"
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
   s3:
     image: chrislusf/seaweedfs:4.17@sha256:186de7ef977a20343ee9a5544073f081976a29e2d29ecf8379891e7bf177fbe9
     command: [server, -dir=/data, -s3, -ip=s3, -volume.max=1]

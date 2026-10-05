@@ -1,0 +1,29 @@
+import { describe, expect, it } from 'vitest';
+import { createYardApp } from './app.js';
+
+describe('Yard shell, no payment capabilities (T-0175)', () => {
+  it('reports only its own readiness and cannot claim money or live services', async () => {
+    const app = createYardApp({ environment: 'ci' });
+    const response = await app.request('/health');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: 'ok',
+      product: 'yard',
+      environment: 'ci',
+      capabilities: { board: false, foreman: false, credentials: false, events: false, payments: false },
+    });
+  });
+  it('fails closed for every unimplemented command with no body reflection', async () => {
+    const app = createYardApp({ environment: 'local' });
+    for (const path of ['/yard/v1/blueprints', '/yard/v1/work-orders/wo/claim', '/yard/v1/webhooks/stood']) {
+      const response = await app.request(path, { method: 'POST', body: 'private input' });
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain('private');
+    }
+    expect((await app.request('/yard/v1/board')).status).toBe(503);
+    expect((await app.request('/v1/allowances', { method: 'POST' })).status).toBe(404);
+  });
+  it('refuses unspecified production configurations', () => {
+    expect(() => createYardApp({ environment: 'production' })).toThrow();
+  });
+});

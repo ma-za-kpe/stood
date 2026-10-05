@@ -11,7 +11,7 @@ const refusal = (namedField: string | null, distance?: number): Decision => ({
   reason: 'fixture_failed',
   detail: distance === undefined ? null : { distance_m: distance },
 });
-describe('Assessment sentences describe evidence before payment (T-0127)', () => {
+describe('Site-visit scenario assessment copy before payment (T-0127)', () => {
   it('formats pin distance in metres or kilometres', () => {
     expect(assessmentSentence(refusal('plot', 1400))).toBe('Wrong plot. 1.4 km off.');
     expect(assessmentSentence(refusal('plot', 750.4))).toBe('Wrong plot. 750 m off.');

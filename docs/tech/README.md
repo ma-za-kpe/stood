@@ -1,6 +1,6 @@
 # Technical docs
 
-What we're building, how it fits together, and where it runs. Product intent is in [`../stood/`](../stood/). How we work is in [`../WAYS_OF_WORKING.md`](../WAYS_OF_WORKING.md).
+Code milestones lead: frozen signed tests, commit package, budget mandate and outside usage release. The code profile and durable core are tested; runner, funding HTTP, Yard and A2A/AP2 remain planned. This index describes implementation and target design, with field work labelled as a scenario. Product intent is in [`../stood/`](../stood/). How we work is in [`../WAYS_OF_WORKING.md`](../WAYS_OF_WORKING.md).
 
 | # | Doc | Covers |
 |---|---|---|
@@ -11,7 +11,7 @@ What we're building, how it fits together, and where it runs. Product intent is 
 | T05 | [Data model and storage](T05-data-model.md) | Postgres schema, R2 layout, evidence index, retention |
 | T06 | [PayPal integration](T06-paypal-integration.md) | Vault, AUTHORIZE / capture / void / reauthorise, timers, failures, sandbox |
 | T07 | [Evidence pipeline](T07-evidence-pipeline.md) | Rules-first pipeline, evidence agent, near-duplicate search, Channel3 |
-| T08 | [EyeOnSite integration](T08-eyeonsite-integration.md) | **Where [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) calls Stood and how payments change** |
+| T08 | [EyeOnSite: example scenario integration](T08-eyeonsite-integration.md) | **Where [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) calls Stood and how payments change** |
 | T09 | [Tech stack](T09-tech-stack.md) | Open-source / free-tier choices and fallbacks |
 | T10 | [Deployment](T10-deployment.md) | Where it runs (Render, Neon, R2, Workers AI, Astropods), CI/CD, free-tier risks |
 | T11 | [Security and privacy](T11-security-privacy.md) | STRIDE, money-specific controls, data protection |

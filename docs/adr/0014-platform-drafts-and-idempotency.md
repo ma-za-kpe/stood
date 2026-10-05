@@ -1,5 +1,7 @@
 # ADR-0014: Atomic platform drafts and durable request replay
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](../stood/S17-agent-payments-positioning.md).
+
 - Status: Proposed; implemented local slice awaiting review
 - Date: 2026-10-05
 - Tasks: T-0028, T-0154, T-0156

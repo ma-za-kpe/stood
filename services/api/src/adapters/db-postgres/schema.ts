@@ -13,6 +13,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import type { TrancheCommand } from '../../domain/tranche-record.js';
+import type { CommitPackageInput, StoredCommitPackage } from '../../ports/commit-package-store.js';
 import type { OperationIntent, OperationStatus } from '../../ports/payment-operation-store.js';
 import type { StoredDraft } from '../../ports/platform-api-store.js';
 import type { OperationalAlert } from '../../ports/reconciliation-queue.js';
@@ -180,10 +181,37 @@ export const apiTrancheOwners = pgTable(
     platformId: text('platform_id').notNull(),
   },
   (table) => [
+    unique('owner_platform_identity').on(table.trancheId, table.platformId),
     foreignKey({
       columns: [table.allowanceId, table.platformId],
       foreignColumns: [apiAllowances.id, apiAllowances.platformId],
     }),
+  ],
+);
+export const commitPackages = pgTable(
+  'commit_packages',
+  {
+    id: text().primaryKey(),
+    platformId: text('platform_id').notNull(),
+    trancheId: text('tranche_id').notNull(),
+    key: text().notNull(),
+    fingerprint: text().notNull(),
+    metadata: jsonb().$type<CommitPackageInput>().notNull(),
+    waitingFor: text('waiting_for').$type<StoredCommitPackage['waitingFor']>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    unique('commit_package_request').on(table.platformId, table.trancheId, table.key),
+    foreignKey({
+      columns: [table.trancheId, table.platformId],
+      foreignColumns: [apiTrancheOwners.trancheId, apiTrancheOwners.platformId],
+    }),
+    check(
+      'commit_package_valid',
+      sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.fingerprint} ~ '^[a-f0-9]{64}$' AND jsonb_typeof(${table.metadata}) = 'object' AND ${table.waitingFor} IN ('HOLD','RENEWAL','RUNNER')`,
+    ),
   ],
 );
 export const apiRequests = pgTable(

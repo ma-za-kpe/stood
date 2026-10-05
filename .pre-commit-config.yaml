@@ -97,12 +97,13 @@ repos:
     hooks:
       - id: typos
         args: [--force-exclude]   # report only: never auto-rewrite names like Magentic
-  - repo: https://github.com/lycheeverse/lychee
-    rev: lychee-v0.24.2
+  - repo: local
     hooks:
       - id: lychee
         name: markdown links (offline, local files + anchors)
-        args: [--no-progress, --offline, --include-fragments]
+        language: system
+        entry: scripts/check-links
+        require_serial: true
         files: \.md$
 
   # ---------- web code ----------
@@ -118,7 +119,7 @@ repos:
         language: system
         entry: scripts/check-docker
         pass_filenames: false
-        files: ^Dockerfile$
+        files: (^Dockerfile$|^tools/site/Dockerfile\.test$|^scripts/check-docker$)
       - id: product-validation
         name: strict types, money boundary, unit/Postgres tests, coverage and build (Docker)
         language: system

@@ -1,5 +1,22 @@
 # T01: Requirements
 
+## Code-milestone requirements (planned unless stated)
+
+Existing FR IDs stay stable; field requirements below are scenario-specific.
+
+| ID | Requirement | Pri |
+|---|---|---|
+| FR-70 | Freeze signed acceptance-test manifest, hashes and test identities before building; changes require a new buyer-approved contract | M |
+| FR-71 | Fetch exact repository/base/new commit with read-only GitHub credentials; detect renamed/reused diffs, path violations and unapproved dependencies; never push/merge | M |
+| FR-72 | Run builder code outside the payment service with no network/secrets and bounded time, memory, CPU, processes, disk and output | M |
+| FR-73 | Verify signed runner identity/image, exact commit/test hashes, all required tests and zero skips/selective runs; client PASS is insufficient | M |
+| FR-74 | Bind mutation scope/threshold to signed contract; missing or weak test quality means WAIT | M |
+| FR-75 | Bind operator/payee, USD cap and milestone to buyer mandate; agent chains cannot increase authority | M |
+| FR-76 | Usage release requires independent outside-authority proof and any agreed human acceptance, bound to allowance/commit; reject circular or self-attested demand | M |
+| FR-77 | Human/agent buyer and builder receive the same verdict for the same authenticated evidence | M |
+
+T-0157 implements the RULE profile only; FR-70–76 require the separately tracked trusted adapters. Local DRAFT metadata is not approval or evidence. Example cap $4,000, build milestone $1,200.
+
 Source specs: [S04 outcomes](../stood/S04-job-story-and-outcomes.md), [S05 features](../stood/S05-feature-list.md), [S06 voice](../stood/S06-voice-and-states.md), [S11 evidence integrity](../stood/S11-evidence-integrity.md). IDs are stable. Tests and PRs reference them (`Refs: FR-12`).
 
 Priority: **M** = must (hackathon), **S** = should (hackathon if time), **L** = later.
@@ -83,7 +100,7 @@ Priority: **M** = must (hackathon), **S** = should (hackathon if time), **L** = 
 | NFR-07 | Cost | **$0/month baseline** on free tiers and partner credits ([T10](T10-deployment.md)). Any paid line item needs an ADR |
 | NFR-08 | Security | Secrets only in platform env stores. HMAC on all webhooks. Signed, expiring receipt links. Least-privilege keys per service |
 | NFR-09 | Privacy | No real personal data in the repo or fixtures. Photos are stored privately with signed URLs. Retention of 180 days for demo data. Plot coordinates aren't exposed on public receipts (distance only) |
-| NFR-10 | Accessibility | WCAG 2.2 AA. Greyscale-safe decisions. Kojo's screens ≥ 16px with 48px targets ([S15](../stood/S15-design-system.md)) |
+| NFR-10 | Accessibility | WCAG 2.2 AA. Greyscale-safe decisions. Field-scenario screens ≥ 16px with 48px targets ([S15](../stood/S15-design-system.md)) |
 | NFR-11 | Auditability | Every decision is reproducible from stored inputs plus the rule version. The decision record stores the rule-set version and model id / version |
 | NFR-12 | Portability | Processor-agnostic domain (a `PaymentGateway` port). PayPal is the first adapter |
 | NFR-13 | Observability | Structured logs with correlation ids (tranche, package, decision, PayPal debug id). Metrics: decisions by outcome / field, false-refusal rate, hold age, capture failures |

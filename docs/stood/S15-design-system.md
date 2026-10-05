@@ -1,5 +1,9 @@
 # S15: Design system v2, "Volt"
 
+## Current lockup and social copy
+
+Use **Agents pay agents. Only when the work stands.** The social preview cards were regenerated in PR #24. Code evidence displays a test report and diff summary; the field theme and uncropped-photo requirements below are for the EyeOnSite scenario. Yard and the runner remain planned.
+
 **Status:** current (2026-10-03). Supersedes the v1 "Paper, stamp and a red line" system ([ADR-0005](../adr/0005-design-system-v2-volt.md)). Asset files: [`docs/brand/`](../brand/). Live reference: the landing page (`site/`), published to GitHub Pages.
 
 ## 1. Direction
@@ -37,7 +41,7 @@ The v1 principles that stay: **the screen decides money**, every decision has a 
 
 ### Semantic tokens
 
-| Token | Night theme (default) | Cream theme | Field (Kojo's phone, always) |
+| Token | Night theme (default) | Cream theme | Field (the site-visit inspector’s phone, always) |
 |---|---|---|---|
 | `bg` | Night | Cream | `#FFFFFF` |
 | `surface` | Night 2 | Cream 2 | `#F4F4F6` |
@@ -82,7 +86,7 @@ The v1 principles that stay: **the screen decides money**, every decision has a 
 | `h2` | 32 → 60 px | Section titles |
 | `verdict` | 20–40 px, Bricolage 800 | Released / Refused / In review |
 | `reason` | 19 → 24 px, Geist 600 | The one sentence |
-| `body` | 17 px | Body (Kojo minimum 16 px) |
+| `body` | 17 px | Body (the site-visit inspector minimum 16 px) |
 | `mono` | 13–15 px | Ids, amounts in the reviewer file, kickers |
 
 Amounts use `tabular-nums`. The **wordmark is outlined** (paths from Bricolage Grotesque 800 / `wdth` 90), so it renders identically everywhere.
@@ -155,4 +159,4 @@ The generator script (fontTools) lives in the scratch workflow for now. Moving i
 - [ ] Text pairs meet AA or better (table above). Volt and Sun are never used as text on cream.
 - [ ] Focus ring visible (Volt on night, Ultra ink on cream).
 - [ ] Reduced motion respected. Content visible without JS.
-- [ ] Touch targets ≥ 48 px. Kojo's capture button ≥ 64 px. The Field theme is on his phone.
+- [ ] Touch targets ≥ 48 px. the site-visit inspector’s capture button ≥ 64 px. The Field theme is on his phone.

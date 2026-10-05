@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "usage-pending",
+  "profile": "code.final@1",
+  "assessment": "USAGE_PENDING",
+  "steps": ["DRAFT", "AUTHORIZE_FIXTURE", "DISPATCH", "PACKAGE", "ASSESS_FIXTURE", "EXECUTE", "RECONCILE", "VERIFY"],
+  "expected": {
+    "domainState": "WAITING",
+    "providerState": "CREATED",
+    "captures": 0,
+    "settlementEffect": null,
+    "ledgerStatus": null
+  }
+}

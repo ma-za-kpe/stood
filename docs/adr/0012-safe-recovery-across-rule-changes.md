@@ -1,5 +1,7 @@
 # ADR-0012: Preserve old holds in restricted recovery
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](../stood/S17-agent-payments-positioning.md).
+
 - **Status:** accepted
 - **Date:** 2026-10-04
 - **Supersedes:** ADR-0011's rejection of all older rule-set versions

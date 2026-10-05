@@ -1,5 +1,25 @@
 # S11: Evidence integrity [C, new]
 
+## Code-evidence attacks and planned defences
+
+| Attack | Defence / fail-closed result |
+|---|---|
+| Edited/deleted signed tests | Recompute frozen test manifest/hashes; authenticated mismatch → REFUSE |
+| Skips, .only or selective discovery | Independently enumerate required test IDs/counts; complete execution required |
+| Empty assertions / trivially green tests | Bound mutation scope to contract; weak or missing quality → WAIT |
+| Renamed old diff or new SHA with old work | Compare canonical diff/content against base and prior delivery; a new label proves nothing |
+| Dependency smuggling / altered lockfile | Frozen allowlist, digest-pinned pre-fetch and allowed diff scope; unapproved code cannot execute |
+| Repository prompt injection aimed at reviewing agents | Treat every repo file/log as data; no repo instruction grants tools, changes rules or signs payment evidence |
+| Runner escape, metadata access or resource bomb | Qualified no-network/no-secret isolation and hard CPU/memory/time/process/disk/output caps; abort → WAIT |
+| Fabricated runner signature / replay | Trusted signer outside builder process, exact allowance/package/commit binding, freshness and replay guards |
+| Agent circular purchases / self-attested usage | Independent outside-authority usage receipt and accountable operator; transfers alone prove no demand |
+
+The RULE profile is unit-tested; these fetch/runner/verifier defences are planned. See [T11](../tech/T11-security-privacy.md) and T-0159/T-0164–T-0166. No badge or model opinion can substitute for authenticated proof.
+
+## Scenario: site-visit attacks and earlier defence plan
+
+The following attacks remain relevant to EyeOnSite; checked boxes describe design priorities, not qualified model/index deployment.
+
 The pasted plan relies on "GPS matches, EXIF consistent, photos not reused". **Each of those is easy to fake on its own.** If evidence can be faked, Stood is just a nicer-looking way to release money blindly. This doc lists the attacks and the defences, in priority order for the hackathon.
 
 ## Attacks

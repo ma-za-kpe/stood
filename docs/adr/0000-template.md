@@ -1,5 +1,7 @@
 # ADR-NNNN: <decision title>
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](../stood/S17-agent-payments-positioning.md).
+
 - **Status:** proposed | accepted | superseded by ADR-XXXX
 - **Date:** YYYY-MM-DD
 - **Deciders:** <names / roles>

@@ -6,7 +6,7 @@ Use this at the end, when we review everything against the official brief ([06](
 
 - [ ] Uses the **PayPal developer platform in the sandbox**, and PayPal is **central** (the money path *is* PayPal: authorise / capture / void). Evidence:
 - [ ] Integrates ≥1 PayPal technology, API, SDK, product or capability **meaningfully** (Orders v2, Vault, Disputes, Transaction Search, Agent Toolkit MCP, Server SDK). Evidence:
-- [ ] Incorporates AI **meaningfully** (evidence agent: stage recognition, nonce reading, re-capture detection, spec check; AI assistants for the reviewer). Evidence:
+- [ ] Incorporates AI **meaningfully** (buying/building agents and read-only reviewer assistance; deterministic rules retain money authority). Evidence:
 - [ ] A working prototype (no mock-ups standing in for features). Evidence:
 - [ ] Documented well enough for judges to understand it (README + docs/). Evidence:
 - [ ] Complies with the **Official Rules** (read in full, including judge-contact and IP clauses). Date read:
@@ -18,7 +18,7 @@ Use this at the end, when we review everything against the official brief ([06](
 - [ ] **Functional demo:**
   - [ ] Hosted URL works, is warm (Postman monitor green), and needs no special access, **and/or**
   - [ ] Complete setup and run instructions that a fresh machine can follow (tested by someone else).
-  - [ ] Judges can trigger **all three outcomes** themselves (fixtures, the "Replay as Ama" Kernel button, the Postman collection).
+  - [ ] Judges can trigger **all three outcomes** themselves (fixtures, code-good, signed-tests-changed, tests-skipped, weak-tests and usage-pending; real sandbox approval replay only if built, the Postman collection).
 - [ ] **Tools section:** every tool named, and *how* it was used (PayPal, the AI model(s), each partner tool used, each MCP / plugin), linked to `docs/sponsors/*.md`.
 - [ ] **Public GitHub repo:**
   - [ ] all source, assets and instructions
@@ -26,7 +26,7 @@ Use this at the end, when we review everything against the official brief ([06](
   - [ ] no secrets committed (keys only in env; commercial packages not vendored)
 - [ ] **Demo video:**
   - [ ] **under 3:00** (target 1:30)
-  - [ ] **shows the project working on the device it was built for**: Kojo's capture on a real Android phone, Ama on a phone, reviewer on desktop
+  - [ ] **shows the project working on the device it was built for**: buyer on a phone, builder commit/test report and reviewer on desktop
   - [ ] **public on YouTube**, link on the form
   - [ ] **no third-party trademarks or copyrighted music / material without permission**: no Paga, WhatsApp, Meta or other logos, royalty-free or original music, partner names as plain text unless their logo use is permitted
   - [ ] captions on
@@ -47,9 +47,9 @@ Use this at the end, when we review everything against the official brief ([06](
 |---|---|---|---|
 | Best Use of PayPal + AI | PayPal central, AI meaningful, rules move money | | |
 | Best Use of Agentic Commerce | An agent acting human-not-present under an allowance. The gate in front of agent payments | | |
-| Most Impactful | The diaspora corridor, a real audience, demonstrated fix | | |
-| Most Creative | "Pay on proof": the nonce, the gate | | |
-| Best Demo Delivery | 90s story, refusal first, real Accra footage | | |
+| Most Impactful | Buyer/builders and accountable agent operators, demonstrated delivery gate | | |
+| Most Creative | Frozen signed tests, independent outside usage and the gate | | |
+| Best Demo Delivery | Six S09 beats, two target human touches, actual runner/provider proof | | |
 | Best Use of AG Grid / AG Studio | Reviewer file in **AG Studio**: two async data sources, reconciliation, AI assistant (read-only) | | |
 | Best Use of APIMatic | Context Plugin in the workflow (before / after lesson). Stood SDK / MCP from OpenAPI | | |
 | Best Use of Bryntum | Gantt of tranches locked until release. AI chat "why is X blocked?" | | |
@@ -62,7 +62,7 @@ Use this at the end, when we review everything against the official brief ([06](
 
 - [ ] Every claim in the video and README exists in the build (no "coming soon" in the main flow).
 - [ ] Local rail shown honestly as **labelled, not executed** (or a real test-mode call if built).
-- [ ] Kojo is never paid on PayPal. The word "escrow" doesn't appear in user-facing copy.
+- [ ] Onward operator payout is not implied by a platform capture. The word "escrow" doesn't appear in user-facing copy.
 - [ ] Every voice string matches [S06](stood/S06-voice-and-states.md). No "Something went wrong".
 - [ ] Every screen passes the greyscale test ([S07](stood/S07-brand-and-design-tokens.md)).
 - [ ] Every partner tool used has a `docs/sponsors/<tool>.md` page with the "refused uses" section.
@@ -74,3 +74,10 @@ Use this at the end, when we review everything against the official brief ([06](
 - [ ] Devpost page proofread. Video plays logged out.
 - [ ] Hosted demo kept alive until winners are announced on **21 Dec 2026** (Render + Postman monitor).
 - [ ] Repo tagged `v-hackathon-submission`.
+
+## Code-milestone recording gate
+
+- [ ] Each of the six S09 beats has actual evidence: sign once, A2A hire, confirmed capture, edited-test refusal, bounded Yard test-agent subcontract, human usage release.
+- [ ] Yard, runner and A2A/AP2 are labelled planned wherever not qualified; no storyboard is shown as shipped.
+- [ ] The default curl uses signed-tests-changed and explicitly executes no payment.
+- [ ] Two human touches is a target, with extra provider-required approvals shown honestly.

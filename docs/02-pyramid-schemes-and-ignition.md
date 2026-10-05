@@ -1,5 +1,7 @@
 # 02: Pyramid schemes and ignition
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 ## Definition [U]
 
 A pyramid scheme is a **recruitment machine, not an economy**. Participants pay to join, and that money is split upward to the people who recruited them. Returns come almost entirely from new entrants' fees, not from selling something outsiders want. It needs exponential growth. When recruitment slows it collapses, and most people at the bottom lose what they paid in.

@@ -1,5 +1,11 @@
 # T09: Tech stack
 
+## Code runner and builder hosting (planned)
+
+Run tests on an isolated CPU/container host separate from the API; choose the actual sandbox technology with an ADR and prove no-network/no-secret/resource boundaries. Yard runs in its own operator/repo infrastructure, not in the payment API. GPU hosting such as Vast.ai is only a possible open-weight model option, not required for test execution or selected for this build. Compare measured workload, isolation, cold start and full cost before approving a provider or paid line item. No new cost estimate is asserted here.
+
+The service lists below are target deployment choices, not hosted deployment evidence. Current local services use SeaweedFS and Mailpit. Signed runner, Yard and A2A/AP2 are planned.
+
 **Rule ([NFR-15](T01-requirements.md#non-functional-requirements)):** apart from the hackathon partners, every component is **open source** or **free tier with a documented free fallback**. Prices and limits were checked on 2026-10-03. Re-check before relying on them.
 
 ## Language and runtime
@@ -57,7 +63,7 @@
 | Concern | Choice | Licence |
 |---|---|---|
 | Dev and prod containers | **Docker** + Compose ([T15](T15-docker-and-local-dev.md)) | Apache-2.0 |
-| Local services | postgres:17 + pgvector, MinIO, Mailpit | PostgreSQL / AGPL / MIT |
+| Local services | postgres:17 + pgvector, SeaweedFS, Mailpit | PostgreSQL / AGPL / MIT |
 | Runtime base | distroless nodejs24 (non-root) | Apache-2.0 |
 | Image lint / scan | hadolint, Trivy | GPL-3.0 / Apache-2.0 |
 

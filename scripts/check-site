@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+docker compose run --rm app sh -c 'npm ci --prefix tools/site && node tools/site/build.mjs'
+docker build -f tools/site/Dockerfile.test -t stood-site-browser .
+# A dedicated browser container with only built static files, the test and screenshots.
+mkdir -p artifacts/site
+docker run --rm --init --shm-size=256m \
+  --mount "type=bind,src=$(pwd)/_site,dst=/workspace/_site,readonly" \
+  --mount "type=bind,src=$(pwd)/tools/site/smoke.mjs,dst=/workspace/tools/site/smoke.mjs,readonly" \
+  --mount "type=bind,src=$(pwd)/tools/site/serve.mjs,dst=/workspace/tools/site/serve.mjs,readonly" \
+  --mount "type=bind,src=$(pwd)/artifacts/site,dst=/workspace/artifacts/site" \
+  stood-site-browser node tools/site/smoke.mjs

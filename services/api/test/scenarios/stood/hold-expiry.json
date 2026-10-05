@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "hold-expiry",
+  "profile": "code.milestone@1",
+  "assessment": "PASS",
+  "steps": ["DRAFT", "AUTHORIZE_FIXTURE", "DISPATCH", "ADVANCE_EXPIRY", "EXPIRE", "RECONCILE", "VERIFY"],
+  "expected": {
+    "domainState": "EXPIRED",
+    "providerState": "EXPIRED",
+    "captures": 0,
+    "settlementEffect": "EXPIRE",
+    "ledgerStatus": "FAILED"
+  }
+}

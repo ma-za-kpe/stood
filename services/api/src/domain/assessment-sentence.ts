@@ -3,8 +3,17 @@ import type { Decision } from './decision.js';
 // Assessment copy cannot claim a capture/void has completed.
 export function assessmentSentence(decision: Decision): string {
   if (decision.outcome === 'RELEASE') return 'Evidence checks passed.';
-  if (decision.outcome === 'WAIT') return 'A person needs to check this evidence.';
+  if (decision.outcome === 'WAIT') {
+    if (decision.reason === 'weak_tests') return 'The tests are too weak. A person needs to review them.';
+    if (decision.reason === 'usage_pending') return 'Usage proof is missing. The final payment waits for the buyer.';
+    return 'A person needs to check this evidence.';
+  }
   switch (decision.namedField) {
+    case 'signed_tests_changed':
+      return 'The signed tests were changed.';
+    case 'tests_skipped':
+      return 'Required tests were skipped.';
+    // Site-visit scenario copy.
     case 'plot': {
       const distance = decision.detail?.distance_m;
       if (distance === undefined) return 'Wrong plot.';

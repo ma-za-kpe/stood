@@ -1,0 +1,7 @@
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+WORKDIR /workspace
+COPY tools/site/package.json tools/site/package-lock.json /workspace/tools/site/
+RUN npm ci --prefix tools/site --no-audit --no-fund \
+    && tools/site/node_modules/.bin/playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+CMD ["node", "tools/site/smoke.mjs"]

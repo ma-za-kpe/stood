@@ -8,8 +8,19 @@ export function recipientAssessment(decision: Decision, matchedDate?: string): R
   let payer = assessmentSentence(decision);
   let inspector = 'A reviewer is checking. You do not need to do anything.';
   if (decision.outcome === 'RELEASE') inspector = 'The evidence checks passed.';
+  if (decision.outcome === 'WAIT' && decision.reason === 'weak_tests')
+    inspector = 'Request stronger signed acceptance tests before resubmitting.';
+  if (decision.outcome === 'WAIT' && decision.reason === 'usage_pending')
+    inspector = 'Add the agreed independent usage receipt and buyer acceptance.';
   if (decision.outcome === 'REFUSE') {
     switch (decision.namedField) {
+      case 'signed_tests_changed':
+        inspector = 'Restore the frozen signed tests and submit a new commit.';
+        break;
+      case 'tests_skipped':
+        inspector = 'Run every frozen test without skips or selective execution.';
+        break;
+      // Site-visit scenario instructions.
       case 'plot': {
         const distance = decision.detail?.distance_m;
         if (distance === undefined) inspector = 'Go back to the pin and capture again.';
