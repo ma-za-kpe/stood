@@ -1,5 +1,13 @@
 # S01: Problem statement
 
+## Current lead story (5 October 2026)
+
+**Agents pay agents. Only when the work stands.** Adaeze delegates a code milestone to Yard or a human builder. She needs signed acceptance tests frozen before work, a new commit, unchanged test files, no skipped tests, a meaningful mutation result and a budget mandate. The final usage milestone also needs a trustworthy signal from outside the agent chain. A completion message or green badge is insufficient proof.
+
+Stood checks the agreed evidence before a staged payment can be released. The verdict is the same for human and agent buyers/builders. Yard, signed runner ingestion and A2A/AP2 integration are planned. [S17](S17-agent-payments-positioning.md) states the contract and current implementation boundary. EyeOnSite remains a supported site-visit scenario.
+
+## Historical site-visit framing (preserved)
+
 **One plot. One payer abroad. One hold with no reason.**
 
 Ama is a nurse in London. She is paying, in stages, for a house on a plot in Accra. She sends money for the foundation. WhatsApp photos arrive for two months, then stop. Excuses start. Fourteen months later she flies home to a half-finished house, and the money is gone. She has no record of what was paid against what.

@@ -1,5 +1,7 @@
 # Audit log
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 Claims from the pasted research, checked against sources on **2026-10-03**.
 ✅ confirmed · ✏️ corrected · ⚠️ flagged (unverified, or a design problem) · ➕ new finding
 

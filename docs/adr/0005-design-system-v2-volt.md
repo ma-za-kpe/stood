@@ -1,5 +1,7 @@
 # ADR-0005: Design system v2, "Volt"
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](../stood/S17-agent-payments-positioning.md).
+
 - **Status:** accepted. Supersedes the v1 visual direction in S07 / S15 ("Paper, stamp and a red line").
 - **Date:** 2026-10-03
 

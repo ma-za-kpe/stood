@@ -1,5 +1,21 @@
 # T12: Testing strategy and quality gates
 
+## Default code fixtures and qualification
+
+| Fixture | Assessment | Expected evidence reason |
+|---|---|---|
+| code-good | RELEASE | All synthetic RULE findings pass |
+| signed-tests-changed | REFUSE | Frozen test integrity failed |
+| tests-skipped | REFUSE | Required execution incomplete |
+| weak-tests | WAIT | Mutation quality insufficient, human review |
+| usage-pending | WAIT | Independent usage proof / buyer acceptance absent |
+
+T-0169 implements these synthetic HTTP fixtures and recipient copy with tests first. No fixture means a test runner or payment actually executed. Preserve general location/geofence tests and the labelled site-visit fixtures below.
+
+Trusted adapters require signature/identity/replay tests, exact commit and frozen-test hashes, skip/selection/dependency attacks, mutation scope and outside-authority tests. Runner qualification adds network/secret/escape and resource-exhaustion tests; end-to-end release needs actual sandbox settlement evidence. Current SDK tests use mocks, not recorded contracts.
+
+## Scenario: site-visit fixtures and earlier test plan
+
 Policy: [WoW §4](../WAYS_OF_WORKING.md#4-test-driven-development). This page is the concrete plan.
 
 ## Test layers
@@ -56,6 +72,6 @@ The implemented Docker hook (`scripts/check-product`) runs unit/domain validatio
 5. PayPal adapter contract tests (recorded sandbox) → wire the real adapter.
 6. HTTP layer + fixtures `wrong-plot` and `good` end to end.
 
-The ten local demo scenarios are unit-tested fixtures. `funding-declined` and `hold-expiry` expose lifecycle state separately from the assessment outcome; both use outcome WAIT and execute no payment. Expiry advances the explicit domain clock, reserves cancellation, then supplies a simulated provider-expiry proof. It never confirms expiry from elapsed time alone. Hosted/sandbox replay remains separate qualification.
+The original ten secondary site-visit/freelance demo scenarios are unit-tested fixtures; five code fixtures now lead. `funding-declined` and `hold-expiry` expose lifecycle state separately from the assessment outcome; both use outcome WAIT and execute no payment. Expiry advances the explicit domain clock, reserves cancellation, then supplies a simulated provider-expiry proof. It never confirms expiry from elapsed time alone. Hosted/sandbox replay remains separate qualification.
 
 The T-0028 draft slice adds signed HTTP tests and real-Postgres tests for concurrent idempotency, restart response replay, tenant isolation, immutable ownership and final-write rollback. Its HTTP/Postgres scenario creates a DRAFT/PENDING stage, reads it and rejects changed request bytes; it does not qualify sandbox authorisation, evidence uploads or payment execution. Adapter tests use SDK mocks/synthetic bodies and fake-executor crash tests, never recorded provider evidence. Actual qualification remains T-0121.

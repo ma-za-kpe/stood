@@ -1,52 +1,34 @@
 # 09: Stood (product overview)
 
-> **Money does not move until someone stood there.**
+> **Agents pay agents. Only when the work stands.**
 
-Stood is the **release gate** a platform calls before a staged payment leaves. A payer abroad signs what "done" means (an *allowance*). An evidence source (an inspector's phone) submits a *package*. Stood decides **release**, **refuse**, or **wait**, and writes that decision onto the PayPal order. A dispute then becomes a file, not a story. The local payout stays on a local rail, and Stood never pretends to settle cedis.
+Stood is a release gate for code milestones and staged payments. Adaeze, or her buying agent, agrees frozen signed acceptance tests and a budget mandate. A human builder or a planned Yard builder agent submits a commit package. Rules judge the evidence, independently of who is buying or building. Every agent has an accountable operator/payee.
 
-[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) ([11](11-africa-payments-and-eyeonsite.md)) is the **first consumer, not the owner**. The same API serves lenders, insurers, NGOs and input-finance programmes ([08](08-idea-bank.md) #24–26).
+## How the research thread ends up here
 
-## How the whole research thread ends up here [C]
-
-| Thread | Where it lands in Stood |
+| Thread | Current product rule |
 |---|---|
-| Pyramid / "ultimate user" test ([02](02-pyramid-schemes-and-ignition.md)) | Inspector and plot records only improve from **accepted visits paid for by clients outside the inspector's tree**. New accounts paying each other graduate no one |
-| Force value creation ([03](03-how-agents-make-money-today.md)) | Money moves **only against delivered evidence** |
-| Better than Muse ([07](07-paypal-landscape.md)) | The agent spends against **proof**, not a product feed. It identifies itself as an agent on every order |
-| AP2 mandates / Whisper attacks | Allowance ≈ intent mandate. Release is bound to evidence, not just to a signature |
-| Identity as export licence | The inspector record and plot record |
-| Paga's silent holds ([11](11-africa-payments-and-eyeonsite.md)) | A hold is **a state on a job with a sentence attached**, not a missing balance |
-| Simulation ([05](05-simulation-design.md)) | Test harness: synthetic honest inspectors, recyclers, spoofers and collusion rings |
+| Pyramid / ultimate-user test | A usage release needs an outside signal from an independent user. Circular agent purchases do not prove demand |
+| Force value creation | A completion message is insufficient: bind reports to the exact new commit and frozen tests |
+| Signed mandates | Authority and budget do not prove delivery; both mandate and evidence must pass |
+| Silent holds | Every unresolved operation has a named owner, state and sentence |
+| Simulation | Synthetic fixtures qualify rules, never claim a provider payment or real runner execution |
 
-## The money model [C, important correction]
+## Money model
 
-The pasted plan said "capture a PayPal payout to the inspector" and "the platform holds escrow". **Both break in the real world:**
+The buyer's allowance freezes the operator, currency, milestones and cap: examples use **$4,000** total and a **$1,200** build milestone. PayPal Vault approval stores a payment method; it does not itself sign the acceptance-test contract. Binding that contract and provider approval durably is planned funding work.
 
-1. **Ghanaian PayPal accounts can't receive money** (send-only; Nigeria only receives via the Paga link). Kojo can't be paid on PayPal.
-2. **PayPal's Acceptable Use Policy requires pre-approval for escrow services.** A hackathon demo in sandbox is fine. A real product called "escrow" is not, without approval.
-3. **Authorisations last 29 days** (3-day honour period). **Multiparty delayed disbursement maxes out at 28 days and then auto-releases.** House stages take months.
+PayPal authorises on dispatch. RELEASE reserves a capture; REFUSE reserves a void; WAIT retains review. Only matching provider confirmation records a settlement. Ambiguous outcomes stay pending for reconciliation. Expiry never authorises a capture, and the five-minute safety margin is rechecked immediately before submission. Stood never pools funds or pays operators locally; the calling platform owns onward payout.
 
-**Recommended model: "authorise on dispatch, capture on proof".**
+## Evidence and usage release
 
-- Ama signs the allowance once. PayPal **Vault** saves her payment method (the mandate stand-in).
-- When a stage is ready for inspection, Stood creates an Orders v2 order with **intent AUTHORIZE** for that tranche. This is the *hold*: "This tranche is in review until the photos match." Inspections take about 48 hours, inside the honour period.
-- **Release:** capture the authorisation. The payee is the **platform's** PayPal merchant account ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) / Manti Labs LLC, a US entity that can receive).
-- **Refuse:** **void** the authorisation. Ama's money never left her.
-- The platform then pays the builder and the inspector fee locally (Paystack or Flutterwave MoMo), outside Stood.
+A commit package binds repository, base and new commit, frozen test hashes, actual test identities/counts, runner signature, mutation scope/score and mandate budget. Required usage proof must identify an independent outside authority and cannot be signed by the builder. Model opinions cannot substitute for rule evidence or hold payment credentials. Missing or incompatible proof means WAIT.
 
-Why this is better: no long-lived pooled escrow, no 28-day auto-release surprise. It uses PayPal's own primitives exactly as designed, and **Stood never holds money: it decides and records.** That's a much easier regulatory position (see [10](10-risks-and-open-questions.md)).
+The code profile is unit-tested over synthetic findings. Trusted runner ingestion, the isolated runner, GitHub read-only adapter, usage receipts, Yard and A2A/AP2 surfaces remain planned. Funding and financial HTTP are disabled pending qualification; the local API creates DRAFTs and reads state. No real sandbox evidence is claimed.
 
-## Where the AI is (so "meaningfully uses AI" is clearly true) [C]
+## Scenario: site visits
 
-| AI does | Rules do |
-|---|---|
-| Recognise the build stage in the photos (foundation vs blockwork vs roof) | Plot geofence check (distance plus tolerance) |
-| Detect photo-of-a-screen, stock images, re-shot prints | Required shots present, timestamps inside the window |
-| Read the **nonce** (a code the inspector writes on paper, see [S11](stood/S11-evidence-integrity.md)) | Near-duplicate check against all prior packages (vector search) |
-| Write the one-sentence reason, and draft the dispute packet | **The final release / refuse / wait decision** |
-| Act as Ama's agent: human-not-present capture under the allowance | Amount ≤ allowance cap. Payee = the allowance payee |
-
-**Principle: the model reports findings with confidence. Deterministic rules move money.** Low confidence never refuses, it only **waits** and routes to the reviewer.
+[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) submits field evidence against location, novelty, nonce and stage checks. Its scenario integration remains [T08](tech/T08-eyeonsite-integration.md); original corridor research remains [11](11-africa-payments-and-eyeonsite.md). It is one profile, not the headline product.
 
 ## Stood product docs
 

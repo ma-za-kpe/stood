@@ -1,42 +1,30 @@
 # S05: Feature list
 
-## Must (hackathon) [U + C]
+## Code-milestone priorities
 
-1. Create allowance (plot, geofence tolerance, stages, cap, payee, required shots)
-2. Sign allowance (PayPal Vault approval as the mandate) [C: names the PayPal object]
-3. Dispatch a stage → **authorise** the tranche (the "in review" hold) [C]
-4. Submit package (GPS, server time, photos, checklist, nonce)
-5. **Plot check** (distance vs tolerance)
-6. **Reused-photo check**: near-duplicate (perceptual / embedding), not exact hash [C: exact hashes are beaten by a one-pixel edit]
-7. Stage recognition by vision model, plus a screen / print re-capture check [C]
-8. Decide: release / refuse / wait, with the **named field**
-9. Write to the PayPal order: agent flag, allowance id, evidence reference
-10. **Capture only on release. Void on refuse.** [C: void, not just "no capture"]
-11. Dispute packet
-12. Receipt link (opens without an account)
-13. Reviewer file (the one-screen audit)
-14. Fixtures: good / wrong-plot / recycled / wrong-stage / substituted-fitting packages, so judges can replay every outcome [C: the submission needs a demo judges can actually use]
-15. **Fixtures and finishes spec check** (Channel3 lookup + image search → WAIT on mismatch, never refuse) [C]
-16. **Reviewer file in AG Studio** with two data sources (Stood decisions + PayPal Transaction Search) and the **reconciliation / gate-bypass** widget [C]
-17. **Bryntum Gantt of tranches**, each locked until release, plus AI chat ("why is X blocked?") [C]
-18. **Stood OpenAPI → APIMatic SDK** (+ MCP server if alpha access is granted) [C]
-19. **Evidence agent on Astropods** (no PayPal credentials) and an **Elastic evidence index** (kNN reused / internet photos) [C]
-20. **Kernel headless sandbox approval**: "Replay as Ama" for judges, plus CI [C]
-21. **Zapier notifications**, outbound only (Ama, Kojo, reviewer) [C]
-22. **Postman public workspace, fixtures collection and monitors** [C]
+| Feature | Evidence today / acceptance |
+|---|---|
+| Frozen signed acceptance tests | Planned immutable manifest/hash before work, newly signed version for changes |
+| Code profile | Unit-tested pure RULE findings; synthetic reports only |
+| GitHub read-only fetch | Planned exact repository/base/new commit, no write/push/merge privileges |
+| New work and scope | Planned canonical diff novelty, dependency allowlist and signed allowed paths |
+| Isolated test runner | Planned no network/secrets; limits and attested image/report before execution |
+| Test integrity/execution | Planned compare hashes and test identities; reject skips, deleted tests and selective execution |
+| Mutation quality | Planned signed mutation scope/threshold; weak or missing proof means WAIT |
+| Budget mandate | Exact USD cap and milestone sum implemented in DRAFT; buyer approval binding planned |
+| Usage release | Planned outside authority and receipt bound to exact commit; circular transfers prove nothing |
+| Payment record | Durable atomic tranche/operation storage and guarded funded-hold adapter tested; money HTTP off |
+| Reviewer, receipts, disputes and notifications | Planned view of evidence and matching confirmed settlement, never an invented payout |
+| Yard / A2A / AP2 | Planned, separately qualified operator/mandate/task surfaces |
 
-## Later
+## Shipping gates
 
-- Webhook retries and idempotency keys
-- More checklists (lender site visit, insurance claim, NGO milestone, farm input delivery)
-- Inspector and plot record, improved only by accepted visits from outside the inspector's tree
-- Sandbox vs live keys, a multi-tenant platform model
-- Device attestation (Play Integrity) via the capture SDK [C]
-- Random double-inspection to catch collusion [C]
-- Satellite / prior-imagery comparison [C]
-- An AP2-compatible mandate export [C]
+The trusted verifier derives findings; clients cannot self-authorise PASS. Qualify real sandbox funding/settlement, missed-send recovery and renewal evidence queuing before enabling payment HTTP. Qualification evidence has its own tier in TASKS.md.
 
-## Never in v1 [U]
+## Scenario: site visits
 
-Matching. Ratings. Cedi settlement. Catalog. Subscriptions. Chat. A map of Africa.
-[C] Also never: holding funds, a token, referral bonuses for inspectors.
+[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) supplies photos, coordinates, server times, nonce and attestation. Geofence, novelty, stage, recapture and optional fittings checks remain scenario features. Local fixtures execute no payments. Channel3 mismatch stays WAIT. Rentals require a rule/human safeguard before shipping.
+
+## Excluded
+
+Stood does not build code, recruit agents, offer referral rewards, match workers, pool funds or execute submitted code in its payment service.

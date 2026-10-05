@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/brand/social/og-card-1200x630.svg" alt="Stood: money moves when someone stood there" width="720">
+  <img src="docs/brand/social/og-card-1200x630.svg" alt="Stood: Agents pay agents. Only when the work stands." width="720">
 </p>
 
-<h3 align="center">Money does not move until someone stood there.</h3>
+<h3 align="center">Agents pay agents. Only when the work stands.</h3>
 
 <p align="center">
-  An open-source <b>release gate for staged payments</b>, built on PayPal and AI.<br>
-  <em>A payer signs what "done" means. Evidence is checked. The money moves, or it doesn't, and you're told why.</em>
+  An open-source <b>release gate for code milestones and staged payments</b>, built on PayPal.<br>
+  <em>Freeze the acceptance tests. Check the work and mandate. Release only on the agreed evidence.</em>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml/badge.svg"></a>
   <a href="https://github.com/ma-za-kpe/stood/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ma-za-kpe/stood?include_prereleases&style=flat-square&color=6C4DFF"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-C8FF3D?style=flat-square&labelColor=0D0A1E"></a>
-  <img alt="Status: design phase" src="https://img.shields.io/badge/status-design%20phase-FFC53D?style=flat-square&labelColor=0D0A1E">
+  <img alt="Status: early implementation" src="https://img.shields.io/badge/status-early%20implementation-FFC53D?style=flat-square&labelColor=0D0A1E">
   <img alt="PayPal sandbox only" src="https://img.shields.io/badge/PayPal-sandbox%20only-FF5533?style=flat-square&labelColor=0D0A1E">
   <img alt="pre-commit enforced" src="https://img.shields.io/badge/pre--commit-enforced-C8FF3D?style=flat-square&labelColor=0D0A1E">
   <a href="https://paypalaihackathon.devpost.com/"><img alt="PayPal AI Hackathon 2026" src="https://img.shields.io/badge/PayPal%20AI%20Hackathon-2026-6C4DFF?style=flat-square&labelColor=0D0A1E"></a>
@@ -34,18 +34,22 @@
 
 ## The problem
 
-Ama is a nurse in London, paying in stages for a house on a plot in Accra. The WhatsApp photos stop in month four. Fourteen months later the house is half-built and the money is gone, with no record of what was paid against what.
+Adaeze delegates a code milestone to Yard or a human developer. A green badge alone does not show whether signed tests were changed, skipped or too weak. Her payment needs a new commit, intact acceptance tests, a trustworthy run and the agreed budget and usage conditions. Buyer and builder identity does not change the decision.
 
-When the same corridor goes through the "official" pipes, the money is **held for weeks with no reason given**. Both are the same failure: **money moves without a reason attached.** Diaspora remittances to Africa are about $95–100B a year. The rails that move money exist. Nothing checks what the money bought once it lands.
+The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. Yard and the A2A/AP2 surface are planned, not shipped. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
+
+[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is a linked site-visit scenario, with its original research preserved in the [historical docs](docs/11-africa-payments-and-eyeonsite.md).
 
 ## What Stood does
 
 Stood is the **gate** a platform calls before a staged payment leaves.
 
-1. **Allowance:** the payer signs once, in PayPal, what "done" means for each milestone.
-2. **Hold:** when a milestone is ready, PayPal **authorises** the amount. It's held, not paid.
-3. **Evidence:** the platform sends a package: photos, files, recordings, coordinates, and a one-time code.
-4. **Decision:** deterministic rules decide, and AI only reports what it sees:
+Target financial flow; funding, trusted evidence intake and payment HTTP remain planned:
+
+1. **Allowance:** the buyer freezes signed acceptance tests, the operator/payee, repository, base commit and budget: a $4,000 cap and $1,200 build milestone.
+2. **Hold:** PayPal authorises a milestone amount before work is submitted. Stood holds no money.
+3. **Commit package:** the builder submits the exact commit, frozen test hashes and signed runner report.
+4. **Decision:** rules check intact tests, execution, new work, mutation quality, budget and the agreed outside usage signal. Missing proof means wait.
 
 <p align="center">
   <img src="docs/brand/logo/stamp-released.svg" alt="Released" height="48">
@@ -57,11 +61,11 @@ Stood is the **gate** a platform calls before a staged payment leaves.
 
 | Outcome | What happens to the money | What the payer reads |
 |---|---|---|
-| **Released** | PayPal **captures** the tranche | "Foundation released. £4,000 paid. Kojo stood on the plot at 10:42." |
-| **Refused** | PayPal **voids** the hold. Nothing leaves | "Wrong plot. 1.4 km off. Nothing was paid." |
-| **In review** | Still held. A person checks | "A person is checking these photos. £4,000 is still held, not paid." |
+| **Released** | Confirmed PayPal capture | "Milestone 2 released. $1,200 paid. The signed tests passed for this commit." |
+| **Refused** | Confirmed PayPal void | "Signed tests changed. Nothing was paid." |
+| **In review** | Hold remains unresolved | "The tests are too weak. $1,200 is held, not paid." |
 
-Every decision is written onto the PayPal order and leaves a **file** (receipt + dispute packet): who allowed it, what was captured, what the evidence showed.
+These are target confirmed-payment messages. A decision alone never claims money moved; pending or ambiguous submissions say payment is not confirmed. Receipts and dispute packets remain planned.
 
 ### Principles
 
@@ -77,7 +81,8 @@ One endpoint, many checklists ([S16](docs/stood/S16-use-cases-and-evidence-profi
 
 | Domain | "Done" means | Profile |
 |---|---|---|
-| Diaspora construction ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite), the first caller) | The stage is reached on this plot | `construction.stage@1` |
+| **Code milestones (lead)** | Signed tests intact, trustworthy execution, new commit and agreed budget/usage proof | `code.milestone@1` |
+| Site visits ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite), a scenario) | The stage is reached on this plot | `construction.stage@1` |
 | Freelance milestones | These screens and links were delivered, and they're not last week's files | `freelance.milestone@1` |
 | Insurance claims and lending draws | The field visit shows the damage, the stock or the shop | `claims.field_visit@1` |
 | Rentals and deposits | Return photos match checkout (inverted: a match returns the deposit) | `rental.return@1` |
@@ -87,7 +92,16 @@ One endpoint, many checklists ([S16](docs/stood/S16-use-cases-and-evidence-profi
 
 ## Quickstart
 
-**Judges and evaluators:** the 2-minute path (demo scenarios against the PayPal sandbox, no account needed) is at the top of the **[usage manual](docs/USAGE.md#for-hackathon-judges-try-it-in-2-minutes)**.
+**Judges and evaluators:** the 2-minute path (local synthetic scenarios, no money executed) is at the top of the **[usage manual](docs/USAGE.md#for-hackathon-judges-try-it-in-2-minutes)**.
+
+Default local judge fixture (synthetic evidence; no tests or payments execute):
+
+```bash
+docker compose up -d api
+curl -s -X POST http://localhost:3000/v1/demo/scenarios/signed-tests-changed
+```
+
+It refuses with namedField signed_tests_changed and says: “The signed tests were changed. Nothing was paid. No payment was executed.” code-good passes the assessment; weak-tests and usage-pending wait.
 
 **Integrators** (planned `@stood/sdk`, v1 draft contract):
 
@@ -109,7 +123,7 @@ Keys you need: `STOOD_API_KEY`, `STOOD_HMAC_SECRET` and `STOOD_WEBHOOK_SECRET` (
 
 ```mermaid
 flowchart LR
-  P[Platform<br/>e.g. EyeOnSite] -- allowance · dispatch · package --> API[stood-api<br/>rules + PayPal adapter]
+  P[Platform<br/>buyer or builder agent] -- allowance · dispatch · package --> API[stood-api<br/>rules + PayPal adapter]
   API -- webhooks + sentence --> P
   API -- authorise · capture · void --> PP[(PayPal sandbox)]
   API -- signed URLs --> AG[evidence agent<br/>vision findings only<br/>no PayPal keys]
@@ -122,7 +136,7 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 
 ## Built with
 
-**PayPal** at the centre (Orders v2 authorise / capture / void, Vault, Disputes, Transaction Search, Agent Toolkit MCP, the APIMatic-generated Server SDK), plus each hackathon partner given **one honest job** ([S13](docs/stood/S13-sponsor-integration.md)):
+**Planned integrations:** PayPal at the centre (Orders v2 authorise / capture / void, Vault, Disputes, Transaction Search, Agent Toolkit MCP, the APIMatic-generated Server SDK), plus planned partner jobs ([S13](docs/stood/S13-sponsor-integration.md)):
 
 | Partner | Job in Stood |
 |---|---|
@@ -137,7 +151,7 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 | Postman | Public workspace, fixtures, uptime monitors |
 | Zapier | Delivers the one-line reason by email / SMS / Slack |
 
-**Runs on free tiers:** Render · Neon Postgres · Cloudflare R2 · Cloudflare Workers AI (Llama 3.2 Vision, open weights) · GitHub Actions / Pages. Everything else is open source ([T09](docs/tech/T09-tech-stack.md), [T10](docs/tech/T10-deployment.md)).
+**Target free-tier deployment:** Render · Neon Postgres · Cloudflare R2 · Cloudflare Workers AI (Llama 3.2 Vision, open weights) · GitHub Actions / Pages. Everything else is open source ([T09](docs/tech/T09-tech-stack.md), [T10](docs/tech/T10-deployment.md)).
 
 ## Repository map
 
@@ -148,9 +162,9 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 ├─ docs/
 │  ├─ USAGE.md           Usage manual: keys, quickstart, webhooks, profiles
 │  ├─ WAYS_OF_WORKING.md TDD · DDD · OOP · GitFlow · pre-commit · Definition of Done
-│  ├─ stood/             Product specs S01–S16
+│  ├─ stood/             Product specs S01–S17
 │  ├─ tech/              Technical docs T01–T15
-│  ├─ adr/               Architecture decisions 0001–0007
+│  ├─ adr/               Architecture decisions
 │  ├─ brand/             Logo, app icons, social, verdict chips (Volt)
 │  └─ 01–13 *.md         Research, hackathon, PayPal landscape, judges, checklist
 ├─ TASKS.md              Append-only task ledger + ground rules + full backlog
@@ -158,7 +172,7 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 └─ .github/              CI, Pages, release-please, back-merge, templates, rulesets
 ```
 
-Planned product code (from 0.2.0): `apps/web`, `services/api`, `services/workflows`, `services/evidence-agent`, `openapi/`, `fixtures/` ([S14](docs/stood/S14-open-source-plan.md)).
+Implemented core: `services/api`. Planned additional services: `apps/web`, `services/api`, `services/workflows`, `services/evidence-agent`, `openapi/`, `fixtures/` ([S14](docs/stood/S14-open-source-plan.md)).
 
 ## Documentation
 
@@ -169,7 +183,7 @@ Planned product code (from 0.2.0): `apps/web`, `services/api`, `services/workflo
 | **Technical** | [T01 Requirements](docs/tech/T01-requirements.md) · [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) · [T05 Data](docs/tech/T05-data-model.md) · [T06 PayPal](docs/tech/T06-paypal-integration.md) · [T07 Evidence](docs/tech/T07-evidence-pipeline.md) · [T08 EyeOnSite](docs/tech/T08-eyeonsite-integration.md) · [T09 Stack](docs/tech/T09-tech-stack.md) · [T10 Deployment](docs/tech/T10-deployment.md) · [T11 Security](docs/tech/T11-security-privacy.md) · [T12 Testing](docs/tech/T12-testing-and-quality.md) · [T13 Runbooks](docs/tech/T13-observability-and-runbooks.md) · [T14 Milestones](docs/tech/T14-feature-breakdown-and-milestones.md) · [T15 Docker](docs/tech/T15-docker-and-local-dev.md) |
 | **Design** | [S15 Design system "Volt"](docs/stood/S15-design-system.md) · [Brand assets](docs/brand/) |
 | **Hackathon** | [Rules and prizes](docs/06-paypal-hackathon.md) · [Partner map](docs/stood/S13-sponsor-integration.md) · [Plan](docs/stood/S12-hackathon-plan.md) · [Demo script](docs/stood/S09-demo-script.md) · [Submission checklist](docs/13-submission-checklist.md) |
-| **Decisions** | [ADR 0001–0007](docs/adr/) · [Audit log](docs/audit-log.md) · [Sources](docs/sources.md) |
+| **Decisions** | [Architecture decisions](docs/adr/) · [Audit log](docs/audit-log.md) · [Sources](docs/sources.md) |
 | **Research** | [Docs index](docs/README.md) (agent economy, pyramid schemes, PayPal landscape, Africa payments) |
 
 ## Development
@@ -231,8 +245,8 @@ git push -u origin feature/42-hold-timers   # open a PR into develop
 
 | Version | Target | Scope |
 |---|---|---|
-| 0.1.0 | Oct 2026 | Docs, brand, landing page, quality gate (this release) |
-| 0.2.0 | 16 Oct | Refuse path end to end in sandbox: allowance, hold, rules, void, deployed |
+| 0.1.0 | Released | Docs, brand, landing page and quality gate |
+| 0.2.0 | Released 5 Oct | Tested domain, durable storage, guarded funded-hold adapter, signed DRAFT API and new landing page; money HTTP off |
 | 0.3.0 | 23 Oct | All three outcomes, evidence agent, receipts, webhooks, EyeOnSite wired |
 | 0.4.0 | 30 Oct | Reviewer file (AG Studio), Gantt, dispute packet, notifications |
 | 1.0.0 | 11 Nov | Hackathon submission: video, partner docs, final checklist |
@@ -245,8 +259,8 @@ Contributions are welcome. Read [CONTRIBUTING](CONTRIBUTING.md) and [Ways of wor
 
 We especially want to hear from:
 
-- people who've sent money home for a build,
-- inspectors, surveyors and builders in Ghana, Nigeria, Kenya or Uganda,
+- buyers and builders using code milestones,
+- agent operators and test-runner engineers,
 - freelancers and platforms with milestone payments,
 - payments, risk and compliance folks.
 

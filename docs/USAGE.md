@@ -1,7 +1,7 @@
 # Stood: usage manual
 
-> **Money does not move until someone stood there.**
-> An open-source release gate for staged payments, built on PayPal and AI.
+> **Agents pay agents. Only when the work stands.**
+> An open-source release gate for code milestones and staged payments, built on PayPal.
 
 | | |
 |---|---|
@@ -16,61 +16,83 @@
 
 ## What Stood does, in 20 seconds
 
-You run a platform where someone pays for work in **stages**: a house build, a freelance milestone, an insurance repair, a grant tranche. Stood sits between "the stage is done" and "the money moves":
+Your buyer or buying agent pays an operator for a code milestone against frozen signed acceptance tests and a budget mandate. Stood sits between "the stage is done" and "the money moves":
 
-1. **Allowance:** the payer signs, once, what "done" means for each milestone (via PayPal).
+1. **Allowance:** the buyer agrees frozen tests, repository, operator and budget once. Provider approval binding remains planned.
 2. **Hold:** when a milestone is ready, Stood asks PayPal to **authorise** (hold) the amount.
-3. **Package:** you send the evidence: photos, files, recordings, coordinates.
+3. **Commit package:** send the exact commit and authenticated test report; trusted runner ingestion remains planned.
 4. **Decision:** Stood's rules return **`RELEASE`** (PayPal capture), **`REFUSE`** (PayPal void, plus the named reason), or **`WAIT`** (a human reviews).
 5. **File:** every decision leaves a receipt and a dispute packet.
 
 Stood **never holds money**, never pays anyone locally, and never knows your industry. You choose an **evidence profile** (`construction.stage@1`, `freelance.milestone@1`, …).
 
+The lead product direction is now code milestones and agent-to-agent payments: **Agents pay agents. Only when the work stands.** `code.milestone@1` adds deterministic signed-test, integrity, execution, new-commit, mutation, mandate and usage findings. The profile is unit-tested; authentic runner/usage ingestion, Yard and A2A/AP2 remain planned. See [S17](stood/S17-agent-payments-positioning.md). A signed DRAFT is not a payer-approved mandate, and a synthetic passing finding is not actual execution evidence.
+
 ---
+
+## Code-milestone quickstart (local DRAFT)
+
+Create a signed local DRAFT using the bearer/HMAC conventions in [T04](tech/T04-api-spec.md). The request body is:
+
+```json
+{ "payee_ref": "yard-operator", "cap": { "minor": 400000, "currency": "USD" },
+  "milestones": [
+    { "name": "build", "amount": { "minor": 120000, "currency": "USD" },
+      "profile": "code.milestone@1",
+      "params": { "repository": "owner/repo", "base_commit": "full-commit-sha",
+                  "frozen_tests_manifest": "sha256-manifest", "usage_required": false } },
+    { "name": "usage release", "amount": { "minor": 280000, "currency": "USD" },
+      "profile": "code.milestone@1", "params": { "usage_required": true } }
+  ], "window_days": 7, "max_resubmits": 2 }
+```
+
+These params are draft metadata. This endpoint does not freeze/sign tests, validate a runner, approve a mandate or fund a hold. The future signed contract must replace the illustrative hashes with exact values and explicitly agree any usage exemption; a client flag cannot waive proof. The response is DRAFT with PENDING tranche IDs, no approval URL. Yard is planned.
 
 ## For hackathon judges: try it in 2 minutes
 
-**Current local implementation:** start `docker compose up -d api`. `POST http://localhost:3000/v1/demo/scenarios/wrong-plot` runs synthetic check results through the real rule and returns `payment.executed: false`. It does not authorise, capture or void. The hosted sandbox replay and SDK below are planned contracts, not shipped capabilities.
+The live landing page's four commit cards are illustrative. The local API now defaults to code-milestone fixtures, using synthetic findings through the real pure gate. No test runner or payment is executed.
 
-The local response includes assessment copy and structured evidence details:
+```bash
+docker compose up -d api
+BASE=http://localhost:3000/v1
+curl -s "$BASE/demo/scenarios"
+curl -s -X POST "$BASE/demo/scenarios/signed-tests-changed"
+curl -s -X POST "$BASE/demo/scenarios/code-good"
+```
+
+Changed-test response (excerpt):
 
 ```json
-{ "outcome": "REFUSE", "effect": "VOID", "namedField": "plot",
-  "ruleSetVersion": "1.1.0", "detail": { "distance_m": 1400 },
-  "sentence": "Wrong plot. 1.4 km off. No payment was executed.",
+{ "outcome": "REFUSE", "effect": "VOID", "namedField": "signed_tests_changed",
+  "profileId": "code.milestone@1", "ruleSetVersion": "1.1.0", "scenario": "code_milestone",
+  "sentence": "The signed tests were changed. Nothing was paid. No payment was executed.",
+  "sentences": {
+    "payer": "The signed tests were changed. Nothing was paid. No payment was executed.",
+    "builder": "Restore the frozen signed tests and submit a new commit. No payment was executed."
+  },
   "evidenceTier": "fixture", "source": "synthetic_check_results",
   "payment": { "executed": false } }
 ```
 
-This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. Local scenarios: `good`, `wrong-plot`, `recycled`, `wrong-stage`, `substituted-fitting`, `nonce-unreadable`, `mock-location`, `freelance-missing-screen`, `funding-declined` and `hold-expiry`. The last two return `state: WAIT_FUNDING | EXPIRED`, `outcome: WAIT` and `source: synthetic_domain_transitions`. Expiry uses simulated provider proof; its fixture settlement reference is not a PayPal ID.
+The full response also includes checks, reason, detail and a compatibility inspector sentence. It has no paypal block. RELEASE is assessment eligibility, not a confirmed RELEASED settlement.
 
-The local response also exposes `sentences.payer` and `sentences.inspector`, each ending with "No payment was executed." Missing-item copy names the item. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
+| Default fixture | Assessment | Reason / next action |
+|---|---|---|
+| code-good | RELEASE | Synthetic findings pass, no capture |
+| signed-tests-changed | REFUSE | Restore the frozen signed tests |
+| tests-skipped | REFUSE | Run every required test |
+| weak-tests | WAIT | Human review of weak mutation quality |
+| usage-pending | WAIT | Independent usage receipt and buyer acceptance missing |
 
-**Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, payment-confirmed sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
+Both WAIT responses keep namedField null and expose weak_tests / usage_pending in reason, preserving the existing decision contract. Money copy is conservative: this fixture knows no call was made; ordinary assessments never claim payment or successful cancellation. A future final usage milestone cannot release without trusted outside proof and the agreed buyer acceptance.
 
-```bash
-BASE=https://stood-api.onrender.com/v1
+### Scenario: site visits (secondary synthetic fixtures)
 
-# 1. Wake the free-tier demo (first call can take ~1 minute)
-curl -s $BASE/../health
+Existing good, wrong-plot, recycled, wrong-stage, substituted-fitting, nonce-unreadable, mock-location, funding-declined and hold-expiry remain reachable at the same fixture paths and return scenario: site_visit. The secondary freelance-missing-screen fixture returns scenario: freelance. They are not the default judge path. Site-visit wrong-plot retains the 1.4 km detail and separate payer/inspector instructions. Location/geofence tests remain valid generic checks.
 
-# 2. Run a scenario: good | wrong-plot | recycled | wrong-stage | substituted-fitting | freelance-missing-screen
-curl -s -X POST $BASE/demo/scenarios/wrong-plot | jq '{outcome, named_field, sentence, paypal}'
-```
+Funding-declined and hold-expiry simulate domain transitions: outcome WAIT, states WAIT_FUNDING/EXPIRED and source synthetic_domain_transitions. Expiry requires simulated matched provider proof, not elapsed time alone. No reference is a real PayPal ID.
 
-Planned response (not yet implemented):
-
-```json
-{ "outcome": "REFUSE", "named_field": "plot",
-  "sentence": "Wrong plot. 1.4 km off. Nothing was paid.",
-  "paypal": { "order_id": "…", "authorization_id": "…", "status": "VOIDED" } }
-```
-
-- Watch it in the browser: the landing page's "Try the gate" section, and the receipt link returned by each scenario.
-- Replay as the payer (Kernel drives the PayPal sandbox approval live): `POST $BASE/demo/approve`. It returns a live-view URL.
-- Postman: the public "Stood × PayPal" workspace has every scenario pre-built.
-
-The domain and signed draft API permit GBP/USD/EUR holds and validate the exact sum of milestones against the cap. Allowance signing and financial HTTP workflows below remain planned. The tested funded-hold adapter records possible submission atomically before SDK calls and checks the five-minute capture margin again immediately before submission. It is not enabled for HTTP payment execution.
+Hosted provider replay, approval browser automation, receipts and Postman workspace remain planned; no hosted URL or provider confirmation is claimed here. Allowances/tranches accept GBP/USD/EUR with exact totals. The guarded funded-hold adapter is tested with fake/synthetic provider evidence and rechecks the five-minute expiry margin before calling; financial HTTP remains off.
 
 ---
 
@@ -145,12 +167,12 @@ cp .env.example .env            # fill the sandbox values above
 docker compose up -d db s3 mail
 docker compose run --rm app pnpm install
 docker compose run --rm app pnpm db:migrate
-docker compose up api web       # API on :3000, web on :5173
+docker compose up -d api        # local API on :3000; product web app is planned
 ```
 
 ---
 
-## Quickstart (TypeScript SDK)
+## Scenario: site visits (planned TypeScript SDK)
 
 ```ts
 import { Stood } from '@stood/sdk';
@@ -202,7 +224,7 @@ const t = await stood.tranches.get(held.id); // t.state: RELEASED | REFUSED | WA
 ### Freelance example (same endpoint, different profile)
 
 ```ts
-{ name: 'homepage', amount: { minor: 120000, currency: 'EUR' },
+{ name: 'homepage', amount: { minor: 120000, currency: 'USD' },
   profile: 'freelance.milestone@1',
   params: { required_items: ['screen_home', 'screen_pricing', 'screen_contact', 'figma_link'],
             artifact_hash: { must_differ_from: 'previous_deliveries' } } }
@@ -210,7 +232,7 @@ const t = await stood.tranches.get(held.id); // t.state: RELEASED | REFUSED | WA
 
 ---
 
-## Webhooks you'll receive
+## Webhooks you'll receive (planned)
 
 Register one HTTPS URL. Every event is signed: `Stood-Signature: t=<unix>,v1=<hex hmac_sha256(secret, t + "." + body)>`.
 
@@ -263,6 +285,7 @@ Every event includes `sentence.payer` and `sentence.inspector`, plain-language t
 
 | Profile | Use it for | Key params |
 |---|---|---|
+| `code.milestone@1` | Code milestones (lead) | Frozen tests, commit, runner report, mutation, mandate and outside usage; ingestion planned |
 | `construction.stage@1` | Build stages verified on site | `location`, `required_items`, stage label |
 | `freelance.milestone@1` | Digital deliverables | `required_items`, `artifact_hash`, `link_check` |
 | `claims.field_visit@1` | Insurance / lending field visits | `location`, `pair_match` (before / after) |
@@ -274,7 +297,7 @@ Need another? Open a **Feature or use case** issue. Profiles are compositions of
 
 ---
 
-## Other ways to plug in
+## Other ways to plug in (planned)
 
 | Path | How |
 |---|---|
@@ -285,7 +308,7 @@ Need another? Open a **Feature or use case** issue. Profiles are compositions of
 
 ---
 
-## Limits and guarantees
+## Target limits and guarantees (financial API planned)
 
 | | |
 |---|---|

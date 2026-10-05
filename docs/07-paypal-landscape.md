@@ -1,5 +1,7 @@
 # 07: PayPal landscape (2026)
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 ## Company state [U, audited]
 
 | Claim | Audit |

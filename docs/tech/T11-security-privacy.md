@@ -1,5 +1,17 @@
 # T11: Security, privacy and threat model
 
+## Highest-priority threat: executing builder code
+
+A builder controls repository files, test hooks, dependencies and output. Treat execution as hostile even when the buyer or builder is an agent. The API, payment adapter and signing service must never load or execute submitted code. A normal container alone is not qualified isolation.
+
+Planned runner controls: deny all network ingress/egress including DNS, metadata and host services; no payment, platform, repository, DB or signing credentials; non-root process, read-only verified inputs/root filesystem, bounded temporary disk; hard CPU/memory/wall-time/process/output limits; no host sockets/mounts/devices or privileged capability. Separate trusted pre-fetch supervisor and host-bound report signer. Destroy each sandbox after one job.
+
+Pin source and dependency digests and enumerate frozen test identities independently. Reject edits/deletions, skips/.only, empty assertions, renamed old diffs and dependency smuggling. Repository prompt injection is data, never authority for reviewing agents or tool calls. Verify runner signatures and package/commit binding outside the builder process. Missing proof, timeout, escape signal or incomplete output means WAIT with an owned alert.
+
+Sandbox technology is undecided. A separate ADR must compare isolation, cost and escape/resource tests before implementation (T-0164); no paid GPU/provider is approved here. Yard and the runner are planned. Test egress to metadata/DNS/host, fork/memory/disk bombs, archive traversal, signer theft and cross-job leakage before shipping.
+
+Code artifacts may contain private source/secrets: private object storage, least-privilege tenant access, redaction and explicit retention/deletion policy are required before real customer repositories. Public receipts expose only agreed commit/report identifiers, never source URLs or logs. Field-photo privacy below is scenario-specific.
+
 Evidence attacks (GPS spoofing, recycled photos, collusion, prompt injection) are covered in [S11](../stood/S11-evidence-integrity.md). This page covers the **system**.
 
 ## Assets
@@ -47,7 +59,7 @@ Additional money-specific controls:
 
 See [T10 §Secrets](T10-deployment.md#secrets-and-config) and [WoW §11](../WAYS_OF_WORKING.md#11-security-and-secrets-open-source-edition). gitleaks runs at pre-commit and in CI.
 
-T-0135 makes guided key onboarding a prerequisite for the PayPal client. Secret prompts must hide input; local setup writes only to git-ignored `.env` with restricted access and never prints credentials or OAuth tokens. Hosted platform keys are shown once and support rotation. Readiness/error responses may list missing variable names and setup guidance, never values or provider response bodies. Missing credentials disable payments without crashing; the sandbox-only boot guard still rejects other environments. This is a required design, not implemented onboarding.
+T-0135 makes guided key onboarding a prerequisite for the PayPal client. Secret prompts must hide input; local setup writes only to git-ignored `.env` with restricted access and never prints credentials or OAuth tokens. Hosted platform keys are shown once and support rotation. Readiness/error responses may list missing variable names and setup guidance, never values or provider response bodies. Missing credentials disable payments without crashing; the sandbox-only boot guard still rejects other environments. Local hidden setup/readiness is unit-tested; hosted issuance/rotation remains planned.
 
 ## Supply chain
 

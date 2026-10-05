@@ -18,7 +18,7 @@ stood/
 ├─ openapi/stood.yaml         ← Stood's API (source for the APIMatic SDK / portal / MCP)
 ├─ apps/
 │  ├─ web/                    ← Allowance, Decision, Receipt, Dispute, Reviewer (AG Studio), Gantt (Bryntum)
-│  └─ capture/                ← Kojo's PWA (offline queue, nonce, in-app camera)
+│  └─ capture/                ← the field inspector’s PWA (offline queue, nonce, in-app camera)
 ├─ services/
 │  ├─ api/                    ← the gate (Render)
 │  ├─ workflows/              ← Render Workflows: dispatch→authorise→checks→capture|void|wait
@@ -26,7 +26,7 @@ stood/
 │  ├─ evidence-index/         ← Elastic mappings + seeding scripts
 │  └─ approver/               ← Kernel: headless PayPal sandbox buyer approval
 ├─ zaps/                      ← exported Zap definitions + message templates (Zapier)
-├─ fixtures/                  ← good / wrong-plot / recycled / wrong-stage / substituted-fitting
+├─ fixtures/                  ← code-good / signed-tests-changed / tests-skipped / weak-tests / usage-pending; field scenarios separate
 ├─ postman/                   ← public collection to replay every outcome
 └─ docs/
    ├─ (these research and product docs)

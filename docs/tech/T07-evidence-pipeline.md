@@ -1,5 +1,21 @@
 # T07: Evidence pipeline
 
+## Code evidence pipeline (planned)
+
+1. Authenticate tenant/package, freeze exact allowance version and enqueue durably; renewal-pending evidence must wait in storage, not be dropped.
+2. Fetch exact base/new commits through the GitHub read-only supervisor; verify archive paths/sizes and dependency digests. Builder code never runs in the API.
+3. Recompute acceptance-test hashes and identities against the signed manifest; reject edits, deletions, skips/selective execution and replayed canonical diffs.
+4. Mount sealed inputs into the qualified no-network/no-secret sandbox; enforce CPU/memory/time/process/disk/output caps and required test enumeration.
+5. Run the agreed mutation scope; incomplete, unsigned or weak results mean WAIT. Signing occurs outside builder control.
+6. Verify report signature and exact package/commit/manifest binding; verify mandate/operator/budget and independent outside usage receipt where required.
+7. Derive RULE findings and call the pure gate. Persist aggregate and reserved payment operation atomically; only the guarded qualified executor may submit. Confirm/reconcile before publishing settlement copy.
+
+The profile is implemented; runner, fetch, signature verification and usage ingestion are planned. Repository instructions are untrusted data, including prompt injection aimed at any reviewing agent. A model summary cannot replace execution proof.
+
+## Scenario: site visits
+
+The remaining photo pipeline is the EyeOnSite scenario, not the lead code demo. Its adapters/model evaluation are plans unless separately qualified.
+
 Goal: turn a package into **check results + findings** that the pure decision rule ([T03](T03-domain-model.md#decision-rule-pure-function)) can use. Threats: [S11](../stood/S11-evidence-integrity.md).
 
 ## Pipeline (one Render Workflow run per package)

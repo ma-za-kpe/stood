@@ -1,5 +1,25 @@
 # T04: API specification (v1)
 
+## Code-milestone example (implemented local DRAFT)
+
+The lead example uses the actual DRAFT fields; bearer/HMAC and idempotency conventions below apply.
+
+```json
+{ "payee_ref": "yard-operator", "cap": { "minor": 400000, "currency": "USD" },
+  "milestones": [
+    { "name": "build", "amount": { "minor": 120000, "currency": "USD" },
+      "profile": "code.milestone@1",
+      "params": { "repository": "owner/repo", "base_commit": "full-sha",
+                  "frozen_tests_manifest": "sha256-manifest", "usage_required": false } },
+    { "name": "usage release", "amount": { "minor": 280000, "currency": "USD" },
+      "profile": "code.milestone@1", "params": { "usage_required": true } }
+  ], "window_days": 7, "max_resubmits": 2 }
+```
+
+Response: DRAFT and PENDING tranche IDs, no approval URL. Params are unverified metadata, not a signed test contract or permission to omit usage proof. Yard is planned. Financial API contracts below are targets; the second allowance/package example is the EyeOnSite scenario.
+
+Future commit packages bind repository/base/new SHA, frozen manifest and authenticated runner/usage reports. Raw client check results cannot authorise capture. Demo fixtures are synthetic and execute no payments.
+
 The planned **OpenAPI 3.1** document will be the source of truth (`openapi/stood.yaml`, generated from Zod route schemas under T-0053; neither is implemented yet). APIMatic generates the TypeScript SDK, docs portal and MCP server from it ([S13](../stood/S13-sponsor-integration.md)). This page is the human summary.
 
 ## Implemented local subset (T-0028, partial)
@@ -31,7 +51,7 @@ The synthetic demo endpoints remain distinct and public when DEMO_MODE is on. Th
 | GET | `/allowances/{id}` | Allowance + stage / tranche states | — |
 | POST | `/allowances/{id}/versions` | Propose changes. Needs a new signature | FR-03 |
 
-`POST /allowances`, request (abridged):
+**Scenario: site visits**, planned `POST /allowances` request (abridged):
 
 ```json
 {
@@ -92,12 +112,16 @@ Reviewer endpoints use **reviewer session auth** (GitHub OAuth via Better Auth),
 
 ### Demo (hackathon only, behind a `DEMO_MODE` flag)
 
+Local code fixtures are synthetic. Hosted provider replay remains planned.
+
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/demo/scenarios/{name}` | Run a fixture end to end: `good`, `wrong-plot`, `recycled`, `wrong-stage`, `substituted-fitting` |
+| POST | `/demo/scenarios/{name}` | Default code fixtures: `code-good`, `signed-tests-changed`, `tests-skipped`, `weak-tests`, `usage-pending` (T-0169); field fixtures are site-visit scenarios |
 | POST | `/demo/approve` | Kernel drives the sandbox buyer approval (live view URL returned) |
 
 ## Webhooks out
+
+Planned contract; the JSON below is a site-visit scenario example.
 
 `POST <platform webhook url>`, headers `Stood-Event-Id`, `Stood-Signature` (same HMAC scheme), `Stood-Event-Type`. At-least-once, exponential backoff for 24h, then dead-letter visible in the reviewer file.
 

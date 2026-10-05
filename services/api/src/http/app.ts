@@ -16,7 +16,41 @@ export type AppConfig = Readonly<{
   api?: PlatformApiConfig;
 }>;
 
-const scenarios: Readonly<Record<string, { profileId: string; changed?: CheckResult }>> = Object.freeze({
+type Scenario = Readonly<{ profileId: string; changed?: CheckResult }>;
+const codeScenarios: Readonly<Record<string, Scenario>> = Object.freeze({
+  'code-good': { profileId: 'code.milestone@1' },
+  'signed-tests-changed': {
+    profileId: 'code.milestone@1',
+    changed: {
+      code: 'test_integrity',
+      source: 'RULE',
+      status: 'FAIL',
+      namedField: 'signed_tests_changed',
+      reason: 'signed_tests_changed',
+    },
+  },
+  'tests-skipped': {
+    profileId: 'code.milestone@1',
+    changed: {
+      code: 'test_execution',
+      source: 'RULE',
+      status: 'FAIL',
+      namedField: 'tests_skipped',
+      reason: 'tests_skipped',
+    },
+  },
+  'weak-tests': {
+    profileId: 'code.milestone@1',
+    changed: { code: 'mutation_score', source: 'RULE', status: 'FAIL', namedField: 'weak_tests', reason: 'weak_tests' },
+  },
+  'usage-pending': {
+    profileId: 'code.milestone@1',
+    changed: { code: 'usage_release', source: 'RULE', status: 'UNCERTAIN', reason: 'usage_pending' },
+  },
+});
+
+// Site-visit scenarios (and the secondary freelance fixture), retained for compatibility.
+const siteVisitScenarios: Readonly<Record<string, Scenario>> = Object.freeze({
   good: { profileId: 'construction.stage@1' },
   'substituted-fitting': {
     profileId: 'construction.stage@1',
@@ -130,6 +164,20 @@ export function createApp(config: AppConfig): Hono {
     await next();
   });
   if (config.demoMode) {
+    app.get('/v1/demo/scenarios', (c) =>
+      c.json({
+        default: 'signed-tests-changed',
+        code: Object.keys(codeScenarios),
+        site_visit: [
+          ...Object.keys(siteVisitScenarios).filter((name) => name !== 'freelance-missing-screen'),
+          'funding-declined',
+          'hold-expiry',
+        ],
+        freelance: ['freelance-missing-screen'],
+        evidenceTier: 'fixture',
+        payment: { executed: false },
+      }),
+    );
     app.post('/v1/demo/scenarios/:name', (c) => {
       const name = c.req.param('name');
       if (name === 'funding-declined' || name === 'hold-expiry') {
@@ -154,6 +202,7 @@ export function createApp(config: AppConfig): Hono {
           inspector: `${copy.inspector} No payment was executed.`,
         };
         return c.json({
+          scenario: 'site_visit',
           outcome: 'WAIT',
           effect: 'NONE',
           namedField: name === 'funding-declined' ? 'funding' : 'expired',
@@ -166,7 +215,12 @@ export function createApp(config: AppConfig): Hono {
           payment: { executed: false },
         });
       }
-      const scenario = Object.hasOwn(scenarios, name) ? scenarios[name] : undefined;
+      const codeScenario = Object.hasOwn(codeScenarios, name);
+      const scenario = codeScenario
+        ? codeScenarios[name]
+        : Object.hasOwn(siteVisitScenarios, name)
+          ? siteVisitScenarios[name]
+          : undefined;
       if (!scenario) {
         return c.newResponse(
           JSON.stringify({ type: 'urn:stood:problem:not_found', title: 'Unknown scenario', status: 404 }),
@@ -186,12 +240,20 @@ export function createApp(config: AppConfig): Hono {
       );
       const decision = decide(scenario.profileId, checks);
       const copy = recipientAssessment(decision);
+      // Only this synthetic endpoint knows no provider call was made. Assessment copy alone cannot say this.
+      const money = codeScenario && decision.outcome === 'REFUSE' ? ' Nothing was paid.' : '';
       return c.json({
         ...decision,
-        sentence: `${assessmentSentence(decision)} No payment was executed.`,
+        scenario: codeScenario
+          ? 'code_milestone'
+          : scenario.profileId === 'freelance.milestone@1'
+            ? 'freelance'
+            : 'site_visit',
+        sentence: `${assessmentSentence(decision)}${money} No payment was executed.`,
         sentences: {
-          payer: `${copy.payer} No payment was executed.`,
+          payer: `${copy.payer}${money} No payment was executed.`,
           inspector: `${copy.inspector} No payment was executed.`,
+          ...(codeScenario ? { builder: `${copy.inspector} No payment was executed.` } : {}),
         },
         checks,
         evidenceTier: 'fixture',

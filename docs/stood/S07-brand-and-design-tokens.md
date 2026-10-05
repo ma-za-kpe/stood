@@ -17,13 +17,13 @@
 | | |
 |---|---|
 | **Name** | Stood |
-| **Line** | Money does not move until someone stood there. |
+| **Line** | Agents pay agents. Only when the work stands. |
 | **Short line** [C] | Paid on proof. |
 | **Personality** | A careful site clerk: plain, exact, unhurried, never accusing |
 | **Is** | A report, a stamp, a ledger line |
 | **Is not** | A wallet, a marketplace, a chatbot, a "fintech" |
 
-> **Naming note [C]:** "Stood" is a common English word. Trademark and domain availability **haven't been checked** (see [S10](S10-sandbox-limits-and-open-questions.md)). In Ghanaian and Nigerian English "stood" reads naturally ("someone stood there"). Test it with Ama-type users before committing.
+> **Naming note [C]:** "Stood" is a common English word. Trademark and domain availability **haven't been checked** (see [S10](S10-sandbox-limits-and-open-questions.md)). In Ghanaian and Nigerian English "stood" reads naturally (the original field-visit phrase). Test it with buyers before committing.
 
 ## Colour [U, plus Claude's audit]
 
@@ -59,7 +59,7 @@ Rules [U]: money is ink. Failure is red. No second green for money.
 
 ### Dark theme [C, optional; the inspector app stays light]
 
-Kojo works in sunlight, so his screens are **light only**. Ama's receipt and the reviewer file can follow the system theme:
+the site-visit inspector works in sunlight, so his screens are **light only**. the buyer’s receipt and the reviewer file can follow the system theme:
 
 | Token | Dark hex | Ratio on `#161513` |
 |---|---|---|
@@ -79,8 +79,8 @@ Kojo works in sunlight, so his screens are **light only**. Ama's receipt and the
 | File, ids, metadata | Source Sans 3 | 14 | `font-variant-numeric: tabular-nums` on every amount |
 
 - No Inter, no Space Grotesk.
-- [C] Both are free Google Fonts. On **Kojo's phone, use the system sans fallback** (Roboto on Android) and don't download web fonts: it saves data and time-to-first-screen on patchy signal.
-- [C] Kojo's minimum body size is 16px, not 14. The 14px level is for the reviewer file only.
+- [C] Both are free Google Fonts. On **the site-visit inspector’s phone, use the system sans fallback** (Roboto on Android) and don't download web fonts: it saves data and time-to-first-screen on patchy signal.
+- [C] the site-visit inspector’s minimum body size is 16px, not 14. The 14px level is for the reviewer file only.
 - [C] Line height: 1.2 for the decision, 1.45 for body.
 
 ## Spacing and layout [C]
@@ -89,7 +89,7 @@ Kojo works in sunlight, so his screens are **light only**. Ama's receipt and the
 - Page gutter 16px on mobile, 32px on desktop. Max reading width 640px. The reviewer file can go to 1200px.
 - Corner radius: **0 for photos** (evidence is uncropped and unrounded), 2px for controls. Stamps are drawn shapes, not rounded pills.
 - No shadows. Separate things with `--rule` lines, like a printed form.
-- Touch targets ≥ 48px (Kojo, gloves, sun).
+- Touch targets ≥ 48px (the site-visit inspector, gloves, sun).
 
 ## Logo [U]
 

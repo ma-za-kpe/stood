@@ -1,5 +1,26 @@
 # S09: Demo script (target 90s, hard cap under 3:00)
 
+## Current code-milestone lead (5 October 2026)
+
+The lead line is **Agents pay agents. Only when the work stands.** Show Adaeze's frozen signed tests and budget, the held milestone, then four commits: passing tests, an edited test file, skipped tests and weak tests. Switch human/agent buyer and builder labels; the verdict stays the same. Finish with the independent usage-release condition and the readable payment record. EyeOnSite is the secondary site-visit scenario.
+
+Today the landing card is illustrative and the rule profile has synthetic unit evidence. Label that clearly. Yard, A2A/AP2, authentic runner ingestion and HTTP payment execution are not shipped. Do not call the card a real PayPal capture or signed runner execution. For a future qualified recording, show actual runner signatures, exact commit/test hashes, outside usage proof and actual sandbox order/settlement IDs. [S17](S17-agent-payments-positioning.md) defines the boundary.
+
+## Six beats (planned qualified recording)
+
+| Beat | What to show | Evidence gate |
+|---|---|---|
+| 1. Sign once | Adaeze freezes signed tests, operator and $4,000 cap | First human touch; real approval linked to exact contract |
+| 2. A2A hire | Her buying agent hires Yard for the $1,200 milestone | A2A/Yard planned; labelled storyboard until qualified |
+| 3. Capture | New commit, intact tests and signed run pass | Actual sandbox CAPTURE reference, never the illustrative landing badge |
+| 4. Edited test refused | A changed frozen test is named | Actual confirmed VOID for the refused hold; no payment claim before confirmation |
+| 5. Test-agent subcontract | Yard buys a bounded $40 test task | Planned separate operator, mandate and receipt; no circular demand claim |
+| 6. Human usage release | Adaeze accepts the independent outside usage evidence | Second human touch; final release requires its own confirmed settlement |
+
+Two human touches are the target: sign once and final usage acceptance. Provider-required extra approvals must be shown honestly. Today only the landing examples and synthetic rule tests exist; do not record this storyboard as shipped.
+
+## Earlier site-visit demo (retained scenario, not a shipping claim)
+
 **The video is a document, not an afterthought.** [U] There's a $5K **Best Demo Delivery** prize, and Presentation is one of the five judging criteria.
 
 **Title [U]:** *The next payment does not leave until someone stood there.*

@@ -1,5 +1,7 @@
 # ADR-0002: Trunk-based flow with release-please
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](../stood/S17-agent-payments-positioning.md).
+
 - **Status:** superseded by [ADR-0006](0006-open-source-branching-strategy.md) (GitFlow)
 - **Date:** 2026-10-03
 

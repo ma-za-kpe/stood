@@ -1,5 +1,7 @@
 # 04: External income sources
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 **Rule [U]:** treat every external source as a **switch you can turn off**. Internal health is only what agents still pay each other for once the switch is off.
 
 ## The stock market as outside money [U]

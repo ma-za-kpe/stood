@@ -1,15 +1,22 @@
-# S16: Use cases beyond housing, and evidence profiles
+# S16: Code milestones and scenario evidence profiles
+
+## Code profile parameters and evidence
+
+Freeze repository, base commit, acceptance manifest/test hashes and identities, allowed paths/dependencies, runner signing key/image, mutation threshold/scope, operator/payee and mandate cap. Usage-required milestones name an independent outside authority and receipt policy. A no-usage exemption must be explicit in the signed contract.
+
+All seven code findings are RULE-sourced: signed_tests, test_integrity, test_execution, new_commit, mutation_score, budget_mandate and usage_release. Weak mutation and missing usage stay WAIT; authenticated definite integrity/execution/budget failure can refuse. The current profile consumes synthetic findings only, not submitted repository code. Parameter schemas, signatures, runner and usage proof ingestion are planned.
 
 > **Stood isn't a housing product. It's a rule:** a signed definition of done + a package of evidence → a PayPal capture **only if they match**. [U]
 > **If a use case needs Stood to understand houses, it has already failed.** [U]
 
-[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is the first caller because its proof is a person on a plot. Every other caller below is **a different checklist on the same endpoint**.
+Code milestones lead; Yard and authentic runner ingestion remain planned. [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is a site-visit scenario. Every other caller below is **a different checklist on the same endpoint**.
 
 ## 1. Where the same gate applies
 
 | Domain | Payer → payee | "Done" means | Evidence | Who calls Stood | Notes [C] |
 |---|---|---|---|---|---|
-| **Diaspora construction** | Ama (London) → builder (Accra) | Stage reached on this plot | Geo-photos, code card, stage label | [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) | The first profile ([T08](../tech/T08-eyeonsite-integration.md)) |
+| **Code milestones (lead)** | Buyer / buying agent → builder operator | Frozen tests, new commit and budget/usage proof | Signed report, exact commit and outside receipt | Platform; Yard/A2A planned | Trusted ingestion is queued |
+| **Scenario: site visits** | Field buyer → builder | Stage reached on this plot | Geo-photos, code card, stage label | [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) | A scenario profile ([T08](../tech/T08-eyeonsite-integration.md)) |
 | **Freelance milestones** [U] | Client (Berlin) → designer (Nairobi) | "Homepage, these 3 screens, the Figma link, not a previous delivery" | Files + hashes, a short screen recording, link check | Freelance platform / agency tool | The strongest second demo: fully digital, global, judges understand it in 5s. Upwork holds milestone funds in its own escrow and handles disputes itself. A PayPal-based platform has no evidence-bound payout. **Stood is that reason** |
 | **Insurance claims** [U] | Insurer → claimant / repairer | Damage exists / repair done | Field-visit photos, geofence, before / after pair | Claims platform, inspection network | WeGoLook does US field visits for insurers. The payee side is often local rails |
 | **Lending draws** [U] | Lender / diaspora mortgage → borrower | Stock in the warehouse, the shop exists, the asset is installed | Site visit, serial-number photo, invoice match | Lender back-office | Results-based draws. Reduces "ghost business" fraud |
@@ -59,6 +66,7 @@ The **decision rule doesn't change**: hard failure → REFUSE (named field). Unc
 
 | Profile id | Checks |
 |---|---|
+| `code.milestone@1` | signed_tests, test_integrity, test_execution, new_commit, mutation_score (WAIT on weak tests), budget_mandate, usage_release. Rule contract implemented; trusted signature/runner/use ingestion remains T-0159 |
 | `construction.stage@1` | required_items, location, capture_window, novelty, nonce, classifier_label(stage), attestation(optional) |
 | `freelance.milestone@1` | required_items(files / screens), artifact_hash(differs), link_check, classifier_label("screens present", WAIT-only), novelty(recording) |
 | `claims.field_visit@1` | required_items, location, capture_window, novelty, pair_match(before / after), human_review(if amount > X) |
@@ -84,11 +92,11 @@ Deposits flip the meaning: the "good" outcome is **void**. The profile declares 
 ## 5. What this changes in the technical docs
 
 - **T03:** `Plot` becomes an optional `location` check. `requiredShots` becomes `required_items`. `Stage` becomes `Milestone` (with `stage` kept as a construction-profile label). `Allowance.milestones[].profile = "<id>@<version>"`.
-- **T04:** `POST /allowances` takes `milestones[].profile` + `params`. `plot` moves under `params.location`. The v1 API is still pre-release, so this lands before 0.2.0 without a breaking-change cost.
+- **T04:** `POST /allowances` takes `milestones[].profile` + `params`. `plot` moves under `params.location`. The v1 API is still pre-release, so this lands through an explicitly versioned future contract.
 - **The decision record** stores the profile id and version (determinism across callers).
 - [ADR-0007](../adr/0007-domain-agnostic-evidence-profiles.md) records the decision.
 
 ## 6. Hackathon implication [C]
 
-- **Keep construction via EyeOnSite as the hero story.** It has a real app, a real device, real footage and the strongest emotion.
-- **Show freelance as the second profile** on the landing page and as a fixture (`freelance-missing-screen`). That proves "one endpoint, many checklists" to the judges in 10 seconds, and it maps to Best Use of Agentic Commerce through the MCP path.
+- **Updated 5 October 2026:** code milestones and agent-to-agent payments are the hero story (PR #24). EyeOnSite remains a concrete site-visit scenario; the former construction-first choice is retained here as historical context. [S17](S17-agent-payments-positioning.md) defines the new trust boundary.
+- **Keep freelance as a secondary profile** in fixture coverage and as a fixture (`freelance-missing-screen`). That proves "one endpoint, many checklists" to the judges in 10 seconds, and it maps to Best Use of Agentic Commerce through the MCP path.

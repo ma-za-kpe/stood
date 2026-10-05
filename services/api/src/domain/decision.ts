@@ -51,6 +51,20 @@ const profile = (
   });
 
 const profiles: Readonly<Record<string, EvidenceProfile>> = Object.freeze({
+  'code.milestone@1': profile(
+    'code.milestone@1',
+    [
+      ['signed_tests', true, 'RULE', null],
+      ['test_integrity', true, 'RULE', null],
+      ['test_execution', true, 'RULE', null],
+      ['new_commit', true, 'RULE', null],
+      ['mutation_score', false, 'RULE', null],
+      ['budget_mandate', true, 'RULE', null],
+      ['usage_release', false, 'RULE', null],
+    ],
+    'CAPTURE',
+    'VOID',
+  ),
   'construction.stage@1': profile(
     'construction.stage@1',
     [

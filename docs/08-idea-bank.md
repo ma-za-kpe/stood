@@ -1,5 +1,7 @@
 # 08: Idea bank
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](stood/S17-agent-payments-positioning.md).
+
 Every idea generated so far, kept so nothing is lost. **The selected direction is Stood ([09](09-stood.md)).** Scores are Claude's judgement against the hackathon criteria ([06](06-paypal-hackathon.md)) and real-world adoption.
 
 Legend: **Fit** = hackathon fit, **Adopt** = chance of real adoption after November, **Crowd** = how likely other entrants are building it. Ratings run 1 (low) to 5 (high), except Crowd, where 5 means crowded.

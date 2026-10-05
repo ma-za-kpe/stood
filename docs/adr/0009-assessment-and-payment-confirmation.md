@@ -1,5 +1,7 @@
 # ADR-0009: Separate assessment, payment effect and confirmation
 
+> Historical framing (before the 5 Oct 2026 repositioning). See [S17](../stood/S17-agent-payments-positioning.md).
+
 - **Status:** accepted
 - **Date:** 2026-10-03
 

@@ -24,6 +24,7 @@ describe('API bootstrap and fixture preview', () => {
     const app = createApp({ appEnv: 'local', paypalBaseUrl: 'https://api-m.sandbox.paypal.com', demoMode: false });
     expect((await app.request('/v1/demo/scenarios/good', { method: 'POST' })).status).toBe(404);
   });
+  // Secondary site-visit scenarios; the primary code demo has its own regression suite.
   it.each([
     ['good', 'RELEASE'],
     ['wrong-plot', 'REFUSE'],

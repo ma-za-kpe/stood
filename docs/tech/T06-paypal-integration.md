@@ -55,11 +55,11 @@ The domain now reserves REAUTHORIZE_PENDING with its own effect/key/result types
 
 | Failure | Handling |
 |---|---|
-| Timeout / 5xx (ambiguous outcome) | Retry with the **same** `PayPal-Request-Id` (PayPal idempotency), up to 3 times with backoff. Keep the pending reservation for reconciliation; surface an operational system wait, without permitting a competing payment |
+| Timeout / 5xx (ambiguous outcome) | No automatic SDK retries. Keep the same persisted `PayPal-Request-Id`; T-0158 permits one bounded retry only after qualified no-capture proof and a fresh capture-window check. Keep the pending reservation for reconciliation; surface an operational system wait, without permitting a competing payment |
 | Definite declined / system failure, confirmed no payment | `settlementFailed` matches the reserved effect and authorisation, clears the reservation and returns to `WAITING`. Expiry rules can then run |
 | Capture succeeded, DB write failed | Reconciler sees `PAYMENT.CAPTURE.COMPLETED` / Transaction Search and completes the state transition |
 | `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, with an `EXPIRE` confirmation record and provider response reference; notify. Requires a re-signature or new authorisation |
-| `INSTRUMENT_DECLINED` on authorise | `WAIT_FUNDING`. Sentence: "PayPal could not hold £4,000. Nothing was sent to inspect." |
+| `INSTRUMENT_DECLINED` on authorise | `WAIT_FUNDING`. Sentence: "PayPal could not hold $1,200. Nothing was paid." |
 | Webhook missing | The poller checks open authorisations hourly (and on the tick endpoint) |
 
 `REJECTED_NO_PAYMENT` replaces `SYSTEM_FAULT` and means a confirmed failure with no payment effect. A timeout, connection loss or PayPal 5xx is always `AMBIGUOUS`. `classifyPaymentFailure` is a pure response policy, not a payment client. It only accepts operation-correlated, authenticated responses; it makes no SDK/network calls.
@@ -91,7 +91,7 @@ Wiring T-0027 is blocked on durable payment operations (T-0132), reconciliation/
 
 An ambiguous renewal must remain reserved past the deadline until provider status resolves whether it renewed. A confirmed renewal supplies the new id for expiry; a confirmed absence of renewal plus provider expiry/no payment needs a matched typed renewal-reconciliation exit (T-0138). The domain now has the matched `confirmNoRenewalExpiry` exit; elapsed time or an inconclusive lookup cannot clear it. Package intake during REAUTHORIZE_PENDING must queue durably and retry when the operation resolves (T-0137).
 
-- One sandbox **business** account (the platform merchant: "[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) Demo") and two sandbox **personal** accounts (Ama-success, Ama-declined).
+- One sandbox **business** account (the platform merchant: "[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) Demo") and two sandbox **personal** accounts (buyer-success, buyer-declined).
 - Webhook subscription created per environment (`demo`, `ci`). The webhook ID is in env.
 - CI contract tests run against sandbox with **recorded** responses (replayed by default). A nightly job runs them live against sandbox.
 - **Never** a live client id or secret in any environment. CI asserts the base URL is `api-m.sandbox.paypal.com`.
@@ -102,7 +102,7 @@ An ambiguous renewal must remain reserved past the deadline until provider statu
 
 The coordinator validates a candidate transition without writing, then records it through the atomic tranche store. Repeated resolved reconciliation reads no provider; stale workers return RETRY. Reconciliation command identities include the recorded server clock, so competing expiry lookups with different clocks cannot collide as changed idempotent commands; the stream version still permits only one outcome. Unknown lookups retain their reservation and return an alert signal. A confirmed renewal is adopted before expiry reserves a void against its new id; a restart between those transactions safely resumes expiry. Existing captures may be reconciled even in old-rule safe mode, but no new capture is dispatched.
 
-Tests use a fake reader, including real Postgres persistence. No PayPal status reader or executor exists yet. Scheduled polling, Transaction Search and delivered alerts remain T-0149; real provider proof requires T-0027 sandbox contracts.
+Tests use a fake reader, including real Postgres persistence. The guarded SDK status reader/executor slice below is implemented with synthetic tests; financial HTTP remains disabled. Scheduled polling, Transaction Search and delivered alerts remain T-0149; real provider proof requires T-0027 sandbox contracts.
 
 ### Server SDK settlement slice (T-0027)
 

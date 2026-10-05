@@ -1,5 +1,11 @@
 # T10: Deployment: where and how
 
+## Code runner and builder hosting (planned)
+
+Run tests on an isolated CPU/container host separate from the API; choose the actual sandbox technology with an ADR and prove no-network/no-secret/resource boundaries. Yard runs in its own operator/repo infrastructure, not in the payment API. GPU hosting such as Vast.ai is only a possible open-weight model option, not required for test execution or selected for this build. Compare measured workload, isolation, cold start and full cost before approving a provider or paid line item. No new cost estimate is asserted here.
+
+The service lists below are target deployment choices, not hosted deployment evidence. Current local services use SeaweedFS and Mailpit. Signed runner, Yard and A2A/AP2 are planned.
+
 **Target cost: $0/month** on free tiers plus partner credits ([NFR-07](T01-requirements.md#non-functional-requirements)). Region: **Frankfurt (EU Central)**, the closest Render region to both London (payers) and Accra / Lagos (inspectors and platform), and close to [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)'s `africa-south1` Firebase.
 
 ## Topology
@@ -36,7 +42,7 @@ flowchart LR
 
 | Env | Where | Data | PayPal | Purpose |
 |---|---|---|---|---|
-| `local` | Docker Compose (Postgres, MinIO for S3, MailHog) | Fixtures only | Sandbox (dev app) or recorded | Development, TDD |
+| `local` | Docker Compose (Postgres, SeaweedFS for S3, Mailpit) | Fixtures only | Sandbox (dev app) or recorded | Development, TDD |
 | `ci` | GitHub Actions + Testcontainers | Ephemeral | Recorded / replayed. Nightly live sandbox | Gates |
 | `demo` | Render + Neon + R2 (as above) | Synthetic and consented demo data | Sandbox (demo app) | Hackathon judging. **The only hosted environment** |
 

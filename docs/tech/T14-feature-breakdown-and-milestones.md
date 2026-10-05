@@ -1,42 +1,19 @@
 # T14: Feature breakdown and milestones
 
-Product-level features: [S05](../stood/S05-feature-list.md). Partner tiers: [S13](../stood/S13-sponsor-integration.md#build-tiers-keep-ten-partners-from-sinking-a-55-week-build-c). Timeline: [S12](../stood/S12-hackathon-plan.md). Versions are released by release-please.
+Versions are release artifacts, not proof that every planned feature shipped. v0.2.0 released on 5 October 2026 with tested domain/storage, guarded funded-hold adapter, signed DRAFT API and landing page. Money HTTP, funding, runner and agent surfaces remain planned.
 
-## Epics → features → requirements
+## Current epics and exit evidence
 
-| Epic | Feature | FRs | Partner | Tier |
-|---|---|---|---|---|
-| **E1 Allowance** | Create allowance API | FR-01, 03, 04 | — | 1 |
-| | PayPal Vault signature + Kernel-driven sandbox approval | FR-02, 64 | PayPal, Kernel | 1 |
-| | Allowance screen + Bryntum stage Gantt | FR-55 | Bryntum | 2 |
-| | Fixtures spec via Channel3 lookup | FR-05 | Channel3 | 3 |
-| **E2 Hold** | Dispatch → AUTHORIZE + nonce | FR-10, 11 | PayPal | 1 |
-| | Hold timers (reauthorise / warn / void) | FR-12 | Render Workflows | 1 |
-| | Funding-failed path | FR-13 | PayPal | 1 |
-| **E3 Evidence** | Package intake + R2 presign + pHash | FR-20–22 | — | 1 |
-| | Rules C1–C4 | FR-30, 32 | — | 1 |
-| | Near-duplicate C5 | FR-31 | Elastic / pgvector | 2 |
-| | Evidence agent: nonce, stage, recapture | FR-33–35 | Astropods, Workers AI | 2 |
-| | Fixtures check C9 | FR-36 | Channel3 | 3 |
-| **E4 Decision** | Pure decide() + capture / void effects | FR-37, 38 | PayPal | 1 |
-| | Reviewer / payer override | FR-39, 40 | — | 1 |
-| **E5 Records** | Receipt page | FR-50 | — | 1 |
-| | Dispute packet (+ submit where possible) | FR-51, 52 | PayPal | 2 |
-| | Reviewer file in AG Studio + reconciliation | FR-53, 54 | AG Studio, PayPal TS | 1 / 2 |
-| **E6 Integration** | Outbound webhooks + PayPal inbound | FR-60, 61 | — | 1 |
-| | Notifications | FR-62 | Zapier | 2 |
-| | OpenAPI → SDK (+ MCP) | FR-63 | APIMatic | 3 |
-| | [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) `stood/` functions + nonce in the inspector app | [T08](T08-eyeonsite-integration.md) | — | 1 (demo path) |
-| **E7 Demo / ops** | Fixtures + replay endpoints, Postman workspace and monitors | FR-64 | Postman, Kernel | 1 / 3 |
-| | Render Blueprint, deploy on release tag | [T10](T10-deployment.md) | Render | 1 |
+| Epic | Work / tasks | Required evidence |
+|---|---|---|
+| Contract and docs | T-0157, T-0160–T-0163, T-0169 | Profile and synthetic fixtures tested; entrypoints aligned; provenance preserved |
+| Funding and recovery | T-0154, T-0158, T-0137, T-0156 | Atomic approval/authorisation, bounded missed-send recovery, renewal queue, tenant-safe HTTP; fake-provider/DB tests then actual sandbox |
+| Trusted code evidence | T-0159, T-0164, T-0165 | Frozen manifest, read-only fetch, qualified isolated runner and signed exact-commit/mutation report |
+| Usage release | T-0166 | Independent outside-authority receipt, replay protection and agreed buyer acceptance |
+| Agent/operator flow | T-0167, T-0168 | Pinned A2A/AP2 contracts, bounded Yard subcontract, identified operators and qualified integration |
+| Review and delivery | T-0142, T-0155; receipts/webhooks/Gantt backlog | Visible owned unresolved rows, delivered alerts, confirmed money clauses and safe dispute packet |
+| Scenario integration | EyeOnSite T08 | Field provenance/model qualification and honest fixture path; not the lead story |
 
-## Milestones
+## Delivery cadence
 
-| Version | Target date | Scope | Exit evidence |
-|---|---|---|---|
-| **0.1.0** | 4 Oct | Docs, brand, ways of working (done) | Repo public, pre-commit green |
-| **0.2.0** | 16 Oct | E1 (API + Vault), E2 dispatch, E3 rules C1–C4, E4 refuse path, PayPal void in sandbox, deployed on Render | Fixture `wrong-plot` refuses end to end in sandbox, with the void visible in PayPal |
-| **0.3.0** | 23 Oct | Release path (capture), evidence agent (nonce + stage), C5 duplicates, receipt, webhooks, [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) E1–E5 wired | All three outcomes on hosted demo. [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) Android captures a real package |
-| **0.4.0** | 30 Oct | Reviewer file (AG Studio + reconciliation), Gantt + chat, dispute packet, notifications, timers | Judge path E2E 5/5. Reviewer can resolve a WAIT |
-| **0.5.0** | 6 Nov | Channel3 fixtures, APIMatic SDK / MCP, Postman workspace, design polish, accessibility | Partner docs pages complete. Greyscale and axe checks pass |
-| **1.0.0** | 11 Nov | Submission: video, README, `docs/sponsors/*`, final checklist ([13](../13-submission-checklist.md)) | Submitted. Tagged `v-hackathon-submission` |
+At least five tasks per round, one signed Conventional commit per task and one reviewed PR. Tests fail first for money changes. Dates are targets, never evidence. Before the submission target, the six S09 beats need actual runner/provider/operator proof; unbuilt Yard/A2A/AP2 remains a labelled storyboard. Do not enable payment HTTP until missed-send recovery, funding/reconciliation and real sandbox qualification pass.
