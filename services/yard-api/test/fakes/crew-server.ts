@@ -71,7 +71,13 @@ const board: CrewBoard = {
     };
     offers.set(id, scoped);
     const token = await github.issue('installation', scoped.repository, 'BUILD', `wo/${id}`);
-    return { id: view.currentClaim.id, expiresAt: view.currentClaim.leasedUntil, token: token.value };
+    return {
+      id: view.currentClaim.id,
+      expiresAt: view.currentClaim.leasedUntil,
+      token: token.value,
+      repository: scoped.repository,
+      baseCommit: scoped.baseCommit,
+    };
   },
   log: async (id, lease, _event) => {
     const view = (await yard(path(id))) as { state: string; projectVersion: number; currentClaim: { id: string } };

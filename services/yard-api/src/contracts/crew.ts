@@ -5,7 +5,13 @@ export type CrewOffer = Readonly<{
   stack: string;
   priceMinor: number;
 }>;
-export type CrewLease = Readonly<{ id: string; expiresAt: number; token: string }>;
+export type CrewLease = Readonly<{
+  id: string;
+  expiresAt: number;
+  token: string;
+  repository?: string;
+  baseCommit?: string;
+}>;
 export interface CrewBoard {
   discover(ids?: readonly string[]): Promise<readonly CrewOffer[]>;
   claim(
