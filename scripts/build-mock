@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+pnpm build
+pnpm exec tsc -p tsconfig.json --noEmit false --outDir .mock-dist
+ln -sfn /workspace/node_modules .mock-dist/node_modules
+for service in api yard-api simulators; do
+  ln -sfn "/workspace/services/$service/node_modules" ".mock-dist/services/$service/node_modules"
+done

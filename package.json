@@ -16,6 +16,7 @@
     "validate": "pnpm lint && pnpm typecheck && pnpm boundary && pnpm test:coverage && pnpm build",
     "test:db": "vitest run --config vitest.db.config.ts --coverage",
     "test:mock:stood": "vitest run --config vitest.db.config.ts services/api/test/mock-flow.db.test.ts",
+    "test:mock:network": "vitest run --config vitest.network.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

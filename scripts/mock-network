@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+project="stood-mock-$(date +%s)-$$"
+compose() { docker compose -p "$project" -f compose.mock.yaml "$@"; }
+finish() {
+  result=$?
+  trap - EXIT INT TERM
+  if [ "$result" -ne 0 ]; then
+    mkdir -p artifacts/mock-network
+    compose logs --no-color > artifacts/mock-network/services.log 2>&1 || true
+    compose logs --no-color --tail 40 || true
+  fi
+  compose down --volumes --remove-orphans --rmi local >/dev/null 2>&1 || true
+  exit "$result"
+}
+trap finish EXIT INT TERM
+compose build runner
+compose run --rm runner pnpm install --frozen-lockfile
+compose run --rm runner scripts/build-mock
+compose up -d --wait --wait-timeout 120 db paypal-sim api yard-api
+compose run --rm runner pnpm test:mock:network

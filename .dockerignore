@@ -9,3 +9,4 @@
 .pnpm-store
 _site
 *.log
+.mock-dist

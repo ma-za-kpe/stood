@@ -12,6 +12,8 @@ case "$1" in
     docker compose up -d --wait db
     exec docker compose run --rm app pnpm test:db ;;
   mock)
+    exec scripts/mock-network ;;
+  mock:integration)
     docker compose up -d --wait db
     exec docker compose run --rm app pnpm test:mock:stood ;;
   *) exec docker compose run --rm app pnpm "$@" ;;
