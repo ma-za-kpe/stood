@@ -38,6 +38,8 @@ importers:
 
   packages/contracts: {}
 
+  packages/yard-domain: {}
+
   services/api:
     dependencies:
       '@hono/node-server':

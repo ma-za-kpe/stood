@@ -1,0 +1,13 @@
+{
+  "name": "@stood/yard-domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --outDir dist"
+  },
+  "exports": {
+    ".": "./src/blueprint.ts"
+  }
+}

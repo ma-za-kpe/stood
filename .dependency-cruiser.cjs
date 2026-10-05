@@ -1,6 +1,12 @@
 module.exports = {
   forbidden: [
     {
+      name: 'pure-yard-domain',
+      severity: 'error',
+      from: { path: '^packages/yard-domain/src/' },
+      to: { pathNot: '^packages/yard-domain/src/' },
+    },
+    {
       name: 'real-crew-is-external',
       severity: 'error',
       from: { path: '^(services|packages|apps)/.*crew', pathNot: '/(fakes|contracts)/' },

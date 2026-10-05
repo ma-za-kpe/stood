@@ -6,7 +6,7 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**', '**/*.db.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['services/api/src/**/*.ts'],
+      include: ['services/api/src/**/*.ts', 'services/yard-api/src/**/*.ts', 'packages/yard-domain/src/**/*.ts'],
       exclude: ['**/*.test.ts', '**/server.ts', '**/setup-cli.ts', '**/reconcile-cli.ts', '**/adapters/db-postgres/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {
@@ -15,6 +15,7 @@ export default defineConfig({
         lines: 85,
         statements: 85,
         'services/api/src/domain/**': { branches: 100, functions: 100, lines: 100, statements: 100 },
+        'packages/yard-domain/src/**': { branches: 100, functions: 100, lines: 100, statements: 100 },
       },
     },
   },

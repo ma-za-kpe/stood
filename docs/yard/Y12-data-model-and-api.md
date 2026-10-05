@@ -53,3 +53,7 @@ site_log          (work_order_id, seq, at, kind, message)          -- append-onl
 ## Calls Yard makes to Stood (SDK)
 
 `createAllowance` · `getAllowance` · `dispatchTranche` · `submitPackage` (repo, SHA, test-bundle hash) · `getTranche` · webhook verification. **Nothing else.**
+
+## Implemented foundation boundary
+
+`packages/yard-domain` implements immutable, versioned Blueprint terms. Only the final milestone uses `code.final@1`. A local FROZEN terms record is not a funded or signed Stood allowance; approval and red-baseline references must come from qualified authority adapters before runtime activation. Persistence, HTTP blueprint commands and the remaining API above are planned.
