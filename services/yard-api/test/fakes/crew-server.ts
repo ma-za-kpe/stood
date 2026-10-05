@@ -61,7 +61,16 @@ const board: CrewBoard = {
     assert(version);
     await yard(`${path(id)}/claim`, 'POST', {}, `${id}:claim`, version);
     const view = (await yard(path(id))) as { currentClaim: { id: string; leasedUntil: number } };
-    const token = await github.issue('installation', offer.repository, 'BUILD', `wo/${id}`);
+    const project = (await yard(`/yard/v1/blueprints/${offer.projectId}`)) as {
+      data: { blueprint: { repository: string; baseCommit: string } };
+    };
+    const scoped = {
+      ...offer,
+      repository: project.data.blueprint.repository,
+      baseCommit: project.data.blueprint.baseCommit,
+    };
+    offers.set(id, scoped);
+    const token = await github.issue('installation', scoped.repository, 'BUILD', `wo/${id}`);
     return { id: view.currentClaim.id, expiresAt: view.currentClaim.leasedUntil, token: token.value };
   },
   log: async (id, lease, _event) => {
