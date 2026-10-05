@@ -9,7 +9,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 | **Vault v3** (setup token → payment token) | The allowance signature: the payer approves once, Stood stores the payment token | FR-02 |
 | **Orders v2**, `intent=AUTHORIZE` with the vaulted `payment_source` | The hold per tranche on dispatch | FR-10 |
 | **Authorizations**: capture / void / reauthorize | Release / refuse / timers | FR-12, 38 |
-| Order metadata: `custom_id` (decision id), `invoice_id` (tranche id), description | The decision bound to PayPal's record | FR-38 |
+| Order metadata: `custom_id` (tranche id); capture `invoice_id` (operation key), description | The decision bound to PayPal's record | FR-38 |
 | **Webhooks** + verify-webhook-signature | State confirmation | FR-61 |
 | **Disputes API** | The dispute packet and evidence | FR-52 |
 | **Transaction Search** (`/v1/reporting/transactions`) | Reconciliation in the reviewer file | FR-54 |
@@ -103,3 +103,13 @@ An ambiguous renewal must remain reserved past the deadline until provider statu
 The coordinator validates a candidate transition without writing, then records it through the atomic tranche store. Repeated resolved reconciliation reads no provider; stale workers return RETRY. Reconciliation command identities include the recorded server clock, so competing expiry lookups with different clocks cannot collide as changed idempotent commands; the stream version still permits only one outcome. Unknown lookups retain their reservation and return an alert signal. A confirmed renewal is adopted before expiry reserves a void against its new id; a restart between those transactions safely resumes expiry. Existing captures may be reconciled even in old-rule safe mode, but no new capture is dispatched.
 
 Tests use a fake reader, including real Postgres persistence. No PayPal status reader or executor exists yet. Scheduled polling, Transaction Search and delivered alerts remain T-0149; real provider proof requires T-0027 sandbox contracts.
+
+### Server SDK settlement slice (T-0027)
+
+The pinned TypeScript Server SDK 2.5.0 is confined to the PayPal adapter. It uses explicit sandbox configuration, a ten-second timeout, zero automatic retries and a silent logger. Integer minor units format provider amounts. Capture sets `invoice_id` to the reserved operation key; the request UUID remains its persisted `PayPal-Request-Id`. The capture endpoint does not accept `custom_id`, so that field stays the tranche identity on its order.
+
+Status lookup requires the authorisation's related order, one matching purchase unit, complete explicit capture/authorisation arrays and exact amount/currency. A capture must carry the matching invoice and related authorisation. Only then does the adapter attach our durable UUID to normalised proof; it is not an echoed provider field. Extra/unknown captures, renewals, partial resources and identity mismatches remain unresolved. A successful void response alone remains pending until the reader proves cancellation with no capture. Absence of a capture while an authorisation is still active cannot prove a timed-out request never happened.
+
+`executePayment` records possible submission as AMBIGUOUS before the provider call and uses a fresh unique claim per invocation. Reserved means no call was attempted. Only one competing version claim wins. Failed database confirmation leaves the UUID and ambiguity intact for status reconciliation. Old-rule captures and rental returns without a human/rule safeguard are blocked. Clock checks run before claiming and immediately before calling; after a claim, uncertainty cannot be cleared by an elapsed deadline.
+
+This slice has synthetic-response and real-Postgres/fake-executor evidence. No actual SDK payment calls ran. Vault and initial funding need the separate durable phases under T-0154; the runtime keeps financial endpoints off. Official SDK/reference sources: [pinned SDK payments controller](https://github.com/paypal/PayPal-TypeScript-Server-SDK/blob/2.5.0/src/controllers/paymentsController.ts), [capture request model](https://github.com/paypal/PayPal-TypeScript-Server-SDK/blob/2.5.0/src/models/captureRequest.ts), [SDK authorisation model](https://github.com/paypal/PayPal-TypeScript-Server-SDK/blob/2.5.0/src/models/paymentAuthorization.ts).

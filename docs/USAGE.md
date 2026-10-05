@@ -5,11 +5,11 @@
 
 | | |
 |---|---|
-| **Status** | ⚠️ **v1 draft contract, not yet implemented.** This manual describes the API being built for the PayPal AI Hackathon 2026. Every example uses the **PayPal sandbox**. Check the [changelog](https://ma-za-kpe.github.io/stood/changelog.html) for what has shipped |
+| **Status** | ⚠️ **Sandbox implementation in progress.** Local signed DRAFT creation and reads, synthetic demos and status polling are implemented; financial API workflows below are planned. This manual describes the API being built for the PayPal AI Hackathon 2026. Every example uses the **PayPal sandbox**. Check the [changelog](https://ma-za-kpe.github.io/stood/changelog.html) for what has shipped |
 | **Licence** | MIT |
 | **Hosted demo** | `https://stood-api.onrender.com/v1` (sandbox, free tier: the first request after idle can take about 1 min) |
 | **SDK (planned)** | `npm i @stood/sdk` (TypeScript, APIMatic-generated). Kotlin and Python later |
-| **Spec** | `openapi/stood.yaml` (OpenAPI 3.1) |
+| **Spec (planned)** | `openapi/stood.yaml` (OpenAPI 3.1; generation is T-0053) |
 | **Docs** | [Overview](09-stood.md) · [API spec](tech/T04-api-spec.md) · [Evidence profiles](stood/S16-use-cases-and-evidence-profiles.md) |
 
 ---
@@ -42,7 +42,9 @@ The local response includes assessment copy and structured evidence details:
   "payment": { "executed": false } }
 ```
 
-This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
+This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. Local scenarios: `good`, `wrong-plot`, `recycled`, `wrong-stage`, `substituted-fitting`, `nonce-unreadable`, `mock-location`, `freelance-missing-screen`, `funding-declined` and `hold-expiry`. The last two return `state: WAIT_FUNDING | EXPIRED`, `outcome: WAIT` and `source: synthetic_domain_transitions`. Expiry uses simulated provider proof; its fixture settlement reference is not a PayPal ID.
+
+The local response also exposes `sentences.payer` and `sentences.inspector`, each ending with "No payment was executed." Missing-item copy names the item. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
 
 **Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, payment-confirmed sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
 
@@ -68,7 +70,7 @@ Planned response (not yet implemented):
 - Replay as the payer (Kernel drives the PayPal sandbox approval live): `POST $BASE/demo/approve`. It returns a live-view URL.
 - Postman: the public "Stood × PayPal" workspace has every scenario pre-built.
 
-The creation-only domain aggregate currently permits GBP/USD/EUR holds and validates the exact sum of milestones against the cap. Allowance signing and the financial HTTP endpoints below remain planned. The pure payment policy blocks new capture reservations five minutes before expiry; provider calls and durable reservations are not yet wired.
+The domain and signed draft API permit GBP/USD/EUR holds and validate the exact sum of milestones against the cap. Allowance signing and financial HTTP workflows below remain planned. The tested funded-hold adapter records possible submission atomically before SDK calls and checks the five-minute capture margin again immediately before submission. It is not enabled for HTTP payment execution.
 
 ---
 
@@ -80,9 +82,31 @@ Run `scripts/dev setup` from an interactive terminal. Docker builds the API and 
 
 Create the PayPal credentials in your [sandbox app](https://developer.paypal.com/dashboard/applications/sandbox); see [PayPal authentication](https://developer.paypal.com/api/rest/authentication/). Obtain the webhook id from that app's [webhook configuration](https://developer.paypal.com/api/rest/webhooks/). The tool validates the client id/secret using sandbox OAuth, discards the access token and writes only the six keys into git-ignored `.env`, with private file permissions. Other configuration is preserved. Invalid input or failed OAuth validation leaves existing configuration untouched. Values containing whitespace, quotes, backslashes or interpolation characters are rejected; keys are never altered silently. Symlinks and hard links are refused. The webhook id and platform keys are collected, but their provider ownership is not checked by this local tool.
 
-Restart the API with `docker compose up -d --force-recreate api` after setup. Compose passes these six named variables to the API only. The local `/health` returns `paymentReady: false`, `missing` (variable **names** only) and setup guidance. Presence of every variable is not proof of valid credentials or payment readiness. Writes under `/v1/allowances`, `/v1/tranches` and `/v1/payments` return `503 payments_not_configured` with the same guidance. They remain unavailable even with valid keys; the PayPal adapter and sandbox qualification are still required. Synthetic demo scenarios remain available. No financial request is executed by setup or these guards.
+Restart the API with `docker compose up -d --force-recreate api` after setup. Compose passes named variables only; the API also gets its fixed local database connection and STOOD_PLATFORM_ID (default local-platform). The local `/health` returns `paymentReady: false`, `missing` (variable **names** only) and setup guidance. Presence of every variable is not proof of valid credentials or payment readiness. With STOOD_API_KEY and STOOD_HMAC_SECRET configured, POST `/v1/allowances` creates a DRAFT and signed reads are available after migrations. Other allowance, tranche and payment writes return `503 payments_not_configured`; initial funding, evidence processing and real sandbox qualification are still required. Synthetic demo scenarios remain available. No financial request is executed by setup or these guards.
 
 Hosted onboarding, webhook URL registration, copy-once platform key issuance and rotation remain planned under T-0150. Tests for the local tool use fake OAuth responses; no real sandbox credentials were supplied or verified during development. The sandbox-only boot guard remains in place.
+
+### Local signed draft API (implemented subset)
+
+Start Postgres with `scripts/dev up`, replay migrations with `scripts/dev db:migrate`, then start the API. Configure the local Stood platform key and HMAC secret privately; PayPal credentials are not needed for draft creation. Hosted key issuance is still planned. Every draft request and read requires `Authorization: Bearer <STOOD_API_KEY>` and `Stood-Signature: t=<unix-seconds>,v1=<hex HMAC-SHA256(STOOD_HMAC_SECRET, timestamp + "." + raw-body)>`. For GET, sign an empty body. The server rejects timestamps more than five minutes away. Draft POST also requires JSON and `Idempotency-Key`; the maximum request body is 64 KiB.
+
+`POST /v1/allowances` accepts this implemented draft shape:
+
+```json
+{
+  "payee_ref": "builder-reference",
+  "cap": { "minor": 400000, "currency": "GBP" },
+  "milestones": [{ "name": "foundation", "amount": { "minor": 400000, "currency": "GBP" },
+    "profile": "construction.stage@1", "params": {} }],
+  "window_days": 7, "max_resubmits": 2
+}
+```
+
+Response: `201 { "id": "alw_…", "status": "DRAFT", "tranches": [{ "id": "trn_…", "name": "foundation" }], … }`, including the validated input fields. It contains no `approve_url` and creates no hold. Params are stored draft metadata; profile-specific activation/evidence validation remains planned. Unknown top-level or milestone fields are rejected; platform identity comes from configured authentication.
+
+`GET /v1/allowances/{id}` returns the owned draft. `GET /v1/tranches/{id}` returns recovered state, version, amount, profile, decision, hold age/expiry, pending effect/status/creation time, settlement and `sentences.payer` / `sentences.inspector`. A missing or foreign record returns the same 404. Identical POST bytes with the same platform/key replay the stored response across restart; changed bytes return 409. The local implementation retains keys indefinitely (at least the promised 24 hours). JSON formatting changes count as changed bytes.
+
+Dispatch, versions, packages and uploads are still guarded. The allowance examples and approval URLs in the hosted sections below describe the **planned full API**, not this draft subset. Fixtures remain public synthetic previews and execute no payment.
 
 ### A. Calling Stood from your platform (hosted)
 
@@ -265,7 +289,7 @@ Need another? Open a **Feature or use case** issue. Profiles are compositions of
 
 | | |
 |---|---|
-| Hold length | Up to **29 days** per tranche (a PayPal authorisation limit). Automatic reauthorisation from day 4 is planned; the domain rules are unit-tested, but the scheduler and payment client are not implemented |
+| Hold length | Up to **29 days** per tranche. Day-four renewal rules and the funded-hold adapter are tested; status polling is implemented, automatic provider renewal submission is not enabled |
 | Photos per package | ≤ 10, ≤ 8 MB each (JPEG / HEIC / WebP) |
 | Rate limits (demo) | 60 req/min per key, 10 packages/min |
 | Idempotency | Required on every POST (`Idempotency-Key`, 24h) |
@@ -282,7 +306,7 @@ RFC 9457 `application/problem+json`. A **refusal is not an error**: it's a `200`
 | `invalid_state` | 409 | For example dispatching a tranche that's already `HELD` |
 | `idempotency_conflict` | 409 | Same key, different body. Use a new key |
 | `unauthorized` | 401 | Wrong key or a bad `Stood-Signature` (check the clock skew is under 5 min) |
-| `payments_not_configured` (planned) | 503 | Payments are off. Follow [Keys and configuration](#keys-and-configuration); missing/invalid keys must not crash the service |
+| `payments_not_configured` | 503 | Payments are off. Follow [Keys and configuration](#keys-and-configuration); missing/invalid keys must not crash the service |
 | `paypal_unavailable` | 503 | Retry with the same idempotency key. State is reconciled automatically |
 
 ## FAQ
@@ -296,3 +320,11 @@ RFC 9457 `application/problem+json`. A **refusal is not an error**: it's a `200`
 **Is this production-ready?** Not yet. It's sandbox only during the hackathon. Going live needs PayPal live review, licensing and data-protection steps ([TASKS.md](../TASKS.md) T-0111…T-0115).
 
 **How do I report a security issue?** Privately: [SECURITY.md](../SECURITY.md).
+
+## Local reconciliation worker (implemented status polling)
+
+After database migrations and sandbox key setup, run `scripts/dev reconcile` in the foreground, or `docker compose --profile operations up -d reconciler` in the background. Compose reads the named sandbox credentials from the private `.env`; it does not forward the whole file. Set `RECONCILIATION_OWNER` to the responsible reviewer. The local default, `local-reviewer`, means the person running this checkout.
+
+The worker ticks every 15 seconds, claims up to ten due jobs, retries unresolved status checks after 60 seconds and idle states after an hour. Database leases expire after 90 seconds and require a matching token to finish. It reserves cancellation of old-rule holds automatically and records reviewer-owned `SAFE_CANCEL_REQUESTED`, `PROVIDER_UNKNOWN`, `UNRESOLVED_3H` and `WORKER_FAILURE` rows in `payment_alerts`; resolved rows remain available. The reviewer must investigate unknown outcomes and any pending safe-mode cancellation.
+
+This command reads PayPal status and writes local state and alerts. It does **not** submit captures, cancellations or renewals. A reserved safe-mode cancellation therefore remains pending until a qualified executor submits it or the reviewer cancels it through PayPal and matching provider proof confirms the outcome. Transaction Search auditing, dashboard presentation and email/Slack notification delivery remain planned (T-0155 / T-0142). No raw provider responses or credentials are logged.
