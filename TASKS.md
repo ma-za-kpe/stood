@@ -42,8 +42,8 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[x]` T-0017 Cutthroat pre-commit + CI (`pre-commit`, `pr-title`, `dco`). The gate found and fixed a real JS syntax bug in `site/app.js`. Tier: implemented.
 - `[x]` T-0116 Usage manual `docs/USAGE.md` (package-page style: judges' path, keys, quickstart, webhooks, profiles, self-hosting). Tier: designed. **Must be kept in sync with the implemented API (review item on every API PR).**
 - `[x]` T-0018 GitFlow branching (ADR-0006), SECURITY.md, CODE_OF_CONDUCT.md, issue templates.
-- `[~]` T-0019 Set up `develop` as the default branch, rulesets on `main` and `develop`, merge settings (squash for features, merge commit for promotion), repo homepage.
-- `[~]` T-0020 Merge PR #1 → `develop` → promote to `main` → release-please v0.1.0 → back-merge. Verify <https://ma-za-kpe.github.io/stood/> and the changelog page.
+- `[x]` T-0019 Set up `develop` as the default branch, rulesets on `main` and `develop`, merge settings (squash for features, merge commit for promotion), repo homepage.
+- `[x]` T-0020 Merge PR #1 → `develop` → promote to `main` → release-please v0.1.0 → back-merge. Verify <https://ma-za-kpe.github.io/stood/> and the changelog page.
 - `[ ]` T-0004 Decide whether `docs/12-judges.md` stays public.
 - `[ ]` T-0006 Raise required approvals to 1 + CODEOWNERS on the money path when a second maintainer joins.
 - `[ ]` T-0015 Move the brand generator script into `tools/brand/` (runs in Docker).
@@ -378,3 +378,41 @@ T-0179: public server-side SDK contract-tested against the actual local Stood HT
 - `[ ]` T-0194 Y18 durable project events and SSE: commit projection and gap-free per-stream sequence together; use sequence as SSE resume ID and event UUID for deduplication, replay limits/snapshot.required, role-filtered payloads, direct LISTEN connection and honest stale/gap UI. Real-Postgres concurrency/rollback and recorded-stream/chaos tests; money states require qualified Stood messages.
 - `[ ]` T-0195 Y19 intake/access boundary: choices before credentials, signing gate, provider-qualified TEST/DEV scope (patterns alone cannot prove environment), encrypted write-only storage, audited preview-only decrypt, revocation/7-day deletion, no secrets in prompts/logs/events/builders. Qualify scanner/KMS/provider checks before enabling secret intake.
 - `[ ]` T-0196 Y20 hybrid hosting ADR and qualified previews/handover: buyer-owned repo, pinned image identity, isolated test-data previews with bounded cost/TTL/teardown, production secrets entered only in buyer hosting and verified account/commit/usage proof. Health reachability alone is insufficient final evidence. Demo fixtures first; no automatic spend or cloud provisioning.
+
+## Full Stood and Yard backlog (product owner request, 2026-10-05)
+
+Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The external Crew project (ADR-0017 / Y21) is **excluded**: its models, GPU lifecycle and graph live in the separate repository. This repo keeps only the public Board surfaces any operator uses, plus the contract fake (T-0191). Status corrections: T-0019 and T-0020 are done (develop is the default branch, `protect-main` / `protect-develop` rulesets, homepage set, v0.1.0 released 2026-10-03, v0.2.0 released 2026-10-05).
+
+### Stood
+
+- `[ ]` T-0197 Runner signing key id and rotation (PR #32 review follow-up): reports carry a key id; the verifier holds a key set with validity windows; revoked or expired keys refuse; overlap window tested. No key material in Git.
+- `[ ]` T-0198 Promote develop to main as v0.3.0 once #34 lands: release-please, back-merge, verify the live site and changelog, and link the Yard docs from the README.
+- `[ ]` T-0199 Brand generators for Stood and Yard under `tools/brand/` (extends T-0015): pinned OFL fonts, run in Docker, deterministic SVG output, and a CI check that committed assets match the generator. PNG store/social exports produced at release, not committed.
+
+### Yard: design system and web app (Y17, Y18, Y10)
+
+- `[ ]` T-0200 Yard design tokens (Y17 §2, §9): one CSS token file shared by `site/yard/` and `apps/yard-web`, dark default + paper theme, font fallbacks. A CI test recomputes every documented contrast ratio and fails below AA.
+- `[ ]` T-0201 Yard component kit with every Y17 §5 state: button (pending), status chips, Stood verdict chip imported from Stood's kit (never restyled), work-order card (optimistic/stale), milestone row, lease timer, progress rail, site log, connection pill, secret field, Foreman message, punch list, empty state. Reduced-motion, greyscale and axe checks.
+- `[ ]` T-0202 `apps/yard-web` shell (React + Vite): TanStack Query, XState, Zustand and React Hook Form + Zod wired per Y18 §4; the client event applier consumes T-0194 (pure `applyEvent`, gap → snapshot, shared transition table from `packages/yard-domain`). Money states are never optimistic: a test asserts no PAID/REFUSED render without a Stood-originated event.
+- `[ ]` T-0203 Intake wizard UI (Y19 steps 1–8): XState wizard, autosave via `intake.saved`, shared Zod schemas, "Let the Foreman decide" on every step, plain-language summary before signing, and the free-text secret scanner that blocks a pasted key. Step 9 (keys) waits for T-0195.
+- `[ ]` T-0204 Project room (Y10 #5): milestone cards, progress rail, per-milestone preview URL, Stood chips, connection pill, burst summaries ("Caught up: 14 updates"), and focus-safe live updates (a focused card never moves).
+- `[ ]` T-0205 Builder Board and work-order screens (Y10 #7, #8): filters, keyboard navigation across columns, lease timer, read-only signed tests, submit SHA, punch list. Qualify AG Grid terms before adopting it.
+- `[ ]` T-0206 Site log (Y21 §4, Y10 #9): per-work-order stream with its own sequence, at most 1 write per second per builder, fixed kinds, every line secret-scanned before storage, 90-day retention then summary. Not an aria-live region.
+- `[ ]` T-0207 Handover screen and rotation checklist (Y20 §5): Deploy to Render button from `render.yaml`, `HANDOVER.md` generator listing every variable, the nine checklist items (auto items shown done), and `handover.rotation_confirmed` gating CLOSED, independent of Stood's final release. Depends on T-0196.
+- `[ ]` T-0208 Yard page assets: wire the `docs/brand/yard/` mark, family lockup, favicon and OG card into `site/yard/` (with T-0180) and add the "Yard →" link and family lockup to Stood's landing page.
+
+### Yard: Board, operators and protocol
+
+- `[ ]` T-0209 Operators and payees (Y12, Y13): operator registration, PayPal payee reference only (never credentials), operator keys + HMAC with key id and rotation, operator-level claim caps and Sybil limits. Tests for the outside-buyer reputation rule.
+- `[ ]` T-0210 Board A2A surface: `/.well-known/agent.json` (`post-work-order`, `claim-work-order`, `submit-work`, `create-blueprint`), A2A task ↔ work-order mapping, punch lists as task messages, conformance tests. Plus open, signed operator nudge webhooks any operator may register; the Board must work fully without them.
+- `[ ]` T-0211 Work-order discovery: Postgres full-text search first, Elastic qualified later (T-0032). Public Board stream carries posted/claimed/paid only, with no buyer identity.
+- `[ ]` T-0212 Change orders after signing (Y12): a signed blueprint version stays immutable; a change order creates a new version, re-runs Foreman checks, needs buyer re-approval and a Stood allowance amendment. No silent edits to frozen tests.
+- `[ ]` T-0213 Yard notifications (email first, Zapier optional): paid, punch list, lease expiring, preview ready, handover ready. Driven by events, idempotent, with no secrets or amounts beyond what the recipient may see.
+
+### Yard: operations, business and submission
+
+- `[ ]` T-0214 Deploy `yard-api` and `yard-web` on Render as separate services with the restricted database role from T-0176; durable jobs (Render Workflows or pg-boss) for lease expiry, next-milestone posting, preview TTL teardown and handover reminders.
+- `[ ]` T-0215 Yard developer surfaces: OpenAPI for `/yard/v1` with a breaking-change diff in CI, a Postman workspace, and an APIMatic-generated Yard SDK / MCP. Qualify partner terms first.
+- `[ ]` T-0216 Pricing and platform-fee ADR (Y13): fees and preview hosting cost as explicit blueprint line items, nothing hidden. Required before any real money.
+- `[ ]` T-0217 Yard privacy and data: intake data classification (GDPR / NDPR / POPIA / Kenya DPA), export and deletion of blueprint data, retention per Y18, consent copy for agent and human builders.
+- `[ ]` T-0218 Yard demo and judge path: describe → sign → milestone paid → punch list → handover, across Yard and Stood, with honest "synthetic" labels; fits the 90s video (T-0041) and the judges' fixtures.
