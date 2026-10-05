@@ -246,6 +246,35 @@ export class Board {
       simulated: true,
     };
   }
+  async room(id: string, actor: Operator) {
+    const snapshot = await this.read(id, actor),
+      d = data(snapshot.data);
+    return {
+      id: snapshot.id,
+      version: snapshot.version,
+      summary: d.blueprint.summary,
+      currency: d.blueprint.currency,
+      simulated: true,
+      orders: Object.keys(d.orders).map((wo) => {
+        const { work, order } = workOrder(d, wo),
+          milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+        return {
+          id: wo,
+          name: milestone.name,
+          budgetMinor: milestone.budgetMinor,
+          trancheId: order.trancheId,
+          state: order.payment
+            ? 'PAID'
+            : order.submissionIntent?.status === 'RESERVED'
+              ? 'SUBMITTING'
+              : work.snapshot.state,
+          payment: order.payment,
+          submission: work.snapshot.submission,
+          leasedUntil: work.snapshot.currentClaim?.leasedUntil ?? null,
+        };
+      }),
+    };
+  }
   async pendingSubmissions(after = '') {
     const projects = await this.events.list(after),
       page = projects.slice(0, 100);
@@ -404,7 +433,7 @@ export class Board {
       return {
         data: d,
         type: 'stood.released',
-        payload: { wo, state: 'PAID', reference: proof.reference, simulated: true },
+        payload: { wo, state: 'PAID', reference: proof.reference, payment: structuredClone(proof), simulated: true },
       };
     });
   }

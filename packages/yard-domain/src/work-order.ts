@@ -1,3 +1,12 @@
+export const WORK_ORDER_TRANSITIONS = Object.freeze({
+  CLAIMED: Object.freeze(['POSTED']),
+  BUILDING: Object.freeze(['CLAIMED']),
+  SUBMITTED: Object.freeze(['BUILDING']),
+  CHECKING: Object.freeze(['SUBMITTED']),
+  ABANDONED: Object.freeze(['CLAIMED', 'BUILDING']),
+  LEASE_EXPIRED: Object.freeze(['CLAIMED', 'BUILDING']),
+  POSTED: Object.freeze(['LEASE_EXPIRED', 'ABANDONED']),
+});
 export const LEASE_MS = 48 * 3600000;
 export type ClaimInput = Readonly<{ id: string; builderId: string; operatorId: string; operatorRootId: string }>;
 export type Claim = ClaimInput &
@@ -66,7 +75,10 @@ export class WorkOrder {
         return current;
       throw new Error('Work order already has a claim');
     }
-    if (this.#snapshot.state !== 'POSTED' || this.#snapshot.claims.some((c) => c.id === input.id))
+    if (
+      !WORK_ORDER_TRANSITIONS.CLAIMED.includes(this.#snapshot.state) ||
+      this.#snapshot.claims.some((c) => c.id === input.id)
+    )
       throw new Error('Claim cannot be reused');
     const claim: Claim = Object.freeze({
       id: input.id,
@@ -93,30 +105,38 @@ export class WorkOrder {
   }
   build(claimId: string, now: number): void {
     this.active(claimId, now);
-    if (this.#snapshot.state !== 'CLAIMED') throw new Error('Cannot start build');
+    if (!WORK_ORDER_TRANSITIONS.BUILDING.includes(this.#snapshot.state)) throw new Error('Cannot start build');
     this.commit(now, { state: 'BUILDING' });
   }
   submit(claimId: string, commit: string, packageId: string, now: number): void {
     this.active(claimId, now);
-    if (this.#snapshot.state !== 'BUILDING' || !/^[a-f0-9]{40}$/.test(commit) || !text(packageId))
+    if (
+      !WORK_ORDER_TRANSITIONS.SUBMITTED.includes(this.#snapshot.state) ||
+      !/^[a-f0-9]{40}$/.test(commit) ||
+      !text(packageId)
+    )
       throw new Error('Invalid submission');
     this.commit(now, { state: 'SUBMITTED', submission: Object.freeze({ commit, packageId, claimId }) });
   }
   checking(packageId: string, now: number): void {
     this.clock(now);
-    if (this.#snapshot.state !== 'SUBMITTED' || this.#snapshot.submission?.packageId !== packageId)
+    if (
+      !WORK_ORDER_TRANSITIONS.CHECKING.includes(this.#snapshot.state) ||
+      this.#snapshot.submission?.packageId !== packageId
+    )
       throw new Error('No matching submitted package');
     this.commit(now, { state: 'CHECKING' });
   }
   release(claimId: string, now: number): void {
     const claim = this.active(claimId, now);
-    if (!['CLAIMED', 'BUILDING'].includes(this.#snapshot.state)) throw new Error('Cannot clock out during a check');
+    if (!WORK_ORDER_TRANSITIONS.ABANDONED.includes(this.#snapshot.state))
+      throw new Error('Cannot clock out during a check');
     this.close(now, claim, 'RELEASED', 'ABANDONED');
   }
   expire(now: number): void {
     this.clock(now);
     const claim = this.#snapshot.currentClaim;
-    if (!claim || !['CLAIMED', 'BUILDING'].includes(this.#snapshot.state) || now < claim.leasedUntil)
+    if (!claim || !WORK_ORDER_TRANSITIONS.LEASE_EXPIRED.includes(this.#snapshot.state) || now < claim.leasedUntil)
       throw new Error('Lease cannot expire during unresolved submission');
     this.close(now, claim, 'EXPIRED', 'LEASE_EXPIRED');
   }
@@ -131,8 +151,7 @@ export class WorkOrder {
   }
   repost(now: number): void {
     this.clock(now);
-    if (!['LEASE_EXPIRED', 'ABANDONED'].includes(this.#snapshot.state))
-      throw new Error('Work order cannot be reposted');
+    if (!WORK_ORDER_TRANSITIONS.POSTED.includes(this.#snapshot.state)) throw new Error('Work order cannot be reposted');
     this.commit(now, { state: 'POSTED' });
   }
 }

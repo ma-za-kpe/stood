@@ -111,6 +111,9 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     );
   });
   app.get('/yard/v1/blueprints/:id', async (c) => c.json(await config.board.read(c.req.param('id'), request(c).actor)));
+  app.get('/yard/v1/blueprints/:id/room', async (c) =>
+    c.json(await config.board.room(c.req.param('id'), request(c).actor)),
+  );
   app.post('/yard/v1/blueprints/:id/approve', async (c) => {
     const { key, version, actor } = command(c);
     const proof = body(c, ['version', 'buyerOperatorId', 'approvalReference', 'baselines']);

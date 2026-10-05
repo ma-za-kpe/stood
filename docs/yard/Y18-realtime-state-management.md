@@ -172,3 +172,11 @@ This first transport polls the durable log once per second across instances, wit
 In mock mode, Yard event timestamps are supplied by the same server-side controlled clock used by Stood and PayPal. Outside mock composition, events default to database `clock_timestamp()`. Clients cannot supply event timestamps.
 
 Each Yard runtime shares one PostgreSQL LISTEN connection across viewers. Committed writes emit project-id-only wake hints. Each project shares a 15-second fallback wake timer so notification loss cannot strand a stream. Streams always re-read numbered durable events, never trust a notification payload; the last viewer releases its subscription.
+
+## Current connected mock evidence
+
+The React shell at `/yard/app/` fetches a scoped `/yard/v1/blueprints/{id}/room` projection and resumes the durable event stream from that version. It shares the immutable ordinary build-transition table with Yard's domain. Stood capture projections additionally require exact matching payment proof; unknown events or missing sequences reload the snapshot rather than inventing a transition.
+
+The isolated Docker mock stack adds a server-side browser session proxy using fixed synthetic operator credentials. These credentials never enter the browser bundle. This test composition is excluded from production and is not hosted authentication. The room labels simulated payments before showing results. Missing authentication or unavailable APIs produce an explicit empty/error state.
+
+The stream retains comment heartbeats and also sends a `heartbeat` event so JavaScript can measure transport silence. A monotonic 35-second watchdog reconnects; it never supplies time to payment decisions. One shared database notification listener and a shared 15-second fallback per project replace per-viewer polling. Notification payloads contain the project identifier only. Site-log transport, public role-filtered streams, retention and the remaining project-room states are still planned.

@@ -42,6 +42,7 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
             cursor = event.seq;
           }
           await stream.write(': hb\n\n');
+          await stream.writeSSE({ event: 'heartbeat', data: JSON.stringify({ seq: cursor }) });
           if (!stopped && !stream.aborted) await subscription.wait(generation);
         }
       } finally {

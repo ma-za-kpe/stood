@@ -5,6 +5,7 @@ import { PostgresYardEvents } from '../src/adapters/db-postgres/events.js';
 import type { SettlementProof } from '../src/application/board.js';
 import { Board } from '../src/application/board.js';
 import { createYardApp } from '../src/http/app.js';
+import { browserSession } from './fakes/browser-session.js';
 
 if (process.env.NETWORK_MOCK !== 'true' || process.env.APP_ENV !== 'ci') throw new Error('Mock Yard refused');
 const pool = new pg.Pool({ connectionString: 'postgres://yard_runtime:sim-yard-database-only@db:5432/stood_mock' });
@@ -81,6 +82,7 @@ const app = createYardApp({
     },
   },
 });
+browserSession(app, clock);
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: 3001 });
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () =>

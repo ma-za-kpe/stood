@@ -2,12 +2,13 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['services/**/*.test.ts', 'packages/**/*.test.ts'],
+    include: ['services/**/*.test.ts', 'packages/**/*.test.ts', 'apps/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/*.db.test.ts', '**/*.network.test.ts'],
     coverage: {
       provider: 'v8',
       include: [
         'services/api/src/**/*.ts',
+        'apps/yard-web/src/project-state.ts',
         'services/yard-api/src/**/*.ts',
         'services/yard-foreman/src/**/*.ts',
         'services/simulators/src/**/*.ts',
