@@ -180,3 +180,20 @@ it('restores only platform secrets and rejects duplicates and linked config', as
     await rm(directory, { recursive: true, force: true });
   }
 });
+it.each([
+  [async () => new Response('{}', { status: 401 }), 'SANDBOX_KEYS_REJECTED'],
+  [async () => new Response('{}', { status: 503 }), 'SANDBOX_UNAVAILABLE'],
+  [
+    async () => {
+      throw new Error('fixture_secret must stay private');
+    },
+    'SANDBOX_UNAVAILABLE',
+  ],
+  [async () => new Response('not-json'), 'SANDBOX_INVALID_RESPONSE'],
+])('classifies provider setup failures without exposing responses or saving', async (request, code) => {
+  const save = vi.fn(async (_keys: unknown) => {});
+  await expect(setup({ prompt: async () => 'fixture_value', print: () => {}, save, request })).rejects.toMatchObject({
+    code,
+  });
+  expect(save).not.toHaveBeenCalled();
+});

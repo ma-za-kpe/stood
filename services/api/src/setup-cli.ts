@@ -1,5 +1,5 @@
 import { hiddenPrompt } from './adapters/local-setup/hidden-prompt.js';
-import { persistEnv, readPlatformKeys, setup } from './adapters/local-setup/setup.js';
+import { persistEnv, readPlatformKeys, SetupFailure, setup } from './adapters/local-setup/setup.js';
 
 try {
   if (process.argv.slice(2).some((arg) => arg !== '--rotate-platform')) throw new Error('Unknown setup option');
@@ -15,9 +15,17 @@ try {
     },
     process.env.PAYPAL_BASE_URL,
   );
-} catch {
-  process.stderr.write(
-    'Setup did not complete. Check your interactive terminal and sandbox keys, then retry scripts/dev setup.\n',
-  );
+} catch (error) {
+  const reason =
+    error instanceof SetupFailure
+      ? {
+          SANDBOX_KEYS_REJECTED:
+            'PayPal rejected the sandbox app credentials. Check the sandbox app and re-enter its keys.',
+          SANDBOX_UNAVAILABLE:
+            'PayPal sandbox could not be reached or is temporarily unavailable. Retry when it is reachable.',
+          SANDBOX_INVALID_RESPONSE: 'PayPal returned an unusable sandbox response. No credentials were saved.',
+        }[error.code]
+      : 'Setup did not complete. Check the interactive terminal, private .env and key input, then retry scripts/dev setup.';
+  process.stderr.write(`${reason}\n`);
   process.exitCode = 1;
 }

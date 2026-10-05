@@ -412,3 +412,5 @@ The static Yard preview lives in `site/yard/`, connects to Stood’s page, and u
 Run `scripts/dev site` to build and serve Stood at <http://localhost:8082/> and Yard at <http://localhost:8082/yard/>. Ports 3000/3001 remain API-only; their `/` route returns 404. Re-run the command after page changes to rebuild the preview.
 
 Run `scripts/check-site` to build the static site and check it in a dedicated Docker Chromium browser on Node 24. It checks desktop/mobile layout, keyboard fixture selection, both-way navigation, missing assets, reduced motion and simulation disclosure. Screenshots go to `artifacts/site/`. The separate `site-browser` CI job runs the same command; it is a page smoke test, not a full accessibility audit or the remaining Yard application E2E suite.
+
+Local setup distinguishes rejected sandbox credentials, sandbox unavailability/timeouts and invalid provider responses. These failures save nothing and never print provider response bodies, OAuth tokens or entered credentials.

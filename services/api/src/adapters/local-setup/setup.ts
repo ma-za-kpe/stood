@@ -5,6 +5,11 @@ import { resolve } from 'node:path';
 import { PAYMENT_KEYS, type PaymentKeys } from '../../application/payment-readiness.js';
 
 export const PLATFORM_KEYS = ['STOOD_API_KEY', 'STOOD_HMAC_SECRET', 'STOOD_WEBHOOK_SECRET'] as const;
+export class SetupFailure extends Error {
+  constructor(readonly code: 'SANDBOX_KEYS_REJECTED' | 'SANDBOX_UNAVAILABLE' | 'SANDBOX_INVALID_RESPONSE') {
+    super(`Sandbox key validation failed: ${code}`);
+  }
+}
 type SetupIO = Readonly<{
   existingPlatform?: PaymentKeys;
   rotatePlatform?: boolean;
@@ -44,7 +49,14 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
       },
       body: 'grant_type=client_credentials',
     });
-    const token: unknown = await response.json();
+    if (response.status === 401 || response.status === 403) throw new SetupFailure('SANDBOX_KEYS_REJECTED');
+    if (response.status >= 500 || response.status === 429) throw new SetupFailure('SANDBOX_UNAVAILABLE');
+    let token: unknown;
+    try {
+      token = await response.json();
+    } catch {
+      throw new SetupFailure('SANDBOX_INVALID_RESPONSE');
+    }
     if (
       !response.ok ||
       !token ||
@@ -58,9 +70,10 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
       !Number.isFinite(token.expires_in) ||
       token.expires_in <= 0
     )
-      throw new Error('Invalid OAuth response');
-  } catch {
-    throw new Error('Sandbox key validation failed');
+      throw new SetupFailure('SANDBOX_INVALID_RESPONSE');
+  } catch (error) {
+    if (error instanceof SetupFailure) throw error;
+    throw new SetupFailure('SANDBOX_UNAVAILABLE');
   }
   const generated: (typeof PLATFORM_KEYS)[number][] = [];
   for (const name of PLATFORM_KEYS) {
