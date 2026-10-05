@@ -138,7 +138,8 @@ export function createApp(config: AppConfig): Hono {
       const response = await api.fetch(new Request(url, c.req.raw));
       if (
         response.status !== 404 ||
-        (c.req.method === 'GET' && /^\/v1\/(allowances(?:\/[^/]+)?|tranches\/[^/]+)$/.test(c.req.path))
+        (c.req.method === 'GET' && /^\/v1\/(allowances(?:\/[^/]+)?|tranches\/[^/]+)$/.test(c.req.path)) ||
+        /^\/v1\/tranches\/[^/]+\/packages(?:\/[^/]+)?$/.test(c.req.path)
       )
         return response;
       return next();
