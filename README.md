@@ -94,6 +94,15 @@ One endpoint, many checklists ([S16](docs/stood/S16-use-cases-and-evidence-profi
 
 **Judges and evaluators:** the 2-minute path (local synthetic scenarios, no money executed) is at the top of the **[usage manual](docs/USAGE.md#for-hackathon-judges-try-it-in-2-minutes)**.
 
+Default local judge fixture (synthetic evidence; no tests or payments execute):
+
+```bash
+docker compose up -d api
+curl -s -X POST http://localhost:3000/v1/demo/scenarios/signed-tests-changed
+```
+
+It refuses with namedField signed_tests_changed and says: “The signed tests were changed. Nothing was paid. No payment was executed.” code-good passes the assessment; weak-tests and usage-pending wait.
+
 **Integrators** (planned `@stood/sdk`, v1 draft contract):
 
 ```ts

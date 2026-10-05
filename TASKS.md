@@ -301,6 +301,8 @@ T-0157 includes the approved landing repositioning (PR #24, 9eebf39) and unit-te
 
 The documentation review round is T-0157 and T-0160–T-0163. The funding/evidence implementation round above remains queued; this audit does not close issue #25 or qualification blockers.
 
-- `[ ]` T-0169 Issue #29 addendum: make five code-milestone fixtures the default demo set; add separate payer/builder copy, honest synthetic responses, code-first judges curl and PR checklist. Preserve geofence tests and label field demo code/docs as site-visit scenarios. Tests first for fixture outcomes, copy and demo-disabled guards.
+- `[x]` T-0169 Issue #29 addendum: make five code-milestone fixtures the default demo set; add separate payer/builder copy, honest synthetic responses, code-first judges curl and PR checklist. Preserve geofence tests and label field demo code/docs as site-visit scenarios. Tests first for fixture outcomes, copy and demo-disabled guards.
 
 Issue #29 provenance audit: 27 historical research/source/ADR records receive banner-only changes; ADR-0015 records the pivot without replacing ADR-0014. T-0163 also completes the code attack table and audits scenario/process boundaries. Issue closure follows code-fixture addendum T-0169 and full CI. Other open implementation issues remain open until their scope is met.
+
+T-0169 evidence: 11 fixture regressions failed first (new routes/copy and field labels absent); all 16 new cases then pass, including demo-off visibility. Synthetic code fixtures expose separate payer/builder sentences and never claim a runner/payment ran. Weak/usage WAIT retains the existing null namedField and named reason. Full Docker gate/CI is required before closing issue #29.

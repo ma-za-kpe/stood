@@ -1,4 +1,4 @@
-<!-- PR title must be a Conventional Commit, e.g. `feat(decision): refuse packages outside the geofence` -->
+<!-- PR title must be a Conventional Commit, e.g. `feat(decision): refuse changed frozen acceptance tests` -->
 
 ## Scope
 
@@ -7,7 +7,7 @@ What changed and why. Link the task: `TASKS.md#T-XXXX` and the spec doc(s).
 ## Tests first
 
 - [ ] I wrote a failing test before the change (or this PR is docs / config only).
-- [ ] Acceptance scenarios / fixtures affected: <!-- good · wrong-plot · recycled · wrong-stage · substituted-fitting -->
+- [ ] Acceptance scenarios / fixtures affected: <!-- code-good · signed-tests-changed · tests-skipped · weak-tests · usage-pending; site-visit scenario fixtures if touched -->
 
 ## Evidence
 

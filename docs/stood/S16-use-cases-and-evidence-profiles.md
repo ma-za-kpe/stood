@@ -99,4 +99,4 @@ Deposits flip the meaning: the "good" outcome is **void**. The profile declares 
 ## 6. Hackathon implication [C]
 
 - **Updated 5 October 2026:** code milestones and agent-to-agent payments are the hero story (PR #24). EyeOnSite remains a concrete site-visit scenario; the former construction-first choice is retained here as historical context. [S17](S17-agent-payments-positioning.md) defines the new trust boundary.
-- **Show freelance as the second profile** on the landing page and as a fixture (`freelance-missing-screen`). That proves "one endpoint, many checklists" to the judges in 10 seconds, and it maps to Best Use of Agentic Commerce through the MCP path.
+- **Keep freelance as a secondary profile** in fixture coverage and as a fixture (`freelance-missing-screen`). That proves "one endpoint, many checklists" to the judges in 10 seconds, and it maps to Best Use of Agentic Commerce through the MCP path.

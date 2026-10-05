@@ -1,12 +1,12 @@
 # S06: Voice and states
 
-## Code-milestone sentence pairs (target copy)
+## Code-milestone sentence pairs
 
-Buyer / builder replace payer / inspector in code-facing screens. The existing internal sentence field names remain unchanged until a versioned API contract changes them. These pairs describe evidence; append a money clause from confirmed state only.
+Buyer / builder replace payer / inspector in code-facing screens. The existing internal sentence field names remain unchanged until a versioned API contract changes them. Code assessment pairs are implemented for changed/skipped/weak tests and usage pending. Confirmed settlement/product-screen examples remain target copy; append a money clause from confirmed state only.
 
 | Condition | Buyer | Builder |
 |---|---|---|
-| Signed tests changed | Signed tests changed | Restore the frozen tests and submit a new commit |
+| Signed tests changed | The signed tests were changed | Restore the frozen tests and submit a new commit |
 | Skipped tests | Required tests were skipped | Run every frozen test without skips or selective execution |
 | Weak tests | The tests are too weak | Request stronger signed acceptance tests before resubmitting |
 | Confirmed release | Milestone 2 released. $1,200 paid | Your commit passed. $1,200 paid to the platform merchant |

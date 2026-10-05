@@ -50,51 +50,49 @@ These params are draft metadata. This endpoint does not freeze/sign tests, valid
 
 ## For hackathon judges: try it in 2 minutes
 
-The live landing page has four illustrative commit scenarios. They execute no tests or payments.
+The live landing page's four commit cards are illustrative. The local API now defaults to code-milestone fixtures, using synthetic findings through the real pure gate. No test runner or payment is executed.
 
-### Scenario: site visits (local synthetic fixtures)
+```bash
+docker compose up -d api
+BASE=http://localhost:3000/v1
+curl -s "$BASE/demo/scenarios"
+curl -s -X POST "$BASE/demo/scenarios/signed-tests-changed"
+curl -s -X POST "$BASE/demo/scenarios/code-good"
+```
 
-**Current local implementation:** start `docker compose up -d api`. `POST http://localhost:3000/v1/demo/scenarios/wrong-plot` runs synthetic check results through the real rule and returns `payment.executed: false`. It does not authorise, capture or void. The hosted sandbox replay and SDK below are planned contracts, not shipped capabilities.
-
-The local response includes assessment copy and structured evidence details:
+Changed-test response (excerpt):
 
 ```json
-{ "outcome": "REFUSE", "effect": "VOID", "namedField": "plot",
-  "ruleSetVersion": "1.1.0", "detail": { "distance_m": 1400 },
-  "sentence": "Wrong plot. 1.4 km off. No payment was executed.",
+{ "outcome": "REFUSE", "effect": "VOID", "namedField": "signed_tests_changed",
+  "profileId": "code.milestone@1", "ruleSetVersion": "1.1.0", "scenario": "code_milestone",
+  "sentence": "The signed tests were changed. Nothing was paid. No payment was executed.",
+  "sentences": {
+    "payer": "The signed tests were changed. Nothing was paid. No payment was executed.",
+    "builder": "Restore the frozen signed tests and submit a new commit. No payment was executed."
+  },
   "evidenceTier": "fixture", "source": "synthetic_check_results",
   "payment": { "executed": false } }
 ```
 
-This excerpt omits `checks`, `reason` and `profileId`. Check results include `source: RULE | MODEL`; model results include confidence. The distance and findings in this endpoint are synthetic, not observations from a visit. `recycled` includes `detail.matched_package_id`. Local scenarios: `good`, `wrong-plot`, `recycled`, `wrong-stage`, `substituted-fitting`, `nonce-unreadable`, `mock-location`, `freelance-missing-screen`, `funding-declined` and `hold-expiry`. The last two return `state: WAIT_FUNDING | EXPIRED`, `outcome: WAIT` and `source: synthetic_domain_transitions`. Expiry uses simulated provider proof; its fixture settlement reference is not a PayPal ID.
+The full response also includes checks, reason, detail and a compatibility inspector sentence. It has no paypal block. RELEASE is assessment eligibility, not a confirmed RELEASED settlement.
 
-The local response also exposes `sentences.payer` and `sentences.inspector`, each ending with "No payment was executed." Missing-item copy names the item. Assessment copy never claims that the declared CAPTURE/VOID effect completed; the local response has no `paypal` block.
+| Default fixture | Assessment | Reason / next action |
+|---|---|---|
+| code-good | RELEASE | Synthetic findings pass, no capture |
+| signed-tests-changed | REFUSE | Restore the frozen signed tests |
+| tests-skipped | REFUSE | Run every required test |
+| weak-tests | WAIT | Human review of weak mutation quality |
+| usage-pending | WAIT | Independent usage receipt and buyer acceptance missing |
 
-**Planned hosted demo (not yet implemented):** no account will be needed. These endpoints will run fixture scenarios against the PayPal **sandbox** and return real sandbox order, void and capture IDs. The hosted URL, payment-confirmed sentences, `named_field`, `paypal` block, receipts, browser approval and Postman replay below are target contracts; they are not responses or capabilities of the current local API.
+Both WAIT responses keep namedField null and expose weak_tests / usage_pending in reason, preserving the existing decision contract. Money copy is conservative: this fixture knows no call was made; ordinary assessments never claim payment or successful cancellation. A future final usage milestone cannot release without trusted outside proof and the agreed buyer acceptance.
 
-```bash
-BASE=https://stood-api.onrender.com/v1
+### Scenario: site visits (secondary synthetic fixtures)
 
-# 1. Wake the free-tier demo (first call can take ~1 minute)
-curl -s $BASE/../health
+Existing good, wrong-plot, recycled, wrong-stage, substituted-fitting, nonce-unreadable, mock-location, funding-declined and hold-expiry remain reachable at the same fixture paths and return scenario: site_visit. The secondary freelance-missing-screen fixture returns scenario: freelance. They are not the default judge path. Site-visit wrong-plot retains the 1.4 km detail and separate payer/inspector instructions. Location/geofence tests remain valid generic checks.
 
-# 2. Run a scenario: good | wrong-plot | recycled | wrong-stage | substituted-fitting | freelance-missing-screen
-curl -s -X POST $BASE/demo/scenarios/wrong-plot | jq '{outcome, named_field, sentence, paypal}'
-```
+Funding-declined and hold-expiry simulate domain transitions: outcome WAIT, states WAIT_FUNDING/EXPIRED and source synthetic_domain_transitions. Expiry requires simulated matched provider proof, not elapsed time alone. No reference is a real PayPal ID.
 
-Planned response (not yet implemented):
-
-```json
-{ "outcome": "REFUSE", "named_field": "plot",
-  "sentence": "Wrong plot. 1.4 km off. Nothing was paid.",
-  "paypal": { "order_id": "…", "authorization_id": "…", "status": "VOIDED" } }
-```
-
-- Watch it in the browser: the landing page's "Try the gate" section, and the receipt link returned by each scenario.
-- Replay as the payer (Kernel drives the PayPal sandbox approval live): `POST $BASE/demo/approve`. It returns a live-view URL.
-- Postman: the public "Stood × PayPal" workspace has every scenario pre-built.
-
-The domain and signed draft API permit GBP/USD/EUR holds and validate the exact sum of milestones against the cap. Allowance signing and financial HTTP workflows below remain planned. The tested funded-hold adapter records possible submission atomically before SDK calls and checks the five-minute capture margin again immediately before submission. It is not enabled for HTTP payment execution.
+Hosted provider replay, approval browser automation, receipts and Postman workspace remain planned; no hosted URL or provider confirmation is claimed here. Allowances/tranches accept GBP/USD/EUR with exact totals. The guarded funded-hold adapter is tested with fake/synthetic provider evidence and rechecks the five-minute expiry margin before calling; financial HTTP remains off.
 
 ---
 

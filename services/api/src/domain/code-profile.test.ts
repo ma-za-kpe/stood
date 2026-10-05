@@ -9,12 +9,8 @@ describe('Code milestone evidence profile', () => {
       status: 'PASS',
       reason: 'synthetic_trusted_finding',
     }));
-  it('requires deterministic evidence regardless of whether either party is human or agent', () => {
-    for (const buyer of ['human', 'agent'])
-      for (const builder of ['human', 'agent']) {
-        expect(buyer.length + builder.length).toBeGreaterThan(0);
-        expect(decide('code.milestone@1', passed())).toMatchObject({ outcome: 'RELEASE', effect: 'CAPTURE' });
-      }
+  it('requires deterministic evidence without a buyer or builder identity input', () => {
+    expect(decide('code.milestone@1', passed())).toMatchObject({ outcome: 'RELEASE', effect: 'CAPTURE' });
     expect(getProfile('code.milestone@1').checks.every((c) => c.source === 'RULE')).toBe(true);
   });
   it.each(['test_integrity', 'test_execution', 'new_commit', 'budget_mandate'])(
