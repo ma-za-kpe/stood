@@ -86,6 +86,8 @@ services:
       - dependencies:/workspace/node_modules
     environment:
       APP_ENV: local
+      PROVIDER_PAYPAL: ${PROVIDER_PAYPAL:-}
+      PAYPAL_SIM_URL: http://paypal-sim:8080
       PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
       DATABASE_URL: postgres://stood:stood_local_only@db:5432/stood
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}

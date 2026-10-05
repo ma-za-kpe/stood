@@ -68,6 +68,7 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
     appEnv: 'ci',
     paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
     demoMode: false,
+    providerMode: 'sim',
     clockMode: 'controlled',
     requestClock: () => clock.read(),
     api: {

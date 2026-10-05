@@ -5,10 +5,10 @@ import { PostgresReconciliationQueue } from './adapters/db-postgres/reconciliati
 import * as schema from './adapters/db-postgres/schema.js';
 import { PostgresTranches } from './adapters/db-postgres/tranches.js';
 import { PayPalAdapter } from './adapters/payments-paypal/adapter.js';
-import { ServerSdkTransport } from './adapters/payments-paypal/sdk.js';
 import { reconciliationTick } from './application/reconciliation-worker.js';
+import { reconciliationRuntime } from './reconciliation-runtime.js';
 
-const required = ['DATABASE_URL', 'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'RECONCILIATION_OWNER'] as const;
+const required = ['DATABASE_URL', 'PROVIDER_PAYPAL', 'RECONCILIATION_OWNER'] as const;
 const missing = required.filter((key) => !process.env[key]?.trim());
 if (missing.length) {
   process.stderr.write(`Reconciliation is off. Add: ${missing.join(', ')}. See docs/USAGE.md.\n`);
@@ -19,20 +19,14 @@ if (missing.length) {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const store = new PostgresTranches(drizzle(pool, { schema }));
-    const reader = new PayPalAdapter(
-      new ServerSdkTransport({
-        appEnv: process.env.APP_ENV ?? 'local',
-        baseUrl: process.env.PAYPAL_BASE_URL ?? 'https://api-m.sandbox.paypal.com',
-        clientId: process.env.PAYPAL_CLIENT_ID ?? '',
-        clientSecret: process.env.PAYPAL_CLIENT_SECRET ?? '',
-      }),
-      store,
-    );
+    const providers = await reconciliationRuntime(process.env);
+    const reader = new PayPalAdapter(providers.transport, store);
     const queue = new PostgresReconciliationQueue(pool);
     while (!abort.signal.aborted) {
+      const now = await providers.clock();
       const result = await reconciliationTick(store, reader, queue, {
         owner: process.env.RECONCILIATION_OWNER ?? '',
-        clock: Date.now,
+        clock: () => now,
       });
       process.stdout.write(
         `Reconciliation: ${result.processed} processed, ${result.waiting} waiting, ${result.failed} failed.\n`,

@@ -10,6 +10,7 @@ it('delivers signed simulated events to Stood as reconciliation hints, never set
     appEnv: 'ci',
     paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
     demoMode: false,
+    providerMode: 'sim',
     providerEvents: {
       verify: async (body, headers) =>
         headers.get('Stood-Sim-Signature') ===
@@ -60,5 +61,26 @@ it('rejects non-boolean verification and array resources without enqueueing a hi
     (await app.request('/v1/webhooks/paypal', { method: 'POST', body: JSON.stringify({ ...event, resource: [] }) }))
       .status,
   ).toBe(422);
+  expect(enqueue).not.toHaveBeenCalled();
+});
+
+it('rejects simulated notifications in live mode before calling any verifier', async () => {
+  const enqueue = vi.fn(async () => {});
+  const verify = vi.fn(async () => true);
+  const app = createApp({
+    appEnv: 'ci',
+    paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
+    demoMode: false,
+    providerMode: 'live',
+    providerEvents: { verify, enqueue },
+  });
+  const event = { id: 'SIM-EVENT', event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'capture' } };
+  for (const request of [
+    { body: JSON.stringify({ ...event, simulated: true }) },
+    { body: JSON.stringify(event), headers: { 'Stood-Sim-Signature': 'fake' } },
+    { body: JSON.stringify(event), headers: { 'X-Stood-Simulated': 'true' } },
+  ])
+    expect((await app.request('/v1/webhooks/paypal', { method: 'POST', ...request })).status).toBe(401);
+  expect(verify).not.toHaveBeenCalled();
   expect(enqueue).not.toHaveBeenCalled();
 });
