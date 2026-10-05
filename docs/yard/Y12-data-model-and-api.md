@@ -57,3 +57,5 @@ site_log          (work_order_id, seq, at, kind, message)          -- append-onl
 ## Implemented foundation boundary
 
 `packages/yard-domain` implements immutable, versioned Blueprint terms. Only the final milestone uses `code.final@1`. A local FROZEN terms record is not a funded or signed Stood allowance; approval and red-baseline references must come from qualified authority adapters before runtime activation. Persistence, HTTP blueprint commands and the remaining API above are planned.
+
+The WorkOrder domain implements pre-payment claims, build/submission/checking, fixed 48-hour leases and explicit expiry/repost. It retains unresolved submitted/checking work instead of making it claimable. It cannot project PAID or a refusal: qualified signed Stood projections remain T-0189. Claims are still in-memory domain records; concurrent durable claims and funding coordination remain T-0186/T-0187.

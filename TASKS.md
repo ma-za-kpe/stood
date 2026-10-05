@@ -332,7 +332,7 @@ Y-A foundations: T-0174 supplies the designed ADR and tested import rules. The r
 - `[x]` T-0175 Yard Hono skeleton and health endpoint, separate configuration; no money endpoints or Stood imports.
 - `[ ]` T-0176 Separate yard Postgres schema/role and migration owner; real-database tests prove no Stood-table grants or cross-schema writes.
 - `[x]` T-0177 Blueprint/Milestone domain: versions, immutable signed terms, test hashes, intermediate/final profile binding; tests first.
-- `[ ]` T-0178 WorkOrder/Claim domain: one current claim, 48-hour lease, explicit expiry/recovery and outside-operator identity; property tests.
+- `[x]` T-0178 WorkOrder/Claim domain: one current claim, 48-hour lease, explicit expiry/recovery and outside-operator identity; property tests.
 - `[ ]` T-0179 Public HTTP Stood SDK contract: signed requests, typed errors and truthful DRAFT/QUEUED semantics, contract tests against local API. No internal imports.
 - `[ ]` T-0180 Y0 Yard page with Y09 tokens/voice and Stood nav link; accessible fixtures, planned-capability labels.
 
@@ -368,3 +368,5 @@ T-0175–T-0179 implement the next foundation slices. Production Crew code is ex
 T-0175: three shell tests failed first on the absent module. Yard health and guarded workflows are unit-tested; the opt-in local Docker service uses YARD_ENV/YARD_PORT only and receives no Stood or PayPal credentials. No Board, model, SSE, secret storage or funding workflow is exposed.
 
 T-0177: five blueprint tests (including 500 property cases) pass after the absent domain failed first. DRAFT edits preserve prior versions; FROZEN copies require matching buyer/version/test hashes/red-baseline references and cannot change. Integer budget sums use BigInt; intermediate/final profiles are fixed by position. FROZEN is local terms only, not cryptographic approval or a Stood SIGNED mandate. Verified approval/red-runner receipt loading remains T-0182/T-0184. Yard domain coverage is enforced at 100%, separately from Stood.
+
+T-0178: lease-domain tests failed first on the absent aggregate; six cases plus 500 random command-sequence properties cover one active claim, fixed 48-hour expiry, no replay extension, explicit clock-out/repost and rejection without mutation. SUBMITTED/CHECKING cannot automatically expire or reopen. Operator roots are recorded for reputation only; the authenticated registry must supply them. No PAID state or provider operation exists in this aggregate. Concurrent durable claiming and Stood-signed projections remain T-0186/T-0189.
