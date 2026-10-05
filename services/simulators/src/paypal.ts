@@ -180,6 +180,8 @@ export function createPayPalSimulator(config: {
       });
     }
     if (c.req.header('authorization') !== 'Bearer sim-access-token') return response(error(401, 'INVALID_TOKEN'));
+    if (path === '/__sim/time' && method === 'GET')
+      return response({ status: 200, body: { simulated: true, now: now() } });
     if (method === 'GET') {
       const oid = /^\/v2\/checkout\/orders\/([^/]+)$/.exec(path)?.[1];
       if (oid) {

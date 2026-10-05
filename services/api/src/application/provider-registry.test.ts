@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { bootProviders, ProviderConfigurationError, type ProviderDefinition } from './provider-registry.js';
 
 const definition = (): ProviderDefinition => ({
@@ -15,6 +15,33 @@ const definition = (): ProviderDefinition => ({
   ),
 });
 describe('Explicit provider boot registry', () => {
+  it('returns the declared port type and preserves a safe startup failure reason', async () => {
+    type Ports = { paypal: { ping(): Promise<string> } };
+    const registry = await bootProviders<Ports>({
+      environment: 'ci',
+      selections: { paypal: 'sim' },
+      keys: {},
+      definitions: [
+        {
+          id: 'paypal',
+          requiredKeys: [],
+          factories: {
+            sim: async () => ({
+              adapter: { ping: async () => 'pong' },
+              ready: async () => true,
+            }),
+          },
+        },
+      ],
+    });
+    expectTypeOf(registry.get('paypal')).toEqualTypeOf<Ports['paypal']>();
+    expect(await registry.get('paypal').ping()).toBe('pong');
+    const d = definition();
+    d.factories.sim = async () => ({ adapter: {}, ready: async () => false });
+    await expect(
+      bootProviders({ environment: 'ci', selections: { paypal: 'sim' }, keys: {}, definitions: [d] }),
+    ).rejects.toMatchObject({ reason: 'READINESS_REJECTED' });
+  });
   it.each(['fake', 'sim', 'live'])('selects only %s and freezes sanitised health', async (mode) => {
     const d = definition();
     const registry = await bootProviders({
@@ -67,7 +94,11 @@ describe('Explicit provider boot registry', () => {
         },
         definitions: [d],
       }),
-    ).rejects.toMatchObject({ code: 'NOT_READY', message: 'Provider paypal is not ready.' });
+    ).rejects.toMatchObject({
+      code: 'NOT_READY',
+      reason: 'CONSTRUCTION_FAILED',
+      message: 'Provider paypal is not ready (CONSTRUCTION_FAILED).',
+    });
     expect(d.factories.fake).not.toHaveBeenCalled();
     expect(d.factories.sim).not.toHaveBeenCalled();
   });
@@ -87,7 +118,7 @@ describe('Explicit provider boot registry', () => {
         definitions: [d],
         timeoutMs: 25,
       });
-      const assertion = expect(pending).rejects.toMatchObject({ code: 'NOT_READY' });
+      const assertion = expect(pending).rejects.toMatchObject({ code: 'NOT_READY', reason: 'TIMEOUT' });
       await vi.advanceTimersByTimeAsync(25);
       await assertion;
     } finally {

@@ -53,6 +53,8 @@ services:
       PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
       DATABASE_URL: postgres://stood:stood_local_only@db:5432/stood
       STOOD_PLATFORM_ID: ${STOOD_PLATFORM_ID:-local-platform}
+      PROVIDER_PAYPAL: ${PROVIDER_PAYPAL:-}
+      PAYPAL_SIM_URL: http://paypal-sim:8080
       DEMO_MODE: "true"
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
