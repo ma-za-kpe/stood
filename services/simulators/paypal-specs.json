@@ -1,0 +1,26 @@
+{
+  "commit": "90e8041ffe02d80c452d2b476bedd59a8d219bdc",
+  "specs": [
+    {
+      "name": "checkout_orders_v2.json",
+      "url": "https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/checkout_orders_v2.json",
+      "sha256": "14db0b9e0d7440e38595b823724599edc7ab8b7a2b41ac442463e81b7d477fd6"
+    },
+    {
+      "name": "payments_payment_v2.json",
+      "url": "https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/payments_payment_v2.json",
+      "sha256": "ecd8bc60e133bd4bc54de10daae3011a451e3a69e971ddf19c09213aa0f15c21"
+    },
+    {
+      "name": "vault_payment_tokens_v3.json",
+      "url": "https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/vault_payment_tokens_v3.json",
+      "sha256": "acac6fb026868e361a967d4106b7ca39da41f1751ebe205e1df8365f559aa3d3"
+    },
+    {
+      "name": "notifications_webhooks_v1.json",
+      "url": "https://raw.githubusercontent.com/paypal/paypal-rest-api-specifications/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/notifications_webhooks_v1.json",
+      "sha256": "4702a4c2601a087cdde7481f1b55800abb568906e50dde867bb958b4b25afecf"
+    }
+  ],
+  "qualification": "published-contract reference only; no sandbox recordings"
+}
