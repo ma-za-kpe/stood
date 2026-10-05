@@ -28,7 +28,7 @@
 1. Check `paypal_calls` for the tranche (status, `paypal_debug_id`).
 2. If PayPal shows the capture as completed (Transaction Search), mark it reconciled. **Don't re-capture.**
 3. If the authorisation expired, set the state to `EXPIRED` and notify the payer: "The hold ended before release. Nothing was paid." Ask for a new authorisation.
-4. Otherwise retry once with the same `PayPal-Request-Id`, then escalate.
+4. If the outcome is unknown, keep the reservation pending and escalate to its reviewer owner. Do not blindly re-capture. A definite decline resolves the operation; any subsequent domain-approved attempt gets a new operation key and request ID.
 
 ### R2: Capture without a Stood release (gate bypass)
 
@@ -52,3 +52,7 @@
 1. Revoke and rotate immediately (PayPal app secret / HMAC / R2 token).
 2. Purge it from history only if it was committed (and treat it as compromised regardless).
 3. Requalify with the CI contract tests. Log it in `TASKS.md`.
+
+## Implemented local scheduler
+
+T-0149 provides durable leased status-polling jobs and deduplicated alert rows, not Transaction Search auditing or external notification delivery (T-0155). `scripts/dev reconcile` is read-only at the provider boundary. Safe-mode cancellation is triggered by the scheduler before and after reconciliation; `RECONCILIATION_OWNER` owns any unresolved cancellation and provider uncertainty. The default owner is the local checkout operator (`local-reviewer`). Three hours is measured from the server-set operation creation time, never from a new retry. Jobs survive process restarts; lease tokens prevent a stale completion from clearing another worker's claim. Money submission is an optional tested application capability and is not enabled by this CLI.

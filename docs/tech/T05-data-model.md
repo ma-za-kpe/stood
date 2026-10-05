@@ -126,3 +126,7 @@ Every object is private. Access is through signed URLs with a 15-minute TTL (rec
 | Webhook deliveries | 30 days |
 
 **Real personal data never enters fixtures or the repo** ([WoW §11](../WAYS_OF_WORKING.md#11-security-and-secrets-open-source-edition)).
+
+### Reconciliation operations (T-0149)
+
+`reconciliation_jobs` stores a next-run deadline and an expiring lease token per managed tranche. Claims are atomic with `FOR UPDATE SKIP LOCKED`; finishing requires the exact token. `payment_alerts` retains deduplicated reviewer-owned OPEN/RESOLVED rows, original opened time and latest observation time. Safe-mode cancellation has an automatic scheduler trigger and a configured reviewer owner; unresolved operations get a three-hour alert. These operational tables do not replace the immutable payment ledger or prove a provider cancellation. Transaction Search scanning and notification delivery are separate T-0155 work.

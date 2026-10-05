@@ -298,3 +298,11 @@ RFC 9457 `application/problem+json`. A **refusal is not an error**: it's a `200`
 **Is this production-ready?** Not yet. It's sandbox only during the hackathon. Going live needs PayPal live review, licensing and data-protection steps ([TASKS.md](../TASKS.md) T-0111…T-0115).
 
 **How do I report a security issue?** Privately: [SECURITY.md](../SECURITY.md).
+
+## Local reconciliation worker (implemented status polling)
+
+After database migrations and sandbox key setup, run `scripts/dev reconcile` in the foreground, or `docker compose --profile operations up -d reconciler` in the background. Compose reads the named sandbox credentials from the private `.env`; it does not forward the whole file. Set `RECONCILIATION_OWNER` to the responsible reviewer. The local default, `local-reviewer`, means the person running this checkout.
+
+The worker ticks every 15 seconds, claims up to ten due jobs, retries unresolved status checks after 60 seconds and idle states after an hour. Database leases expire after 90 seconds and require a matching token to finish. It reserves cancellation of old-rule holds automatically and records reviewer-owned `SAFE_CANCEL_REQUESTED`, `PROVIDER_UNKNOWN`, `UNRESOLVED_3H` and `WORKER_FAILURE` rows in `payment_alerts`; resolved rows remain available. The reviewer must investigate unknown outcomes and any pending safe-mode cancellation.
+
+This command reads PayPal status and writes local state and alerts. It does **not** submit captures, cancellations or renewals. A reserved safe-mode cancellation therefore remains pending until a qualified executor submits it or the reviewer cancels it through PayPal and matching provider proof confirms the outcome. Transaction Search auditing, dashboard presentation and email/Slack notification delivery remain planned (T-0155 / T-0142). No raw provider responses or credentials are logged.
