@@ -1,5 +1,19 @@
 module.exports = {
   forbidden: [
+    {
+      name: 'yard-calls-stood-over-http',
+      severity: 'error',
+      from: { path: '^(services/yard-[^/]+/|apps/yard-web/|packages/stood-sdk/)' },
+      to: { path: '^services/api/' },
+    },
+    {
+      name: 'foreman-plans-only',
+      severity: 'error',
+      from: { path: '^services/yard-foreman/' },
+      to: {
+        path: '^(services/(api|yard-api|yard-crew)/|packages/stood-sdk/|(@paypal/)|(node:)?(child_process|fs|http|https|net|tls|worker_threads)(/|$))',
+      },
+    },
     { name: 'no-cycles', severity: 'error', from: {}, to: { circular: true } },
     {
       name: 'pure-domain',

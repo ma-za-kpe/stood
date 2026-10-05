@@ -15,7 +15,7 @@ flowchart LR
   API --> PayPal[(Guarded sandbox adapter: HTTP money off)]
 ```
 
-The fetch supervisor has narrowly scoped repository access; the execution sandbox has none. Pre-fetch allowed dependencies outside execution, verify digests and mount inputs read-only. Host-bound signing keys never enter the builder process. Limit CPU/memory/wall time/processes/disk/output; reject partial reports. A2A task negotiation and AP2 mandate exchange are planned caller surfaces, not payment authority. Yard belongs to a separate operator/repo.
+The fetch supervisor has narrowly scoped repository access; the execution sandbox has none. Pre-fetch allowed dependencies outside execution, verify digests and mount inputs read-only. Host-bound signing keys never enter the builder process. Limit CPU/memory/wall time/processes/disk/output; reject partial reports. A2A task negotiation and AP2 mandate exchange are planned caller surfaces, not payment authority. Yard is a separate product/runtime in this monorepo, with separate operator credentials and database grants; see [ADR-0016](../adr/0016-yard-monorepo-caller-boundaries.md).
 
 Durable aggregate/ledger writes and reconciliation polling are implemented. Funding HTTP and trusted evidence ingestion remain planned. Stored ambiguous effects stay unresolved until exact provider proof; old-rule captures cannot be submitted.
 

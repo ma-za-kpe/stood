@@ -36,7 +36,7 @@
 
 Adaeze delegates a code milestone to Yard or a human developer. A green badge alone does not show whether signed tests were changed, skipped or too weak. Her payment needs a new commit, intact acceptance tests, a trustworthy run and the agreed budget and usage conditions. Buyer and builder identity does not change the decision.
 
-The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. Yard and the A2A/AP2 surface are planned, not shipped. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
+The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. [Yard](docs/yard/README.md) lives as a planned companion product in this monorepo; its runtime and the A2A/AP2 surface are not shipped. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
 
 [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is a linked site-visit scenario, with its original research preserved in the [historical docs](docs/11-africa-payments-and-eyeonsite.md).
 
