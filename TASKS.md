@@ -416,3 +416,26 @@ Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The
 - `[ ]` T-0216 Pricing and platform-fee ADR (Y13): fees and preview hosting cost as explicit blueprint line items, nothing hidden. Required before any real money.
 - `[ ]` T-0217 Yard privacy and data: intake data classification (GDPR / NDPR / POPIA / Kenya DPA), export and deletion of blueprint data, retention per Y18, consent copy for agent and human builders.
 - `[ ]` T-0218 Yard demo and judge path: describe → sign → milestone paid → punch list → handover, across Yard and Stood, with honest "synthetic" labels; fits the 90s video (T-0041) and the judges' fixtures.
+
+### Provider abstraction: fake, simulator and live (product owner request, 2026-10-05)
+
+We don't have provider keys yet. Every external service sits behind a port with **three interchangeable implementations**, so the whole product runs and is tested today, and switching to real keys is configuration, not a rewrite:
+
+- **fake:** in-memory, deterministic, scriptable scenarios, used by unit tests.
+- **simulator:** a local HTTP server that speaks the provider's real wire protocol, so the **real SDK** runs against it unchanged. Used in Docker dev, integration tests and the demo.
+- **live:** the real provider, enabled only when keys are present and validated.
+
+Rules: production code imports ports only; fakes and simulators never ship in a production build; there's no silent fallback from live to a mock; every simulated result is labelled as simulated in the API and UI.
+
+- `[ ]` T-0219 Provider abstraction ADR: the port inventory (PayPal, runner, GitHub, Render, KMS/secret store, email, object storage, LLM planner, search, browser QA, Stood-for-Yard, Crew endpoint), the fake / simulator / live modes, per-provider mode configuration (`PROVIDER_PAYPAL=fake|sim|live` …), and the rules above. A dependency-cruiser rule forbids production entry points importing `**/fakes/**` or `**/simulators/**`.
+- `[ ]` T-0220 Provider registry and boot-time readiness: one composition root picks each adapter from configuration; live mode requires its keys and a passing readiness check, or the service refuses to start with a named error (never a crash, never a fallback). `/health` reports each provider's mode. Production (`APP_ENV=production`) refuses fake/simulator for money and evidence providers.
+- `[ ]` T-0221 Shared port contract suites: one test suite per port, run against fake and simulator in CI, and against live in the nightly sandbox job (T-0096) once keys exist. A fake that drifts from the contract fails CI.
+- `[ ]` T-0222 PayPal simulator: stateful Orders v2 (create, AUTHORIZE), Payments v2 (capture, void, reauthorize, get), OAuth tokens, Vault/setup tokens (T-0154) and webhooks, derived from PayPal's published OpenAPI specs. The pinned Server SDK 2.5.0 runs against it through `PAYPAL_BASE_URL`. A controllable clock covers the honor period, day-four reauthorisation and 29-day expiry.
+- `[ ]` T-0223 Fault injection for every simulator: timeouts, 5xx, rate limits, malformed bodies, duplicate and out-of-order webhooks, and **ambiguous outcomes** (request applied but response lost). Scenario files drive the T-0158 ambiguous-retry and reconciliation (T-0149, T-0155) tests.
+- `[ ]` T-0224 Record and verify against the real sandbox once keys arrive: capture sanitised sandbox exchanges (no tokens, ids rewritten), diff them against the simulator, and fail when they drift. Update the simulator from the recordings, never the other way round.
+- `[ ]` T-0225 GitHub simulator / fake for the Yard GitHub App (T-0188, T-0165): installation tokens scoped to one repo, repo creation in the buyer's account, branch protections, `wo/*` pushes, PR merge, read-only fetch by commit SHA, archive download. Includes the token/repo/path attack cases.
+- `[ ]` T-0226 Render API fake for previews and handover (T-0196, T-0207, T-0214): create a service from an image, set env vars, deploy status, delete, TTL teardown, and a `render.yaml` Blueprint validator for the Deploy to Render path. No real spend in tests.
+- `[ ]` T-0227 Secret-store port (T-0195): local libsodium sealed-box adapter for dev/demo and a KMS adapter for live, with the same write-only contract (no read-back API), audit rows on decrypt and rotation tests.
+- `[ ]` T-0228 Fakes for the remaining ports: email (Mailpit already in Compose), object storage (SeaweedFS already in Compose), LLM `PlannerModel` (scripted plus record/replay of real runs, T-0181), search (Postgres FTS vs Elastic, T-0211), browser QA (Kernel), notifications (Zapier), and the Crew dispatch endpoint (shares T-0191's contract fake).
+- `[ ]` T-0229 Stood fake for Yard: a local server implementing Stood's public `/v1` and signed webhooks from the same contracts as `packages/stood-sdk` (T-0179), with scripted RELEASE / REFUSE / WAIT. Yard's tests and demo run with no Stood database or PayPal at all.
+- `[ ]` T-0230 Switching guide in `docs/USAGE.md`: "Run everything without keys" (one command, simulators on), then "Switch a provider to live": the keys needed, where they come from, `scripts/dev setup`, the readiness output, and how to switch back. The README badge and `/health` show which providers are simulated.
