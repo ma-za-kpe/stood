@@ -1,0 +1,8 @@
+minimum_pre_commit_version: "4.0.0"
+repos:
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        args: [--no-progress, --offline, --include-fragments]
+        files: \.md$
