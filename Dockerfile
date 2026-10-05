@@ -13,8 +13,8 @@ CMD ["pnpm", "test"]
 
 FROM dev AS build
 COPY --chown=node:node . .
-RUN pnpm install --frozen-lockfile && pnpm validate
-RUN pnpm --filter @stood/api deploy --prod --legacy /workspace/release
+RUN pnpm install --store-dir /workspace/.pnpm-store --frozen-lockfile && pnpm validate
+RUN pnpm --filter @stood/api deploy --prod --offline --store-dir /workspace/.pnpm-store /workspace/release
 
 FROM gcr.io/distroless/nodejs24-debian12:nonroot@sha256:14d42e2511532589a7c7e01a753667a74fcc96266e137e8125006b87b0c32d0a AS api
 WORKDIR /app

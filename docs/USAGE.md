@@ -390,3 +390,25 @@ Run `docker compose --profile yard up -d --wait yard-api`. Its localhost-only po
 `@stood/stood-sdk` exposes `StoodClient` for trusted server callers: `createDraft(input, key)`, `getDraft(id)`, `submitPackage(trancheId, references, key)` and `getPackage(trancheId, packageId)`. Configure a pinned HTTPS root (localhost HTTP is allowed), the platform key/HMAC secret and a server clock. It signs exact request bytes, disallows redirects, bounds response bodies to 64 KiB and times out after five seconds. Yard web cannot import this package.
 
 Results remain DRAFT or QUEUED. Typed `StoodClientError.code` values identify authentication, validation, not-found, conflict, invalid response and unavailable storage. TIMEOUT/UNKNOWN_OUTCOME do not prove a POST was absent: inspect the resource or deliberately resend the same request with the same durable key. The SDK never retries automatically. It has no dispatch, signing, settlement or webhook-authority method. The contract tests use the real local HTTP router with fake storage, not a deployed service or PayPal sandbox.
+
+The reconciliation worker now requires an explicit `PROVIDER_PAYPAL` selection and uses the same provider runtime as the API. With `PROVIDER_PAYPAL=sim`, `scripts/dev reconcile` reads the simulator clock and needs no PayPal keys. With `live`, sandbox readiness and keys are required; there is no fallback. Each reconciliation tick freezes one provider-clock instant. Simulated notification headers or bodies are rejected unless the receiver is explicitly in simulator mode, even if a verifier would otherwise accept them. Normal runtime webhook ingestion remains off until its durable queue is wired.
+
+### Isolated network simulation
+
+`scripts/dev mock` now builds and starts a separate Docker project for Stood, the restricted Postgres-backed Yard Board and the PayPal simulator, then drives the shared Stood scenario files over HTTP. It uses fixed synthetic credentials, publishes no host ports and deletes only its own containers and disposable database/dependency volumes on exit. It never reads your DATABASE_URL or forwards your PayPal keys. Failed runs save synthetic service logs under `artifacts/mock-network/`.
+
+Authorization/approval and assessments are explicitly test-only fixture commands, not shipped financial API routes or authentic runner reports. Those controls compile into `.mock-dist` for this stack and cannot enter the production API package. `scripts/dev mock:integration` retains the faster seven-case integration suite. The `mock-network` CI job runs on every PR with a ten-minute timeout; it must pass before merge. Yard/Crew and browser scenarios are added separately, and qualified live funding remains blocked.
+
+### First connected Yard fixture
+
+`scripts/dev mock` also runs the first Yard flow over the isolated Docker network: locally frozen fixture terms, a real persisted Board post, an ordinary simulated Crew claim, a commit pushed to the GitHub fake, and a package submitted through Yard’s server-side Stood SDK. A passing assessment leaves Yard in CHECKING. Only a signed Stood notification with matching read proof projects the confirmed simulated capture as PAID; forged notifications and duplicates are checked. No payment is executed.
+
+Funding and assessment are explicit test-only fixture controls, not authenticated production funding or runner evidence. Crew receives only its Board identity and scoped fake GitHub token; it has no Stood payment credentials or database access. Cross-service package submission retries use a stable key, and recorded Board commands replay without another SDK call. A crash between package submission and Board persistence can leave an unreferenced package; a durable submission outbox remains follow-up work before this integration is enabled outside the isolated mock stack.
+
+### Yard page and browser checks
+
+The static Yard preview lives in `site/yard/`, connects to Stood’s page, and uses the outlined Yard kit. The page’s scenario controls change illustrations only; they do not call the Board or payment APIs. It says that no payment is executed before the first sample verdict. Planner, hosting, handover and live integration claims remain labelled as planned.
+
+Run `scripts/dev site` to build and serve Stood at <http://localhost:8082/> and Yard at <http://localhost:8082/yard/>. Ports 3000/3001 remain API-only; their `/` route returns 404. Re-run the command after page changes to rebuild the preview.
+
+Run `scripts/check-site` to build the static site and check it in a dedicated Docker Chromium browser on Node 24. It checks desktop/mobile layout, keyboard fixture selection, both-way navigation, missing assets, reduced motion and simulation disclosure. Screenshots go to `artifacts/site/`. The separate `site-browser` CI job runs the same command; it is a page smoke test, not a full accessibility audit or the remaining Yard application E2E suite.

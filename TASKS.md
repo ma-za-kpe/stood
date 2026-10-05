@@ -334,7 +334,7 @@ Y-A foundations: T-0174 supplies the designed ADR and tested import rules. The r
 - `[x]` T-0177 Blueprint/Milestone domain: versions, immutable signed terms, test hashes, intermediate/final profile binding; tests first.
 - `[x]` T-0178 WorkOrder/Claim domain: one current claim, 48-hour lease, explicit expiry/recovery and outside-operator identity; property tests.
 - `[x]` T-0179 Public HTTP Stood SDK contract: signed requests, typed errors and truthful DRAFT/QUEUED semantics, contract tests against local API. No internal imports.
-- `[ ]` T-0180 Y0 Yard page with Y09 tokens/voice and Stood nav link; accessible fixtures, planned-capability labels.
+- `[x]` T-0180 Y0 Yard page with Y09 tokens/voice and Stood nav link; accessible fixtures, planned-capability labels.
 
 Y-B Foreman (depends on tested domains and runner isolation):
 
@@ -346,7 +346,7 @@ Y-B Foreman (depends on tested domains and runner isolation):
 
 Y-C Board (depends on funding/dispatch and qualified runner):
 
-- `[ ]` T-0186 Work-order posting, tenant-scoped discovery and atomic claim/lease storage; concurrent claimant tests.
+- `[~]` T-0186 Work-order posting, tenant-scoped discovery and atomic claim/lease storage; concurrent claimant tests.
 - `[ ]` T-0187 Lease-to-confirmed-hold dispatch through public Stood API; durable intent/recovery, no invented hold.
 - `[ ]` T-0188 GitHub App bootstrap and brokered branch/test permissions; prove token/repository/path attacks and branch restrictions.
 - `[ ]` T-0189 Submit SHA to Stood package, trusted webhook projection and punch list; signed deduplication, never infer paid from a passing assessment.
@@ -375,7 +375,7 @@ T-0176: six real-Postgres cases run against all actual Stood migrations in a ran
 
 T-0179: public server-side SDK contract-tested against the actual local Stood HTTP router with fake storage. Eight SDK cases cover signed DRAFT/QUEUED requests and reads, typed conflicts/validation/auth/missing/unavailable errors, malformed or unbound receipts, bounded bodies, timeouts and no network retry. A failing browser-import graph test precedes its server-only boundary. Dispatch, signing, financial commands and webhook verification remain full T-0156/T-0053; no financial authority is exposed by this slice. Additional graph fixtures qualify the T-0193 external-Crew/fake boundary.
 
-- `[ ]` T-0194 Y18 durable project events and SSE: commit projection and gap-free per-stream sequence together; use sequence as SSE resume ID and event UUID for deduplication, replay limits/snapshot.required, role-filtered payloads, direct LISTEN connection and honest stale/gap UI. Real-Postgres concurrency/rollback and recorded-stream/chaos tests; money states require qualified Stood messages.
+- `[~]` T-0194 Y18 durable project events and SSE: commit projection and gap-free per-stream sequence together; use sequence as SSE resume ID and event UUID for deduplication, replay limits/snapshot.required, role-filtered payloads, direct LISTEN connection and honest stale/gap UI. Real-Postgres concurrency/rollback and recorded-stream/chaos tests; money states require qualified Stood messages.
 - `[ ]` T-0195 Y19 intake/access boundary: choices before credentials, signing gate, provider-qualified TEST/DEV scope (patterns alone cannot prove environment), encrypted write-only storage, audited preview-only decrypt, revocation/7-day deletion, no secrets in prompts/logs/events/builders. Qualify scanner/KMS/provider checks before enabling secret intake.
 - `[ ]` T-0196 Y20 hybrid hosting ADR and qualified previews/handover: buyer-owned repo, pinned image identity, isolated test-data previews with bounded cost/TTL/teardown, production secrets entered only in buyer hosting and verified account/commit/usage proof. Health reachability alone is insufficient final evidence. Demo fixtures first; no automatic spend or cloud provisioning.
 
@@ -399,7 +399,7 @@ Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The
 - `[ ]` T-0205 Builder Board and work-order screens (Y10 #7, #8): filters, keyboard navigation across columns, lease timer, read-only signed tests, submit SHA, punch list. Qualify AG Grid terms before adopting it.
 - `[ ]` T-0206 Site log (Y21 §4, Y10 #9): per-work-order stream with its own sequence, at most 1 write per second per builder, fixed kinds, every line secret-scanned before storage, 90-day retention then summary. Not an aria-live region.
 - `[ ]` T-0207 Handover screen and rotation checklist (Y20 §5): Deploy to Render button from `render.yaml`, `HANDOVER.md` generator listing every variable, the nine checklist items (auto items shown done), and `handover.rotation_confirmed` gating CLOSED, independent of Stood's final release. Depends on T-0196.
-- `[ ]` T-0208 Yard page assets: wire the `docs/brand/yard/` mark, family lockup, favicon and OG card into `site/yard/` (with T-0180) and add the "Yard →" link and family lockup to Stood's landing page.
+- `[x]` T-0208 Yard page assets: wire the `docs/brand/yard/` mark, family lockup, favicon and OG card into `site/yard/` (with T-0180) and add the "Yard →" link and family lockup to Stood's landing page.
 
 ### Yard: Board, operators and protocol
 
@@ -498,3 +498,28 @@ T-0235: implemented README and Stood hero simulation notices, with a failing-fir
 - `[x]` T-0236 Exclude test fakes and simulator harnesses from production API artifacts. Discovery: pnpm deploy --prod copied services/api/test/fakes/paypal.ts and the simulator harness despite the dependency guard. Add an actual build/deploy regression, explicitly package compiled runtime files and required SQL migration assets only, and inspect the release for fake/simulator/test sources and provider-simulator dependencies.
 
 T-0236: unit-tested real production-package evidence. The build/deploy regression first found raw src/test/.turbo/config files and a payment fake in the release; it now verifies only dist, SQL migrations and package manifest (plus runtime dependencies), a valid server entrypoint, no compiled test/fake/simulator paths, and no provider-simulator dependency. No hooks skipped; not a hosted deployment.
+
+## Yard network round after PR #38
+
+- `[x]` T-0237 Reconciliation uses the same explicit provider selection and controlled clock as the API. Reject simulated webhook headers/bodies in live mode before verification or enqueue. Tests first: simulator worker readiness/time, missing selection refuses work, live rejects synthetic signatures even with an accepting verifier.
+- `[~]` T-0194 Durable Yard project events and SSE slice: transactionally numbered events, authenticated replay, gap/snapshot signalling and disconnect cleanup. Tests first: ordered replay, foreign-project isolation and rollback.
+- `[~]` T-0186 Durable Board slice: frozen blueprint posting, server-owned operator identities, atomic 48-hour claims, exact command replay/conflicts, submission and Stood-only payment projection. Tests first: concurrent claimants, stale commands, foreign operators and duplicate/conflicting settlement notifications. No direct Stood database access.
+- `[~]` T-0233 Network mock slice: a separate Docker mock stack with fixed synthetic credentials, disposable databases and real HTTP services. Run shared Stood scenarios and the Yard flow as a required CI check; retain the existing fast integration suite. Tests first: missing services fail, provider/ledger/history references agree.
+- `[~]` T-0232 First network Yard scenario: frozen terms → posted → ordinary Crew claim/build/submit → simulated Stood confirmed capture → signed notification → paid projection. Test that a passing assessment alone never sets PAID and unknown/forged notifications cannot do so. Full funding API and authentic runner evidence remain T-0154/T-0156.
+- `[x]` T-0180 Yard landing page with Y17 tokens, outlined brand assets, connected Stood navigation, responsive layout, motion respecting reduced-motion preference and prominent simulation labels. Tests first: notice before verdict, accessible controls and both-side links. Browser smoke is a stretch; never imply the planner/Crew/live integrations shipped.
+
+T-0237: failing-first regressions reproduced live acceptance of synthetic notifications and missing shared worker composition. The CLI now requires explicit provider selection, boots the common runtime, reads controlled time per tick and freezes that instant through reconciliation. Live/unconfigured receivers reject simulation headers or any simulation field before verifier invocation. Simulator tests use no real keys. This does not activate webhook ingestion or real payments.
+
+T-0194 event slice: failing-first real-Postgres and stream regressions now pass for atomic state/event/receipt writes, competing stale versions, exact replay/conflict, rollback, append-only history, authenticated project replay, cursor validation and snapshot-required gaps. Runtime uses a restricted Yard role. SSE currently polls the durable log; LISTEN/NOTIFY, public role-filtered streams and site-log retention remain open.
+
+T-0186 durable Board slice: failing-first real-Postgres and signed HTTP tests prove one concurrent claimant, exact replay/conflict, server-owned identities, private-project denial, protected terms and checking-only submission. A Stood-authenticated integration obtains matching read proof before a capture-only PAID projection; unknown/mismatched/duplicate/conflicting notifications are tested. Full operator/payee registration, funding, expiry/repost and refusal/rework remain open. The first consuming workspace now builds Yard's domain before typechecking. Injected workspace builds sync after scripts, and production deploy uses the existing content-addressable store offline with a dedicated lockfile; release tests still assert no test/fake/simulator implementation or simulator dependency, with bounded child-process deadlines. This fixes observed legacy deploy re-resolution timeouts rather than removing the packaging check.
+
+T-0233 network slice: all seven shared Stood definitions passed through a separate Docker project with actual Stood/PayPal HTTP services, restricted Postgres-backed Yard health, migrations from scratch, controlled time and signed duplicate/reversed notifications. Lost capture remains ambiguous, is never blindly resubmitted, and restores through a new database connection; provider capture invoice, domain/ledger references and latest audit status agree. Missing mock endpoints failed first. The non-conditional `mock-network` CI job has a ten-minute budget. Fixed synthetic setup/assessment controls are test-only; this is not the qualified financial API, full Yard/browser suite or hosted demo. Cleanup removes only the randomly named stack's volumes and leaves ordinary local services alone.
+
+T-0232 first Yard network slice: the connected scenario uses frozen local fixture terms, persisted Board claims, the normal simulated Crew contract, scoped fake GitHub pushes and server-side SDK package submission. A completed submit retry returns its recorded receipt without an external call; changed keys/commits are rejected. That HTTP retry regression failed first. Yard stays CHECKING after assessment, rejects a forged notification, and projects PAID only after matching signed Stood proof. Event replay and provider/ledger/reference agreement are asserted. Full funding, authentic runner evidence, durable cross-service submission outbox, refusal/rework and remaining browser scenarios stay open. No live keys or money.
+
+T-0180: the Yard static page uses Y17 colours/type, drafting grid, crane motion, outlined Yard logo/favicon/social card and Stood’s existing money stamps. Connected navigation joins both pages; T-0208 finishes the Stood footer family lockup. A missing-page presentation test failed first, then passed; real Docker Chromium checks cover desktop/mobile, keyboard scenario controls, reduced motion and missing assets, with screenshots. Both-page simulation notices precede sample verdicts. The page is illustrative, not a live Board; full Yard application screens and browser flow definitions remain open. Publishing awaits promotion to main.
+
+- `[ ]` T-0238 Durable Yard submission outbox before enabling the SDK submission bridge outside the mock stack: persist the exact tenant/claim/terms-bound request before sending, reuse one key on recovery, attach only a matching package receipt, and resolve orphaned package intake. Test crashes on both sides of the HTTP call, duplicate/racing workers and changed terms/identity. This bridge has no payment authority.
+
+T-0208: outlined Yard assets and the family lockup now join both landing pages. A Docker browser regression failed on the missing Stood footer lockup before wiring it; desktop/mobile checks load the actual SVG and follow its link back to Yard. The existing nav link remains available on mobile. All examples remain simulated; no promotion to main or payment activation.

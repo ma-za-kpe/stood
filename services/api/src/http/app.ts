@@ -19,6 +19,7 @@ export type AppConfig = Readonly<{
   providerHealth?: () => readonly ProviderHealth[];
   requestClock?: () => Promise<number>;
   clockMode?: 'system' | 'controlled';
+  providerMode?: 'sim' | 'live';
   providerEvents?: Readonly<{
     verify(body: string, headers: Headers): Promise<boolean>;
     enqueue(event: Readonly<{ id: string; event_type: string; resource: unknown; simulated?: true }>): Promise<void>;
@@ -143,6 +144,18 @@ export function createApp(config: AppConfig) {
     if (!config.providerEvents) return c.json({ code: 'webhooks_not_configured' }, 503);
     try {
       const body = await c.req.text();
+      if (config.providerMode !== 'sim') {
+        if (c.req.header('Stood-Sim-Signature') !== undefined || c.req.header('X-Stood-Simulated') !== undefined)
+          return c.json({ code: 'unauthorized' }, 401);
+        let envelope: unknown;
+        try {
+          envelope = JSON.parse(body);
+        } catch {
+          return c.json({ code: 'invalid_event' }, 422);
+        }
+        if (envelope && typeof envelope === 'object' && 'simulated' in envelope)
+          return c.json({ code: 'unauthorized' }, 401);
+      }
       if ((await config.providerEvents.verify(body, c.req.raw.headers)) !== true)
         return c.json({ code: 'unauthorized' }, 401);
       const event: unknown = JSON.parse(body);

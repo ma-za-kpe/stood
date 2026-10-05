@@ -32,13 +32,13 @@
 
 > **Simulated demos. No payment is executed.** Current demo evidence and outcomes are synthetic. An isolated PayPal HTTP simulator exercises the real SDK without keys; real-provider connections require sandbox keys and qualification. Keys alone do not qualify an adapter or turn fixtures into real results.
 >
-> ⚠️ **Status: early implementation.** Docker tooling, tested Stood/Yard domains, a server-side HTTP SDK, durable DRAFT/package intake and a synthetic-fixture API are implemented. Full funding, trusted execution, hosted replay and product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap) and [simulator guide](services/simulators/README.md).
+> ⚠️ **Status: early implementation.** Docker tooling, tested Stood/Yard domains, a server-side HTTP SDK, durable DRAFT/package intake and a synthetic-fixture API are implemented. Full funding, trusted execution, hosted replay and production product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap) and [simulator guide](services/simulators/README.md).
 
 ## The problem
 
 Adaeze delegates a code milestone to Yard or a human developer. A green badge alone does not show whether signed tests were changed, skipped or too weak. Her payment needs a new commit, intact acceptance tests, a trustworthy run and the agreed budget and usage conditions. Buyer and builder identity does not change the decision.
 
-The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. [Yard](docs/yard/README.md) lives as a planned companion product in this monorepo; its runtime and the A2A/AP2 surface are not shipped. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
+The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. [Yard](docs/yard/README.md) is the companion product in this monorepo. Its durable Board and first connected Docker mock are implemented for review; the planner, hosted previews, live integrations and A2A/AP2 surface remain planned. The [Yard page](site/yard/index.html) is an illustrative simulation, not a live work-order screen. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
 
 [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is a linked site-visit scenario, with its original research preserved in the [historical docs](docs/11-africa-payments-and-eyeonsite.md).
 

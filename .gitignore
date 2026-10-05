@@ -10,3 +10,5 @@ _site/
 coverage/
 .turbo/
 .pnpm-store/
+.mock-dist/
+artifacts/
