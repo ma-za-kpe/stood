@@ -6,7 +6,7 @@ export default defineConfig({
     testTimeout: 10000,
     coverage: {
       provider: 'v8',
-      include: ['services/api/src/adapters/db-postgres/**/*.ts'],
+      include: ['services/api/src/adapters/db-postgres/**/*.ts', 'services/yard-api/src/adapters/db-postgres/**/*.ts'],
       exclude: ['**/*.test.ts'],
       reportsDirectory: 'coverage/db',
       reporter: ['text', 'json-summary'],
