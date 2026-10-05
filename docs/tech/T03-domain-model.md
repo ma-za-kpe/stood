@@ -1,6 +1,14 @@
 # T03: Domain model and decision rules
 
-> **Generalisation pending ([ADR-0007](../adr/0007-domain-agnostic-evidence-profiles.md), [S16](../stood/S16-use-cases-and-evidence-profiles.md)):** `Plot` becomes an optional `location` check, `Stage` becomes `Milestone`, and `requiredShots` becomes `required_items`. Checks are composed per milestone through an **evidence profile**. The construction names below describe the `construction.stage@1` profile.
+## Code profile and current domain vocabulary
+
+Allowance = buyer agreement; milestone = staged amount/profile; operator = payee behind a builder agent; commit package = bound source/report evidence; usage release = milestone requiring an independent outside signal. Generalisation into profile-based DRAFT milestones is implemented.
+
+`code.milestone@1` requires seven RULE findings in fixed precedence: signed_tests, test_integrity, test_execution, new_commit, mutation_score, budget_mandate, usage_release. The first four and budget failures are hard; mutation and usage failures/uncertainty stay WAIT. No model can supply these RULE facts. The trusted signature/runner/usage verifier is planned; client-authored PASS has no authority.
+
+DRAFT creation and persistence are implemented, including exact cap/sum equality and GBP/USD/EUR subset. Signature/Vault approval, versioned contracts and financial HTTP are planned. USD examples use a $4,000 cap and $1,200 milestone.
+
+> **Scenario: construction vocabulary ([ADR-0007](../adr/0007-domain-agnostic-evidence-profiles.md), [S16](../stood/S16-use-cases-and-evidence-profiles.md)):** `Plot` becomes an optional `location` check, `Stage` becomes `Milestone`, and `requiredShots` becomes `required_items`. Checks are composed per milestone through an **evidence profile**. The construction names below describe the `construction.stage@1` profile.
 
 Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §5–6](../WAYS_OF_WORKING.md#5-domain-driven-design).
 
@@ -22,7 +30,7 @@ Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §
 | paymentToken | `VaultTokenRef` | Required when SIGNED |
 | version | int | Optimistic lock |
 
-The implemented creation-only `Allowance` is an immutable DRAFT with ordered milestones, exact single-currency cap/sum equality, unique trimmed names, known profiles, window 1–28 days and resubmit limit 0–5. Stood's current hold subset is GBP/USD/EUR at allowance and direct tranche creation; general Money still represents local currencies. This does not implement signature/Vault approval, persistence or the HTTP creation endpoint.
+The implemented creation-only `Allowance` is an immutable DRAFT with ordered milestones, exact single-currency cap/sum equality, unique trimmed names, known profiles, window 1–28 days and resubmit limit 0–5. Stood's current hold subset is GBP/USD/EUR at allowance and direct tranche creation; general Money still represents local currencies. Signature/Vault approval remains planned; the DRAFT persistence and HTTP creation endpoint are implemented.
 
 ### `Stage` (entity in Allowance)
 
@@ -110,7 +118,7 @@ Structured `detail` carries `distance_m` (distance from the pin in metres, not d
 
 The domain in `services/api/src/domain/` implements Money, GeoPoint, Geofence, Nonce, PhotoFingerprint, required-item and location checks, versioned profiles, the pure decision gate and tranche transitions. [ADR-0009](../adr/0009-assessment-and-payment-confirmation.md) separates assessment from payment effects and introduces pending-operation states. Profile stage recognition is WAIT-only until evaluation qualifies it.
 
-Missing check results and incomplete uploads are uncertain; a completed missing-item check is a hard failure. The pure core has no I/O. Hold timers, server-validated capture provenance, a real novelty index and durable payment orchestration remain queued.
+Missing check results and incomplete uploads are uncertain; a completed missing-item check is a hard failure. The pure core has no I/O. Durable tranche/operation storage and status polling are implemented. Authentic evidence adapters, provider funding and timer execution remain queued.
 
 New capture reservations close five minutes before hold expiry (Stood's operational buffer). A passing assessment in that margin stays WAITING with `settlementBlock: CAPTURE_WINDOW_CLOSING`; it does not reserve a capture or an early expiry void. Actual expiry still reserves VOID. Refusal and deposit-return VOID effects remain eligible before expiry. An existing pending capture remains reserved for reconciliation; the future payment client must recheck the margin immediately before calling PayPal.
 

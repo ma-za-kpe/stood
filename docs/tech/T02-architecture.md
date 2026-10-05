@@ -1,5 +1,28 @@
 # T02: Architecture
 
+## Code-milestone architecture (planned evidence services)
+
+```mermaid
+flowchart LR
+  Buyer[Buyer or buying agent] --> API[Stood API and pure gate]
+  Builder[Builder / Yard planned] --> API
+  API --> Fetch[GitHub read-only adapter planned]
+  Fetch --> Runner[Isolated runner planned: no network or secrets]
+  Runner --> Verify[Trusted signed report verifier planned]
+  Verify --> API
+  Usage[Independent outside usage authority planned] --> API
+  API --> DB[(Atomic tranche and operation store)]
+  API --> PayPal[(Guarded sandbox adapter: HTTP money off)]
+```
+
+The fetch supervisor has narrowly scoped repository access; the execution sandbox has none. Pre-fetch allowed dependencies outside execution, verify digests and mount inputs read-only. Host-bound signing keys never enter the builder process. Limit CPU/memory/wall time/processes/disk/output; reject partial reports. A2A task negotiation and AP2 mandate exchange are planned caller surfaces, not payment authority. Yard belongs to a separate operator/repo.
+
+Durable aggregate/ledger writes and reconciliation polling are implemented. Funding HTTP and trusted evidence ingestion remain planned. Stored ambiguous effects stay unresolved until exact provider proof; old-rule captures cannot be submitted.
+
+## Scenario: site-visit architecture examples
+
+The diagrams below illustrate EyeOnSite. Hosted services/screens/workflows are target designs unless explicitly recorded as implemented. The code-milestone flow above is the lead product.
+
 Style: **hexagonal (ports and adapters) around a pure domain core**, with **runtime separation** between the code that looks at evidence and the code that moves money. Decisions: [ADR-0003](../adr/0003-rules-move-money.md), [ADR-0004](../adr/0004-authorise-on-dispatch-capture-on-proof.md).
 
 ## 1. System context (C4 level 1)
@@ -25,7 +48,7 @@ flowchart LR
   Rev -- reviewer file --> Stood
 ```
 
-[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is the first consumer. Integration details are in [T08](T08-eyeonsite-integration.md).
+[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is a scenario consumer. Integration details are in [T08](T08-eyeonsite-integration.md).
 
 ## 2. Containers (C4 level 2)
 
@@ -196,7 +219,7 @@ Renewal is a separate operation, never a settlement. REAUTHORIZE_PENDING blocks 
 |---|---|
 | Idempotency | `Idempotency-Key` header on all POSTs (stored 24h). Persist a provider UUID for each domain operation key, including hold attempt, action, renewal revision and definite-failure retry counter as applicable |
 | Consistency | Persist the operation reservation and stable provider request ID transactionally before calling PayPal. Confirm the effect and append outbox events together afterward. Reconcile "PayPal succeeded, our write failed" without inventing a payment result |
-| Concurrency | Optimistic locking (`version` column) plus one active effect per authorisation. Append immutable decisions; a later decision references the WAIT it supersedes. Durable persistence is still queued |
+| Concurrency | Optimistic locking (`version` column) plus one active effect per authorisation. Append immutable decisions; a later decision references the WAIT it supersedes. Atomic aggregate/ledger persistence is implemented |
 | Time | An injected `Clock`. All times are UTC ISO-8601 |
-| Config | 12-factor env vars, validated at boot with Zod. Fail fast on missing config |
+| Config | 12-factor env vars, validated at boot with Zod. Missing payment keys disable payment routes without crashing |
 | Versioning | URL `/v1`. Additive changes only within v1. Webhook payloads carry `schema_version` |

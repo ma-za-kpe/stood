@@ -291,7 +291,7 @@ T-0157 includes the approved landing repositioning (PR #24, 9eebf39) and unit-te
 
 - `[x]` T-0160 Align README, docs index, overview and usage quickstart with Adaeze/code milestones, USD amounts and truthful DRAFT/payment boundaries. Tier: designed documentation; offline links and full gate required.
 - `[x]` T-0161 Realign product specs, sentence pairs, commit/report screens, six-beat demo, attack model, partner fit and profile parameters. Tier: designed; no runner/payment execution claim.
-- `[ ]` T-0162 Realign technical requirements, architecture, API examples, artifact model, pipeline, runner security, hosting and qualification plan. Tier: designed; sandbox technology remains undecided.
+- `[x]` T-0162 Realign technical requirements, architecture, API examples, artifact model, pipeline, runner security, hosting and qualification plan. Tier: designed; sandbox technology remains undecided.
 - `[ ]` T-0163 Preserve research/ADR provenance with historical banners, record pivot in ADR-0015, align process/submission examples and audit old-story matches. Tier: designed; preserve historical body bytes.
 - `[ ]` T-0164 Build/qualify isolated code runner: no network or secrets, non-root, read-only inputs, CPU/memory/time/process/disk limits, signed results. Choose sandbox technology in a separate ADR and prove escape/resource tests before shipping.
 - `[ ]` T-0165 GitHub read-only adapter: pin repository/base/new commit, recompute test hashes, detect reused diffs, limit dependencies and paths; no write, push or merge credentials. Qualify immutable fetch and archive/path attacks.
@@ -300,3 +300,5 @@ T-0157 includes the approved landing repositioning (PR #24, 9eebf39) and unit-te
 - `[ ]` T-0168 Yard integration in its separate repo: accountable operator, bounded test-agent subcontract and budget, traceable new commit, outside usage proof. Yard remains planned.
 
 The documentation review round is T-0157 and T-0160–T-0163. The funding/evidence implementation round above remains queued; this audit does not close issue #25 or qualification blockers.
+
+- `[ ]` T-0169 Issue #29 addendum: make five code-milestone fixtures the default demo set; add separate payer/builder copy, honest synthetic responses, code-first judges curl and PR checklist. Preserve geofence tests and label field demo code/docs as site-visit scenarios. Tests first for fixture outcomes, copy and demo-disabled guards.

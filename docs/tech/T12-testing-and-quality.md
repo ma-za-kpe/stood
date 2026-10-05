@@ -1,5 +1,21 @@
 # T12: Testing strategy and quality gates
 
+## Default code fixtures and qualification
+
+| Fixture | Assessment | Expected evidence reason |
+|---|---|---|
+| code-good | RELEASE | All synthetic RULE findings pass |
+| signed-tests-changed | REFUSE | Frozen test integrity failed |
+| tests-skipped | REFUSE | Required execution incomplete |
+| weak-tests | WAIT | Mutation quality insufficient, human review |
+| usage-pending | WAIT | Independent usage proof / buyer acceptance absent |
+
+T-0169 implements these synthetic HTTP fixtures and recipient copy with tests first. No fixture means a test runner or payment actually executed. Preserve general location/geofence tests and the labelled site-visit fixtures below.
+
+Trusted adapters require signature/identity/replay tests, exact commit and frozen-test hashes, skip/selection/dependency attacks, mutation scope and outside-authority tests. Runner qualification adds network/secret/escape and resource-exhaustion tests; end-to-end release needs actual sandbox settlement evidence. Current SDK tests use mocks, not recorded contracts.
+
+## Scenario: site-visit fixtures and earlier test plan
+
 Policy: [WoW §4](../WAYS_OF_WORKING.md#4-test-driven-development). This page is the concrete plan.
 
 ## Test layers
