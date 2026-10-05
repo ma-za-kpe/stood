@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-export function createYardApp(config: Readonly<{ environment: string }>): Hono {
+import { type EventFeed, eventFeed } from './event-feed.js';
+export function createYardApp(config: Readonly<{ environment: string; eventFeed?: EventFeed }>): Hono {
   if (!['local', 'ci', 'demo'].includes(config.environment))
     throw new RangeError('Yard is not configured for hosted operation');
   const app = new Hono();
@@ -8,9 +9,10 @@ export function createYardApp(config: Readonly<{ environment: string }>): Hono {
       status: 'ok',
       product: 'yard',
       environment: config.environment,
-      capabilities: { board: false, foreman: false, credentials: false, events: false, payments: false },
+      capabilities: { board: false, foreman: false, credentials: false, events: !!config.eventFeed, payments: false },
     }),
   );
+  if (config.eventFeed) eventFeed(app, config.eventFeed);
   app.all('/yard/v1/*', (c) =>
     c.json(
       {
