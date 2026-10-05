@@ -36,3 +36,9 @@ The shared PayPal transport contracts also run against an independently implemen
 The server clock begins at 5 October 2026 and advances only through authenticated local control requests. Test harnesses inject their own clock. Runtime time does not silently determine scenario outcomes. Every HTTP response has `X-Stood-Simulated: true`; health says `mode: sim`, `simulated: true`, `paymentExecuted: false`.
 
 This command starts the isolated simulator only. It does not activate financial API routes, fund Yard work orders or provide the complete one-command product demo (T-0233).
+
+## Scripted faults
+
+Inject a `FaultController` when creating a test simulator. Plans match exact method/path and consume each fault once. They can return 500, rate limits, malformed JSON, stall before/after applying a request, or replace a successful response with a 503 after the state change. The latter models a lost response without inventing a second payment. `release()` explicitly releases stalled replies; tests use the actual HTTP client's bounded timeout and do not sleep. Fault controls are injected by the harness, never exposed through a product endpoint.
+
+[capture-lost-response.json](scenarios/capture-lost-response.json) and [capture-timeout.json](scenarios/capture-timeout.json) are synthetic scenario files for the seeded first authorization. The HTTP contract tests load these files. The separate `replayEvents` helper selects copied event snapshots in duplicate/out-of-order sequences; actual signed delivery and application consumption remain queued. A test proves real-domain capture and void recovery through status lookup without a second submission, using an in-memory tranche store. Real PostgreSQL durability is covered separately by the storage suites.

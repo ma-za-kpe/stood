@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { FaultController } from './faults.js';
 
 type ObjectValue = Record<string, unknown>;
 type Reply = { status: number; body: unknown };
@@ -41,7 +42,7 @@ function amount(value: unknown): Amount | null {
     return null;
   return { currency_code: a.currency_code as string, value: a.value };
 }
-export function createPayPalSimulator(config: { environment: string; clock: () => number }) {
+export function createPayPalSimulator(config: { environment: string; clock: () => number; faults?: FaultController }) {
   if (!['local', 'ci', 'demo'].includes(config.environment)) throw new Error('Simulator is local-only');
   let offset = 0;
   const now = () => {
@@ -124,6 +125,28 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
     setup.status = 'APPROVED';
   };
   app.onError(() => response(error(400, 'INVALID_REQUEST')));
+  app.use('*', async (c, next) => {
+    const fault =
+      c.req.header('authorization') === 'Bearer sim-access-token'
+        ? config.faults?.take(c.req.method, c.req.path)
+        : null;
+    if (!fault) return next();
+    if (fault.phase === 'after') await next();
+    if (fault.kind === 'TIMEOUT') await config.faults?.wait();
+    if (fault.kind === 'MALFORMED') {
+      const malformed = new Response('{invalid-json', {
+        status: 201,
+        headers: { 'X-Stood-Simulated': 'true', 'Content-Type': 'application/json' },
+      });
+      c.res = malformed;
+      return malformed;
+    }
+    const status = fault.kind === 'RATE_LIMIT' ? 429 : fault.kind === 'HTTP_500' ? 500 : 503;
+    const result = response({ status, body: { name: 'SIMULATED_FAULT', simulated: true, kind: fault.kind } });
+    if (status === 429) result.headers.set('Retry-After', '1');
+    c.res = result;
+    return result;
+  });
   app.all('*', async (c) => {
     const path = c.req.path;
     const method = c.req.method;
