@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import { Annotation, type BaseCheckpointSaver, Command, END, interrupt, START, StateGraph } from '@langchain/langgraph';
 import { Blueprint, type BlueprintInput } from '@stood/yard-domain';
+import { type ForemanCoordinator, memoryCoordinator } from './coordinator.js';
+export type Revision = Readonly<{ version: number; feedback: string }>;
 export type PlannerIntake = Omit<BlueprintInput, 'summary' | 'milestones'> & Readonly<{ description: string }>;
 export interface PlannerModel {
-  draft(input: Readonly<{ policy: string; intake: PlannerIntake }>): Promise<unknown>;
+  draft(input: Readonly<{ policy: string; intake: PlannerIntake; revision?: Revision }>): Promise<unknown>;
 }
 export type Plan = Readonly<{
   status: 'BUYER_REVIEW' | 'READY_FOR_BASELINE' | 'REVISION_REQUESTED';
@@ -11,7 +13,7 @@ export type Plan = Readonly<{
   requirements: readonly Readonly<{ id: string; text: string; testIds: readonly string[] }>[];
   tests: readonly Readonly<{ milestoneId: string; id: string; path: string; content: string }>[];
   risks: readonly string[];
-  version: 1;
+  version: number;
   simulated: boolean;
 }>;
 const policy =
@@ -19,6 +21,7 @@ const policy =
 const State = Annotation.Root({
   intake: Annotation<PlannerIntake>(),
   plan: Annotation<Plan>(),
+  revision: Annotation<Revision | null>(),
 });
 const text = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 4096;
 function object(value: unknown, keys: readonly string[]): Record<string, unknown> {
@@ -119,17 +122,30 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
 }
 export class Foreman {
   private readonly graph;
-  constructor(model: PlannerModel, checkpoint: BaseCheckpointSaver, simulated = true) {
+  private readonly coordinator: ForemanCoordinator;
+  constructor(
+    model: PlannerModel,
+    checkpoint: BaseCheckpointSaver,
+    simulated = true,
+    coordinator?: ForemanCoordinator,
+  ) {
+    this.coordinator = coordinator ?? memoryCoordinator(checkpoint);
     this.graph = new StateGraph(State)
-      .addNode('draft', async (state) => ({
-        plan: validateDraft(
+      .addNode('draft', async (state) => {
+        const revision = state.revision ?? undefined;
+        const plan = validateDraft(
           state.intake,
-          await model.draft({ policy, intake: structuredClone(state.intake) }),
+          await model.draft({
+            policy,
+            intake: structuredClone(state.intake),
+            ...(revision ? { revision: structuredClone(revision) } : {}),
+          }),
           simulated,
-        ),
-      }))
+        );
+        return { plan: { ...plan, version: revision?.version ?? 1 } };
+      })
       .addNode('buyer_review', (state) => {
-        const decision: unknown = interrupt({ status: 'BUYER_REVIEW', version: 1, plan: state.plan });
+        const decision: unknown = interrupt({ status: 'BUYER_REVIEW', version: state.plan.version, plan: state.plan });
         if (decision !== 'ACCEPT' && decision !== 'REVISE') throw new Error('INVALID');
         return {
           plan: {
@@ -150,9 +166,22 @@ export class Foreman {
   async draft(input: PlannerIntake): Promise<Plan> {
     const intake = intakeChecked(input),
       config = this.config(intake.id);
-    if (Object.keys((await this.graph.getState(config)).values).length) throw new Error('CONFLICT');
-    await this.graph.invoke({ intake }, config);
-    return this.read(intake.id);
+    return this.coordinator.run(intake.id, async () => {
+      const state = await this.graph.getState(config);
+      if (Object.keys(state.values).length) {
+        const prior = state.values.intake as PlannerIntake;
+        if (
+          !prior ||
+          Object.keys(intake).some((k) => intake[k as keyof PlannerIntake] !== prior[k as keyof PlannerIntake])
+        )
+          throw new Error('CONFLICT');
+        // Repeated creation is a read of the durable result. Failed model work
+        // requires an owner-authorised recover call, never a fresh intake.
+        return this.read(intake.id);
+      }
+      await this.graph.invoke({ intake, revision: null }, config);
+      return this.read(intake.id);
+    });
   }
   async read(id: string): Promise<Plan> {
     const state = await this.graph.getState(this.config(id));
@@ -160,12 +189,39 @@ export class Foreman {
     if (!plan) throw new Error('NOT_FOUND');
     return structuredClone(plan);
   }
+  async recover(id: string, buyer: string): Promise<Plan> {
+    const config = this.config(id);
+    return this.coordinator.run(id, async () => {
+      const state = await this.graph.getState(config);
+      const intake = state.values.intake as PlannerIntake | undefined;
+      if (!intake) throw new Error('NOT_FOUND');
+      if (buyer !== intake.buyerOperatorId) throw new Error('FORBIDDEN');
+      if (state.next.includes('draft')) await this.graph.invoke(null, config);
+      return this.read(id);
+    });
+  }
   async resume(id: string, buyer: string, version: number, decision: 'ACCEPT' | 'REVISE'): Promise<Plan> {
-    const config = this.config(id),
-      plan = await this.read(id);
-    if (buyer !== plan.blueprint.buyerOperatorId) throw new Error('FORBIDDEN');
-    if (plan.status !== 'BUYER_REVIEW' || version !== plan.version) throw new Error('CONFLICT');
-    await this.graph.invoke(new Command({ resume: decision }), config);
-    return this.read(id);
+    const config = this.config(id);
+    if (decision !== 'ACCEPT' && decision !== 'REVISE') throw new Error('INVALID');
+    return this.coordinator.run(id, async () => {
+      const plan = await this.read(id);
+      if (buyer !== plan.blueprint.buyerOperatorId) throw new Error('FORBIDDEN');
+      if (plan.status !== 'BUYER_REVIEW' || version !== plan.version) throw new Error('CONFLICT');
+      await this.graph.invoke(new Command({ resume: decision }), config);
+      return this.read(id);
+    });
+  }
+  async revise(id: string, buyer: string, version: number, feedback: string): Promise<Plan> {
+    const config = this.config(id);
+    if (!text(feedback)) throw new Error('INVALID');
+    return this.coordinator.run(id, async () => {
+      const state = await this.graph.getState(config),
+        plan = await this.read(id);
+      if (buyer !== plan.blueprint.buyerOperatorId) throw new Error('FORBIDDEN');
+      if (plan.status !== 'REVISION_REQUESTED' || version !== plan.version || version >= 20 || state.next.length)
+        throw new Error('CONFLICT');
+      await this.graph.invoke({ intake: state.values.intake, revision: { version: version + 1, feedback } }, config);
+      return this.read(id);
+    });
   }
 }
