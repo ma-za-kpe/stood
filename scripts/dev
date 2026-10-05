@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")/.."
 if [ "$#" -eq 0 ]; then set -- validate; fi
 case "$1" in
-  setup) exec docker compose run --rm -it app sh -c 'pnpm --filter @stood/api build && node services/api/dist/setup-cli.js' ;;
+  setup) shift; exec docker compose run --rm -it app sh -c 'pnpm --filter @stood/api build && node services/api/dist/setup-cli.js "$@"' setup "$@" ;;
   reconcile) exec docker compose --profile operations run --rm reconciler ;;
   site)
     docker compose run --rm app sh -c 'npm ci --prefix tools/site && node tools/site/build.mjs'

@@ -1,9 +1,13 @@
+import { randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PAYMENT_KEYS, type PaymentKeys } from '../../application/payment-readiness.js';
 
+export const PLATFORM_KEYS = ['STOOD_API_KEY', 'STOOD_HMAC_SECRET', 'STOOD_WEBHOOK_SECRET'] as const;
 type SetupIO = Readonly<{
+  existingPlatform?: PaymentKeys;
+  rotatePlatform?: boolean;
   prompt(name: string): Promise<string>;
   print(message: string): void;
   save(keys: PaymentKeys): Promise<void>;
@@ -20,9 +24,11 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
   io.print('Sandbox app keys: https://developer.paypal.com/dashboard/applications/sandbox');
   io.print('OAuth: https://developer.paypal.com/api/rest/authentication/');
   io.print('Webhook id: https://developer.paypal.com/api/rest/webhooks/');
-  io.print('Platform keys: your local platform configuration; hosted issuance and rotation are planned.');
+  io.print(
+    'Stood platform secrets are generated locally; existing secrets are preserved unless --rotate-platform is selected.',
+  );
   const keys: Partial<Record<(typeof PAYMENT_KEYS)[number], string>> = {};
-  for (const name of PAYMENT_KEYS) {
+  for (const name of PAYMENT_KEYS.filter((name) => !PLATFORM_KEYS.includes(name as (typeof PLATFORM_KEYS)[number]))) {
     const value = await io.prompt(name);
     if (!valid(value)) throw new Error('Invalid key input');
     keys[name] = value;
@@ -56,7 +62,15 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
   } catch {
     throw new Error('Sandbox key validation failed');
   }
+  const generated: (typeof PLATFORM_KEYS)[number][] = [];
+  for (const name of PLATFORM_KEYS) {
+    const existing = io.existingPlatform?.[name];
+    if (existing !== undefined && !valid(existing)) throw new Error('Invalid existing platform key');
+    keys[name] = existing && !io.rotatePlatform ? existing : randomBytes(32).toString('hex');
+    if (keys[name] !== existing) generated.push(name);
+  }
   await io.save(keys);
+  for (const name of generated) io.print(`${name} (shown once): ${keys[name]}`);
   io.print('Sandbox credentials checked. Keys saved to .env. Payments remain off until adapter qualification.');
 }
 
@@ -80,6 +94,36 @@ export async function persistEnv(directory: string, keys: PaymentKeys): Promise<
     await file.truncate(0);
     await file.write(next, 0, 'utf8');
     await file.sync();
+  } finally {
+    await file.close();
+  }
+}
+
+export async function readPlatformKeys(directory: string): Promise<PaymentKeys> {
+  let file: Awaited<ReturnType<typeof open>>;
+  try {
+    file = await open(resolve(directory, '.env'), constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') return {};
+    throw error;
+  }
+  try {
+    const info = await file.stat();
+    if (!info.isFile() || info.nlink !== 1) throw new Error('Expected private regular .env');
+    const keys: Partial<Record<(typeof PLATFORM_KEYS)[number], string>> = {};
+    for (const line of (await file.readFile('utf8')).split(/\r?\n/)) {
+      for (const name of PLATFORM_KEYS) {
+        const match = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*?)\\s*$`).exec(line);
+        if (match) {
+          if (keys[name] !== undefined) throw new Error('Duplicate platform key');
+          const raw = match[1] ?? '';
+          const value: unknown = raw.startsWith('"') ? JSON.parse(raw) : raw;
+          if (!valid(value)) throw new Error('Invalid existing platform key');
+          keys[name] = value;
+        }
+      }
+    }
+    return keys;
   } finally {
     await file.close();
   }
