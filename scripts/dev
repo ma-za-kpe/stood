@@ -11,5 +11,8 @@ case "$1" in
   test:db)
     docker compose up -d --wait db
     exec docker compose run --rm app pnpm test:db ;;
+  mock)
+    docker compose up -d --wait db
+    exec docker compose run --rm app pnpm test:mock:stood ;;
   *) exec docker compose run --rm app pnpm "$@" ;;
 esac

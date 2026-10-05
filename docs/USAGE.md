@@ -36,6 +36,14 @@ The lead product direction is now code milestones and agent-to-agent payments: *
 
 ### Optional PayPal simulator and shared clock
 
+The first shared Stood integration smoke run also works without keys:
+
+```console
+scripts/dev mock
+```
+
+It tests seven scenarios using isolated Postgres and actual local HTTP: release, refusal, review, final usage waiting, renewal, expiry and lost-capture recovery. It labels approval/authorization and assessment as fixtures, checks signed draft/package/read APIs and matching ledger/provider outcomes, and replays signed duplicate/out-of-order notification hints. This is an integration test command, not the full Yard/browser demo or live sandbox qualification. It creates and drops its own random database on the fixed local Postgres and never uses your `DATABASE_URL`. The same cases run inside the required Docker product gate.
+
 ```console
 docker compose --profile simulators up -d --wait paypal-sim
 PROVIDER_PAYPAL=sim docker compose up -d --force-recreate --wait api
