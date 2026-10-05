@@ -17,6 +17,7 @@ import { PostgresTranches } from '../src/adapters/db-postgres/tranches.js';
 import { PayPalAdapter } from '../src/adapters/payments-paypal/adapter.js';
 import { executePayment } from '../src/application/execute-payment.js';
 import { reconcile } from '../src/application/reconcile.js';
+import { retryCapture } from '../src/application/retry-capture.js';
 import { type CheckResult, decide, getProfile } from '../src/domain/decision.js';
 import { restoreTrancheRecord, type TrancheCommand } from '../src/domain/tranche-record.js';
 import { createApp } from '../src/http/app.js';
@@ -48,17 +49,20 @@ afterAll(async () => {
 });
 
 it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HTTP)', async (scenario) => {
-  const faults =
-    scenario.id === 'capture-lost-response'
-      ? new FaultController([
-          { method: 'POST', path: '/v2/payments/authorizations/SIM-AUTH-3/capture', kind: 'LOST_RESPONSE' },
-        ])
-      : undefined;
+  const faults = ['capture-lost-response', 'capture-missed-send'].includes(scenario.id)
+    ? new FaultController([
+        {
+          method: 'POST',
+          path: '/v2/payments/authorizations/SIM-AUTH-3/capture',
+          kind: scenario.id === 'capture-missed-send' ? 'HTTP_500' : 'LOST_RESPONSE',
+        },
+      ])
+    : undefined;
   const h = await simulatorServer(faults);
   const calls = vi.spyOn(h.transport, 'call');
   const clock = new ControlledClockClient('ci', h.baseUrl);
   let store = new PostgresTranches(db);
-  let adapter = new PayPalAdapter(h.transport, store);
+  let adapter = new PayPalAdapter(h.transport, store, () => clock.read());
   let restarted: pg.Pool | undefined;
   let trancheId = '';
   let authorizationId = '';
@@ -212,7 +216,7 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           }
           case 'EXECUTE': {
             const result = await executePayment(store, adapter, trancheId, 'capture-worker', () => at);
-            if (scenario.id === 'capture-lost-response') {
+            if (['capture-lost-response', 'capture-missed-send'].includes(scenario.id)) {
               expect(result).toBe('WAIT');
               expect((await store.load(trancheId)).pending?.status).toBe('AMBIGUOUS');
               expect(await executePayment(store, adapter, trancheId, 'no-blind-retry', () => at)).toBe('WAIT');
@@ -224,10 +228,15 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
             const before = (await store.load(trancheId)).pending?.providerRequestId;
             restarted = new pg.Pool({ connectionString, options: '-c statement_timeout=5000' });
             store = new PostgresTranches(drizzle(restarted, { schema }));
-            adapter = new PayPalAdapter(h.transport, store);
+            adapter = new PayPalAdapter(h.transport, store, () => clock.read());
             expect((await store.load(trancheId)).pending?.providerRequestId).toBe(before);
             return;
           }
+          case 'RETRY_CAPTURE':
+            expect(await retryCapture(store, adapter, adapter, trancheId, 'retry-worker', () => at)).toBe(
+              scenario.id === 'capture-missed-send' ? 'RESOLVED' : 'DONE',
+            );
+            return;
           case 'RECONCILE':
             await reconcile(store, adapter, trancheId, at);
             return;
@@ -285,7 +294,9 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           purchase_units: { payments: { captures: { id: string; invoice_id: string }[] } }[];
         };
         const captures = order.purchase_units[0]?.payments.captures ?? [];
-        expect(calls.mock.calls.filter(([action]) => action === 'CAPTURE')).toHaveLength(scenario.expected.captures);
+        const captureCalls = calls.mock.calls.filter(([action]) => action === 'CAPTURE');
+        expect(captureCalls).toHaveLength(scenario.expected.captures + (scenario.id === 'capture-missed-send' ? 1 : 0));
+        expect(new Set(captureCalls.map(([, input]) => input.requestId)).size).toBeLessThanOrEqual(1);
         if (captures[0]) expect(captures[0].invoice_id).toBe(ledger?.key);
         return {
           domainState: projected.state,

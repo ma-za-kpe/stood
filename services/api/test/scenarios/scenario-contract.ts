@@ -6,6 +6,7 @@ export const STEPS = [
   'ASSESS_FIXTURE',
   'EXECUTE',
   'RECONCILE',
+  'RETRY_CAPTURE',
   'VERIFY',
   'RESTART',
   'ADVANCE_DAY_FOUR',

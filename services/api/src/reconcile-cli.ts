@@ -20,7 +20,7 @@ if (missing.length) {
   try {
     const store = new PostgresTranches(drizzle(pool, { schema }));
     const providers = await reconciliationRuntime(process.env);
-    const reader = new PayPalAdapter(providers.transport, store);
+    const reader = new PayPalAdapter(providers.transport, store, providers.clock);
     const queue = new PostgresReconciliationQueue(pool);
     while (!abort.signal.aborted) {
       const now = await providers.clock();

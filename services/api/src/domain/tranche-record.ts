@@ -16,6 +16,7 @@ const arity = {
   beginSettlement: 3,
   confirmSettlement: 1,
   settlementFailed: 1,
+  claimCaptureRetry: 1,
   beginReauthorization: 1,
   confirmReauthorization: 1,
   reauthorizationFailed: 1,
@@ -105,6 +106,8 @@ function replay(tranche: Tranche, command: TrancheCommand) {
       return tranche.beginSettlement(...command.args);
     case 'confirmSettlement':
       return tranche.confirmSettlement(...command.args);
+    case 'claimCaptureRetry':
+      return tranche.claimCaptureRetry(...command.args);
     case 'settlementFailed':
       return tranche.settlementFailed(...command.args);
     case 'beginReauthorization':

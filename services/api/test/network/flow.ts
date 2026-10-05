@@ -10,6 +10,7 @@ import { PayPalAdapter } from '../../src/adapters/payments-paypal/adapter.js';
 import type { PayPalTransport } from '../../src/adapters/payments-paypal/sdk.js';
 import { executePayment } from '../../src/application/execute-payment.js';
 import { reconcile } from '../../src/application/reconcile.js';
+import { retryCapture } from '../../src/application/retry-capture.js';
 import { type CheckResult, decide, getProfile } from '../../src/domain/decision.js';
 import { restoreTrancheRecord, type TrancheCommand } from '../../src/domain/tranche-record.js';
 import type { Scenario, ScenarioEvidence, ScenarioStep } from '../scenarios/scenario-contract.js';
@@ -22,6 +23,7 @@ export class NetworkFlow {
   private adapter: PayPalAdapter;
   private transport: PayPalTransport;
   private captures = 0;
+  private captureRequestIds: string[] = [];
   private index = 0;
   trancheId = '';
   packageId = '';
@@ -34,11 +36,14 @@ export class NetworkFlow {
   ) {
     this.transport = {
       call: async (action, input) => {
-        if (action === 'CAPTURE') this.captures++;
+        if (action === 'CAPTURE') {
+          this.captures++;
+          this.captureRequestIds.push(input.requestId);
+        }
         return transport.call(action, input);
       },
     };
-    this.adapter = new PayPalAdapter(this.transport, this.store);
+    this.adapter = new PayPalAdapter(this.transport, this.store, this.clock);
   }
   private client() {
     return new StoodClient({
@@ -119,6 +124,8 @@ export class NetworkFlow {
         assert(this.authorizationId);
         if (this.scenario.id === 'capture-lost-response')
           await this.control('/__mock/lose-capture', { authorizationId: this.authorizationId });
+        if (this.scenario.id === 'capture-missed-send')
+          await this.control('/__mock/miss-capture', { authorizationId: this.authorizationId });
         break;
       }
       case 'DISPATCH':
@@ -187,7 +194,7 @@ export class NetworkFlow {
       }
       case 'EXECUTE': {
         const result = await executePayment(this.store, this.adapter, this.trancheId, 'network-execute', () => this.at);
-        if (this.scenario.id === 'capture-lost-response') {
+        if (['capture-lost-response', 'capture-missed-send'].includes(this.scenario.id)) {
           assert.equal(result, 'WAIT');
           assert.equal((await this.store.load(this.trancheId)).pending?.status, 'AMBIGUOUS');
           assert.equal(
@@ -203,8 +210,20 @@ export class NetworkFlow {
         await this.pool.end();
         this.pool = new pg.Pool({ connectionString: connection });
         this.store = new PostgresTranches(drizzle(this.pool, { schema }));
-        this.adapter = new PayPalAdapter(this.transport, this.store);
+        this.adapter = new PayPalAdapter(this.transport, this.store, this.clock);
         assert.equal((await this.store.load(this.trancheId)).pending?.providerRequestId, before);
+        break;
+      }
+      case 'RETRY_CAPTURE': {
+        const result = await retryCapture(
+          this.store,
+          this.adapter,
+          this.adapter,
+          this.trancheId,
+          'network-retry',
+          () => this.at,
+        );
+        assert.equal(result, this.scenario.id === 'capture-missed-send' ? 'RESOLVED' : 'DONE');
         break;
       }
       case 'RECONCILE':
@@ -279,7 +298,8 @@ export class NetworkFlow {
       })
     ).body as { purchase_units: { payments: { captures: { id: string; invoice_id: string }[] } }[] };
     const captures = order.purchase_units[0]?.payments.captures ?? [];
-    assert.equal(this.captures, this.scenario.expected.captures);
+    assert.equal(this.captures, this.scenario.expected.captures + (this.scenario.id === 'capture-missed-send' ? 1 : 0));
+    assert(new Set(this.captureRequestIds).size <= 1);
     if (captures[0]) assert.equal(captures[0].invoice_id, ledger?.key);
     return {
       domainState: projected.state,
