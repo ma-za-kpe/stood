@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import type { FaultController } from './faults.js';
+import { replayEvents } from './faults.js';
+import { deliverSimulatedWebhook } from './webhooks.js';
 
 type ObjectValue = Record<string, unknown>;
 type Reply = { status: number; body: unknown };
@@ -42,7 +44,12 @@ function amount(value: unknown): Amount | null {
     return null;
   return { currency_code: a.currency_code as string, value: a.value };
 }
-export function createPayPalSimulator(config: { environment: string; clock: () => number; faults?: FaultController }) {
+export function createPayPalSimulator(config: {
+  environment: string;
+  clock: () => number;
+  faults?: FaultController;
+  webhookUrl?: string;
+}) {
   if (!['local', 'ci', 'demo'].includes(config.environment)) throw new Error('Simulator is local-only');
   let offset = 0;
   const now = () => {
@@ -57,6 +64,9 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
   const setups = new Map<string, ObjectValue>();
   const tokens = new Map<string, ObjectValue>();
   const events: ObjectValue[] = [];
+  const deliver = async (url: string, indices: readonly number[] = events.map((_, i) => i)) => {
+    for (const event of replayEvents(events, indices)) await deliverSimulatedWebhook({ url, clock: now, event });
+  };
   let sequence = 0;
   const id = (kind: string) => `SIM-${kind}-${++sequence}`;
   const error = (status: number, issue: string): Reply => ({
@@ -127,7 +137,9 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
   app.onError(() => response(error(400, 'INVALID_REQUEST')));
   app.use('*', async (c, next) => {
     const fault =
-      c.req.header('authorization') === 'Bearer sim-access-token'
+      (c.req.path !== '/v1/oauth2/token' && c.req.header('authorization') === 'Bearer sim-access-token') ||
+      (c.req.path === '/v1/oauth2/token' &&
+        c.req.header('authorization') === `Basic ${Buffer.from('sim-client:sim-secret').toString('base64')}`)
         ? config.faults?.take(c.req.method, c.req.path)
         : null;
     if (!fault) return next();
@@ -168,6 +180,8 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
       });
     }
     if (c.req.header('authorization') !== 'Bearer sim-access-token') return response(error(401, 'INVALID_TOKEN'));
+    if (path === '/__sim/time' && method === 'GET')
+      return response({ status: 200, body: { simulated: true, now: now() } });
     if (method === 'GET') {
       const oid = /^\/v2\/checkout\/orders\/([^/]+)$/.exec(path)?.[1];
       if (oid) {
@@ -208,6 +222,15 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
       return response(error(400, 'INVALID_REQUEST'));
     }
     // Control paths are local simulator-only, never provider endpoints or production commands.
+    if (path === '/__sim/webhooks/deliver') {
+      if (!config.webhookUrl || !Array.isArray(body.indices)) return response(error(422, 'WEBHOOK_NOT_CONFIGURED'));
+      try {
+        await deliver(config.webhookUrl, body.indices);
+        return response({ status: 200, body: { simulated: true, delivered: body.indices.length } });
+      } catch {
+        return response(error(503, 'WEBHOOK_DELIVERY_FAILED'));
+      }
+    }
     if (path === '/__sim/advance') {
       if (
         !Number.isSafeInteger(body.milliseconds) ||
@@ -302,7 +325,11 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
         auth.status = 'VOIDED';
         emit('PAYMENT.AUTHORIZATION.VOIDED', auth);
         reply = { status: 204, body: null };
-      } else if (canonical(amount(body.amount)) !== canonical(auth.amount)) reply = error(422, 'AMOUNT_MISMATCH');
+      } else if (
+        !(action === 'reauthorize' && body.amount === undefined) &&
+        canonical(amount(body.amount)) !== canonical(auth.amount)
+      )
+        reply = error(422, 'AMOUNT_MISMATCH');
       else if (action === 'capture') {
         if (body.final_capture !== true || typeof body.invoice_id !== 'string' || !body.invoice_id.trim())
           reply = error(422, 'INVALID_CAPTURE');
@@ -324,12 +351,10 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
       } else if (now() < Date.parse(auth.create_time) + 3 * DAY) reply = error(422, 'AUTHORIZATION_IN_HONOR_PERIOD');
       else {
         const o = orders.get(auth.supplementary_data.related_ids.order_id) as Order;
-        const existing = o.authorizations
-          .map((a) => authorizations.get(a))
-          .find((a) => a && a.id !== auth.id && Date.parse(a.create_time) >= Date.parse(auth.create_time));
-        reply = existing
-          ? error(422, 'AUTHORIZATION_ALREADY_REAUTHORIZED')
-          : { status: 201, body: authorize(o, Date.parse(auth.expiration_time)) };
+        reply =
+          o.authorizations.length !== 1
+            ? error(422, 'AUTHORIZATION_ALREADY_REAUTHORIZED')
+            : { status: 201, body: authorize(o, Date.parse(auth.expiration_time)) };
       }
     } else if (path === '/v3/vault/setup-tokens') {
       if (!object(body.payment_source).paypal) reply = error(422, 'INVALID_PAYMENT_SOURCE');
@@ -363,5 +388,5 @@ export function createPayPalSimulator(config: { environment: string; clock: () =
     cache.set(key, { signature, reply: structuredClone(reply) });
     return response(reply);
   });
-  return { app, approve, approveSetup, events: () => structuredClone(events) };
+  return { app, approve, approveSetup, deliver, events: () => structuredClone(events) };
 }

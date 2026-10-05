@@ -6,7 +6,9 @@ import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { PAYMENT_KEYS } from './application/payment-readiness.js';
 import { createApp } from './http/app.js';
+import { providerRuntime } from './provider-runtime.js';
 
+const providers = await providerRuntime(process.env);
 const pool =
   process.env.DATABASE_URL && process.env.STOOD_API_KEY?.trim() && process.env.STOOD_HMAC_SECRET?.trim()
     ? new pg.Pool({ connectionString: process.env.DATABASE_URL })
@@ -28,6 +30,9 @@ const app = createApp({
   paypalBaseUrl: process.env.PAYPAL_BASE_URL ?? 'https://api-m.sandbox.paypal.com',
   demoMode: process.env.DEMO_MODE === 'true',
   paymentKeys: Object.fromEntries(PAYMENT_KEYS.map((key) => [key, process.env[key] ?? ''])),
+  providerHealth: providers.health,
+  requestClock: providers.clock,
+  clockMode: providers.clockMode,
 });
 const port = Number(process.env.PORT ?? '3000');
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');

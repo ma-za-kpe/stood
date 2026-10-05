@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "weak-tests",
+  "profile": "code.milestone@1",
+  "assessment": "WEAK_TESTS",
+  "steps": ["DRAFT", "AUTHORIZE_FIXTURE", "DISPATCH", "PACKAGE", "ASSESS_FIXTURE", "EXECUTE", "RECONCILE", "VERIFY"],
+  "expected": {
+    "domainState": "WAITING",
+    "providerState": "CREATED",
+    "captures": 0,
+    "settlementEffect": null,
+    "ledgerStatus": null
+  }
+}

@@ -1,11 +1,12 @@
 import { serve } from '@hono/node-server';
+import { simulatorConfiguration } from './configuration.js';
 import { createPayPalSimulator } from './paypal.js';
 
+const config = simulatorConfiguration(process.env);
 const app = createPayPalSimulator({
-  environment: process.env.APP_ENV ?? 'local',
+  environment: config.environment,
   clock: () => Date.parse('2026-10-05T00:00:00Z'),
+  ...(process.env.PAYPAL_SIM_WEBHOOK_URL ? { webhookUrl: process.env.PAYPAL_SIM_WEBHOOK_URL } : {}),
 }).app;
-const port = Number(process.env.PORT ?? '8080');
-if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid simulator PORT');
-const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
+const server = serve({ fetch: app.fetch, port: config.port, hostname: config.hostname });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => server.close());

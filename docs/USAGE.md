@@ -34,6 +34,26 @@ The lead product direction is now code milestones and agent-to-agent payments: *
 
 ## Code-milestone quickstart (local DRAFT)
 
+### Optional PayPal simulator and shared clock
+
+The first shared Stood integration smoke run also works without keys:
+
+```console
+scripts/dev mock
+```
+
+It tests seven scenarios using isolated Postgres and actual local HTTP: release, refusal, review, final usage waiting, renewal, expiry and lost-capture recovery. It labels approval/authorization and assessment as fixtures, checks signed draft/package/read APIs and matching ledger/provider outcomes, and replays signed duplicate/out-of-order notification hints. This is an integration test command, not the full Yard/browser demo or live sandbox qualification. It creates and drops its own random database on the fixed local Postgres and never uses your `DATABASE_URL`. The same cases run inside the required Docker product gate.
+
+```console
+docker compose --profile simulators up -d --wait paypal-sim
+PROVIDER_PAYPAL=sim docker compose up -d --force-recreate --wait api
+curl http://127.0.0.1:3000/health
+```
+
+Health reports PayPal `mode: sim`, `simulated: true`, a `controlled` clock and `paymentReady: false`. Stood reads time from that same simulator for every request; clock failures return 503 instead of using the system clock. Advance both with an authenticated local `POST http://127.0.0.1:8080/__sim/advance` (`Authorization: Bearer sim-access-token`, JSON `{"milliseconds":345600000}`). This does not activate funding, financial writes or the webhook queue. Simulator time is also the signing time for signed platform requests.
+
+An unset `PROVIDER_PAYPAL` boots no adapter. `live` requires the named sandbox keys and an SDK readiness read, and never falls back to simulation; production money is still unsupported. `fake` and all other providers' runtime selections are not wired yet and fail explicitly. To return to the original local configuration, recreate the API with `PROVIDER_PAYPAL=`. The complete multi-provider switching guide remains T-0230.
+
 Create a signed local DRAFT using the bearer/HMAC conventions in [T04](tech/T04-api-spec.md). The request body is:
 
 ```json
@@ -161,7 +181,7 @@ You **don't** give Stood your users' PayPal passwords or card details. Payers ap
 | `CHANNEL3_API_KEY` | optional | For `catalog_match`. The free tier works without a key |
 | `KERNEL_API_KEY` | demo only | Headless sandbox approval |
 | `NOTIFIER` | | `none` / `email` (+ `RESEND_API_KEY`) / `zapier` (+ `ZAPIER_HOOK_URL`) |
-| `DEMO_MODE` | | `true` enables `/demo/*` and accepts PayPal simulator events |
+| `DEMO_MODE` | | `true` enables synthetic `/v1/demo/*` fixtures; it does not enable a webhook verifier |
 
 ```bash
 git clone https://github.com/ma-za-kpe/stood && cd stood

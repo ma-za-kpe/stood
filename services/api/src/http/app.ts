@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { missingPaymentKeys, type PaymentKeys, SETUP_GUIDANCE } from '../application/payment-readiness.js';
 import type { ProviderHealth } from '../application/provider-registry.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
@@ -16,6 +17,12 @@ export type AppConfig = Readonly<{
   paymentKeys?: PaymentKeys;
   api?: PlatformApiConfig;
   providerHealth?: () => readonly ProviderHealth[];
+  requestClock?: () => Promise<number>;
+  clockMode?: 'system' | 'controlled';
+  providerEvents?: Readonly<{
+    verify(body: string, headers: Headers): Promise<boolean>;
+    enqueue(event: Readonly<{ id: string; event_type: string; resource: unknown; simulated?: true }>): Promise<void>;
+  }>;
 }>;
 
 type Scenario = Readonly<{ profileId: string; changed?: CheckResult }>;
@@ -117,27 +124,75 @@ const siteVisitScenarios: Readonly<Record<string, Scenario>> = Object.freeze({
   },
 });
 
-export function createApp(config: AppConfig): Hono {
+export function createApp(config: AppConfig) {
   if (!['local', 'ci', 'demo'].includes(config.appEnv) || config.paypalBaseUrl !== 'https://api-m.sandbox.paypal.com') {
     throw new Error('Only explicitly configured sandbox environments are supported');
   }
-  const app = new Hono();
+  const app = new Hono<{ Variables: { now: number } }>();
+  app.use('*', async (c, next) => {
+    try {
+      const now = config.requestClock ? await config.requestClock() : (config.api?.clock() ?? Date.now());
+      if (!Number.isSafeInteger(now) || now < 0) throw new Error('Invalid clock');
+      c.set('now', now);
+    } catch {
+      return c.json({ code: 'clock_unavailable', paymentReady: false }, 503);
+    }
+    return next();
+  });
+  app.post('/v1/webhooks/paypal', bodyLimit({ maxSize: 65536 }), async (c) => {
+    if (!config.providerEvents) return c.json({ code: 'webhooks_not_configured' }, 503);
+    try {
+      const body = await c.req.text();
+      if ((await config.providerEvents.verify(body, c.req.raw.headers)) !== true)
+        return c.json({ code: 'unauthorized' }, 401);
+      const event: unknown = JSON.parse(body);
+      if (!event || typeof event !== 'object' || Array.isArray(event)) return c.json({ code: 'invalid_event' }, 422);
+      const e = event as Record<string, unknown>;
+      if (
+        typeof e.id !== 'string' ||
+        !e.id.trim() ||
+        e.id.length > 200 ||
+        typeof e.event_type !== 'string' ||
+        !e.event_type.trim() ||
+        e.event_type.length > 200 ||
+        !e.resource ||
+        typeof e.resource !== 'object' ||
+        Array.isArray(e.resource) ||
+        (e.simulated !== undefined && e.simulated !== true)
+      )
+        return c.json({ code: 'invalid_event' }, 422);
+      // Notification only. A reconciler must obtain matching provider proof before changing money state.
+      await config.providerEvents.enqueue({
+        id: e.id,
+        event_type: e.event_type,
+        resource: e.resource,
+        ...(e.simulated === true ? { simulated: true } : {}),
+      });
+      return c.json({ accepted: true }, 202);
+    } catch {
+      return c.json({ code: 'event_unavailable' }, 503);
+    }
+  });
   app.get('/health', (c) =>
     c.json({
       status: 'ok',
       paymentReady: false,
       environment: config.appEnv,
+      clock: { mode: config.clockMode ?? 'system', now: c.get('now') },
       providers: config.providerHealth?.() ?? [],
       missing: missingPaymentKeys(config.paymentKeys),
       sentence: SETUP_GUIDANCE,
     }),
   );
   if (config.api) {
-    const api = platformApi(config.api);
+    const apiConfig = config.api;
+    platformApi(apiConfig); // Validate configuration at boot, before the first request.
     app.use('/v1/*', async (c, next) => {
       if (!/^\/v1\/(allowances|tranches)(?:\/|$)/.test(c.req.path)) return next();
       const url = new URL(c.req.url);
       url.pathname = url.pathname.slice(3);
+      const now = c.get('now');
+      const api = platformApi({ ...apiConfig, clock: () => now });
       const response = await api.fetch(new Request(url, c.req.raw));
       if (
         response.status !== 404 ||
@@ -186,7 +241,7 @@ export function createApp(config: AppConfig): Hono {
       const name = c.req.param('name');
       if (name === 'funding-declined' || name === 'hold-expiry') {
         const tranche = new Tranche('fixture_lifecycle', new Money(400000n, 'GBP'), 'construction.stage@1', 1);
-        const at = 1790985600000;
+        const at = c.get('now');
         const expiry = at + 29 * 86400000;
         if (name === 'funding-declined') tranche.fundingFailed();
         else {

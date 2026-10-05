@@ -40,6 +40,7 @@ export function paypalTransportContract(name: string, setup: () => Promise<PayPa
       expect(result.body).toMatchObject({ status: 'CREATED', amount: { currency_code: 'USD', value: '10.00' } });
       expect((result.body as { id: string }).id).not.toBe(h.input.authorizationId);
       expect(await h.transport.call('REAUTHORIZE', h.input)).toEqual(result);
+      expect((await h.transport.call('REAUTHORIZE', { ...h.input, requestId: 'second-renewal' })).status).toBe(422);
     });
     it('does not capture an expired authorisation', async () => {
       h.advance(29);

@@ -15,6 +15,7 @@
     "boundary": "depcruise --config .dependency-cruiser.cjs services packages",
     "validate": "pnpm lint && pnpm typecheck && pnpm boundary && pnpm test:coverage && pnpm build",
     "test:db": "vitest run --config vitest.db.config.ts --coverage",
+    "test:mock:stood": "vitest run --config vitest.db.config.ts services/api/test/mock-flow.db.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

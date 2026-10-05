@@ -9,6 +9,7 @@ export class FakePayPalTransport implements PayPalTransport {
   };
   private days = 0;
   private state = 'CREATED';
+  private renewed = false;
   private cache = new Map<string, { input: string; result: { status: number; body: unknown } }>();
   advance(days: number) {
     this.days += days;
@@ -52,9 +53,10 @@ export class FakePayPalTransport implements PayPalTransport {
     } else if (action === 'VOID') {
       this.state = 'VOIDED';
       result = { status: 204, body: null };
-    } else if (action === 'REAUTHORIZE' && this.days >= 3)
+    } else if (action === 'REAUTHORIZE' && this.days >= 3 && !this.renewed) {
+      this.renewed = true;
       result = { status: 201, body: { id: 'fake-renewed-auth', status: 'CREATED', amount } };
-    else result = { status: 422, body: { name: 'UNPROCESSABLE_ENTITY' } };
+    } else result = { status: 422, body: { name: 'UNPROCESSABLE_ENTITY' } };
     if (!action.startsWith('GET_'))
       this.cache.set(key, { input: JSON.stringify(input), result: structuredClone(result) });
     return structuredClone(result);
