@@ -75,6 +75,14 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
+  const nested = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const nestedPage = await nested.newPage();
+  await nestedPage.goto('http://web:3002/__pages/yard/app/');
+  await nestedPage.getByAltText('Yard', { exact: true }).waitFor();
+  assert(await nestedPage.getByAltText('Yard', { exact: true }).evaluate((img) => img.naturalWidth > 0));
+  await nestedPage.getByRole('link', { name: 'Yard story', exact: true }).click();
+  assert.equal(new URL(nestedPage.url()).pathname, '/__pages/yard/');
+  await nested.close();
   console.log('Connected mock room: desktop/mobile proof, SSE, simulation, theme and overflow checks passed.');
 } catch (error) {
   for (const [index, context] of browser.contexts().entries()) {

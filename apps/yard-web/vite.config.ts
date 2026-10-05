@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 export default defineConfig({
-  base: '/yard/app/',
+  base: './',
   server: {
     port: 3002,
     host: '0.0.0.0',

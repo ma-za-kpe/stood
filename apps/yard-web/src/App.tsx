@@ -131,12 +131,12 @@ export function App() {
         Skip to project
       </a>
       <header className="masthead">
-        <a href="/yard/">
+        <a href="../">
           <img src={logo} alt="Yard" width="145" height="40" />
         </a>
         <nav aria-label="Product navigation">
-          <a href="/">Stood ↗</a>
-          <a href="/yard/">Yard story</a>
+          <a href="../../">Stood ↗</a>
+          <a href="../">Yard story</a>
           <button type="button" aria-pressed={pane === 'board'} onClick={() => setPane('board')}>
             The Board
           </button>
@@ -324,7 +324,7 @@ export function App() {
         )}
       </main>
       <footer>
-        Yard builds. Stood pays. <a href="/yard/">Back to the Yard →</a>
+        Yard builds. Stood pays. <a href="../">Back to the Yard →</a>
       </footer>
     </div>
   );
