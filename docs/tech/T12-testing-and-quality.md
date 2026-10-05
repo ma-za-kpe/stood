@@ -57,3 +57,5 @@ The implemented Docker hook (`scripts/check-product`) runs unit/domain validatio
 6. HTTP layer + fixtures `wrong-plot` and `good` end to end.
 
 The ten local demo scenarios are unit-tested fixtures. `funding-declined` and `hold-expiry` expose lifecycle state separately from the assessment outcome; both use outcome WAIT and execute no payment. Expiry advances the explicit domain clock, reserves cancellation, then supplies a simulated provider-expiry proof. It never confirms expiry from elapsed time alone. Hosted/sandbox replay remains separate qualification.
+
+The T-0028 draft slice adds signed HTTP tests and real-Postgres tests for concurrent idempotency, restart response replay, tenant isolation, immutable ownership and final-write rollback. Its HTTP/Postgres scenario creates a DRAFT/PENDING stage, reads it and rejects changed request bytes; it does not qualify sandbox authorisation, evidence uploads or payment execution. Adapter tests use SDK mocks/synthetic bodies and fake-executor crash tests, never recorded provider evidence. Actual qualification remains T-0121.

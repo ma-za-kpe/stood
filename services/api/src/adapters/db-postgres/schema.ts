@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { TrancheCommand } from '../../domain/tranche-record.js';
 import type { OperationIntent, OperationStatus } from '../../ports/payment-operation-store.js';
+import type { StoredDraft } from '../../ports/platform-api-store.js';
 import type { OperationalAlert } from '../../ports/reconciliation-queue.js';
 
 export const reconciliationJobs = pgTable('reconciliation_jobs', {
@@ -151,5 +152,53 @@ export const paymentOperationEvents = pgTable(
       columns: [table.trancheId, table.key],
       foreignColumns: [paymentOperations.trancheId, paymentOperations.key],
     }),
+  ],
+);
+
+export const apiAllowances = pgTable(
+  'api_allowances',
+  {
+    id: text().primaryKey(),
+    platformId: text('platform_id').notNull(),
+    body: jsonb().$type<StoredDraft>().notNull(),
+  },
+  (table) => [
+    unique('allowance_platform_identity').on(table.id, table.platformId),
+    check(
+      'allowance_draft_valid',
+      sql`length(trim(${table.platformId})) > 0 AND COALESCE(${table.body}->>'id' = ${table.id} AND ${table.body}->>'status' = 'DRAFT', false)`,
+    ),
+  ],
+);
+export const apiTrancheOwners = pgTable(
+  'api_tranche_owners',
+  {
+    trancheId: text('tranche_id')
+      .primaryKey()
+      .references(() => paymentStreams.trancheId),
+    allowanceId: text('allowance_id').notNull(),
+    platformId: text('platform_id').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.allowanceId, table.platformId],
+      foreignColumns: [apiAllowances.id, apiAllowances.platformId],
+    }),
+  ],
+);
+export const apiRequests = pgTable(
+  'api_requests',
+  {
+    platformId: text('platform_id').notNull(),
+    key: text().notNull(),
+    fingerprint: text().notNull(),
+    response: jsonb().$type<StoredDraft>().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.platformId, table.key] }),
+    check(
+      'api_request_valid',
+      sql`length(trim(${table.platformId})) > 0 AND length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.fingerprint} ~ '^[a-f0-9]{64}$' AND jsonb_typeof(${table.response}) = 'object'`,
+    ),
   ],
 );

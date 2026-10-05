@@ -130,3 +130,7 @@ Every object is private. Access is through signed URLs with a 15-minute TTL (rec
 ### Reconciliation operations (T-0149)
 
 `reconciliation_jobs` stores a next-run deadline and an expiring lease token per managed tranche. Claims are atomic with `FOR UPDATE SKIP LOCKED`; finishing requires the exact token. `payment_alerts` retains deduplicated reviewer-owned OPEN/RESOLVED rows, original opened time and latest observation time. Safe-mode cancellation has an automatic scheduler trigger and a configured reviewer owner; unresolved operations get a three-hour alert. These operational tables do not replace the immutable payment ledger or prove a provider cancellation. Transaction Search scanning and notification delivery are separate T-0155 work.
+
+### Platform draft foundation (T-0028, partial)
+
+`api_allowances` stores immutable validated DRAFT bodies. `api_tranche_owners` binds an allowance/platform pair to each managed tranche, enforced with a composite foreign key; ownership cannot be reassigned. `api_requests` retains the original JSON response and exact-request fingerprint under a platform/key primary key. An advisory transaction lock serialises concurrent requests for that namespace; the draft, tranche creation, ownership and response are committed together. All three tables reject updates/deletes/truncation. Keys currently stay retained indefinitely; hosted retention and signed allowance versions are future work. This foundation neither authorises a hold nor stores a Vault approval.

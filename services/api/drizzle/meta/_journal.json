@@ -71,6 +71,13 @@
       "when": 1791200388870,
       "tag": "0009_reconciliation_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791201435122,
+      "tag": "0010_platform_drafts",
+      "breakpoints": true
     }
   ]
 }

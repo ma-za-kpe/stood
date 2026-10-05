@@ -126,6 +126,9 @@ describe('Payment schema (real local Postgres)', () => {
       schema.paymentOperations,
       schema.paymentOperationEvents,
       schema.trancheCommands,
+      schema.apiAllowances,
+      schema.apiRequests,
+      schema.apiTrancheOwners,
       schema.reconciliationJobs,
       schema.paymentAlerts,
     ])

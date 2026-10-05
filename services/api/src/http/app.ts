@@ -6,12 +6,14 @@ import { Money } from '../domain/money.js';
 import { Nonce } from '../domain/nonce.js';
 import { recipientAssessment, trancheSentences } from '../domain/recipient-sentences.js';
 import { Tranche } from '../domain/tranche.js';
+import { type PlatformApiConfig, platformApi } from './platform-api.js';
 
 export type AppConfig = Readonly<{
   appEnv: string;
   paypalBaseUrl: string;
   demoMode: boolean;
   paymentKeys?: PaymentKeys;
+  api?: PlatformApiConfig;
 }>;
 
 const scenarios: Readonly<Record<string, { profileId: string; changed?: CheckResult }>> = Object.freeze({
@@ -93,6 +95,21 @@ export function createApp(config: AppConfig): Hono {
       sentence: SETUP_GUIDANCE,
     }),
   );
+  if (config.api) {
+    const api = platformApi(config.api);
+    app.use('/v1/*', async (c, next) => {
+      if (!/^\/v1\/(allowances|tranches)(?:\/|$)/.test(c.req.path)) return next();
+      const url = new URL(c.req.url);
+      url.pathname = url.pathname.slice(3);
+      const response = await api.fetch(new Request(url, c.req.raw));
+      if (
+        response.status !== 404 ||
+        (c.req.method === 'GET' && /^\/v1\/(allowances(?:\/[^/]+)?|tranches\/[^/]+)$/.test(c.req.path))
+      )
+        return response;
+      return next();
+    });
+  }
   app.use('/v1/*', async (c, next) => {
     if (
       ['POST', 'PUT', 'PATCH', 'DELETE'].includes(c.req.method) &&
