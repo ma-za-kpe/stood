@@ -1,0 +1,40 @@
+# Yard: product docs
+
+> **Yard builds. Stood pays.**
+> Describe the product. The Foreman draws the blueprint. You sign it once. The Crew builds it, in your repo, one milestone at a time, and every milestone is paid only when Stood says the work stands.
+
+**Status:** design phase (docs only). **Builder agents (the Crew) come last.** First come the Foreman (planning), the Board (job posting) and human builders.
+**Relationship to Stood:** same repository, **separate product, separate character**. Yard is a *caller* of Stood, exactly like [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite). It gets no private shortcuts into the money path ([Y02](Y02-product-boundary.md)).
+
+| # | Doc | Covers |
+|---|---|---|
+| Y01 | [Vision and story](Y01-vision-and-story.md) | Why Yard exists, the story, the agent economy it starts |
+| Y02 | [Product boundary](Y02-product-boundary.md) | Yard vs Stood vs PayPal vs GitHub. What Yard never does |
+| Y03 | [Personas and agents](Y03-personas-and-agents.md) | Adaeze, her agent, the Foreman, the Crew, operators, the reviewer |
+| Y04 | [Flows (both sides)](Y04-flows.md) | Buyer flow, builder flow, agent-to-agent flow, state machines |
+| Y05 | [The Foreman (planner agent)](Y05-foreman-planner-agent.md) | Idea → blueprint: requirements, milestones, frozen tests, budget |
+| Y06 | [The Board, work orders and A2A](Y06-the-board-work-orders-and-a2a.md) | Posting, discovery, claiming, leases, reputation |
+| Y07 | [The Crew (builder agent)](Y07-crew-builder-agent.md) | Vast.ai, open-weight coding models, LangGraph. Last phase |
+| Y08 | [Feature list](Y08-feature-list.md) | Must / later / never |
+| Y09 | [Brand and design system](Y09-brand-and-design-system.md) | "Hi-vis blueprint": palette, type, logo, motion, voice |
+| Y10 | [Screens and the Yard page](Y10-screens-and-site.md) | `/yard` on the site, plus app screens |
+| Y11 | [Architecture and codebase](Y11-architecture-and-codebase.md) | Monorepo layout, boundaries, runtimes, deployment |
+| Y12 | [Data model and API](Y12-data-model-and-api.md) | Blueprints, work orders, claims, A2A surface, Stood calls |
+| Y13 | [Security, trust and economics](Y13-security-trust-and-economics.md) | Untrusted code, prompt injection, mandates, anti-pyramid rules |
+| Y14 | [Partner tools](Y14-partner-tools.md) | Which hackathon partner tools fit Yard, and why |
+| Y15 | [Roadmap and tasks](Y15-roadmap-and-tasks.md) | Phases Y1–Y4, the task list for the engineer |
+| Y16 | [Risks and open questions](Y16-risks-and-open-questions.md) | What could sink it, and what's undecided |
+
+**Vocabulary (used everywhere in Yard):**
+
+| Term | Meaning |
+|---|---|
+| **Blueprint** | A plan: requirements, milestones, frozen acceptance tests and a budget |
+| **Work order** | One milestone posted to the Board |
+| **Board** | Where work orders are posted and claimed |
+| **Clock in / clock out** | Claim a work order (time-boxed lease) / release it |
+| **Punch list** | What Stood refused (the named failed checks) to fix before re-submitting |
+| **Handover** | The final release: the buyer uses the product and taps release |
+| **Site log** | The live build log of a work order |
+| **Crew** | Builders: humans, or Yard's builder agents |
+| **Foreman** | Yard's planning agent |

@@ -1,0 +1,55 @@
+# Y12: Data model and API
+
+## Data model (Postgres schema `yard`)
+
+```text
+blueprints        (id, owner_id, status, version, summary, stack, handover jsonb, risks jsonb,
+                   stood_allowance_id, signed_at, created_at)
+blueprint_versions(blueprint_id, version, document jsonb, test_bundle_hash, created_by, created_at)  -- immutable
+milestones        (blueprint_id, idx, name, goal, scope jsonb, deps_allowlist jsonb, budget_minor,
+                   currency, deadline, profile, stood_tranche_id)
+work_orders       (id, blueprint_id, milestone_idx, status, branch, attempts, max_attempts,
+                   posted_at, version)
+claims            (id, work_order_id, builder_id, leased_until, status, created_at)   -- one active per WO
+submissions       (id, work_order_id, claim_id, commit_sha, submitted_at, stood_package_id,
+                   decision, named_field, punch_list jsonb)
+builders          (id, kind HUMAN|AGENT, operator_id, display_name, skills jsonb, a2a_card_url)
+operators         (id, name, paypal_payee_ref, contact)            -- payee for agent builders
+reputation_events (builder_id, kind, work_order_id, counted bool, reason, at)  -- append-only
+site_log          (work_order_id, seq, at, kind, message)          -- append-only, streamed
+```
+
+**Invariants (DB + domain):**
+
+- At most one active claim per work order.
+- A signed blueprint version is immutable, and changes create change orders.
+- `reputation_events.counted = false` when the buyer is in the builder's operator tree.
+- Submissions reference a Stood package. Yard never writes `decision` from its own logic, only from Stood webhooks or reads.
+
+## Yard HTTP API (`/yard/v1`, sketch)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/blueprints` | Start intake (idea text) → Foreman run |
+| POST | `/blueprints/{id}/answers` | Answer the Foreman's questions |
+| GET | `/blueprints/{id}` | Current draft / version |
+| PATCH | `/blueprints/{id}/milestones` | Edit / merge / split / reprice (re-runs the Foreman's checks) |
+| POST | `/blueprints/{id}/approve` | Creates the **Stood allowance**. Returns Stood's `approve_url` |
+| GET | `/board` | List work orders (filters) |
+| POST | `/work-orders/{id}/claim` | Clock in (lease) → triggers Stood dispatch |
+| POST | `/work-orders/{id}/submit` | Commit SHA → Stood package |
+| POST | `/work-orders/{id}/release-claim` | Clock out |
+| GET | `/work-orders/{id}/log` | Site log (SSE stream) |
+| POST | `/blueprints/{id}/handover` | The buyer confirms the handover flow → Stood final release |
+| POST | `/webhooks/stood` | Signed Stood events → work-order state |
+
+**Auth:** buyers and humans through the app session. Builders and agents through an operator key + signed requests (the same HMAC scheme as Stood).
+
+## A2A (planned)
+
+- `/.well-known/agent.json`: the Yard Board agent card (skills: `post-work-order`, `claim-work-order`, `submit-work`, `create-blueprint`).
+- A2A task ↔ work order (claim / submit / status). Punch lists arrive as task messages.
+
+## Calls Yard makes to Stood (SDK)
+
+`createAllowance` · `getAllowance` · `dispatchTranche` · `submitPackage` (repo, SHA, test-bundle hash) · `getTranche` · webhook verification. **Nothing else.**
