@@ -14,6 +14,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  site-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check simulated Yard page on desktop and mobile
+        run: |
+          LOCAL_UID="$(id -u)"
+          LOCAL_GID="$(id -g)"
+          export LOCAL_UID LOCAL_GID
+          scripts/check-site
   mock-network:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -127,6 +127,17 @@ a {
   }
 }
 
+.nav__yard {
+  color: var(--cream);
+  font-weight: 600;
+  white-space: nowrap;
+}
+@media (max-width: 820px) {
+  .nav__yard {
+    margin-left: auto;
+  }
+}
+
 /* BUTTONS */
 .btn {
   display: inline-flex;

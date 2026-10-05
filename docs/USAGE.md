@@ -404,3 +404,11 @@ Authorization/approval and assessments are explicitly test-only fixture commands
 `scripts/dev mock` also runs the first Yard flow over the isolated Docker network: locally frozen fixture terms, a real persisted Board post, an ordinary simulated Crew claim, a commit pushed to the GitHub fake, and a package submitted through Yard’s server-side Stood SDK. A passing assessment leaves Yard in CHECKING. Only a signed Stood notification with matching read proof projects the confirmed simulated capture as PAID; forged notifications and duplicates are checked. No payment is executed.
 
 Funding and assessment are explicit test-only fixture controls, not authenticated production funding or runner evidence. Crew receives only its Board identity and scoped fake GitHub token; it has no Stood payment credentials or database access. Cross-service package submission retries use a stable key, and recorded Board commands replay without another SDK call. A crash between package submission and Board persistence can leave an unreferenced package; a durable submission outbox remains follow-up work before this integration is enabled outside the isolated mock stack.
+
+### Yard page and browser checks
+
+The static Yard preview lives in `site/yard/`, connects to Stood’s page, and uses the outlined Yard kit. The page’s scenario controls change illustrations only; they do not call the Board or payment APIs. It says that no payment is executed before the first sample verdict. Planner, hosting, handover and live integration claims remain labelled as planned.
+
+Run `scripts/dev site` to build and serve Stood at <http://localhost:8082/> and Yard at <http://localhost:8082/yard/>. Ports 3000/3001 remain API-only; their `/` route returns 404. Re-run the command after page changes to rebuild the preview.
+
+Run `scripts/check-site` to build the static site and check it in a dedicated Docker Chromium browser on Node 24. It checks desktop/mobile layout, keyboard fixture selection, both-way navigation, missing assets, reduced motion and simulation disclosure. Screenshots go to `artifacts/site/`. The separate `site-browser` CI job runs the same command; it is a page smoke test, not a full accessibility audit or the remaining Yard application E2E suite.

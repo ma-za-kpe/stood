@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+import { chromium } from 'playwright';
+import { staticServer } from './serve.mjs';
+
+assert.equal(process.versions.node.split('.')[0], '24');
+const server = staticServer('_site');
+await new Promise((done) => server.listen(4173, '127.0.0.1', done));
+assert.equal((await fetch('http://127.0.0.1:4173/%2e%2e%2f.env')).status, 404);
+mkdirSync('artifacts/site', { recursive: true });
+const browser = await chromium.launch({ headless: true });
+try {
+  for (const [name, width, height] of [
+    ['desktop', 1440, 1000],
+    ['mobile', 390, 844],
+  ]) {
+    const page = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce' });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('response', (r) => {
+      if (r.url().startsWith('http://127.0.0.1:4173') && r.status() >= 400) errors.push(`${r.status()} ${r.url()}`);
+    });
+    page.on('request', (r) => {
+      if (r.method() !== 'GET') errors.push(`Unexpected mutation ${r.method()}`);
+    });
+    assert.equal((await page.goto('http://127.0.0.1:4173/yard/')).status(), 200);
+    await page.getByRole('heading', { level: 1 }).waitFor();
+    await page.keyboard.press('Tab');
+    assert.equal(
+      await page
+        .getByRole('link', { name: 'Skip to content' })
+        .evaluate((e) => e === document.activeElement && getComputedStyle(e).opacity === '1'),
+      true,
+    );
+    assert.match(await page.locator('#simulation-notice').innerText(), /No payment is executed/);
+    assert.match(await page.locator('#verdict-sentence').innerText(), /cannot mark this milestone paid/);
+    const notice = await page.locator('#simulation-notice').boundingBox();
+    const verdict = await page.locator('#fixture-verdict').boundingBox();
+    assert(notice.y < verdict.y, 'Disclosure precedes sample money verdict');
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      true,
+      `${name}: no horizontal page overflow`,
+    );
+    assert.equal(await page.locator('.crane-load').evaluate((e) => getComputedStyle(e).animationName), 'none');
+    await page.getByRole('radio', { name: '01 · Checking' }).focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.getByRole('radio', { name: '02 · Work stands' }).isChecked(), true);
+    assert.match(await page.locator('#verdict-sentence').innerText(), /Simulated capture confirmed/);
+    assert.match(await page.locator('#fixture-disclosure').innerText(), /no payment executed/);
+    await page.getByText('03 · Tests changed', { exact: true }).click();
+    assert.match(await page.locator('#verdict-sentence').innerText(), /Signed tests changed/);
+    await page.getByText('01 · Checking', { exact: true }).click();
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({ path: `artifacts/site/yard-${name}.png`, fullPage: true });
+    await page.screenshot({ path: `artifacts/site/yard-${name}-hero.png` });
+    await page.getByRole('link', { name: '← Back to Stood' }).click();
+    await page.getByRole('link', { name: 'Yard →', exact: true }).click();
+    assert.equal(new URL(page.url()).pathname, '/yard/');
+    assert.deepEqual(errors, [], `${name}: browser errors or missing assets`);
+    await page.close();
+    console.log(`Yard ${name}: simulation notice, keyboard fixtures, navigation, reduced motion and assets passed`);
+  }
+} finally {
+  await browser.close();
+  await new Promise((done) => server.close(done));
+}

@@ -119,7 +119,7 @@ repos:
         language: system
         entry: scripts/check-docker
         pass_filenames: false
-        files: ^Dockerfile$
+        files: (^Dockerfile$|^tools/site/Dockerfile\.test$|^scripts/check-docker$)
       - id: product-validation
         name: strict types, money boundary, unit/Postgres tests, coverage and build (Docker)
         language: system
