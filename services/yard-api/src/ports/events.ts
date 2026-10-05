@@ -7,6 +7,7 @@ export class YardError extends Error {
   }
 }
 export interface YardEvents {
+  subscribe?(id: string, wake: () => void): Promise<() => void>;
   create(id: string, owner: string, data: unknown, key: string): Promise<YardSnapshot>;
   load(id: string): Promise<YardSnapshot>;
   list(after?: string): Promise<readonly YardSnapshot[]>;

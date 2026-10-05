@@ -41,6 +41,55 @@ export class PostgresYardEvents implements YardEvents {
     private readonly pool: pg.Pool,
     private readonly clock?: () => Promise<number>,
   ) {}
+  private listeners = new Map<string, Set<() => void>>();
+  private listening: Promise<pg.PoolClient> | null = null;
+  get subscriptionCount(): number {
+    return [...this.listeners.values()].reduce((n, callbacks) => n + callbacks.size, 0);
+  }
+  async subscribe(id: string, wake: () => void): Promise<() => void> {
+    if (!this.listening)
+      this.listening = this.pool.connect().then(async (client) => {
+        const notify = (message: pg.Notification) => {
+          if (message.channel === 'yard_events')
+            for (const callback of this.listeners.get(message.payload ?? '') ?? []) callback();
+        };
+        client.on('notification', notify);
+        client.on('error', () => {
+          client.removeListener('notification', notify);
+          client.release(true);
+          this.listening = null;
+          for (const callbacks of this.listeners.values()) for (const callback of callbacks) callback();
+        });
+        try {
+          await client.query('LISTEN yard_events');
+        } catch (error) {
+          client.release(true);
+          this.listening = null;
+          throw error;
+        }
+        return client;
+      });
+    const client = await this.listening;
+    const callbacks = this.listeners.get(id) ?? new Set<() => void>();
+    callbacks.add(wake);
+    this.listeners.set(id, callbacks);
+    let closed = false;
+    return () => {
+      if (closed) return;
+      closed = true;
+      callbacks.delete(wake);
+      if (!callbacks.size) this.listeners.delete(id);
+      if (!this.subscriptionCount && this.listening) {
+        this.listening = null;
+        client.removeAllListeners('notification');
+        client.removeAllListeners('error');
+        void client.query('UNLISTEN yard_events').then(
+          () => client.release(),
+          () => client.release(true),
+        );
+      }
+    };
+  }
   private async timestamp(): Promise<Date | null> {
     if (!this.clock) return null;
     const now = await this.clock();
@@ -63,6 +112,7 @@ export class PostgresYardEvents implements YardEvents {
         JSON.stringify({ owner, data }),
         JSON.stringify(result),
       ]);
+      await c.query("SELECT pg_notify('yard_events', $1)", [id]);
       await c.query('COMMIT');
       return result;
     } catch (error) {
@@ -140,6 +190,7 @@ export class PostgresYardEvents implements YardEvents {
         `${actor}:${fingerprint}`,
         JSON.stringify(result),
       ]);
+      await c.query("SELECT pg_notify('yard_events', $1)", [id]);
       await c.query('COMMIT');
       return result;
     } catch (error) {

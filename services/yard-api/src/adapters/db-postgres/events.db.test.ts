@@ -51,3 +51,20 @@ it('timestamps durable events from the shared server-controlled mock clock', asy
     '2026-10-06T00:00:00.000Z',
   ]);
 });
+
+it('shares one database listener and wakes only matching committed projects', async () => {
+  const woken: string[] = [];
+  const a = await store.subscribe('notify', () => woken.push('a'));
+  const b = await store.subscribe('notify', () => woken.push('b'));
+  const other = await store.subscribe('other-notify', () => woken.push('other'));
+  await store.create('notify', 'buyer', {}, 'create');
+  await expect.poll(() => woken).toEqual(['a', 'b']);
+  await expect(
+    store.mutate('notify', 1, 'buyer', 'bad', 'bad', () => ({ data: {}, type: '', payload: {} })),
+  ).rejects.toThrow();
+  expect(woken).toHaveLength(2);
+  a();
+  b();
+  other();
+  expect(store.subscriptionCount).toBe(0);
+});
