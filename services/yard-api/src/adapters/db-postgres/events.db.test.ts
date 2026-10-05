@@ -68,3 +68,30 @@ it('shares one database listener and wakes only matching committed projects', as
   other();
   expect(store.subscriptionCount).toBe(0);
 });
+it('cleans the replacement listener when its last original viewer disconnects', async () => {
+  let resolveLost = () => {};
+  const lost = new Promise<void>((resolve) => {
+    resolveLost = resolve;
+  });
+  const first = await store.subscribe('reconnect', resolveLost);
+  const backend = await fixture.pool.query(
+    "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN yard_events' AND state='idle'",
+  );
+  expect(backend.rows).toHaveLength(1);
+  await fixture.pool.query('SELECT pg_terminate_backend($1)', [backend.rows[0].pid]);
+  await lost;
+  const second = await store.subscribe('reconnect', () => {});
+  second();
+  first();
+  expect(store.subscriptionCount).toBe(0);
+  await expect
+    .poll(
+      async () =>
+        (
+          await fixture.pool.query(
+            "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN yard_events' AND state='idle'",
+          )
+        ).rows.length,
+    )
+    .toBe(0);
+});

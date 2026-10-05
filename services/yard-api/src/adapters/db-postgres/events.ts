@@ -43,6 +43,8 @@ export class PostgresYardEvents implements YardEvents {
   ) {}
   private listeners = new Map<string, Set<() => void>>();
   private listening: Promise<pg.PoolClient> | null = null;
+  private listener: pg.PoolClient | null = null;
+  private listenerRelease: (() => void) | null = null;
   get subscriptionCount(): number {
     return [...this.listeners.values()].reduce((n, callbacks) => n + callbacks.size, 0);
   }
@@ -53,23 +55,50 @@ export class PostgresYardEvents implements YardEvents {
           if (message.channel === 'yard_events')
             for (const callback of this.listeners.get(message.payload ?? '') ?? []) callback();
         };
+        let released = false;
+        const finish = (destroy: boolean) => {
+          if (released) return;
+          released = true;
+          client.removeAllListeners('notification');
+          client.removeAllListeners('error');
+          client.release(destroy);
+        };
+        this.listener = client;
+        this.listenerRelease = () => {
+          void client.query('UNLISTEN yard_events').then(
+            () => finish(false),
+            () => finish(true),
+          );
+        };
         client.on('notification', notify);
         client.on('error', () => {
-          client.removeListener('notification', notify);
-          client.release(true);
-          this.listening = null;
+          finish(true);
+          if (this.listener === client) {
+            this.listener = null;
+            this.listening = null;
+          }
           for (const callbacks of this.listeners.values()) for (const callback of callbacks) callback();
         });
         try {
           await client.query('LISTEN yard_events');
         } catch (error) {
-          client.release(true);
-          this.listening = null;
+          finish(true);
+          if (this.listener === client) {
+            this.listener = null;
+            this.listening = null;
+          }
           throw error;
         }
+        this.listener = client;
         return client;
       });
-    const client = await this.listening;
+    const opening = this.listening;
+    try {
+      await opening;
+    } catch (error) {
+      if (this.listening === opening) this.listening = null;
+      throw error;
+    }
     const callbacks = this.listeners.get(id) ?? new Set<() => void>();
     callbacks.add(wake);
     this.listeners.set(id, callbacks);
@@ -79,14 +108,12 @@ export class PostgresYardEvents implements YardEvents {
       closed = true;
       callbacks.delete(wake);
       if (!callbacks.size) this.listeners.delete(id);
-      if (!this.subscriptionCount && this.listening) {
+      if (!this.subscriptionCount && this.listener) {
+        const release = this.listenerRelease;
+        this.listener = null;
+        this.listenerRelease = null;
         this.listening = null;
-        client.removeAllListeners('notification');
-        client.removeAllListeners('error');
-        void client.query('UNLISTEN yard_events').then(
-          () => client.release(),
-          () => client.release(true),
-        );
+        release?.();
       }
     };
   }
