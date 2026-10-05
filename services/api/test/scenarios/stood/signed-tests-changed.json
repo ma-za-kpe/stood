@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "signed-tests-changed",
+  "profile": "code.milestone@1",
+  "assessment": "INTEGRITY_FAIL",
+  "steps": ["DRAFT", "AUTHORIZE_FIXTURE", "DISPATCH", "PACKAGE", "ASSESS_FIXTURE", "EXECUTE", "RECONCILE", "VERIFY"],
+  "expected": {
+    "domainState": "REFUSED",
+    "providerState": "VOIDED",
+    "captures": 0,
+    "settlementEffect": "VOID",
+    "ledgerStatus": "CONFIRMED"
+  }
+}

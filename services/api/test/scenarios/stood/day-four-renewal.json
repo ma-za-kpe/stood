@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "day-four-renewal",
+  "profile": "code.milestone@1",
+  "assessment": "PASS",
+  "steps": [
+    "DRAFT",
+    "AUTHORIZE_FIXTURE",
+    "DISPATCH",
+    "ADVANCE_DAY_FOUR",
+    "RENEW",
+    "PACKAGE",
+    "ASSESS_FIXTURE",
+    "EXECUTE",
+    "RECONCILE",
+    "VERIFY"
+  ],
+  "expected": {
+    "domainState": "RELEASED",
+    "providerState": "CAPTURED",
+    "captures": 1,
+    "settlementEffect": "CAPTURE",
+    "ledgerStatus": "CONFIRMED"
+  }
+}
