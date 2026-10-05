@@ -22,7 +22,8 @@ const clock = async () => {
 await clock();
 const github = new FakeRepositories(() => at, [{ id: 'installation', owner: 'buyer' }]);
 const repository = await github.create('installation', 'project', { 'tests/contract.ts': 'signed tests' });
-const offers = new Map<string, CrewOffer & { projectId: string }>();
+type PublicOffer = CrewOffer & { projectId: string; workOrderId: string; version: number };
+const offers = new Map<string, PublicOffer>();
 const yard = async (path: string, method = 'GET', body?: unknown, key = 'request', version = 1) => {
   const raw = body === undefined ? '' : JSON.stringify(body),
     t = String(Math.floor((await clock()) / 1000));
@@ -31,7 +32,9 @@ const yard = async (path: string, method = 'GET', body?: unknown, key = 'request
     ...(raw ? { body: raw } : {}),
     headers: {
       'Yard-Key-Id': 'sim-builder-key',
-      'Yard-Signature': `t=${t},v1=${createHmac('sha256', 'sim-builder-secret').update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+      'Yard-Signature': `t=${t},v1=${createHmac('sha256', 'sim-builder-secret')
+        .update(`${t}.${method}.${path.split('?')[0]}.${raw}`)
+        .digest('hex')}`,
       'Idempotency-Key': key,
       'If-Match': String(version),
     },
@@ -43,21 +46,39 @@ const yard = async (path: string, method = 'GET', body?: unknown, key = 'request
 const path = (id: string) => {
   const offer = offers.get(id);
   assert(offer);
-  return `/yard/v1/blueprints/${offer.projectId}/work-orders/${id}`;
+  return `/yard/v1/blueprints/${offer.projectId}/work-orders/${offer.workOrderId}`;
+};
+const openOffers = async () => {
+  const all: PublicOffer[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const response = (await yard(`/yard/v1/board${cursor ? `?after=${encodeURIComponent(cursor)}` : ''}`)) as {
+      orders: PublicOffer[];
+      nextCursor: string | null;
+    };
+    all.push(...response.orders);
+    cursor = response.nextCursor;
+    if (cursor) {
+      if (seen.has(cursor)) throw new Error('Board cursor repeated');
+      seen.add(cursor);
+    }
+  } while (cursor);
+  return all;
 };
 const board: CrewBoard = {
   discover: async (ids) => {
-    const response = (await yard('/yard/v1/board')) as { orders: (CrewOffer & { projectId: string })[] };
-    for (const o of response.orders) offers.set(o.id, { ...o, stack: 'node' });
-    return [...offers.values()].filter((o) => !ids || ids.includes(o.id));
+    const response = await openOffers();
+    for (const o of response) offers.set(o.id, { ...o, stack: 'node' });
+    return response.map((o) => offers.get(o.id)!).filter((o) => !ids || ids.includes(o.id));
   },
   claim: async (id, builder) => {
     assert.equal(builder.builderId, 'sim-crew');
     assert.equal(builder.operatorRootId, 'sim-crew-operator');
     const offer = offers.get(id);
     assert(offer);
-    const boardView = (await yard('/yard/v1/board')) as { orders: { id: string; version: number }[] };
-    const version = boardView.orders.find((o) => o.id === id)?.version;
+    const boardView = await openOffers();
+    const version = boardView.find((o) => o.id === id)?.version;
     assert(version);
     await yard(`${path(id)}/claim`, 'POST', {}, `${id}:claim`, version);
     const view = (await yard(path(id))) as { currentClaim: { id: string; leasedUntil: number } };

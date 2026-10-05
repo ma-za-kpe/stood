@@ -15,7 +15,10 @@ export type SettlementProof = Readonly<{
 type Action =
   | { kind: 'claim'; id: string; actor: Operator; now: number }
   | { kind: 'build'; claim: string; now: number }
-  | { kind: 'submit'; claim: string; commit: string; packageId: string; now: number };
+  | { kind: 'submit'; claim: string; commit: string; packageId: string; now: number }
+  | { kind: 'expire'; now: number }
+  | { kind: 'release'; claim: string; now: number }
+  | { kind: 'repost'; now: number };
 export type SubmissionIntent = Readonly<{
   key: string;
   actor: Operator;
@@ -72,6 +75,13 @@ function data(value: unknown): Data {
   }
   return structuredClone(d);
 }
+function leaseChange(change: () => void): void {
+  try {
+    change();
+  } catch (error) {
+    throw new YardError(error instanceof RangeError ? 'INVALID' : 'CONFLICT');
+  }
+}
 function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
   if (!Object.hasOwn(d.orders, id)) throw new YardError('NOT_FOUND');
   const order = d.orders[id]!;
@@ -87,6 +97,15 @@ function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
       case 'submit':
         work.submit(a.claim, a.commit, a.packageId, a.now);
         work.checking(a.packageId, a.now);
+        break;
+      case 'expire':
+        work.expire(a.now);
+        break;
+      case 'release':
+        work.release(a.claim, a.now);
+        break;
+      case 'repost':
+        work.repost(a.now);
         break;
       default:
         throw new YardError('INVALID');
@@ -137,7 +156,8 @@ export class Board {
         return [
           {
             projectId: s.id,
-            id,
+            id: fingerprint({ projectId: s.id, workOrderId: id }),
+            workOrderId: id,
             name: milestone.name,
             priceMinor: milestone.budgetMinor,
             currency: d.blueprint.currency,
@@ -209,6 +229,37 @@ export class Board {
       work.build(claim.id, now);
       order.actions.push({ kind: 'build', claim: claim.id, now });
       return { wo, state: 'BUILDING', simulated: true };
+    });
+  }
+  expireLease(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    return this.mutate(id, actor, version, key, { expire: wo }, 'wo.lease_expired', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
+      const { work, order } = workOrder(d, wo);
+      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      leaseChange(() => work.expire(now));
+      order.actions.push({ kind: 'expire', now });
+      return { wo, state: 'LEASE_EXPIRED', simulated: true };
+    });
+  }
+  releaseClaim(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    return this.mutate(id, actor, version, key, { release: wo }, 'wo.released_claim', (d) => {
+      const { work, order } = workOrder(d, wo),
+        claim = work.snapshot.currentClaim;
+      if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
+      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      leaseChange(() => work.release(claim.id, now));
+      order.actions.push({ kind: 'release', claim: claim.id, now });
+      return { wo, state: 'ABANDONED', simulated: true };
+    });
+  }
+  repost(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    return this.mutate(id, actor, version, key, { repost: wo }, 'wo.reposted', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
+      const { work, order } = workOrder(d, wo);
+      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      leaseChange(() => work.repost(now));
+      order.actions.push({ kind: 'repost', now });
+      return { wo, state: 'POSTED', simulated: true };
     });
   }
   submit(

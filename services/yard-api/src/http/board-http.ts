@@ -159,6 +159,16 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       }
       return c.json(ack(await config.board[action](id, wo, actor, version, key, now)));
     });
+  for (const [route, method] of [
+    ['expire', 'expireLease'],
+    ['release', 'releaseClaim'],
+    ['repost', 'repost'],
+  ] as const)
+    app.post(`/yard/v1/blueprints/:id/work-orders/:wo/${route}`, async (c) => {
+      const { key, version, actor, now } = command(c);
+      body(c, []);
+      return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
+    });
   eventFeed(app, {
     store: config.board.events,
     authorize: async (headers, id) => {
