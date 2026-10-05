@@ -53,3 +53,7 @@ intake → clarify (≤ 3 questions) → requirements → milestone split → te
 - *"That's two milestones, not one: payments and reminders fail differently."*
 - *"Blueprint's ready: 4 milestones, $4,000, about 5 weeks. Read the tests. They're your contract."*
 - *"I can't test 'looks nice'. Want a check for 'loads in under 2 seconds' instead?"*
+
+## Implementation evidence
+
+The first graph in `services/yard-foreman` drafts through the PlannerModel port and persists a buyer-review interrupt. Tests use scripted model output and both memory and real-Postgres checkpoints. A buyer accepting the draft yields READY_FOR_BASELINE; it remains DRAFT and grants no permission to post work or move money. Proposed test files are hashed and mapped to requirements, but never executed by the Foreman. Clarification/revision HTTP composition and isolated baseline execution are still being built. The graph follows [LangGraph interrupt/checkpoint semantics](https://docs.langchain.com/oss/javascript/langgraph/interrupts).

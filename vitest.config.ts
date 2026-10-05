@@ -9,6 +9,7 @@ export default defineConfig({
       include: [
         'services/api/src/**/*.ts',
         'services/yard-api/src/**/*.ts',
+        'services/yard-foreman/src/**/*.ts',
         'services/simulators/src/**/*.ts',
         'packages/yard-domain/src/**/*.ts',
         'packages/stood-sdk/src/**/*.ts',

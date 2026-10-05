@@ -24,13 +24,18 @@ export async function yardDatabase() {
   url.username = runtime;
   url.password = password;
   const limited = new pg.Pool({ connectionString: url.toString() });
+  await pool.query(`GRANT CREATE ON DATABASE ${name} TO ${owner}`);
+  const migration = new pg.Pool({ connectionString: pool.options.connectionString, options: `-c role=${owner}` });
   return {
     pool,
     limited,
+    migration,
+    connectRuntime: () => new pg.Pool({ connectionString: url.toString() }),
     owner,
     runtime,
     close: async () => {
       await limited.end();
+      await migration.end();
       await pool.end();
       await admin.query(`DROP DATABASE ${name}`);
       await admin.query(`DROP ROLE ${runtime}`);

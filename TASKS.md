@@ -338,7 +338,7 @@ Y-A foundations: T-0174 supplies the designed ADR and tested import rules. The r
 
 Y-B Foreman (depends on tested domains and runner isolation):
 
-- `[ ]` T-0181 PlannerModel port and paused Foreman graph; no action tools, external-write credentials or automatic approval.
+- `[~]` T-0181 PlannerModel port and paused Foreman graph; no action tools, external-write credentials or automatic approval.
 - `[ ]` T-0182 Blueprint validation and red-first acceptance-test gate in a qualified isolated runner; empty scaffold must fail.
 - `[ ]` T-0183 Intake/repository prompt-injection corpus and tool-capability tests; reject tampering with signed terms.
 - `[ ]` T-0184 Buyer-approved blueprint to Stood mandate after T-0154/full T-0156; frozen test bundle and final-only usage condition.
@@ -536,3 +536,5 @@ Product-owner direction: one next PR containing all work that can be implemented
 The batch includes the pre-key implementation portions of T-0154/T-0158/T-0156, T-0159/T-0164–T-0166, T-0181–T-0189, T-0190/T-0194–T-0196, T-0200–T-0218, T-0220–T-0233 and T-0238. Existing task acceptance criteria remain the source of truth. Audit the wider ledger for additional key-independent gaps before declaring handoff ready. Non-engineering owner decisions and live qualification stay explicit; credentials cannot substitute for unresolved design or missing services.
 
 Handoff requires: full mock judge journey including refusal/rework and lease expiry/repost, connected browser application, restart-safe payment/submission paths, provider-mode/readiness reporting, secure key intake/setup and deployment manifests, green required gates, a per-provider key inventory with scopes, and an explicit list of tests deferred until keys arrive. Notify the owner at the Hosting and credentials handoff before requesting any keys. PR #39 merged as 1f3d5f1; all six required/reporting checks passed after the runner-starved jobs were rerun.
+
+T-0181 first implementation: pinned LangGraph.js 1.4.19 draft → persisted buyer-review interrupt, strict proposed-blueprint validation, immutable intake scope/budget/identity and final-only usage profile. Acceptance returns READY_FOR_BASELINE, never signing/payment authority. Seven unit cases failed on the missing module first; a separate real-Postgres checkpoint test restores with a new connection and no model replay. Clarification/revision HTTP integration and model qualification remain in this pre-key batch; no real AI completion is claimed.
