@@ -1,40 +1,24 @@
 # S02: Product boundary
 
-**Stood is the gate. Nothing else.**
+Stood checks agreed evidence before a staged payment moves and keeps the decision record. It never holds pooled funds, writes builder code, pushes commits or merges repositories.
 
-## The line
-
-> **Stood decides whether a staged payment moves, writes that decision onto the PayPal order, and keeps the file. Stood never holds money, never finds people, and never pays anyone locally.**
-
-## Ownership table
+## Ownership
 
 | Concern | Owner |
 |---|---|
-| Allowance (what "done" means, cap, payee, required shots, plot geofence) | **Stood** |
-| Package intake and comparison | **Stood** |
-| Decision: release / refuse / wait, with the named field | **Stood** |
-| PayPal order: authorise on dispatch, capture on release, void on refuse | **Stood** (using the platform's PayPal credentials) |
-| Dispute packet, receipt, reviewer file | **Stood** |
-| Inspector and plot record (accepted visits only) | **Stood** (later) |
-| Users, sign-up, KYC of inspectors and builders | Platform ([EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)) |
-| Inspector matching, routing, ratings | Platform |
-| Capture app on the inspector's phone | Platform (Stood offers an intake spec and SDK) |
-| Local payouts (builder draw, inspector fee) on Paystack / Flutterwave / MoMo | Platform |
-| Merchant of record and funds flow | Platform's PayPal account |
-| Customer support | Platform |
+| Buyer agreement, frozen signed acceptance tests, cap, payee/operator and evidence profile | Stood contract; provider approval binding planned |
+| Repository/base/new commit fetch | Planned GitHub read-only adapter; scoped read token only |
+| Secret-free, network-free test execution and signed report | Planned isolated runner; separate from payment API |
+| Evidence assessment, named condition, durable reservation and matching settlement | Stood |
+| Building code, hiring/subcontracting, user identity and onward payouts | Calling platform and accountable builder operator |
+| Agent discovery/task negotiation | Planned A2A surface; does not grant payment authority |
+| Mandate exchange | Planned AP2 surface; does not prove delivery |
+| Payment authorisation/capture/void | PayPal via guarded Stood adapter |
 
-## Tests to stop the boundary drifting [C]
+## Current boundary
 
-Before adding anything, ask:
+The code profile checks synthetic RULE findings; it is not a signed test verifier. DRAFT creation is implemented, financial HTTP and trusted evidence intake are not. A builder-provided green report cannot release money. Yard is planned in a separate repo, with an operator and a bounded mandate. Human/agent labels never affect verdicts.
 
-1. Does it change whether money moves, or what the file says about it? If not, it belongs to the platform.
-2. Would Stood have to **hold** money or **know a person** to do it? If so, no.
-3. Would a second consumer (a lender, an NGO) need it in the same shape? If not, it's EyeOnSite-specific and belongs in [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite).
+## Scenario: site visits
 
-## Integration surface (concept, not code)
-
-- **Allowance:** the platform creates it, the payer signs it, Stood returns an allowance id.
-- **Dispatch:** the platform says "inspect stage N". Stood authorises the tranche and returns the order id. State: *in review*.
-- **Package:** the platform (or the capture SDK) submits the evidence. Stood returns a decision id.
-- **Decision event:** sent to the platform: release (plus capture id), refuse (plus named field), or wait (plus reason).
-- **Dispute:** the platform asks for the packet. Stood returns a document ready to file.
+[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) owns matching, capture app, users and local payouts. Stood assesses its field package through a profile. These responsibilities do not move into the code-milestone core.

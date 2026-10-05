@@ -2,52 +2,21 @@
 
 ## Job story
 
-> **When** a stage of my build is said to be finished, **I want** the money for it to move only if someone independent stood on my plot and the photos match what I signed for, **so that** I never pay for a wall that isn't there, and when something goes wrong I have a file instead of an argument.
+When a builder says a code milestone is done, Adaeze wants payment to depend on the exact new commit and frozen signed acceptance tests, so a changed test or fabricated green badge cannot spend her mandate. The same rule applies when her buying agent submits the request.
 
-## Lifecycle [C, adds the money model from [09](../09-stood.md)]
+## Contract and commit package
 
-```text
-Allowance signed ──► Stage dispatched ──► Package submitted ──► Decision
-   (Vault mandate)    (PayPal AUTHORIZE:      (evidence)          ├─ Release ─► CAPTURE
-                       "in review")                               ├─ Refuse  ─► VOID
-                                                                  └─ Wait    ─► reviewer ─► Release / Refuse
-                                                    Release ─► (later) Dispute ─► packet
-```
+Freeze repository, base commit, acceptance-test manifest/hash, required test identities, allowed diff scope/dependencies, runner identity, mutation threshold, operator/payee, currency and cap. Example: $4,000 cap, $1,200 build milestone. A usage milestone also names an independent outside authority and any required human acceptance.
 
-## The allowance (input, signed once)
+The package binds the allowance/milestone, repository/new commit, recomputed test hashes, signed execution report/counts/skips, mutation result/scope and mandate/usage receipt. Missing or unverifiable proof means WAIT; a client PASS is insufficient. Trusted ingestion and the runner are planned.
 
-Plot (coordinates plus tolerance radius), stages (name, amount, currency), payee (the platform merchant), required shots per stage (angles, checklist items), inspection window, the max number of re-submits, and who may dispute. Signed by Ama, and maps to the **AP2 intent mandate**.
+## Outcomes and confirmation
 
-## Outcome 1: Release
+| Assessment | Buyer | Builder | Money |
+|---|---|---|---|
+| RELEASE | Signed tests passed for this commit | The commit meets the agreed checks | Reserve CAPTURE, then confirm exact operation before saying paid |
+| REFUSE | Signed tests changed | Restore the frozen tests and submit a new commit | Reserve VOID, then confirm before saying the hold ended |
+| WAIT | The tests are too weak | Strengthen the agreed tests through a newly signed allowance | Review; no implicit settlement |
+| DISPUTE after settlement | Your record is ready to file | The decision and evidence remain in the record | Preserve confirmed settlement; dispute cannot rewrite it |
 
-| | |
-|---|---|
-| **Inputs** | A package passes every rule. Model findings are above the confidence threshold |
-| **Stood does** | Captures the authorisation for this tranche |
-| **Outputs** | Decision = release, capture id, the evidence hashes, a receipt link. Event to the platform: pay the builder's draw and the inspector fee locally |
-| **PayPal stores** | Order with `custom_id` = decision id, and a description stating that an agent captured it under allowance X. Capture id |
-| **Ama reads** | "Foundation released. £4,000 paid. Kojo stood on the plot at 10:42." |
-
-## Outcome 2: Refuse
-
-| | |
-|---|---|
-| **Inputs** | Any **hard** rule fails: plot outside tolerance, photo reused, required shot missing, stage clearly wrong |
-| **Stood does** | Voids the authorisation. Nothing is captured |
-| **Outputs** | Decision = refuse, **the named field**, the evidence. Event to the platform: re-dispatch allowed or not |
-| **PayPal stores** | Voided authorisation, with the reference |
-| **Ama reads** | "Wrong plot. 1.4 km off. Nothing was paid." |
-| **Kojo reads** | "Photos were taken 1.4 km from the plot. Go back to the pin and capture again. Fee not paid for this visit." |
-
-## Outcome 3: Dispute
-
-| | |
-|---|---|
-| **Inputs** | Ama says a release was wrong |
-| **Stood does** | Builds the packet: the allowance she signed, the package that passed (photos, coordinates, times, nonce), the rule results, the model findings, capture id, timeline |
-| **Outputs** | A packet ready to file (PDF plus JSON). In sandbox, submitted through the PayPal disputes flow if the sandbox supports it, **otherwise shown as ready to file, never as a fake win** |
-| **PayPal stores** | Dispute evidence on the capture |
-
-## Wait (not an outcome, a state) [C]
-
-Used only when the model is unsure (blurred photos, can't tell the stage) or a system fails (PayPal timeout). It **never** turns into a refusal on its own. A human reviewer decides within the authorisation honour period, or Stood reauthorises.
+Planned receipts/dispute packets contain the signed contract, exact commits/hashes, runner report, rule version, decision history, operator and provider settlement identity. Never claim sandbox filing succeeded without a provider case. Pending/ambiguous effects say payment is not confirmed. Expiry never releases money.

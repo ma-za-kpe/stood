@@ -1,5 +1,24 @@
 # S06: Voice and states
 
+## Code-milestone sentence pairs (target copy)
+
+Buyer / builder replace payer / inspector in code-facing screens. The existing internal sentence field names remain unchanged until a versioned API contract changes them. These pairs describe evidence; append a money clause from confirmed state only.
+
+| Condition | Buyer | Builder |
+|---|---|---|
+| Signed tests changed | Signed tests changed | Restore the frozen tests and submit a new commit |
+| Skipped tests | Required tests were skipped | Run every frozen test without skips or selective execution |
+| Weak tests | The tests are too weak | Request stronger signed acceptance tests before resubmitting |
+| Confirmed release | Milestone 2 released. $1,200 paid | Your commit passed. $1,200 paid to the platform merchant |
+| Usage pending | Usage proof is missing. $1,200 is held, not paid | Add the agreed independent usage receipt |
+| Unknown provider outcome | Payment is not confirmed. A reviewer is checking | Payment is not confirmed. Do not submit another payment |
+
+Never say nothing was paid after an ambiguous provider call: money may have moved. Do not promise an operator's onward payout based on a Stood capture.
+
+## Scenario: site visits (legacy copy targets)
+
+The field-specific wording below belongs to EyeOnSite. A provider timeout uses the unknown-outcome pair above; the earlier timed-retry wording is not shipping copy.
+
 **Paga's failure was silence. Stood's product is the sentence.** [U]
 
 ## Rules
@@ -25,7 +44,7 @@
 | Refuse: missing shot | "**Missing photo.** No photo of the north wall. Nothing was paid." | "Add a photo of the north wall." | `REFUSED_MISSING` |
 | Refuse: stage | "**Not finished.** The photos show blockwork, not the roof. Nothing was paid." | "The roof is not visible. Capture it when it is done." | `REFUSED_STAGE` |
 | Wait: model unsure | "A person is checking these photos. £4,000 is still held, not paid." | "A reviewer is checking. You don't need to do anything." | `WAIT_REVIEW` |
-| Wait: system | "PayPal did not answer. Nothing was paid. We'll try again at 14:05." | — | `WAIT_SYSTEM` |
+| Wait: system | "PayPal did not answer. Payment is not confirmed. A reviewer is checking." | — | `WAIT_SYSTEM` |
 | Hold expiring [C] | "The hold ends in 1 day. If the stage isn't seen, nothing is paid and the hold is released." | — | `HOLD_EXPIRING` |
 | Dispute opened | "Your dispute is filed with the record of what Kojo saw." | — | `DISPUTED` |
 | Rules changed; cancellation confirmed | "The rules changed. Your hold is cancelled. Nothing was paid." | "The hold is cancelled. Ask the platform before starting again." | `CANCELLED` |

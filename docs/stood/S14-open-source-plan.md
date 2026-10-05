@@ -18,7 +18,7 @@ stood/
 ├─ openapi/stood.yaml         ← Stood's API (source for the APIMatic SDK / portal / MCP)
 ├─ apps/
 │  ├─ web/                    ← Allowance, Decision, Receipt, Dispute, Reviewer (AG Studio), Gantt (Bryntum)
-│  └─ capture/                ← Kojo's PWA (offline queue, nonce, in-app camera)
+│  └─ capture/                ← the field inspector’s PWA (offline queue, nonce, in-app camera)
 ├─ services/
 │  ├─ api/                    ← the gate (Render)
 │  ├─ workflows/              ← Render Workflows: dispatch→authorise→checks→capture|void|wait

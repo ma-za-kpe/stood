@@ -290,7 +290,7 @@ Round: T-0157, T-0151/T-0152/T-0153 (reviewer-approved grouped setup task), T-01
 T-0157 includes the approved landing repositioning (PR #24, 9eebf39) and unit-tested code-profile contract; six regression tests failed first on the absent profile. Trusted execution remains T-0159. The full audit is split below, preserving one task per commit. ADR-0014 already exists, so the pivot uses ADR-0015.
 
 - `[x]` T-0160 Align README, docs index, overview and usage quickstart with Adaeze/code milestones, USD amounts and truthful DRAFT/payment boundaries. Tier: designed documentation; offline links and full gate required.
-- `[ ]` T-0161 Realign product specs, sentence pairs, commit/report screens, six-beat demo, attack model, partner fit and profile parameters. Tier: designed; no runner/payment execution claim.
+- `[x]` T-0161 Realign product specs, sentence pairs, commit/report screens, six-beat demo, attack model, partner fit and profile parameters. Tier: designed; no runner/payment execution claim.
 - `[ ]` T-0162 Realign technical requirements, architecture, API examples, artifact model, pipeline, runner security, hosting and qualification plan. Tier: designed; sandbox technology remains undecided.
 - `[ ]` T-0163 Preserve research/ADR provenance with historical banners, record pivot in ADR-0015, align process/submission examples and audit old-story matches. Tier: designed; preserve historical body bytes.
 - `[ ]` T-0164 Build/qualify isolated code runner: no network or secrets, non-root, read-only inputs, CPU/memory/time/process/disk limits, signed results. Choose sandbox technology in a separate ADR and prove escape/resource tests before shipping.
