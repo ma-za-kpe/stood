@@ -76,3 +76,9 @@ Steps 2 and 3 run before step 4. **If a hard rule already refuses, the model ste
 - a provenance manifest hash
 
 Stood accepts these as `platform_signals`: **any HIGH-severity signal → WAIT**. Stood independently re-runs the checks it can (plot, window, pHash). [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) has device attestation, which Stood can't do. Stood has the cross-plot and cross-platform index, which [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) can't have.
+
+## Signed report contract (T-0171, unit-tested)
+
+The runner verifier checks an Ed25519 signature over a bounded exact payload, trusted runner/image, tenant/allowance/package/repository/base/new commit and frozen manifest. It derives only the six build RULE findings after validating tests, mutation and budget. A runner never asserts outside usage. Unknown, stale, future, tampered or incompatible reports yield no findings, so the gate waits.
+
+The fake runner signs synthetic reports without executing any source. Fixture reports are rejected by default and require explicit test-mode allowance. Signature verification is not sandbox attestation or payer approval: production wiring still requires a qualified signer/runtime and a trusted frozen agreement, separate outside-usage proof and immutable package/replay binding. Report freshness is checked against the ingest server clock; queued work must preserve its immutable received/verified time rather than treating processing time as new evidence. No HTTP payment path consumes these reports yet.
