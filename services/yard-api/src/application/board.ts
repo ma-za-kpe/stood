@@ -16,6 +16,18 @@ type Action =
   | { kind: 'claim'; id: string; actor: Operator; now: number }
   | { kind: 'build'; claim: string; now: number }
   | { kind: 'submit'; claim: string; commit: string; packageId: string; now: number };
+export type SubmissionIntent = Readonly<{
+  key: string;
+  actor: Operator;
+  claimId: string;
+  expectedVersion: number;
+  reservedVersion: number;
+  request: Readonly<{ trancheId: string; repository: string; baseCommit: string; commit: string; key: string }>;
+  requestedAt: number;
+  status: 'RESERVED' | 'CONFIRMED';
+  packageId: string | null;
+  completedVersion: number | null;
+}>;
 type Order = {
   id: string;
   milestone: string;
@@ -23,9 +35,21 @@ type Order = {
   postedAt: number;
   actions: Action[];
   payment: SettlementProof | null;
+  submissionIntent?: SubmissionIntent;
 };
 type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order> };
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, v]) => [key, canonical(v)]),
+    );
+  return value;
+}
+const same = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 function data(value: unknown): Data {
   const d = value as Data;
   if (
@@ -212,11 +236,123 @@ export class Board {
     const { work, order } = workOrder(data(snapshot.data), wo);
     return {
       ...work.snapshot,
-      state: order.payment ? 'PAID' : work.snapshot.state,
+      state: order.payment
+        ? 'PAID'
+        : order.submissionIntent?.status === 'RESERVED'
+          ? 'SUBMITTING'
+          : work.snapshot.state,
       payment: order.payment,
       projectVersion: snapshot.version,
       simulated: true,
     };
+  }
+  async pendingSubmissions(after = '') {
+    const projects = await this.events.list(after),
+      page = projects.slice(0, 100);
+    const submissions = page.flatMap((project) =>
+      Object.entries(data(project.data).orders).flatMap(([wo, order]) =>
+        order.submissionIntent?.status === 'RESERVED'
+          ? [{ projectId: project.id, wo, intent: structuredClone(order.submissionIntent) }]
+          : [],
+      ),
+    );
+    return { submissions, nextCursor: projects.length > 100 ? page.at(-1)!.id : null };
+  }
+  async prepareSubmission(
+    id: string,
+    wo: string,
+    commit: string,
+    actor: Operator,
+    version: number,
+    key: string,
+    now: number,
+  ): Promise<SubmissionIntent> {
+    const current = await this.read(id, actor);
+    const existing = workOrder(data(current.data), wo).order.submissionIntent;
+    if (existing) {
+      if (
+        existing.key !== key ||
+        existing.request.commit !== commit ||
+        existing.expectedVersion !== version ||
+        existing.actor.id !== actor.id ||
+        existing.actor.root !== actor.root ||
+        existing.actor.kind !== actor.kind
+      )
+        throw new YardError('CONFLICT');
+      return structuredClone(existing);
+    }
+    const snapshot = await this.mutate(
+      id,
+      actor,
+      version,
+      `submission-reserve:${key}`,
+      { wo, commit, actor, version, key },
+      'submission.reserved',
+      (d) => {
+        const { work, order } = workOrder(d, wo);
+        const claim = work.snapshot.currentClaim;
+        if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id || order.payment || order.submissionIntent)
+          throw new YardError('FORBIDDEN');
+        work.submit(claim.id, commit, 'reservation-only', now); // validate lease and commit before any HTTP
+        order.submissionIntent = {
+          key,
+          actor: structuredClone(actor),
+          claimId: claim.id,
+          expectedVersion: version,
+          reservedVersion: version + 1,
+          request: {
+            trancheId: order.trancheId,
+            repository: d.blueprint.repository,
+            baseCommit: d.blueprint.baseCommit,
+            commit,
+            key: `yard:${fingerprint({ id, wo, actor, claim: claim.id, commit, key })}`,
+          },
+          requestedAt: now,
+          status: 'RESERVED',
+          packageId: null,
+          completedVersion: null,
+        };
+        return { wo, state: 'SUBMITTING', simulated: true };
+      },
+    );
+    return structuredClone(workOrder(data(snapshot.data), wo).order.submissionIntent!);
+  }
+  completeSubmission(id: string, wo: string, intent: SubmissionIntent, packageId: string) {
+    return this.mutate(
+      id,
+      intent.actor,
+      intent.reservedVersion,
+      `submission-complete:${intent.key}`,
+      {
+        wo,
+        requestKey: intent.request.key,
+        claimId: intent.claimId,
+        originalVersion: intent.expectedVersion,
+        packageId,
+      },
+      'wo.submitted',
+      (d) => {
+        const { work, order } = workOrder(d, wo);
+        if (!same(order.submissionIntent, intent) || work.snapshot.currentClaim?.id !== intent.claimId || order.payment)
+          throw new YardError('CONFLICT');
+        work.submit(intent.claimId, intent.request.commit, packageId, intent.requestedAt);
+        work.checking(packageId, intent.requestedAt);
+        order.actions.push({
+          kind: 'submit',
+          claim: intent.claimId,
+          commit: intent.request.commit,
+          packageId,
+          now: intent.requestedAt,
+        });
+        order.submissionIntent = {
+          ...intent,
+          status: 'CONFIRMED',
+          packageId,
+          completedVersion: intent.reservedVersion + 1,
+        };
+        return { wo, state: 'CHECKING', packageId, simulated: true };
+      },
+    );
   }
   async submissionTerms(
     id: string,

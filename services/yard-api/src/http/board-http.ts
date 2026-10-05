@@ -3,17 +3,14 @@ import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Board, Operator, SettlementProof } from '../application/board.js';
+import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
 import { YardError } from '../ports/events.js';
 import { eventFeed } from './event-feed.js';
 export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
   operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
-  packages?: Readonly<{
-    submit(
-      input: Readonly<{ trancheId: string; repository: string; baseCommit: string; commit: string; key: string }>,
-    ): Promise<string>;
-  }>;
+  packages?: PackageGateway;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number, prefix = ''): boolean {
@@ -140,13 +137,19 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
         if (typeof input.commit !== 'string' || !/^[a-f0-9]{40}$/.test(input.commit)) throw new YardError('INVALID');
         if (config.packages) {
           if (input.packageId !== undefined) throw new YardError('INVALID');
-          const terms = await config.board.submissionTerms(id, wo, actor, input.commit, version, key, now);
-          if ('receipt' in terms) return c.json(ack(terms.receipt));
-          input.packageId = await config.packages.submit({
-            ...terms,
-            commit: input.commit,
-            key: `yard:${id}:${wo}:${key}`,
-          });
+          return c.json(
+            ack(
+              await new SubmissionBridge(config.board, config.packages).submit(
+                id,
+                wo,
+                input.commit,
+                actor,
+                version,
+                key,
+                now,
+              ),
+            ),
+          );
         }
         if (typeof input.packageId !== 'string') throw new YardError('INVALID');
         return c.json(ack(await config.board.submit(id, wo, input.commit, input.packageId, actor, version, key, now)));

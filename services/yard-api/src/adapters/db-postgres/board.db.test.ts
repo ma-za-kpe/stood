@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { yardDatabase } from '../../../test/database.js';
 import { Board } from '../../application/board.js';
+import { SubmissionBridge } from '../../application/submission-bridge.js';
 import { migrateYardEvents, PostgresYardEvents } from './events.js';
 
 let f: Awaited<ReturnType<typeof yardDatabase>>;
@@ -163,4 +164,64 @@ it('paginates beyond project 100 and keeps buyer repository out of discovery', a
     expect(o).not.toHaveProperty('buyerOperatorId');
   }
   await expect(board.discoverPage('invalid cursor')).rejects.toThrow('INVALID');
+});
+
+it('recovers a durable submission through a new connection and serialises competing receipt writers', async () => {
+  const id = 'outbox-project';
+  await board.create({ ...input, id }, buyer, 'create');
+  await board.freeze(
+    id,
+    {
+      version: 1,
+      buyerOperatorId: buyer.id,
+      approvalReference: 'sim-approved',
+      baselines: input.milestones.map((m) => ({
+        milestoneId: m.id,
+        testBundleHash: m.testBundleHash,
+        manifestHash: m.manifestHash,
+        failedTestIds: m.testIds,
+        reference: 'sim-red',
+      })),
+    },
+    buyer,
+    1,
+    'freeze',
+  );
+  await board.post(id, 'one', 'outbox-tranche', buyer, 2, 'post', at);
+  await board.claim(id, 'one', builder, 3, 'claim', at);
+  await board.build(id, 'one', builder, 4, 'build', at);
+  const before = await board.prepareSubmission(id, 'one', 'd'.repeat(40), builder, 5, 'submit', at);
+  const restartedPool = f.connectRuntime();
+  try {
+    const restartedBoard = new Board(new PostgresYardEvents(restartedPool));
+    const after = await restartedBoard.prepareSubmission(id, 'one', 'd'.repeat(40), builder, 5, 'submit', at + 1);
+    expect(after).toEqual(before);
+    const gateway = {
+      submit: async (request: typeof before.request) => ({
+        id: 'durable-package',
+        trancheId: request.trancheId,
+        repository: request.repository,
+        baseCommit: request.baseCommit,
+        commit: request.commit,
+      }),
+    };
+    const bridge = new SubmissionBridge(restartedBoard, gateway);
+    const results = await Promise.all([
+      bridge.submit(id, 'one', 'd'.repeat(40), builder, 5, 'submit', at + 1),
+      bridge.submit(id, 'one', 'd'.repeat(40), builder, 5, 'submit', at + 1),
+    ]);
+    expect(results[0]).toEqual(results[1]);
+    expect((await restartedBoard.view(id, 'one', builder)).submission?.packageId).toBe('durable-package');
+    expect((await new PostgresYardEvents(restartedPool).read(id, 0)).map((e) => e.type)).toEqual([
+      'blueprint.ready',
+      'blueprint.approved',
+      'wo.posted',
+      'wo.claimed',
+      'wo.building',
+      'submission.reserved',
+      'wo.submitted',
+    ]);
+  } finally {
+    await restartedPool.end();
+  }
 });

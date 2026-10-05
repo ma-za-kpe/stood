@@ -60,7 +60,13 @@ it('runs signed Board commands, keeps submissions checking and requires matching
       packages: {
         submit: async (input) => {
           submissions.push(input);
-          return 'package';
+          return {
+            id: 'package',
+            trancheId: input.trancheId,
+            repository: input.repository,
+            baseCommit: input.baseCommit,
+            commit: input.commit,
+          };
         },
       },
       stood: { mode: 'sim', secret: 'sim-stood-webhook-secret', read: async () => proof },
@@ -152,7 +158,7 @@ it('runs signed Board commands, keeps submissions checking and requires matching
     409,
   );
   expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 6, 'different', 'builder')).status).toBe(
-    403,
+    409,
   );
   expect(submissions).toHaveLength(1);
   const before = await (await request(base)).json();
@@ -186,9 +192,9 @@ it('runs signed Board commands, keeps submissions checking and requires matching
   expect((await (await request(base)).json()).state).toBe('PAID');
   expect((await (await request('/yard/v1/board')).json()).orders).toHaveLength(0);
   expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 7, 'changed', 'builder')).status).toBe(
-    403,
+    409,
   );
-  await expect(board.settlement('p', 'one', { ...proof, eventId: 'different' }, 7)).rejects.toThrow('INVALID');
+  await expect(board.settlement('p', 'one', { ...proof, eventId: 'different' }, 8)).rejects.toThrow('INVALID');
   await expect(
     board.create({ ...input, id: '__proto__' } as never, { id: 'buyer', root: 'buyer-root', kind: 'BUYER' }, 'bad'),
   ).rejects.toThrow('INVALID');

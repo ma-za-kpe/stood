@@ -35,19 +35,24 @@ const app = createYardApp({
           clock: () => now,
           transport: (request) => fetch(new Request(`http://api:3000${new URL(request.url).pathname}`, request)),
         });
-        return (
-          await client.submitPackage(
-            input.trancheId,
-            {
-              repository: input.repository,
-              base_commit: input.baseCommit,
-              commit_sha: input.commit,
-              report_ref: 'reports/yard-first.json',
-              report_sha256: 'c'.repeat(64),
-            },
-            input.key,
-          )
-        ).id;
+        const receipt = await client.submitPackage(
+          input.trancheId,
+          {
+            repository: input.repository,
+            base_commit: input.baseCommit,
+            commit_sha: input.commit,
+            report_ref: 'reports/yard-first.json',
+            report_sha256: 'c'.repeat(64),
+          },
+          input.key,
+        );
+        return {
+          id: receipt.id,
+          trancheId: receipt.trancheId,
+          repository: receipt.metadata.repository,
+          baseCommit: receipt.metadata.base_commit,
+          commit: receipt.metadata.commit_sha,
+        };
       },
     },
     operators: [
