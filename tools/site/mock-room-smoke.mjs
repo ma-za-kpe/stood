@@ -35,6 +35,29 @@ try {
     await page.getByRole('button', { name: 'Paper theme', exact: true }).click();
     assert.equal(await page.locator('.app').getAttribute('data-theme'), 'paper');
     await page.screenshot({ path: `artifacts/mock-network/yard-room-${name}.png`, fullPage: true });
+    if (name === 'desktop') {
+      await page.getByRole('textbox', { name: 'Project ID', exact: true }).fill('yard-lease');
+      await page.getByRole('button', { name: 'Open project →', exact: true }).click();
+      await page.getByRole('heading', { name: 'Lease lifecycle simulation', exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Builder', exact: true }).click();
+      await page.getByRole('alert').filter({ hasText: 'does not have access' }).waitFor();
+      assert.equal(await page.getByRole('heading', { name: 'Lease lifecycle simulation', exact: true }).count(), 0);
+      assert.equal(await page.getByAltText('Stood / Released').count(), 0);
+    }
+    await page.getByRole('button', { name: 'The Board', exact: true }).click();
+    await page.getByRole('heading', { name: 'Pick work. Stand behind it.', exact: true }).waitFor();
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    if (name === 'desktop') {
+      await page.getByRole('heading', { name: 'build', exact: true }).waitFor();
+      await page.screenshot({ path: 'artifacts/mock-network/yard-board-desktop.png', fullPage: true });
+      await page.getByRole('button', { name: 'Clock in →', exact: true }).click();
+      await page.getByRole('heading', { name: 'Lease lifecycle simulation', exact: true }).waitFor();
+      await page.locator('.state-chip').filter({ hasText: 'CLAIMED' }).waitFor();
+      assert.equal(await page.getByAltText('Stood / Released').count(), 0);
+      assert.equal(await page.locator('.stood-verdict').count(), 0);
+    } else {
+      await page.screenshot({ path: 'artifacts/mock-network/yard-board-mobile.png', fullPage: true });
+    }
     assert.deepEqual(errors, []);
     await page.close();
   }

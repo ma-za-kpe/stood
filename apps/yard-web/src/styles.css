@@ -334,3 +334,50 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+.board-panel > label {
+  display: block;
+  font-family: var(--mono);
+  margin: 2rem 0 0.6rem;
+}
+.board-panel > input {
+  max-width: 32rem;
+  width: 100%;
+}
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+.work-card {
+  background: var(--surface);
+  border: 1px solid var(--grid);
+  border-top: 4px solid var(--amber);
+  padding: 1.5rem;
+}
+.work-card h3 {
+  font: 800 2rem / 1.05 var(--display);
+  text-transform: uppercase;
+  margin: 0.8rem 0;
+}
+.work-card button {
+  width: 100%;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.board-panel .signal {
+  color: var(--y-navy);
+  background: var(--y-hivis);
+  padding: 8px 12px;
+}
+.board-panel > input {
+  font: 16px var(--body);
+  padding: 12px 14px;
+  min-height: 44px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--text-muted);
+}

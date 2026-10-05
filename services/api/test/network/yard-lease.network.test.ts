@@ -124,4 +124,7 @@ it('Yard network: lease expires, owner reposts, and a new claim gets a fresh ide
   expect(after.currentClaim.leasedUntil).toBe((await clock()) + 48 * 3600000);
   expect(after.claims.map((c: { status: string }) => c.status)).toEqual(['EXPIRED', 'ACTIVE']);
   expect(after.payment).toBeNull();
+  // Leave an unclaimed, unpaid fixture for the connected Board/browser check.
+  expect((await request(`${wo}/release`, 'POST', {}, 7, 'release-for-board', 'builder')).status).toBe(200);
+  expect((await request(`${wo}/repost`, 'POST', {}, 8, 'repost-for-board')).status).toBe(200);
 });

@@ -33,3 +33,9 @@ The same GitHub Pages site as Stood. **Stood's nav gets a "Yard →" link.** Yar
 | 10 | **Operator dashboard** | Operator | **AG Studio**: Crew earnings, GPU minutes, pass rate, abandon rate (later) |
 
 All screens show Stood decisions with **Stood's chip**, never a Yard-styled imitation.
+
+## Connected mock screens
+
+The React shell now has a project-room foundation and a Board foundation, exercised against the isolated Docker services. Public posted-work cards load continuation pages, filter the loaded results and show a pending clock-in command. A matching acknowledgement triggers a new scoped room fetch; it is never payment proof. Operator changes clear private cached rooms. A browser regression confirms denied access before claiming and a lease-only room after claiming, without a Stood money stamp.
+
+The complete work-order screen, signed-test viewer, commit submission, punch lists, previews and handover remain unfinished. The Board's current filter is local to loaded pages; it is not server-side search. These screens use simulated providers and synthetic terms, with no real payment.

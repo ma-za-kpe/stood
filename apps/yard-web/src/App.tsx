@@ -6,7 +6,9 @@ import { z } from 'zod';
 import { create } from 'zustand';
 import releasedStamp from '../../../docs/brand/logo/stamp-released.svg';
 import logo from '../../../docs/brand/yard/logo/yard-lockup-on-dark.svg';
+import { BoardPanel } from './BoardPanel.js';
 import { connectionMachine, staleConnection } from './connection.js';
+import { api } from './http.js';
 import { applyEvent, type ProjectRoom, type RoomEvent, roomChecked } from './project-state.js';
 
 const useUI = create<{ theme: 'dark' | 'paper'; toggle(): void }>((set) => ({
@@ -14,22 +16,6 @@ const useUI = create<{ theme: 'dark' | 'paper'; toggle(): void }>((set) => ({
   toggle: () => set((s) => ({ theme: s.theme === 'dark' ? 'paper' : 'dark' })),
 }));
 const projectId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
-async function api(path: string, options?: RequestInit) {
-  const response = await fetch(`/app/api${path}`, {
-    ...options,
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-  });
-  if (!response.ok)
-    throw new Error(
-      response.status === 401
-        ? 'Choose a simulated operator to open the room.'
-        : response.status === 404
-          ? 'No project with that ID.'
-          : 'The service could not complete this request. Retry when it is available.',
-    );
-  return response.json() as Promise<unknown>;
-}
 const money = (minor: number, currency: string) =>
   new Intl.NumberFormat('en', { style: 'currency', currency }).format(minor / 100);
 function useRoomStream(id: string, version: number, ready: boolean) {
@@ -108,6 +94,8 @@ function useRoomStream(id: string, version: number, ready: boolean) {
   return connection;
 }
 export function App() {
+  const client = useQueryClient();
+  const [pane, setPane] = useState<'room' | 'board'>('room');
   const [selected, setSelected] = useState(new URLSearchParams(window.location.search).get('project') ?? '');
   const [session, setSession] = useState(false),
     [sessionError, setSessionError] = useState('');
@@ -123,8 +111,11 @@ export function App() {
     enabled: session && !!selected,
     queryFn: async () => roomChecked(await api(`/blueprints/${encodeURIComponent(selected)}/room`)),
   });
-  const connection = useRoomStream(selected, room.data?.version ?? 0, !!room.data);
+  const connection = useRoomStream(selected, room.data?.version ?? 0, session && !!room.data);
   const choose = async (role: 'buyer' | 'builder') => {
+    setSession(false);
+    client.removeQueries({ queryKey: ['room'] });
+    client.removeQueries({ queryKey: ['board'] });
     try {
       await api('/demo/session', { method: 'POST', body: JSON.stringify({ role }) });
       setSession(true);
@@ -146,6 +137,12 @@ export function App() {
         <nav aria-label="Product navigation">
           <a href="/">Stood ↗</a>
           <a href="/yard/">Yard story</a>
+          <button type="button" aria-pressed={pane === 'board'} onClick={() => setPane('board')}>
+            The Board
+          </button>
+          <button type="button" aria-pressed={pane === 'room'} onClick={() => setPane('room')}>
+            Project room
+          </button>
           <button type="button" onClick={toggle}>
             {theme === 'dark' ? 'Paper theme' : 'Dark theme'}
           </button>
@@ -182,125 +179,147 @@ export function App() {
             {sessionError && <p role="alert">{sessionError}</p>}
           </div>
         </div>
-        <form
-          className="room-picker"
-          onSubmit={handleSubmit(({ id }) => {
-            if (!projectId.safeParse(id).success) {
-              setError('id', { message: 'Use the project ID from the Board.' });
-              return;
-            }
-            setSelected(id);
-            window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
-          })}
-        >
-          <label htmlFor="project-id">Project ID</label>
-          <input
-            id="project-id"
-            {...register('id', { required: 'Enter a project ID.' })}
-            placeholder="yard-project"
-            autoComplete="off"
+        {pane === 'board' && (
+          <BoardPanel
+            enabled={session}
+            onOpen={(id) => {
+              void client.invalidateQueries({ queryKey: ['room', id] });
+              setSelected(id);
+              setPane('room');
+              window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
+            }}
           />
-          <button type="submit">Open project →</button>
-          {errors.id && <p role="alert">{errors.id.message}</p>}
-        </form>
-        {room.isFetching && <p role="status">Loading the latest project record…</p>}
-        {room.error && (
-          <p className="error" role="alert">
-            {room.error.message}
-          </p>
         )}
-        {!room.data && !room.isFetching && (
-          <section className="empty">
-            <div className="grid-mark" aria-hidden="true">
-              Y
-            </div>
-            <h2>Your build belongs here.</h2>
-            <p>Choose a simulated operator, then open a project created by the mock journey.</p>
-            <p className="fine">This screen does not invent progress or payment.</p>
-          </section>
-        )}
-        {room.data && (
+        {pane === 'room' && (
           <>
-            <section className="project-head">
-              <div>
-                <p className="eyebrow">
-                  {room.data.id} / revision {room.data.version}
-                </p>
-                <h2>{room.data.summary}</h2>
-              </div>
-              <span className={`connection ${connection === 'live' ? 'live' : ''}`} role="status">
-                <span aria-hidden="true">●</span>{' '}
-                {connection === 'live'
-                  ? 'Connected'
-                  : connection === 'connecting'
-                    ? 'Connecting'
-                    : connection === 'reloading'
-                      ? 'Reloading record'
-                      : 'Disconnected · last received state'}
-              </span>
-            </section>
-            <div className="project-layout">
-              <section className="milestones" aria-label="Milestones">
-                {room.data.orders.map((o, index) => (
-                  <article className={`milestone ${o.state === 'PAID' ? 'completed' : ''}`} key={o.id}>
-                    <div className="milestone-number">{String(index + 1).padStart(2, '0')}</div>
-                    <div className="milestone-content">
-                      <p className="eyebrow">Milestone {index + 1}</p>
-                      <h3>{o.name}</h3>
-                      <p className="budget">{money(o.budgetMinor, room.data.currency)}</p>
-                      {o.state === 'PAID' ? (
-                        <div className="stood-verdict">
-                          <img className="stamp" src={releasedStamp} alt="Stood / Released" width="160" height="56" />
-                          <p>
-                            Simulated capture confirmed. {money(o.budgetMinor, room.data.currency)} recorded as paid.
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          <span className="state-chip">{o.state.replaceAll('_', ' ')}</span>
-                          <p className="fine">
-                            {o.state === 'CHECKING'
-                              ? 'Submitted for Stood to check. Held, not paid.'
-                              : o.state === 'SUBMITTING'
-                                ? 'Submission saved. Waiting for its matching package receipt.'
-                                : 'The server owns this milestone’s current state.'}
-                          </p>
-                        </>
-                      )}
-                      {o.submission && <p className="commit">Commit {o.submission.commit.slice(0, 12)}</p>}
-                      {o.leasedUntil && (
-                        <p className="fine">
-                          Lease ends {new Date(o.leasedUntil).toISOString().replace('T', ' ').slice(0, 16)} UTC
-                        </p>
-                      )}
-                    </div>
-                  </article>
-                ))}
+            <form
+              className="room-picker"
+              onSubmit={handleSubmit(({ id }) => {
+                if (!projectId.safeParse(id).success) {
+                  setError('id', { message: 'Use the project ID from the Board.' });
+                  return;
+                }
+                setSelected(id);
+                window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
+              })}
+            >
+              <label htmlFor="project-id">Project ID</label>
+              <input
+                id="project-id"
+                {...register('id', { required: 'Enter a project ID.' })}
+                placeholder="yard-project"
+                autoComplete="off"
+              />
+              <button type="submit">Open project →</button>
+              {errors.id && <p role="alert">{errors.id.message}</p>}
+            </form>
+            {room.isFetching && <p role="status">Loading the latest project record…</p>}
+            {room.error && (
+              <p className="error" role="alert">
+                {room.error.message}
+              </p>
+            )}
+            {!room.data && !room.isFetching && (
+              <section className="empty">
+                <div className="grid-mark" aria-hidden="true">
+                  Y
+                </div>
+                <h2>Your build belongs here.</h2>
+                <p>Choose a simulated operator, then open a project created by the mock journey.</p>
+                <p className="fine">This screen does not invent progress or payment.</p>
               </section>
-              <aside className="truth-panel">
-                <p className="eyebrow">Yard builds. Stood pays.</p>
-                <h3>
-                  A pass is a finding.
-                  <br />
-                  Payment needs proof.
-                </h3>
-                <p>
-                  Money states arrive from Stood’s matched settlement record. A builder can submit work, never mark it
-                  paid.
-                </p>
-                <hr />
-                <p className="eyebrow">Provider mode</p>
-                <dl>
-                  <dt>Payments</dt>
-                  <dd>Simulated</dd>
-                  <dt>Crew</dt>
-                  <dd>Simulated</dd>
-                  <dt>Evidence</dt>
-                  <dd>Synthetic fixture</dd>
-                </dl>
-                <p className="fine">No keys are embedded in this application.</p>
-              </aside>
-            </div>
+            )}
+            {room.data && (
+              <>
+                <section className="project-head">
+                  <div>
+                    <p className="eyebrow">
+                      {room.data.id} / revision {room.data.version}
+                    </p>
+                    <h2>{room.data.summary}</h2>
+                  </div>
+                  <span className={`connection ${connection === 'live' ? 'live' : ''}`} role="status">
+                    <span aria-hidden="true">●</span>{' '}
+                    {connection === 'live'
+                      ? 'Connected'
+                      : connection === 'connecting'
+                        ? 'Connecting'
+                        : connection === 'reloading'
+                          ? 'Reloading record'
+                          : 'Disconnected · last received state'}
+                  </span>
+                </section>
+                <div className="project-layout">
+                  <section className="milestones" aria-label="Milestones">
+                    {room.data.orders.map((o, index) => (
+                      <article className={`milestone ${o.state === 'PAID' ? 'completed' : ''}`} key={o.id}>
+                        <div className="milestone-number">{String(index + 1).padStart(2, '0')}</div>
+                        <div className="milestone-content">
+                          <p className="eyebrow">Milestone {index + 1}</p>
+                          <h3>{o.name}</h3>
+                          <p className="budget">{money(o.budgetMinor, room.data.currency)}</p>
+                          {o.state === 'PAID' ? (
+                            <div className="stood-verdict">
+                              <img
+                                className="stamp"
+                                src={releasedStamp}
+                                alt="Stood / Released"
+                                width="160"
+                                height="56"
+                              />
+                              <p>
+                                Simulated capture confirmed. {money(o.budgetMinor, room.data.currency)} recorded as
+                                paid.
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="state-chip">{o.state.replaceAll('_', ' ')}</span>
+                              <p className="fine">
+                                {o.state === 'CHECKING'
+                                  ? 'Submitted for Stood to check. Held, not paid.'
+                                  : o.state === 'SUBMITTING'
+                                    ? 'Submission saved. Waiting for its matching package receipt.'
+                                    : 'The server owns this milestone’s current state.'}
+                              </p>
+                            </>
+                          )}
+                          {o.submission && <p className="commit">Commit {o.submission.commit.slice(0, 12)}</p>}
+                          {o.leasedUntil && (
+                            <p className="fine">
+                              Lease ends {new Date(o.leasedUntil).toISOString().replace('T', ' ').slice(0, 16)} UTC
+                            </p>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </section>
+                  <aside className="truth-panel">
+                    <p className="eyebrow">Yard builds. Stood pays.</p>
+                    <h3>
+                      A pass is a finding.
+                      <br />
+                      Payment needs proof.
+                    </h3>
+                    <p>
+                      Money states arrive from Stood’s matched settlement record. A builder can submit work, never mark
+                      it paid.
+                    </p>
+                    <hr />
+                    <p className="eyebrow">Provider mode</p>
+                    <dl>
+                      <dt>Payments</dt>
+                      <dd>Simulated</dd>
+                      <dt>Crew</dt>
+                      <dd>Simulated</dd>
+                      <dt>Evidence</dt>
+                      <dd>Synthetic fixture</dd>
+                    </dl>
+                    <p className="fine">No keys are embedded in this application.</p>
+                  </aside>
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
