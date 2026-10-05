@@ -6,7 +6,12 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**', '**/*.db.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['services/api/src/**/*.ts', 'services/yard-api/src/**/*.ts', 'packages/yard-domain/src/**/*.ts'],
+      include: [
+        'services/api/src/**/*.ts',
+        'services/yard-api/src/**/*.ts',
+        'packages/yard-domain/src/**/*.ts',
+        'packages/stood-sdk/src/**/*.ts',
+      ],
       exclude: ['**/*.test.ts', '**/server.ts', '**/setup-cli.ts', '**/reconcile-cli.ts', '**/adapters/db-postgres/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {

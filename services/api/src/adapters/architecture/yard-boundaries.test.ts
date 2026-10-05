@@ -16,6 +16,9 @@ function violations(from: string, to: string): string[] {
     'apps/yard-web/src/index.js': 'export const value=1;',
     'packages/stood-sdk/src/index.js': 'export const value=1;',
     'packages/contracts/src/index.js': 'export const value=1;',
+    'services/yard-crew/src/index.js': 'export const value=1;',
+    'services/yard-api/test/fakes/crew/index.js': 'export const value=1;',
+    'packages/contracts/crew/index.js': 'export const value=1;',
   };
   files[from] = `import ${JSON.stringify(to)};`;
   try {
@@ -52,11 +55,18 @@ describe('Real Yard dependency graph boundaries (T-0174)', () => {
     ['services/yard-foreman/src/index.js', '../../../packages/stood-sdk/src/index.js', 'foreman-plans-only'],
     ['services/yard-foreman/src/index.js', '../../yard-api/src/index.js', 'foreman-plans-only'],
     ['services/yard-foreman/src/index.js', 'node:child_process', 'foreman-plans-only'],
+    ['apps/yard-web/src/index.js', '../../../packages/stood-sdk/src/index.js', 'platform-sdk-is-server-only'],
+    ['services/yard-api/src/index.js', '../../yard-crew/src/index.js', 'no-internal-crew-imports'],
+    ['services/yard-crew/src/index.js', '../../../packages/contracts/src/index.js', 'real-crew-is-external'],
   ])('rejects %s importing %s', (from, to, rule) => {
     expect(violations(from, to)).toContain(rule);
   });
   it('permits HTTP SDK contracts and pure Foreman contract types', () => {
     expect(violations('services/yard-api/src/index.js', '../../../packages/stood-sdk/src/index.js')).toEqual([]);
     expect(violations('services/yard-foreman/src/index.js', '../../../packages/contracts/src/index.js')).toEqual([]);
+  });
+  it('permits explicitly labelled fake Crew and contracts only', () => {
+    expect(violations('services/yard-api/src/index.js', '../test/fakes/crew/index.js')).toEqual([]);
+    expect(violations('services/yard-api/src/index.js', '../../../packages/contracts/crew/index.js')).toEqual([]);
   });
 });

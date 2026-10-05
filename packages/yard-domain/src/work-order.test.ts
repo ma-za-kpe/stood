@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { LEASE_MS, WorkOrder } from './work-order.js';
+import { LEASE_MS, WorkOrder } from './index.js';
 
 const at = 1790985600000;
 const builder = { id: 'claim_1', builderId: 'crew_7', operatorId: 'op_1', operatorRootId: 'root_1' };

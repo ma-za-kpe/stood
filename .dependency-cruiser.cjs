@@ -1,6 +1,12 @@
 module.exports = {
   forbidden: [
     {
+      name: 'platform-sdk-is-server-only',
+      severity: 'error',
+      from: { path: '^apps/yard-web/' },
+      to: { path: '^packages/stood-sdk/' },
+    },
+    {
       name: 'pure-yard-domain',
       severity: 'error',
       from: { path: '^packages/yard-domain/src/' },

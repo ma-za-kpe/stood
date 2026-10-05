@@ -19,9 +19,9 @@ Allocated IDs are in [TASKS.md](../../TASKS.md), T-0174–T-0192. Delivered in t
 
 - [x] ADR: "Yard as a companion product in the monorepo, a Stood caller with no shortcuts" (Y02 / Y11)
 - [x] dependency-cruiser rules: no `yard-*` → `services/api` imports. Foreman has no side-effect imports
-- [ ] `services/yard-api` skeleton (Hono) + `yard` schema + role with no grants on Stood tables
-- [ ] Domain: Blueprint (versioned, immutable when signed), Milestone, WorkOrder state machine, Claim / lease (TDD, property tests)
-- [ ] Stood SDK package (`packages/stood-sdk`, generated or hand-typed until APIMatic) + a contract test against the local Stood
+- [x] Local `services/yard-api` shell (T-0175) + operator-only `yard` schema/role provisioning (T-0176), with real-Postgres permission tests; no hosted deployment
+- [x] Foundation domains (T-0177/T-0178): versioned Blueprint terms, Milestone profiles and pre-payment WorkOrder/Claim/lease with property tests. FROZEN terms are not verified Stood signature; paid/refused projections remain T-0189
+- [x] Hand-typed server-side Stood SDK (T-0179) for implemented DRAFT/QUEUED endpoints, contract-tested against the actual local router with fake storage. Full funding/dispatch/webhook methods remain T-0156/T-0053
 - [ ] `site/yard/` page (Y0) with Y09 tokens + a nav link from Stood
 
 **Round Y-B (Foreman):**

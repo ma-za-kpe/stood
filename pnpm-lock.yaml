@@ -38,6 +38,8 @@ importers:
 
   packages/contracts: {}
 
+  packages/stood-sdk: {}
+
   packages/yard-domain: {}
 
   services/api:

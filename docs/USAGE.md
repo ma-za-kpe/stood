@@ -362,3 +362,9 @@ This stores references only: no report upload/fetch, repository execution, asses
 ## Local Yard API shell (T-0175)
 
 Run `docker compose --profile yard up -d --wait yard-api`. Its localhost-only port 3001 exposes `GET /health`, reporting every product capability as false. Planned `/yard/v1/*` workflows return 503 without processing input. This is a separate runtime receiving no Stood/PayPal credentials; the Board, Foreman, events, credential intake and Yard website remain unimplemented.
+
+## Server-side Stood SDK foundation (T-0179)
+
+`@stood/stood-sdk` exposes `StoodClient` for trusted server callers: `createDraft(input, key)`, `getDraft(id)`, `submitPackage(trancheId, references, key)` and `getPackage(trancheId, packageId)`. Configure a pinned HTTPS root (localhost HTTP is allowed), the platform key/HMAC secret and a server clock. It signs exact request bytes, disallows redirects, bounds response bodies to 64 KiB and times out after five seconds. Yard web cannot import this package.
+
+Results remain DRAFT or QUEUED. Typed `StoodClientError.code` values identify authentication, validation, not-found, conflict, invalid response and unavailable storage. TIMEOUT/UNKNOWN_OUTCOME do not prove a POST was absent: inspect the resource or deliberately resend the same request with the same durable key. The SDK never retries automatically. It has no dispatch, signing, settlement or webhook-authority method. The contract tests use the real local HTTP router with fake storage, not a deployed service or PayPal sandbox.

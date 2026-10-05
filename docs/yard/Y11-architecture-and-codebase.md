@@ -11,7 +11,8 @@ services/yard-foreman/        Foreman planner (LangGraph.js), no side-effect too
 external: Crew service       Separate closed project on Vast.ai; public Board + endpoint contract
 apps/yard-web/                Yard app (React + Vite): describe, blueprint, project room, Board
 packages/contracts/           Shared types (already exists): Stood API types used by Yard
-packages/stood-sdk/           Generated Stood SDK (APIMatic, from the OpenAPI spec)
+packages/stood-sdk/           Server-side DRAFT/QUEUED HTTP SDK; fuller generated contract planned
+packages/yard-domain/         Pure Blueprint/Milestone and pre-payment WorkOrder/Claim domains
 site/                         Stood landing page
 site/yard/                    Yard landing page (own CSS tokens, linked from Stood's nav)
 docs/yard/                    These docs
