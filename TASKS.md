@@ -385,7 +385,7 @@ Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The
 
 ### Stood
 
-- `[ ]` T-0197 Runner signing key id and rotation (PR #32 review follow-up): reports carry a key id; the verifier holds a key set with validity windows; revoked or expired keys refuse; overlap window tested. No key material in Git.
+- `[x]` T-0197 Runner signing key id and rotation (PR #32 review follow-up): reports carry a key id; the verifier holds a key set with validity windows; revoked or expired keys refuse; overlap window tested. No key material in Git.
 - `[ ]` T-0198 Promote develop to main as v0.3.0 once #34 lands: release-please, back-merge, verify the live site and changelog, and link the Yard docs from the README.
 - `[ ]` T-0199 Brand generators for Stood and Yard under `tools/brand/` (extends T-0015): pinned OFL fonts, run in Docker, deterministic SVG output, and a CI check that committed assets match the generator. PNG store/social exports produced at release, not committed.
 
@@ -568,3 +568,5 @@ T-0202 static-path follow-up: Vite emits relative assets and the app links back 
 T-0239 cursor follow-up: red-first unit and real-Postgres checks exposed locale ordering for mixed-case project IDs. The runtime query and its operator-created index now use C collation; the in-memory provider uses the same ASCII order. The 105-project two-page test checks order as well as completeness and privacy. Eight targeted tests pass. No repository address is restored to public discovery.
 
 T-0181 revision/recovery evidence: four new red-first graph tests exposed duplicate model work, missing owner-authorised recovery and the absent revision loop. The graph now serialises a thread, retains immutable intake, resumes failed model tasks, advances review versions and rejects stale acceptance. Malformed review decisions are rejected before persisting a resume value. Real-Postgres evidence uses two runtime connections to race identical creation, revise and restore without model replay; failure releases its thread lock. The 20-draft bound limits repeated model work. This is draft metadata, never a signed mandate; clarification, HTTP composition and qualified baseline execution remain open.
+
+T-0197 evidence: five key-rotation tests were written first; three failed against the single-key verifier. Reports now require keyId and an Ed25519 signature over the domain-separated UTF-8 bytes `stood-runner-report/v1\0{keyId}\0{payload}`. Trust entries bind runner identity, issue/ingest validity windows and revocation; malformed/duplicate/private-key configurations refuse construction. Explicit immutable trust-set reload applies revocation, and an overlap accepts both keys until retirement. All 23 verifier cases pass with generated test keys. No hosted signer, repository execution or actual key provisioning is claimed.

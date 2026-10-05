@@ -24,11 +24,21 @@ const contract = {
   priorDiffHashes: [] as string[],
 } as const;
 const now = 1790985600000;
-const verifier = new SignedReportVerifier(keys.publicKey, () => now, true);
+const trust = [
+  {
+    id: 'fixture-2026-10',
+    runnerId: contract.runnerId,
+    publicKey: keys.publicKey,
+    notBefore: now - 1000000,
+    notAfter: now + 1000000,
+    revoked: false,
+  },
+];
+const verifier = new SignedReportVerifier(trust, () => now, true);
 describe('Bound signed runner reports, with no submitted code execution (T-0171)', () => {
   it('derives six RULE checks from the signed fake runner fixture, never usage authority', () => {
     expect(
-      new SignedReportVerifier(keys.publicKey, () => now).verify(contract, fakeReport(contract, keys.privateKey, now)),
+      new SignedReportVerifier(trust, () => now).verify(contract, fakeReport(contract, keys.privateKey, now)),
     ).toBeNull();
     const checks = verifier.verify(contract, fakeReport(contract, keys.privateKey, now));
     expect(checks).not.toBeNull();

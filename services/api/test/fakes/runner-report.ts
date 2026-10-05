@@ -18,7 +18,8 @@ export function fakeReport(
   privateKey: KeyObject,
   recordedAt: number,
   patch: Readonly<Record<string, unknown>> = {},
-): Readonly<{ payload: string; signature: string }> {
+  keyId = 'fixture-2026-10',
+): Readonly<{ keyId: string; payload: string; signature: string }> {
   const binding = Object.fromEntries(bindings.map((k) => [k, contract[k]]));
   const payload = JSON.stringify({
     ...binding,
@@ -32,5 +33,9 @@ export function fakeReport(
     evidenceTier: 'fixture',
     ...patch,
   });
-  return Object.freeze({ payload, signature: sign(null, Buffer.from(payload), privateKey).toString('base64') });
+  return Object.freeze({
+    keyId,
+    payload,
+    signature: sign(null, Buffer.from(`stood-runner-report/v1\0${keyId}\0${payload}`), privateKey).toString('base64'),
+  });
 }
