@@ -1,6 +1,30 @@
 module.exports = {
   forbidden: [
     {
+      name: 'platform-sdk-is-server-only',
+      severity: 'error',
+      from: { path: '^apps/yard-web/' },
+      to: { path: '^packages/stood-sdk/' },
+    },
+    {
+      name: 'pure-yard-domain',
+      severity: 'error',
+      from: { path: '^packages/yard-domain/src/' },
+      to: { pathNot: '^packages/yard-domain/src/' },
+    },
+    {
+      name: 'real-crew-is-external',
+      severity: 'error',
+      from: { path: '^(services|packages|apps)/.*crew', pathNot: '/(fakes|contracts)/' },
+      to: {},
+    },
+    {
+      name: 'no-internal-crew-imports',
+      severity: 'error',
+      from: {},
+      to: { path: '^(services|packages|apps)/.*crew', pathNot: '/(fakes|contracts)/' },
+    },
+    {
       name: 'yard-calls-stood-over-http',
       severity: 'error',
       from: { path: '^(services/yard-[^/]+/|apps/yard-web/|packages/stood-sdk/)' },

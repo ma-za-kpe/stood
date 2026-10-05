@@ -358,3 +358,13 @@ This command reads PayPal status and writes local state and alerts. It does **no
 After migrations and platform authentication are configured, `POST /v1/tranches/:id/packages` accepts exactly `repository` (`owner/repo`), `base_commit` and `commit_sha` (40 lowercase hex characters), `report_ref` (an opaque private object key such as `reports/package.json`) and `report_sha256` (64 lowercase hex characters). Use the same bearer/HMAC headers and an Idempotency-Key. A signed request returns 202 with `id`, `trancheId`, `status: QUEUED`, immutable `metadata`, server `createdAt` and `waitingFor: HOLD | RENEWAL | RUNNER`. Signed `GET /v1/tranches/:id/packages/:packageId` returns that stored intake receipt; missing or foreign records return 404. Changed bodies under the same key return 409.
 
 This stores references only: no report upload/fetch, repository execution, assessment or payment occurs. Intake during renewal is durable, but renewal wake-up and trusted runner processing remain planned. `waitingFor` records the intake reason, not a live worker status. URLs and client-authored PASS findings are rejected. Full T-0156 and T-0137 remain open.
+
+## Local Yard API shell (T-0175)
+
+Run `docker compose --profile yard up -d --wait yard-api`. Its localhost-only port 3001 exposes `GET /health`, reporting every product capability as false. Planned `/yard/v1/*` workflows return 503 without processing input. This is a separate runtime receiving no Stood/PayPal credentials; the Board, Foreman, events, credential intake and Yard website remain unimplemented.
+
+## Server-side Stood SDK foundation (T-0179)
+
+`@stood/stood-sdk` exposes `StoodClient` for trusted server callers: `createDraft(input, key)`, `getDraft(id)`, `submitPackage(trancheId, references, key)` and `getPackage(trancheId, packageId)`. Configure a pinned HTTPS root (localhost HTTP is allowed), the platform key/HMAC secret and a server clock. It signs exact request bytes, disallows redirects, bounds response bodies to 64 KiB and times out after five seconds. Yard web cannot import this package.
+
+Results remain DRAFT or QUEUED. Typed `StoodClientError.code` values identify authentication, validation, not-found, conflict, invalid response and unavailable storage. TIMEOUT/UNKNOWN_OUTCOME do not prove a POST was absent: inspect the resource or deliberately resend the same request with the same durable key. The SDK never retries automatically. It has no dispatch, signing, settlement or webhook-authority method. The contract tests use the real local HTTP router with fake storage, not a deployed service or PayPal sandbox.

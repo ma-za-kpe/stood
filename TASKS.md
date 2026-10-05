@@ -329,11 +329,11 @@ T-0173 evidence: the original hook failed with exit 100 under inherited worktree
 
 Y-A foundations: T-0174 supplies the designed ADR and tested import rules. The remaining five tasks form the next Yard foundation round; money blockers remain ahead of payment activation.
 
-- `[ ]` T-0175 Yard Hono skeleton and health endpoint, separate configuration; no money endpoints or Stood imports.
-- `[ ]` T-0176 Separate yard Postgres schema/role and migration owner; real-database tests prove no Stood-table grants or cross-schema writes.
-- `[ ]` T-0177 Blueprint/Milestone domain: versions, immutable signed terms, test hashes, intermediate/final profile binding; tests first.
-- `[ ]` T-0178 WorkOrder/Claim domain: one current claim, 48-hour lease, explicit expiry/recovery and outside-operator identity; property tests.
-- `[ ]` T-0179 Public HTTP Stood SDK contract: signed requests, typed errors and truthful DRAFT/QUEUED semantics, contract tests against local API. No internal imports.
+- `[x]` T-0175 Yard Hono skeleton and health endpoint, separate configuration; no money endpoints or Stood imports.
+- `[x]` T-0176 Separate yard Postgres schema/role and migration owner; real-database tests prove no Stood-table grants or cross-schema writes.
+- `[x]` T-0177 Blueprint/Milestone domain: versions, immutable signed terms, test hashes, intermediate/final profile binding; tests first.
+- `[x]` T-0178 WorkOrder/Claim domain: one current claim, 48-hour lease, explicit expiry/recovery and outside-operator identity; property tests.
+- `[x]` T-0179 Public HTTP Stood SDK contract: signed requests, typed errors and truthful DRAFT/QUEUED semantics, contract tests against local API. No internal imports.
 - `[ ]` T-0180 Y0 Yard page with Y09 tokens/voice and Stood nav link; accessible fixtures, planned-capability labels.
 
 Y-B Foreman (depends on tested domains and runner isolation):
@@ -355,6 +355,26 @@ Y-C Board (depends on funding/dispatch and qualified runner):
 Y-D/Y-E:
 
 - `[ ]` T-0191 Scripted demo Crew: ordinary Board caller, pass/tamper/skip/expired-lease fixtures and site log; clearly synthetic without sandbox evidence.
-- `[ ]` T-0192 Real Crew stretch: select model deliberately, qualify isolated execution, bounded Vast lifecycle/cost guard/teardown and metrics before GPU spend.
+- `[-]` T-0192 Real Crew implementation moved to the separate closed project by ADR-0017 / Y21. This repo retains endpoint contracts and fake qualification under T-0191; no GPU spend here.
 
 T-0174 evidence: six forbidden-import fixtures failed first, then pass with the dependency rules; the allowed HTTP SDK/contracts fixture passes. Runtime/database permission boundaries are designed and remain separate open tasks.
+
+## Yard foundation implementation round (PRs #32/#33 merged)
+
+T-0175–T-0179 implement the next foundation slices. Production Crew code is external; Y18 events, Y19 credentials and Y20 hosting require separate qualified implementation. Money blockers T-0154/T-0158/full T-0156 remain open.
+
+- `[x]` T-0193 Apply Y21 external-Crew follow-up: ADR-0017, Y11/Y15 and ledger supersession; forbid production Crew graph edges, permit only contract/fake paths. Tier: designed boundary and dependency gate. Separate-repository placement does not prove capability isolation.
+
+T-0175: three shell tests failed first on the absent module. Yard health and guarded workflows are unit-tested; the opt-in local Docker service uses YARD_ENV/YARD_PORT only and receives no Stood or PayPal credentials. No Board, model, SSE, secret storage or funding workflow is exposed.
+
+T-0177: five blueprint tests (including 500 property cases) pass after the absent domain failed first. DRAFT edits preserve prior versions; FROZEN copies require matching buyer/version/test hashes/red-baseline references and cannot change. Integer budget sums use BigInt; intermediate/final profiles are fixed by position. FROZEN is local terms only, not cryptographic approval or a Stood SIGNED mandate. Verified approval/red-runner receipt loading remains T-0182/T-0184. Yard domain coverage is enforced at 100%, separately from Stood.
+
+T-0178: lease-domain tests failed first on the absent aggregate; six cases plus 500 random command-sequence properties cover one active claim, fixed 48-hour expiry, no replay extension, explicit clock-out/repost and rejection without mutation. SUBMITTED/CHECKING cannot automatically expire or reopen. Operator roots are recorded for reputation only; the authenticated registry must supply them. No PAID state or provider operation exists in this aggregate. Concurrent durable claiming and Stood-signed projections remain T-0186/T-0189.
+
+T-0176: six real-Postgres cases run against all actual Stood migrations in a random test database with unique owner/runtime roles and a fresh restricted login. Provisioning is transactional/idempotent and rejects privileged roles, membership, Stood-table grants, executable public SECURITY DEFINER functions and another schema owner. Runtime cannot access Stood tables, create schema objects, truncate Yard tables or write migration history; future Yard tables receive scoped CRUD defaults. Injected late failure rolls the schema back. Roles/passwords are operator-created; no admin/runtime database credentials are passed to the Yard HTTP shell and no hosted provisioning occurred.
+
+T-0179: public server-side SDK contract-tested against the actual local Stood HTTP router with fake storage. Eight SDK cases cover signed DRAFT/QUEUED requests and reads, typed conflicts/validation/auth/missing/unavailable errors, malformed or unbound receipts, bounded bodies, timeouts and no network retry. A failing browser-import graph test precedes its server-only boundary. Dispatch, signing, financial commands and webhook verification remain full T-0156/T-0053; no financial authority is exposed by this slice. Additional graph fixtures qualify the T-0193 external-Crew/fake boundary.
+
+- `[ ]` T-0194 Y18 durable project events and SSE: commit projection and gap-free per-stream sequence together; use sequence as SSE resume ID and event UUID for deduplication, replay limits/snapshot.required, role-filtered payloads, direct LISTEN connection and honest stale/gap UI. Real-Postgres concurrency/rollback and recorded-stream/chaos tests; money states require qualified Stood messages.
+- `[ ]` T-0195 Y19 intake/access boundary: choices before credentials, signing gate, provider-qualified TEST/DEV scope (patterns alone cannot prove environment), encrypted write-only storage, audited preview-only decrypt, revocation/7-day deletion, no secrets in prompts/logs/events/builders. Qualify scanner/KMS/provider checks before enabling secret intake.
+- `[ ]` T-0196 Y20 hybrid hosting ADR and qualified previews/handover: buyer-owned repo, pinned image identity, isolated test-data previews with bounded cost/TTL/teardown, production secrets entered only in buyer hosting and verified account/commit/usage proof. Health reachability alone is insufficient final evidence. Demo fixtures first; no automatic spend or cloud provisioning.
