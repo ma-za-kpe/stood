@@ -42,8 +42,8 @@ Evidence tiers (state one when marking `[x]`): designed → implemented → unit
 - `[x]` T-0017 Cutthroat pre-commit + CI (`pre-commit`, `pr-title`, `dco`). The gate found and fixed a real JS syntax bug in `site/app.js`. Tier: implemented.
 - `[x]` T-0116 Usage manual `docs/USAGE.md` (package-page style: judges' path, keys, quickstart, webhooks, profiles, self-hosting). Tier: designed. **Must be kept in sync with the implemented API (review item on every API PR).**
 - `[x]` T-0018 GitFlow branching (ADR-0006), SECURITY.md, CODE_OF_CONDUCT.md, issue templates.
-- `[~]` T-0019 Set up `develop` as the default branch, rulesets on `main` and `develop`, merge settings (squash for features, merge commit for promotion), repo homepage.
-- `[~]` T-0020 Merge PR #1 → `develop` → promote to `main` → release-please v0.1.0 → back-merge. Verify <https://ma-za-kpe.github.io/stood/> and the changelog page.
+- `[x]` T-0019 Set up `develop` as the default branch, rulesets on `main` and `develop`, merge settings (squash for features, merge commit for promotion), repo homepage.
+- `[x]` T-0020 Merge PR #1 → `develop` → promote to `main` → release-please v0.1.0 → back-merge. Verify <https://ma-za-kpe.github.io/stood/> and the changelog page.
 - `[ ]` T-0004 Decide whether `docs/12-judges.md` stays public.
 - `[ ]` T-0006 Raise required approvals to 1 + CODEOWNERS on the money path when a second maintainer joins.
 - `[ ]` T-0015 Move the brand generator script into `tools/brand/` (runs in Docker).
@@ -378,3 +378,87 @@ T-0179: public server-side SDK contract-tested against the actual local Stood HT
 - `[ ]` T-0194 Y18 durable project events and SSE: commit projection and gap-free per-stream sequence together; use sequence as SSE resume ID and event UUID for deduplication, replay limits/snapshot.required, role-filtered payloads, direct LISTEN connection and honest stale/gap UI. Real-Postgres concurrency/rollback and recorded-stream/chaos tests; money states require qualified Stood messages.
 - `[ ]` T-0195 Y19 intake/access boundary: choices before credentials, signing gate, provider-qualified TEST/DEV scope (patterns alone cannot prove environment), encrypted write-only storage, audited preview-only decrypt, revocation/7-day deletion, no secrets in prompts/logs/events/builders. Qualify scanner/KMS/provider checks before enabling secret intake.
 - `[ ]` T-0196 Y20 hybrid hosting ADR and qualified previews/handover: buyer-owned repo, pinned image identity, isolated test-data previews with bounded cost/TTL/teardown, production secrets entered only in buyer hosting and verified account/commit/usage proof. Health reachability alone is insufficient final evidence. Demo fixtures first; no automatic spend or cloud provisioning.
+
+## Full Stood and Yard backlog (product owner request, 2026-10-05)
+
+Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The external Crew project (ADR-0017 / Y21) is **excluded**: its models, GPU lifecycle and graph live in the separate repository. This repo keeps only the public Board surfaces any operator uses, plus the contract fake (T-0191). Status corrections: T-0019 and T-0020 are done (develop is the default branch, `protect-main` / `protect-develop` rulesets, homepage set, v0.1.0 released 2026-10-03, v0.2.0 released 2026-10-05).
+
+### Stood
+
+- `[ ]` T-0197 Runner signing key id and rotation (PR #32 review follow-up): reports carry a key id; the verifier holds a key set with validity windows; revoked or expired keys refuse; overlap window tested. No key material in Git.
+- `[ ]` T-0198 Promote develop to main as v0.3.0 once #34 lands: release-please, back-merge, verify the live site and changelog, and link the Yard docs from the README.
+- `[ ]` T-0199 Brand generators for Stood and Yard under `tools/brand/` (extends T-0015): pinned OFL fonts, run in Docker, deterministic SVG output, and a CI check that committed assets match the generator. PNG store/social exports produced at release, not committed.
+
+### Yard: design system and web app (Y17, Y18, Y10)
+
+- `[ ]` T-0200 Yard design tokens (Y17 §2, §9): one CSS token file shared by `site/yard/` and `apps/yard-web`, dark default + paper theme, font fallbacks. A CI test recomputes every documented contrast ratio and fails below AA.
+- `[ ]` T-0201 Yard component kit with every Y17 §5 state: button (pending), status chips, Stood verdict chip imported from Stood's kit (never restyled), work-order card (optimistic/stale), milestone row, lease timer, progress rail, site log, connection pill, secret field, Foreman message, punch list, empty state. Reduced-motion, greyscale and axe checks.
+- `[ ]` T-0202 `apps/yard-web` shell (React + Vite): TanStack Query, XState, Zustand and React Hook Form + Zod wired per Y18 §4; the client event applier consumes T-0194 (pure `applyEvent`, gap → snapshot, shared transition table from `packages/yard-domain`). Money states are never optimistic: a test asserts no PAID/REFUSED render without a Stood-originated event.
+- `[ ]` T-0203 Intake wizard UI (Y19 steps 1–8): XState wizard, autosave via `intake.saved`, shared Zod schemas, "Let the Foreman decide" on every step, plain-language summary before signing, and the free-text secret scanner that blocks a pasted key. Step 9 (keys) waits for T-0195.
+- `[ ]` T-0204 Project room (Y10 #5): milestone cards, progress rail, per-milestone preview URL, Stood chips, connection pill, burst summaries ("Caught up: 14 updates"), and focus-safe live updates (a focused card never moves).
+- `[ ]` T-0205 Builder Board and work-order screens (Y10 #7, #8): filters, keyboard navigation across columns, lease timer, read-only signed tests, submit SHA, punch list. Qualify AG Grid terms before adopting it.
+- `[ ]` T-0206 Site log (Y21 §4, Y10 #9): per-work-order stream with its own sequence, at most 1 write per second per builder, fixed kinds, every line secret-scanned before storage, 90-day retention then summary. Not an aria-live region.
+- `[ ]` T-0207 Handover screen and rotation checklist (Y20 §5): Deploy to Render button from `render.yaml`, `HANDOVER.md` generator listing every variable, the nine checklist items (auto items shown done), and `handover.rotation_confirmed` gating CLOSED, independent of Stood's final release. Depends on T-0196.
+- `[ ]` T-0208 Yard page assets: wire the `docs/brand/yard/` mark, family lockup, favicon and OG card into `site/yard/` (with T-0180) and add the "Yard →" link and family lockup to Stood's landing page.
+
+### Yard: Board, operators and protocol
+
+- `[ ]` T-0209 Operators and payees (Y12, Y13): operator registration, PayPal payee reference only (never credentials), operator keys + HMAC with key id and rotation, operator-level claim caps and Sybil limits. Tests for the outside-buyer reputation rule.
+- `[ ]` T-0210 Board A2A surface: `/.well-known/agent.json` (`post-work-order`, `claim-work-order`, `submit-work`, `create-blueprint`), A2A task ↔ work-order mapping, punch lists as task messages, conformance tests. Plus open, signed operator nudge webhooks any operator may register; the Board must work fully without them.
+- `[ ]` T-0211 Work-order discovery: Postgres full-text search first, Elastic qualified later (T-0032). Public Board stream carries posted/claimed/paid only, with no buyer identity.
+- `[ ]` T-0212 Change orders after signing (Y12): a signed blueprint version stays immutable; a change order creates a new version, re-runs Foreman checks, needs buyer re-approval and a Stood allowance amendment. No silent edits to frozen tests.
+- `[ ]` T-0213 Yard notifications (email first, Zapier optional): paid, punch list, lease expiring, preview ready, handover ready. Driven by events, idempotent, with no secrets or amounts beyond what the recipient may see.
+
+### Yard: operations, business and submission
+
+- `[ ]` T-0214 Deploy `yard-api` and `yard-web` on Render as separate services with the restricted database role from T-0176; durable jobs (Render Workflows or pg-boss) for lease expiry, next-milestone posting, preview TTL teardown and handover reminders.
+- `[ ]` T-0215 Yard developer surfaces: OpenAPI for `/yard/v1` with a breaking-change diff in CI, a Postman workspace, and an APIMatic-generated Yard SDK / MCP. Qualify partner terms first.
+- `[ ]` T-0216 Pricing and platform-fee ADR (Y13): fees and preview hosting cost as explicit blueprint line items, nothing hidden. Required before any real money.
+- `[ ]` T-0217 Yard privacy and data: intake data classification (GDPR / NDPR / POPIA / Kenya DPA), export and deletion of blueprint data, retention per Y18, consent copy for agent and human builders.
+- `[ ]` T-0218 Yard demo and judge path: describe → sign → milestone paid → punch list → handover, across Yard and Stood, with honest "synthetic" labels; fits the 90s video (T-0041) and the judges' fixtures.
+
+### Provider abstraction: fake, simulator and live (product owner request, 2026-10-05)
+
+We don't have provider keys yet. Every external service sits behind a port with **three interchangeable implementations**, so the whole product runs and is tested today, and switching to real keys is configuration, not a rewrite:
+
+- **fake:** in-memory, deterministic, scriptable scenarios, used by unit tests.
+- **simulator:** a local HTTP server that speaks the provider's real wire protocol, so the **real SDK** runs against it unchanged. Used in Docker dev, integration tests and the demo.
+- **live:** the real provider, enabled only when keys are present and validated.
+
+Rules: production code imports ports only; fakes and simulators never ship in a production build; there's no silent fallback from live to a mock; every simulated result is labelled as simulated in the API and UI.
+
+- `[ ]` T-0219 Provider abstraction ADR: the port inventory (PayPal, runner, GitHub, Render, KMS/secret store, email, object storage, LLM planner, search, browser QA, Stood-for-Yard, Crew endpoint), the fake / simulator / live modes, per-provider mode configuration (`PROVIDER_PAYPAL=fake|sim|live` …), and the rules above. A dependency-cruiser rule forbids production entry points importing `**/fakes/**` or `**/simulators/**`.
+- `[ ]` T-0220 Provider registry and boot-time readiness: one composition root picks each adapter from configuration; live mode requires its keys and a passing readiness check, or the service refuses to start with a named error (never a crash, never a fallback). `/health` reports each provider's mode. Production (`APP_ENV=production`) refuses fake/simulator for money and evidence providers.
+- `[ ]` T-0221 Shared port contract suites: one test suite per port, run against fake and simulator in CI, and against live in the nightly sandbox job (T-0096) once keys exist. A fake that drifts from the contract fails CI.
+- `[ ]` T-0222 PayPal simulator: stateful Orders v2 (create, AUTHORIZE), Payments v2 (capture, void, reauthorize, get), OAuth tokens, Vault/setup tokens (T-0154) and webhooks, derived from PayPal's published OpenAPI specs. The pinned Server SDK 2.5.0 runs against it through `PAYPAL_BASE_URL`. A controllable clock covers the honor period, day-four reauthorisation and 29-day expiry.
+- `[ ]` T-0223 Fault injection for every simulator: timeouts, 5xx, rate limits, malformed bodies, duplicate and out-of-order webhooks, and **ambiguous outcomes** (request applied but response lost). Scenario files drive the T-0158 ambiguous-retry and reconciliation (T-0149, T-0155) tests.
+- `[ ]` T-0224 Record and verify against the real sandbox once keys arrive: capture sanitised sandbox exchanges (no tokens, ids rewritten), diff them against the simulator, and fail when they drift. Update the simulator from the recordings, never the other way round.
+- `[ ]` T-0225 GitHub simulator / fake for the Yard GitHub App (T-0188, T-0165): installation tokens scoped to one repo, repo creation in the buyer's account, branch protections, `wo/*` pushes, PR merge, read-only fetch by commit SHA, archive download. Includes the token/repo/path attack cases.
+- `[ ]` T-0226 Render API fake for previews and handover (T-0196, T-0207, T-0214): create a service from an image, set env vars, deploy status, delete, TTL teardown, and a `render.yaml` Blueprint validator for the Deploy to Render path. No real spend in tests.
+- `[ ]` T-0227 Secret-store port (T-0195): local libsodium sealed-box adapter for dev/demo and a KMS adapter for live, with the same write-only contract (no read-back API), audit rows on decrypt and rotation tests.
+- `[ ]` T-0228 Fakes for the remaining ports: email (Mailpit already in Compose), object storage (SeaweedFS already in Compose), LLM `PlannerModel` (scripted plus record/replay of real runs, T-0181), search (Postgres FTS vs Elastic, T-0211), browser QA (Kernel), notifications (Zapier), and the Crew dispatch endpoint (shares T-0191's contract fake).
+- `[ ]` T-0229 Stood fake for Yard: a local server implementing Stood's public `/v1` and signed webhooks from the same contracts as `packages/stood-sdk` (T-0179), with scripted RELEASE / REFUSE / WAIT. Yard's tests and demo run with no Stood database or PayPal at all.
+- `[ ]` T-0230 Switching guide in `docs/USAGE.md`: "Run everything without keys" (one command, simulators on), then "Switch a provider to live": the keys needed, where they come from, `scripts/dev setup`, the readiness output, and how to switch back. The README badge and `/health` show which providers are simulated.
+- `[ ]` T-0231 Crew simulator, the fake engineering team (product owner request): a local service implementing the full Y21 dispatch API (`/health`, agent card, `/nudges`, `/jobs/{id}`, cancel) **and** acting as an ordinary Board builder: it evaluates fit, clocks in, streams site-log lines, pushes commits to the GitHub fake (T-0225), submits SHAs and reacts to punch lists. Scenario files script each run (passes first time, fails then fixes, tampers with signed tests, skips tests, abandons honestly, declines on price, lease expires, endpoint down). It reports simulated GPU minutes and cost so Y13 economics and the operator dashboard can be built now. Selected by `PROVIDER_CREW=fake|sim|live`. When the real Crew project ships, `live` points at its endpoint and must pass the same Y21 contract suite (T-0221) before it's enabled. Extends T-0191; no model, GPU or Vast code in this repo.
+
+### End-to-end integration tests: mock and live (product owner request, 2026-10-05)
+
+Two suites run the **same scenario scripts** through the complete Stood and Yard flows. Only the provider configuration differs. The mock suite must pass now and on every PR. The live suite is written now and enabled once every key and real service exists.
+
+**Scenarios both suites cover:**
+
+- **Stood:**
+  - allowance draft → buyer approval → dispatch hold ("held, not paid")
+  - commit package → signed runner report → RELEASE (capture), REFUSE (void + punch list) and WAIT (in review)
+  - day-four reauthorisation, expiry, ambiguous capture → reconciliation, signed webhooks and receipts
+- **Yard:**
+  - intake → Foreman blueprint → buyer edits and approves → Stood allowance → work orders posted
+  - Crew claims → builds → Stood check → milestone paid
+  - a refused attempt → punch list → rework → paid
+  - lease expiry → reposted
+  - preview deployed → handover in the buyer's own account → final usage release → rotation checklist → CLOSED
+- **Money consistency, asserted at the end of every scenario:** Stood's ledger, Yard's projection, the event stream and the provider's state (simulator or sandbox) all agree. Nothing is paid twice, and nothing is shown as paid that wasn't captured.
+
+- `[ ]` T-0232 Shared E2E scenario definitions: one scenario file per flow above (steps, expected events, expected money state), plus Playwright page objects for the Yard and Stood screens. Both suites import the same files, so mock and live can't drift apart.
+- `[ ]` T-0233 **Mock E2E suite (required, must pass):** `docker compose` brings up Stood, Yard, Postgres and every simulator (PayPal T-0222, GitHub T-0225, Render T-0226, Crew T-0231, Stood webhooks, email, storage, planner replay) with a controllable clock. It runs every T-0232 scenario through the HTTP APIs **and** the browser (Playwright), including fault-injected runs (T-0223). It runs on every PR as a required check and in under 10 minutes, with traces, screenshots and the event log uploaded on failure. Also the judges' one-command demo.
+- `[ ]` T-0234 **Live E2E suite (enabled when keys exist):** the same T-0232 scenarios against the PayPal sandbox, a real GitHub App on a test org, a real Render preview workspace with spend caps, and the real Crew endpoint once it passes its contract suite. Manual trigger plus nightly; skipped with a clear "keys not configured" result until T-0121 and the other credentials are in place. Sandbox only, never live money. It tears down every resource it creates and records sanitised exchanges for T-0224.
