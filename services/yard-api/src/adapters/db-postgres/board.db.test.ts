@@ -124,3 +124,43 @@ it('posts frozen terms and serialises real claims using authenticated operator i
   expect(events.map((e) => e.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   expect(events[6]).toMatchObject({ type: 'stood.released', actor: 'stood' });
 });
+
+it('paginates beyond project 100 and keeps buyer repository out of discovery', async () => {
+  for (let i = 0; i < 105; i++) {
+    const id = `page-${String(i).padStart(3, '0')}`;
+    await board.create({ ...input, id }, buyer, 'create');
+    await board.freeze(
+      id,
+      {
+        version: 1,
+        buyerOperatorId: buyer.id,
+        approvalReference: 'sim-approved',
+        baselines: input.milestones.map((m) => ({
+          milestoneId: m.id,
+          testBundleHash: m.testBundleHash,
+          manifestHash: m.manifestHash,
+          failedTestIds: m.testIds,
+          reference: 'sim-red',
+        })),
+      },
+      buyer,
+      1,
+      'freeze',
+    );
+    await board.post(id, 'one', `tranche-${id}`, buyer, 2, 'post', at);
+  }
+  const first = await board.discoverPage();
+  expect(first.nextCursor).not.toBeNull();
+  const second = await board.discoverPage(first.nextCursor!);
+  const orders = [...first.orders, ...second.orders];
+  expect(orders).toHaveLength(105);
+  expect(new Set(orders.map((o) => o.projectId)).size).toBe(105);
+  expect(orders.some((o) => o.projectId === 'page-104')).toBe(true);
+  expect(second.nextCursor).toBeNull();
+  for (const o of orders) {
+    expect(o).not.toHaveProperty('repository');
+    expect(o).not.toHaveProperty('baseCommit');
+    expect(o).not.toHaveProperty('buyerOperatorId');
+  }
+  await expect(board.discoverPage('invalid cursor')).rejects.toThrow('INVALID');
+});

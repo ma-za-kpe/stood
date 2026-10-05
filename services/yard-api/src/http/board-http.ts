@@ -92,7 +92,9 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     accepted: true,
     simulated: true,
   });
-  app.get('/yard/v1/board', async (c) => c.json({ orders: await config.board.discover(), simulated: true }));
+  app.get('/yard/v1/board', async (c) =>
+    c.json({ ...(await config.board.discoverPage(c.req.query('after'))), simulated: true }),
+  );
   app.post('/yard/v1/blueprints', async (c) => {
     const key = c.req.header('Idempotency-Key') ?? '';
     if (!/^[A-Za-z0-9:._-]{1,120}$/.test(key)) throw new YardError('INVALID');

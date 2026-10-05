@@ -98,7 +98,13 @@ export class Board {
     return snapshot;
   }
   async discover() {
-    return (await this.events.list()).flatMap((s) => {
+    return (await this.discoverPage()).orders;
+  }
+  async discoverPage(after = '') {
+    if (after && !/^[A-Za-z0-9_-]{1,100}$/.test(after)) throw new YardError('INVALID');
+    const projects = await this.events.list(after);
+    const page = projects.slice(0, 100);
+    const orders = page.flatMap((s) => {
       const d = data(s.data);
       return Object.keys(d.orders).flatMap((id) => {
         const { work, order } = workOrder(d, id);
@@ -108,8 +114,6 @@ export class Board {
           {
             projectId: s.id,
             id,
-            repository: d.blueprint.repository,
-            baseCommit: d.blueprint.baseCommit,
             name: milestone.name,
             priceMinor: milestone.budgetMinor,
             currency: d.blueprint.currency,
@@ -120,6 +124,7 @@ export class Board {
         ];
       });
     });
+    return { orders, nextCursor: projects.length > 100 ? page.at(-1)!.id : null };
   }
   private async mutate(
     id: string,

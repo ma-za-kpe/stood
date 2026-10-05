@@ -78,8 +78,10 @@ export class PostgresYardEvents implements YardEvents {
     if (!rows[0]) throw new YardError('NOT_FOUND');
     return snapshot(rows[0]);
   }
-  async list(): Promise<readonly YardSnapshot[]> {
-    return (await this.pool.query('SELECT * FROM yard.projects ORDER BY id LIMIT 100')).rows.map(snapshot);
+  async list(after = ''): Promise<readonly YardSnapshot[]> {
+    return (await this.pool.query('SELECT * FROM yard.projects WHERE id>$1 ORDER BY id LIMIT 101', [after])).rows.map(
+      snapshot,
+    );
   }
   async read(id: string, after: number): Promise<readonly YardEvent[]> {
     if (!Number.isSafeInteger(after) || after < 0) throw new YardError('INVALID');
