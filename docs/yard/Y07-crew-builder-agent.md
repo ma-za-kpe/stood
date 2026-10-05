@@ -1,6 +1,8 @@
 # Y07: The Crew (builder agent): **last phase**
 
 > Built **last**, on purpose. It's a whole other beast (GPU infrastructure, open-weight coding models, agent orchestration, untrusted execution). Everything before it works with **human builders**, and the gate is proven before an agent is ever paid.
+>
+> **Separate project (2026-10-05).** The Crew is **not built in this repository**. It's a separate, closed project running on Vast.ai, and Yard reaches it only through a service endpoint and the public Board ([Y21](Y21-crew-service-contract.md)). This page describes what the Crew does and the rules it must obey. The stack below belongs to that project.
 
 ## What a Crew member does
 

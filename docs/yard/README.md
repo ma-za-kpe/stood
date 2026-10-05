@@ -14,7 +14,7 @@
 | Y04 | [Flows (both sides)](Y04-flows.md) | Buyer flow, builder flow, agent-to-agent flow, state machines |
 | Y05 | [The Foreman (planner agent)](Y05-foreman-planner-agent.md) | Idea → blueprint: requirements, milestones, frozen tests, budget |
 | Y06 | [The Board, work orders and A2A](Y06-the-board-work-orders-and-a2a.md) | Posting, discovery, claiming, leases, reputation |
-| Y07 | [The Crew (builder agent)](Y07-crew-builder-agent.md) | Vast.ai, open-weight coding models, LangGraph. Last phase |
+| Y07 | [The Crew (builder agent)](Y07-crew-builder-agent.md) | What the Crew does. It's a separate project ([Y21](Y21-crew-service-contract.md)). Last phase |
 | Y08 | [Feature list](Y08-feature-list.md) | Must / later / never |
 | Y09 | [Brand and design system](Y09-brand-and-design-system.md) | "Hi-vis blueprint": palette, type, logo, motion, voice |
 | Y10 | [Screens and the Yard page](Y10-screens-and-site.md) | `/yard` on the site, plus app screens |
@@ -24,6 +24,11 @@
 | Y14 | [Partner tools](Y14-partner-tools.md) | Which hackathon partner tools fit Yard, and why |
 | Y15 | [Roadmap and tasks](Y15-roadmap-and-tasks.md) | Phases Y1–Y4, the task list for the engineer |
 | Y16 | [Risks and open questions](Y16-risks-and-open-questions.md) | What could sink it, and what's undecided |
+| Y17 | [Design system](Y17-design-system.md) | Tokens, type, components and their live states, motion, asset kit ([`docs/brand/yard/`](../brand/yard/)) |
+| Y18 | [Real-time state management](Y18-realtime-state-management.md) | Event log, SSE, replay, state machines, "money is never optimistic" |
+| Y19 | [Intake form](Y19-intake-form.md) | Everything we ask, when, why. The credentials matrix and how keys are stored |
+| Y20 | [Hosting and credentials decision](Y20-hosting-and-credentials-decision.md) | Their keys vs we host vs hybrid. Recommended: hybrid. The rotation checklist |
+| Y21 | [Crew service contract](Y21-crew-service-contract.md) | The Crew is a separate, closed project on Vast.ai. Yard calls its endpoint |
 
 **Vocabulary (used everywhere in Yard):**
 

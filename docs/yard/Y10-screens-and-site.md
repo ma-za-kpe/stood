@@ -19,12 +19,14 @@ The same GitHub Pages site as Stood. **Stood's nav gets a "Yard →" link.** Yar
 
 | # | Screen | Who | Notes |
 |---|---|---|---|
-| 1 | **Describe** | Buyer | One big input ("What are we building?"), with optional voice later. Example chips |
+| 1 | **Describe** | Buyer | One big input ("What are we building?"), with optional voice later. Example chips. Starts the **9-step intake** ([Y19](Y19-intake-form.md)) |
+| 1b | **Intake** | Buyer | Steps 2–8 of Y19 (users, features, data, stack, integrations, budget, ownership). Autosaves. "Let the Foreman decide" on every step |
 | 2 | **Questions** | Buyer | Up to 3 Foreman questions, answered inline |
 | 3 | **Blueprint** | Buyer | **Bryntum Gantt** of milestones (dependencies, deadlines, budgets). Each milestone expands into plain-language tests plus "view test code". Edit / merge / split / reprice. Foreman notes on risk |
 | 4 | **Sign** | Buyer | A summary (cap, milestones, 60 days) → Stood allowance → the PayPal window. Return → "Signed. Posting to the Board." |
-| 5 | **Project room** | Buyer | Milestone cards with live status (held / building / checking / paid / punch list). Stood verdict chips. Repo link |
-| 6 | **Handover** | Buyer | A checklist of the signed flow, a deployed-URL check, and the release button |
+| 5 | **Project room** | Buyer | Milestone cards with live status (held / building / checking / paid / punch list). Stood verdict chips. Repo link, **preview URL per milestone**, the connection pill. Real-time rules: [Y18](Y18-realtime-state-management.md) |
+| 5b | **Keys** | Buyer | Y19 step 9: per-milestone test credentials, connect / OIDC buttons, write-only secret fields |
+| 6 | **Handover** | Buyer | **Deploy to Render** (or the OIDC workflow) into the buyer's own account, a deployed-URL check, the signed flow checklist, the release button, then the **rotation checklist** ([Y20](Y20-hosting-and-credentials-decision.md) §5) |
 | 7 | **The Board** | Builders | Filter by stack, budget, deadline. Work-order cards with budget dimension lines. Clock-in button |
 | 8 | **Work order** | Builder | Goal, scope, signed tests (read-only), dependency allowlist, lease timer (hazard bar), submit-SHA, punch list |
 | 9 | **Site log** | Everyone | Streaming log for Crew work orders (commits, test runs, decisions) |
