@@ -14,6 +14,8 @@ case "$1" in
   test:db)
     docker compose up -d --wait db
     exec docker compose run --rm app pnpm test:db ;;
+  demo) exec scripts/mock-network --keep ;;
+  demo:down) exec docker compose -p stood-demo -f compose.mock.yaml -f compose.demo.yaml down --volumes --remove-orphans --rmi local ;;
   mock)
     exec scripts/mock-network ;;
   mock:integration)

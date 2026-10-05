@@ -416,3 +416,25 @@ Run `scripts/check-site` to build the static site and check it in a dedicated Do
 Local setup distinguishes rejected sandbox credentials, sandbox unavailability/timeouts and invalid provider responses. These failures save nothing and never print provider response bodies, OAuth tokens or entered credentials.
 
 Setup writes a private temporary .env file, syncs it and replaces the destination atomically. It refuses linked files or configuration changed by another writer during setup. An interruption before replacement preserves the previous configuration.
+
+## Run the connected demo without keys
+
+```sh
+scripts/dev demo
+```
+
+Docker builds and starts the real local services with simulators, seeds the checked scenarios and runs desktop/mobile browser checks. When the checks pass, the isolated demo stays running:
+
+- Stood: <http://localhost:3002/>
+- Yard: <http://localhost:3002/yard/>
+- Connected room: <http://localhost:3002/yard/app/?project=yard-project>
+
+Choose **Buyer** in the room. The project and capture reference come from the mock services; the providers and evidence are simulated. No real payment is executed and no provider keys are required. Only the web port binds to `127.0.0.1`; the database, Crew and provider controls remain inside the isolated Docker network.
+
+```sh
+scripts/dev demo:down
+```
+
+Stopping deletes this demo's disposable volumes. It leaves the ordinary development stack alone. Stop before reseeding. `scripts/dev mock` uses a randomly named disposable stack and always removes it after testing; it remains the required CI check.
+
+The full pre-credentials batch is still in progress. Do not add keys to the demo or switch it to live. Provider qualification and hosted authentication are separate from this synthetic composition. The credential handoff will name each provider's required scopes and the tests that need real sandbox keys. See TASKS.md, issue #41, for unfinished work.

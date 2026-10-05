@@ -1,8 +1,24 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-project="stood-mock-$(date +%s)-$$"
-compose() { docker compose -p "$project" -f compose.mock.yaml "$@"; }
+keep=false
+case "${1:-}" in
+  "") project="stood-mock-$(date +%s)-$$" ;;
+  --keep) keep=true; project=stood-demo ;;
+  *) printf '%s\n' 'Usage: scripts/mock-network [--keep]' >&2; exit 2 ;;
+esac
+if [ "$#" -gt 1 ]; then exit 2; fi
+compose() {
+  if [ "$keep" = true ]; then
+    docker compose -p "$project" -f compose.mock.yaml -f compose.demo.yaml "$@"
+  else
+    docker compose -p "$project" -f compose.mock.yaml "$@"
+  fi
+}
+if [ "$keep" = true ] && [ -n "$(compose ps --all --quiet)" ]; then
+  printf '%s\n' 'A demo stack already exists. Use scripts/dev demo:down before reseeding it.' >&2
+  exit 2
+fi
 finish() {
   result=$?
   trap - EXIT INT TERM
@@ -10,6 +26,10 @@ finish() {
     mkdir -p artifacts/mock-network
     compose logs --no-color > artifacts/mock-network/services.log 2>&1 || true
     compose logs --no-color --tail 40 || true
+  fi
+  if [ "$keep" = true ] && [ "$result" -eq 0 ]; then
+    printf '%s\n' 'Simulated demo ready: http://localhost:3002/ (Stood), /yard/ (Yard), /yard/app/?project=yard-project (connected room).' 'No real payment is executed. Stop with scripts/dev demo:down.'
+    exit 0
   fi
   compose down --volumes --remove-orphans --rmi local >/dev/null 2>&1 || true
   exit "$result"
@@ -24,3 +44,9 @@ mkdir -p artifacts/mock-network
 compose up -d --wait --wait-timeout 120 db paypal-sim api yard-api crew web
 compose run --rm runner pnpm test:mock:network
 compose run --rm browser
+
+if [ "$keep" = true ]; then
+  for path in / /yard/ '/yard/app/?project=yard-project'; do
+    curl --fail --silent --show-error "http://127.0.0.1:3002$path" >/dev/null
+  done
+fi
