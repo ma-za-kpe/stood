@@ -1,0 +1,109 @@
+name: stood
+services:
+  app:
+    build:
+      context: .
+      target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
+    init: true
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - dependencies:/workspace/node_modules
+    environment:
+      APP_ENV: local
+      PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
+      DATABASE_URL: postgres://stood:stood_local_only@db:5432/stood
+      S3_ENDPOINT: http://s3:8333
+      S3_BUCKET: stood-evidence
+      SMTP_HOST: mail
+      SMTP_PORT: "1025"
+  db:
+    image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+    environment:
+      POSTGRES_USER: stood
+      POSTGRES_PASSWORD: stood_local_only
+      POSTGRES_DB: stood
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U stood -d stood"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    build:
+      context: .
+      target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
+    init: true
+    working_dir: /workspace
+    command: [sh, -c, "pnpm --filter @stood/api build && pnpm --filter @stood/api start"]
+    volumes:
+      - .:/workspace
+      - dependencies:/workspace/node_modules
+    environment:
+      APP_ENV: local
+      PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
+      DATABASE_URL: postgres://stood:stood_local_only@db:5432/stood
+      STOOD_PLATFORM_ID: ${STOOD_PLATFORM_ID:-local-platform}
+      DEMO_MODE: "true"
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      STOOD_API_KEY: ${STOOD_API_KEY:-}
+      STOOD_HMAC_SECRET: ${STOOD_HMAC_SECRET:-}
+      STOOD_WEBHOOK_SECRET: ${STOOD_WEBHOOK_SECRET:-}
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  reconciler:
+    profiles: [operations]
+    build:
+      context: .
+      target: dev
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
+    init: true
+    working_dir: /workspace
+    command: [sh, -c, "pnpm --filter @stood/api build && node services/api/dist/reconcile-cli.js"]
+    volumes:
+      - .:/workspace
+      - dependencies:/workspace/node_modules
+    environment:
+      APP_ENV: local
+      PAYPAL_BASE_URL: https://api-m.sandbox.paypal.com
+      DATABASE_URL: postgres://stood:stood_local_only@db:5432/stood
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      RECONCILIATION_OWNER: ${RECONCILIATION_OWNER:-local-reviewer}
+    depends_on:
+      db:
+        condition: service_healthy
+  s3:
+    image: chrislusf/seaweedfs:4.17@sha256:186de7ef977a20343ee9a5544073f081976a29e2d29ecf8379891e7bf177fbe9
+    command: [server, -dir=/data, -s3, -ip=s3, -volume.max=1]
+    ports:
+      - "127.0.0.1:9000:8333"
+    volumes:
+      - objects:/data
+  mail:
+    image: axllent/mailpit:v1.27.8@sha256:6abc8e633df15eaf785cfcf38bae48e66f64beecdc03121e249d0f9ec15f0707
+    ports:
+      - "127.0.0.1:8025:8025"
+volumes:
+  dependencies:
+  postgres:
+  objects:

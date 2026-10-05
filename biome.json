@@ -1,6 +1,20 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "files": { "includes": ["site/**", "tools/**", "!**/node_modules"] },
+  "files": {
+    "includes": [
+      "site/**",
+      "tools/**",
+      "services/**",
+      "packages/**",
+      "*.json",
+      "*.ts",
+      "*.cjs",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!.release-please-manifest.json"
+    ]
+  },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } },
   "linter": {

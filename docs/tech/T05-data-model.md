@@ -18,17 +18,22 @@ allowances           (id, platform_id, platform_ref UNIQUE(platform_id, platform
 stages               (allowance_id, idx, name, amount_minor, required_shots jsonb, checklist jsonb,
                       fixtures jsonb, depends_on, PRIMARY KEY(allowance_id, idx))
 tranches             (id, allowance_id, stage_idx, state, amount_minor, currency,
-                      paypal_order_id, authorization_id, capture_id, void_ref,
+                      paypal_order_id, authorization_id, capture_id, void_ref, settlement_effect, settlement_ref,
                       nonce_hash, held_at, attempts, version, updated_at,
-                      CHECK (state <> 'RELEASED' OR capture_id IS NOT NULL),
-                      CHECK (state NOT IN ('REFUSED','EXPIRED') OR void_ref IS NOT NULL))
+                      CHECK (state NOT IN ('RELEASED','REFUSED','EXPIRED','DISPUTED') OR
+                             (settlement_ref IS NOT NULL AND settlement_effect IS NOT NULL)),
+                      CHECK (state <> 'RELEASED' OR settlement_effect IN ('CAPTURE','VOID')),
+                      CHECK (state <> 'REFUSED' OR settlement_effect = 'VOID'),
+                      CHECK (state <> 'EXPIRED' OR settlement_effect IN ('VOID','EXPIRE')),
+                      CHECK (state <> 'DISPUTED' OR settlement_effect IN ('CAPTURE','VOID')))
 packages             (id, tranche_id, platform_ref, status, submitted_at, completed_at,
                       platform_signals jsonb, UNIQUE(tranche_id, platform_ref))
 photos               (id, package_id, shot, r2_key, sha256, phash, lat, lng, accuracy_m,
                       captured_at_device, received_at_server, mock_location, exif jsonb)
-check_results        (package_id, check_code, status, detail jsonb, PRIMARY KEY(package_id, check_code))
+check_results        (package_id, check_code, source RULE|MODEL, confidence nullable, status, detail jsonb,
+                      PRIMARY KEY(package_id, check_code))
 findings             (id, package_id, kind, value jsonb, confidence, model_id, model_version, latency_ms)
-decisions            (id, package_id UNIQUE, tranche_id, outcome, named_field, reason_key, reason_params jsonb,
+decisions            (id, package_id, supersedes_decision_id, tranche_id, outcome, effect, named_field, reason_key, reason_params jsonb,
                       rule_set_version, decided_by, actor_ref, decided_at)
 paypal_calls         (id, tranche_id, action, request_id UNIQUE, status, paypal_debug_id, http_status, at)
 outbox_events        (id, type, aggregate_id, payload jsonb, created_at, published_at)
@@ -44,8 +49,49 @@ Notes:
 - **The CHECK constraints mirror the domain invariants**, as a second line of defence.
 - `nonce_hash` stores a hash of the nonce, not the nonce itself. The nonce is returned once, at dispatch.
 - `paypal_calls.request_id` = the `PayPal-Request-Id`. Its uniqueness prevents duplicate mutations.
-- Money columns are `bigint` minor units. There are no float columns anywhere.
+- Money columns are `bigint` minor units. Money never uses floating-point columns.
+- Confidence and measured distances are non-money numeric values. Model confidence is required in [0,1]; rule confidence is NULL. Check details include `distance_m` and `matched_package_id`; the selected detail is copied into the immutable decision record (`reason_params`) for audit and sentence generation.
+- Decisions form an immutable history, including WAIT followed by a later rules or human decision ([ADR-0009](../adr/0009-assessment-and-payment-confirmation.md)). Hold attempts and payment-operation reservations need their own durable records before money endpoints are enabled; the schema above remains a logical draft, not an applied migration.
+- T-0132 must persist original hold attempts separately from renewals (prior/new authorisation ids, completion time, expiry, operation key, visit attempt), plus the current authorisation/honour clock, original deadline, pending renewal's prior state and independent retry counters. All capture/void/renewal reservations share one aggregate concurrency guard; an unresolved renewal blocks settlement. The in-memory domain history is not durable evidence.
 - Migrations use **Drizzle Kit**, forward-only, checked in, and run on deploy before traffic switches.
+
+## Implemented payment schema (T-0139)
+
+`services/api/drizzle/` contains forward Drizzle migrations for `payment_streams`, `payment_operations` and `payment_operation_events`. The schema persists operation intent, stable provider UUID, reservation/current versions and outcome reference. A partial unique index excludes competing RESERVED/AMBIGUOUS operations; triggers protect identity, resolved rows and append-only events. See [ADR-0010](../adr/0010-durable-payment-operation-ledger.md).
+
+The migration is integration-tested on local Postgres, including fresh connections and replay. It has not been deployed. `./scripts/dev test:db` creates and removes a randomly named test database on the fixed Compose `db` service; it does not use arbitrary DATABASE_URL. `docker compose run --rm app pnpm db:migrate` explicitly applies the checked-in migrations to the configured local database. No HTTP route invokes them or enables payments.
+
+The T-0140 transaction store locks the stream row, checks its expected version and commits the operation, stable provider request UUID, stream version and event atomically before returning. Reusing a key requires the same tranche, original reservation version and canonical intent; JSONB field order is irrelevant. Definite resolution permits a fresh operation key/UUID, while ambiguous outcomes block it. Immutable timestamp strings survive reload. No HTTP/PayPal executor is wired.
+
+The original ledger-only store remains for isolated ledger tests. Managed tranche streams use the atomic aggregate store below; ledger outcomes alone never authorise financial effects.
+
+Operation updates require increasing versions. RESERVED can become AMBIGUOUS, CONFIRMED or FAILED; AMBIGUOUS can receive further ambiguous observations or become CONFIRMED/FAILED. Resolved rows reject every update. Idempotent callers must return the stored result without rewriting it. Events accept only these four statuses, positive versions, and nonblank references for resolved outcomes.
+
+New operations and each operation's first event must be RESERVED with a null reference, enforced by insert triggers. First-event checks lock the operation row to serialise concurrent inserts. AMBIGUOUS-to-AMBIGUOUS updates intentionally record further unresolved observations with a higher version; identical outcome/reference retries return the existing record without another event. Event order uses stream versions; wall-clock timestamps support the timeline but are not a uniqueness or ordering guarantee.
+
+`created_at` on operations and `recorded_at` on events are immutable `timestamptz` values set by the database clock on insert, overriding any caller-supplied value. The store port exposes them as strings. An ambiguous operation's age can be measured from its first AMBIGUOUS event; provider event time is a separate future field. Existing rows acquire migration-time timestamps when these columns are added, not reconstructed historical times. The reviewer timeline and three-hour unresolved alert remain T-0142 work.
+
+## Tranche recovery record (T-0144)
+
+The pure codec in `domain/tranche-record.ts` creates, advances and restores version-1 JSON records. Each contains the immutable definition, current rule-set version and ordered accepted commands with recorded arguments. Replaying validated domain methods recovers private retry counters, hold/renewal history, decisions, pending operations and terminal settlements; it never reruns evidence checks or processor calls. Unknown/incompatible records and illegal sequences fail closed. See [ADR-0011](../adr/0011-tranche-recovery-record.md).
+
+The atomic store below now persists this format with immutable prior history and coupled operation writes. T-0132 awaits batch approval/merge. Compatibility migrations must precede replay-semantic or rule-version changes (T-0148).
+
+### Safe recovery across decision-rule versions (T-0148)
+
+Older rule versions in the same transition format restore in safe mode, retaining the original decision versions and effects. Future/malformed versions still fail. New captures, assessments, authorisations and renewals are blocked; expiry and a matched cancellation remain available. A cancellation reaches `CANCELLED` only after VOID confirmation. Existing capture/renewal reservations remain for reconciliation and cannot be submitted or raced by another effect. A confirmation of an already-completed capture records a fact, not a new payment. See [ADR-0012](../adr/0012-safe-recovery-across-rule-changes.md).
+
+Dispatch must check `canSubmitPendingOperation` and the unresolved ledger status. Ordinary aggregate writes must preserve the original rule header and prior transitions. T-0145 and T-0056 must honour this restriction before deployment.
+
+### Renewal reconciliation at expiry (T-0138)
+
+`confirmNoRenewalExpiry` accepts a matched renewal key/authorisation, provider reference and clock at or after the hold expiry. It records EXPIRED with an EXPIRE fact, without claiming a void or capture. Unknown outcomes keep REAUTHORIZE_PENDING. A confirmed renewal is adopted through normal confirmation before expiry is applied to the renewed id. Status verification and atomic recording are T-0056/T-0145 work.
+
+### Atomic aggregate store (T-0145 / T-0132)
+
+`PostgresTranches` persists the complete recovery record, original record and append-only command journal. `apply` locks the stream and commits state, aggregate version, reservation/outcome, provider UUID and operation event in one transaction. Matching command retries are read-only; changed commands or original versions conflict. Reads take a shared lock so state and pending operation remain consistent. Direct rewrites and incomplete managed journal/event commits are rejected by database guards. Legacy ledger-only writers cannot mutate managed streams. See [ADR-0013](../adr/0013-atomic-tranche-and-operation-storage.md).
+
+Integration tests cover restart identity, competing transitions, safe-mode cancellation, renewal expiry, confirmation rollback and failure at each write boundary. No payment executor or HTTP money endpoint is enabled. This completes the aggregate-persistence implementation required by T-0132; merge/review evidence remains pending.
 
 ## R2 layout
 
@@ -80,3 +126,11 @@ Every object is private. Access is through signed URLs with a 15-minute TTL (rec
 | Webhook deliveries | 30 days |
 
 **Real personal data never enters fixtures or the repo** ([WoW §11](../WAYS_OF_WORKING.md#11-security-and-secrets-open-source-edition)).
+
+### Reconciliation operations (T-0149)
+
+`reconciliation_jobs` stores a next-run deadline and an expiring lease token per managed tranche. Claims are atomic with `FOR UPDATE SKIP LOCKED`; finishing requires the exact token. `payment_alerts` retains deduplicated reviewer-owned OPEN/RESOLVED rows, original opened time and latest observation time. Safe-mode cancellation has an automatic scheduler trigger and a configured reviewer owner; unresolved operations get a three-hour alert. These operational tables do not replace the immutable payment ledger or prove a provider cancellation. Transaction Search scanning and notification delivery are separate T-0155 work.
+
+### Platform draft foundation (T-0028, partial)
+
+`api_allowances` stores immutable validated DRAFT bodies. `api_tranche_owners` binds an allowance/platform pair to each managed tranche, enforced with a composite foreign key; ownership cannot be reassigned. `api_requests` retains the original JSON response and exact-request fingerprint under a platform/key primary key. An advisory transaction lock serialises concurrent requests for that namespace; the draft, tranche creation, ownership and response are committed together. All three tables reject updates/deletes/truncation. Keys currently stay retained indefinitely; hosted retention and signed allowance versions are future work. This foundation neither authorises a hold nor stores a Vault approval.

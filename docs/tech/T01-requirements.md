@@ -74,7 +74,7 @@ Priority: **M** = must (hackathon), **S** = should (hackathon if time), **L** = 
 
 | ID | Category | Requirement |
 |---|---|---|
-| NFR-01 | Money safety | **No double capture:** every money command is idempotent (idempotency key = tranche id + action). `PayPal-Request-Id` is set on every mutating call |
+| NFR-01 | Money safety | **No double capture:** every money command has a durable identity per tranche, authorisation attempt and action. Its stable provider request UUID is reused on retries and distinct after redispatch. `PayPal-Request-Id` is set on every mutating call |
 | NFR-02 | Money safety | **Fail closed:** unknown, missing or contradictory data → `WAIT`. Never an implicit release |
 | NFR-03 | Architecture | Only the payments adapter imports the PayPal SDK. The evidence agent has no PayPal credentials (separate runtime). Enforced in CI ([ADR-0003](../adr/0003-rules-move-money.md)) |
 | NFR-04 | Correctness | Money is integer minor units + ISO 4217. No floats |

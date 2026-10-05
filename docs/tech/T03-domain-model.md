@@ -22,6 +22,8 @@ Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §
 | paymentToken | `VaultTokenRef` | Required when SIGNED |
 | version | int | Optimistic lock |
 
+The implemented creation-only `Allowance` is an immutable DRAFT with ordered milestones, exact single-currency cap/sum equality, unique trimmed names, known profiles, window 1–28 days and resubmit limit 0–5. Stood's current hold subset is GBP/USD/EUR at allowance and direct tranche creation; general Money still represents local currencies. This does not implement signature/Vault approval, persistence or the HTTP creation endpoint.
+
 ### `Stage` (entity in Allowance)
 
 `name`, `amount: Money`, `requiredShots: ShotSpec[]`, `checklist: ChecklistItem[]`, `fixtures?: FixtureSpec[]` (Channel3 product refs), `dependsOn?: StageName`.
@@ -34,10 +36,11 @@ Ubiquitous language: [S06](../stood/S06-voice-and-states.md). Practices: [WoW §
 | amount: Money | = stage.amount |
 | state | See the state machine ([T02 §5](T02-architecture.md#5-tranche-state-machine)) |
 | authorizationId | Required in HELD / DECIDING / WAITING |
-| captureId | **Required iff RELEASED** |
-| voidRef | Required iff REFUSED / EXPIRED |
+| captureId | Required for a confirmed CAPTURE; retained after DISPUTED |
+| voidRef | Required for a confirmed VOID (including a successful deposit return) |
 | nonce: `Nonce` | Issued on dispatch, single use |
-| heldAt | Drives the timers |
+| heldAt | Original dispatch/evidence clock; never reset by renewal |
+| authorization time, expiry | Honour timer restarts on confirmed renewal; expiry never exceeds the original hold deadline |
 | attempts | ≤ allowance.maxResubmits + 1 |
 
 Methods: `dispatch(auth, nonce, at)`, `startDeciding(pkg)`, `release(capture, decision)`, `refuse(void, decision)`, `wait(reason)`, `expire(void)`, `redispatch()`. Each method checks its invariants and emits events.
@@ -97,9 +100,23 @@ decide(checks, findings, ruleSet):
 - **Never refuse on model uncertainty.** Never release on missing data.
 - The rule set is versioned. Changing a threshold is a `feat(decision)` with an ADR when it loosens safety.
 
+Implemented rule set **1.1.0** requires each check to declare `source: RULE | MODEL`; profiles fix the expected source so a model result cannot be relabelled as a rule. Model confidence must be finite and in [0,1]. Nonce PASS requires >= 0.8, stage PASS >= 0.75, and rental pair-match PASS >= 0.9 (a conservative threshold pending model evaluation). Every model FAIL below 0.9 becomes uncertain centrally. Stage FAIL remains WAIT even above that threshold until evaluation qualifies it. Rule results do not accept a confidence field. Malformed or absent provenance/confidence yields WAIT.
+
+Structured `detail` carries `distance_m` (distance from the pin in metres, not distance beyond the geofence edge) and `matched_package_id` for reuse. A location/novelty FAIL without its required detail yields WAIT. Decisions and tranche history copy/freeze the detail. Assessment sentences describe evidence; only payment confirmation may produce copy claiming capture/void completion.
+
 ## Invariant tests (property-based)
 
-- `release` is impossible without a capture id. `refuse` is impossible without a void ref.
+### Implemented baseline
+
+The domain in `services/api/src/domain/` implements Money, GeoPoint, Geofence, Nonce, PhotoFingerprint, required-item and location checks, versioned profiles, the pure decision gate and tranche transitions. [ADR-0009](../adr/0009-assessment-and-payment-confirmation.md) separates assessment from payment effects and introduces pending-operation states. Profile stage recognition is WAIT-only until evaluation qualifies it.
+
+Missing check results and incomplete uploads are uncertain; a completed missing-item check is a hard failure. The pure core has no I/O. Hold timers, server-validated capture provenance, a real novelty index and durable payment orchestration remain queued.
+
+New capture reservations close five minutes before hold expiry (Stood's operational buffer). A passing assessment in that margin stays WAITING with `settlementBlock: CAPTURE_WINDOW_CLOSING`; it does not reserve a capture or an early expiry void. Actual expiry still reserves VOID. Refusal and deposit-return VOID effects remain eligible before expiry. An existing pending capture remains reserved for reconciliation; the future payment client must recheck the margin immediately before calling PayPal.
+
+`beginReauthorization(now)` reserves from day four (three elapsed days after the latest confirmed authorisation), outside the same five-minute expiry margin. Confirmation matches effect, operation key and prior authorisation; requires a distinct unused authorisation id and finite completion/expiry times within the original deadline; then restores the prior HELD/DECIDING/WAITING state. `currentHold` uses the new id for subsequent capture/void, while immutable original attempts, nonce, evidence clock and resubmission count remain unchanged. Renewals have separate immutable history. AMBIGUOUS retains its reservation/key; REJECTED_NO_REAUTHORIZATION restores the prior state and increments only the renewal retry counter. This is unit-tested domain behaviour; durable storage, timers and PayPal contracts remain queued.
+
+- Terminal states require a matching confirmed settlement reference. Construction release requires CAPTURE; rental return release requires VOID. EXPIRED requires a confirmed expiry VOID or a verified provider expiration (`EXPIRE` confirmation record). Confirmation matches the reserved effect and authorisation; assessment at or after hold expiry reserves VOID rather than CAPTURE. Ambiguous payment outcomes remain pending for reconciliation; definite failures return to WAITING.
 - Σ captured for an allowance ≤ cap.
 - Same inputs + same rule-set version → same decision (determinism).
 - WAIT never results from complete, confident, passing inputs. RELEASE never results from any missing input.

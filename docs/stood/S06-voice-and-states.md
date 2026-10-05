@@ -28,6 +28,7 @@
 | Wait: system | "PayPal did not answer. Nothing was paid. We'll try again at 14:05." | — | `WAIT_SYSTEM` |
 | Hold expiring [C] | "The hold ends in 1 day. If the stage isn't seen, nothing is paid and the hold is released." | — | `HOLD_EXPIRING` |
 | Dispute opened | "Your dispute is filed with the record of what Kojo saw." | — | `DISPUTED` |
+| Rules changed; cancellation confirmed | "The rules changed. Your hold is cancelled. Nothing was paid." | "The hold is cancelled. Ask the platform before starting again." | `CANCELLED` |
 
 ## Words we use / avoid
 
@@ -37,3 +38,9 @@
 | stood on the plot | verified (overclaims) |
 | photos match / don't match | AI detected |
 | allowance | mandate (keep it for the technical docs) |
+
+## Implemented copy boundary
+
+`recipientAssessment` produces separate payer reasons and inspector instructions. Missing items retain their names with spaces for display. Distances round before choosing metres or kilometres. A trusted photo-index date may be supplied for reused evidence; the current fixtures have no real match dates.
+
+`trancheSentences` derives its money clause from the recovered domain record and the server clock. Pending capture, cancellation and renewal say "Payment is not confirmed." Confirmed CAPTURE says the exact amount paid; VOID/EXPIRE says nothing was paid and the hold ended. An overdue unresolved hold asks for an expiry check. Formatting uses integer minor units even for large amounts. It never promises an inspector fee or invents a visit time. The demo's two sentences append "No payment was executed."

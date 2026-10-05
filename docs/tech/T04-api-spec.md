@@ -1,6 +1,14 @@
 # T04: API specification (v1)
 
-The **OpenAPI 3.1** document is the source of truth (`openapi/stood.yaml`, generated from the Zod route schemas). APIMatic generates the TypeScript SDK, docs portal and MCP server from it ([S13](../stood/S13-sponsor-integration.md)). This page is the human summary.
+The planned **OpenAPI 3.1** document will be the source of truth (`openapi/stood.yaml`, generated from Zod route schemas under T-0053; neither is implemented yet). APIMatic generates the TypeScript SDK, docs portal and MCP server from it ([S13](../stood/S13-sponsor-integration.md)). This page is the human summary.
+
+## Implemented local subset (T-0028, partial)
+
+The API currently exposes signed DRAFT creation plus tenant-scoped allowance/tranche reads. Draft creation accepts `payee_ref`, `cap`, `milestones[]{name,amount,profile,params}`, `window_days` and `max_resubmits`, then returns DRAFT plus PENDING tranche IDs and the validated fields. It never returns a provider approval URL. Params are draft metadata, not trusted assessment input. Financial dispatch, signing/versions and package/upload processing below remain planned (T-0154 / T-0156).
+
+Bearer and HMAC authentication follow the conventions below, including signed empty GET bodies and a five-minute skew window. Requests are capped at 64 KiB. Draft idempotency fingerprints method, versioned path and exact request bytes; the platform/key namespace is durable and serialised with a database advisory lock. Allowance, immutable ownership, initial tranche records and the original response commit atomically. Local keys remain retained indefinitely; identical requests replay the same response and changed bytes conflict. Missing and foreign reads both return 404. Read responses include recovered state, hold age/expiry, decision, settlement, pending effect/status/time and separate recipient sentences. See [ADR-0014](../adr/0014-platform-drafts-and-idempotency.md).
+
+The synthetic demo endpoints remain distinct and public when DEMO_MODE is on. The provider-status polling CLI is documented in [USAGE](../USAGE.md#local-reconciliation-worker-implemented-status-polling); HTTP does not execute money calls. The endpoints and examples below are the target full contract.
 
 ## Conventions
 
@@ -97,7 +105,7 @@ Reviewer endpoints use **reviewer session auth** (GitHub OAuth via Better Auth),
 { "id": "evt_…", "type": "tranche.refused", "schema_version": "1",
   "created_at": "2026-11-02T10:43:10Z",
   "data": { "tranche_id": "trn_…", "allowance_id": "alw_…", "platform_ref": "eos-task-…",
-            "outcome": "REFUSE", "named_field": "plot", "distance_m": 1400,
+            "outcome": "REFUSE", "effect": "VOID", "named_field": "plot", "distance_m": 1400,
             "sentence": { "payer": "Wrong plot. 1.4 km off. Nothing was paid.",
                           "inspector": "Photos were taken 1.4 km from the pin. Go back and capture again." },
             "paypal": { "order_id": "…", "authorization_id": "…", "void_status": "VOIDED" },
@@ -105,6 +113,8 @@ Reviewer endpoints use **reviewer session auth** (GitHub OAuth via Better Auth),
 ```
 
 Event types: `allowance.signed`, `allowance.signature_failed`, `tranche.held`, `tranche.funding_failed`, `tranche.deciding`, `tranche.released`, `tranche.refused`, `tranche.waiting`, `tranche.hold_expiring`, `tranche.expired`, `dispute.opened`, `reconciliation.mismatch`.
+
+Financial events explicitly identify the confirmed effect. A CAPTURE release includes `data.effect: CAPTURE`, `data.paypal.capture_id` and `data.paypal.capture_status: COMPLETED`. Only that confirmed effect can initiate a local payout. A rental return RELEASE with effect VOID cannot ([ADR-0009](../adr/0009-assessment-and-payment-confirmation.md)). These webhook contracts are not implemented by the fixture-preview API.
 
 ## Webhooks in (PayPal)
 

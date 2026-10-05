@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "ruleSetVersion": "1.0.0",
+  "definition": {
+    "id": "trn_old",
+    "amount": { "minor": 400000, "currency": "GBP" },
+    "profileId": "construction.stage@1",
+    "maxResubmits": 1
+  },
+  "commands": [{ "method": "dispatch", "args": ["auth_old", "K7Q", 1790985600000, 1793491200000] }]
+}

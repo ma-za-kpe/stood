@@ -1,0 +1,83 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791069575397,
+      "tag": "0000_payment_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791069623158,
+      "tag": "0001_immutable_payment_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791070336684,
+      "tag": "0002_payment_event_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791072377479,
+      "tag": "0003_payment_timestamps_and_event_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791072385580,
+      "tag": "0004_payment_progress_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791111253764,
+      "tag": "0005_reservation_insert_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791114314965,
+      "tag": "0006_cancelled_hold",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791114921902,
+      "tag": "0007_tranche_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791114922829,
+      "tag": "0008_immutable_tranche_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791200388870,
+      "tag": "0009_reconciliation_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791201435122,
+      "tag": "0010_platform_drafts",
+      "breakpoints": true
+    }
+  ]
+}

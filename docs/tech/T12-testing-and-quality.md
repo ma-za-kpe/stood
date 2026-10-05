@@ -47,9 +47,15 @@ Photos in fixtures are **synthetic or public-domain**, with GPS values that are 
 
 ## TDD order for the first slices (milestone 0.2.0)
 
+The implemented Docker hook (`scripts/check-product`) runs unit/domain validation, then starts the pinned Compose Postgres and runs `pnpm test:db`. Database tests use isolated temporary databases and real migrations, never an in-memory substitute. `vitest.config.ts` excludes DB tests/adapters from its unit report; `vitest.db.config.ts` covers them separately with an enforced 85% floor for statements, branches, functions and lines. Domain coverage remains 100%. A missing database is a failing integration run, not a skipped check. Standalone container image builds run `pnpm validate`; local pre-commit and CI additionally require the DB suite.
+
 1. `Money` (properties) → `Geofence` → `Nonce`.
 2. `Tranche` state machine (illegal transitions throw; release requires capture).
 3. `decide()` table tests from [T03](T03-domain-model.md#checks) (C1–C5 first).
 4. `submitPackage` use case with fake `PaymentGateway` (refuse → void exactly once).
 5. PayPal adapter contract tests (recorded sandbox) → wire the real adapter.
 6. HTTP layer + fixtures `wrong-plot` and `good` end to end.
+
+The ten local demo scenarios are unit-tested fixtures. `funding-declined` and `hold-expiry` expose lifecycle state separately from the assessment outcome; both use outcome WAIT and execute no payment. Expiry advances the explicit domain clock, reserves cancellation, then supplies a simulated provider-expiry proof. It never confirms expiry from elapsed time alone. Hosted/sandbox replay remains separate qualification.
+
+The T-0028 draft slice adds signed HTTP tests and real-Postgres tests for concurrent idempotency, restart response replay, tenant isolation, immutable ownership and final-write rollback. Its HTTP/Postgres scenario creates a DRAFT/PENDING stage, reads it and rejects changed request bytes; it does not qualify sandbox authorisation, evidence uploads or payment execution. Adapter tests use SDK mocks/synthetic bodies and fake-executor crash tests, never recorded provider evidence. Actual qualification remains T-0121.

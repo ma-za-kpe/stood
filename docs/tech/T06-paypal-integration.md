@@ -9,7 +9,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 | **Vault v3** (setup token → payment token) | The allowance signature: the payer approves once, Stood stores the payment token | FR-02 |
 | **Orders v2**, `intent=AUTHORIZE` with the vaulted `payment_source` | The hold per tranche on dispatch | FR-10 |
 | **Authorizations**: capture / void / reauthorize | Release / refuse / timers | FR-12, 38 |
-| Order metadata: `custom_id` (decision id), `invoice_id` (tranche id), description | The decision bound to PayPal's record | FR-38 |
+| Order metadata: `custom_id` (tranche id); capture `invoice_id` (operation key), description | The decision bound to PayPal's record | FR-38 |
 | **Webhooks** + verify-webhook-signature | State confirmation | FR-61 |
 | **Disputes API** | The dispute packet and evidence | FR-52 |
 | **Transaction Search** (`/v1/reporting/transactions`) | Reconciliation in the reviewer file | FR-54 |
@@ -30,7 +30,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 - `intent: AUTHORIZE`
 - `purchase_units[0]`: `amount`, `custom_id = tranche_id`, `invoice_id = alw_id:stage`, `description = "Stood hold: <stage>, released only on evidence"`
 - `payment_source.paypal.vault_id`
-- Header `PayPal-Request-Id: <tranche_id>:authorize:<attempt>`
+- Header `PayPal-Request-Id`: a persisted UUID for this attempt's order-creation operation. Order authorisation has its own stable request UUID.
 
 Then authorise the order and record the `authorization_id` and `expiration_time`.
 
@@ -38,30 +38,78 @@ Then authorise the order and record the `authorization_id` and `expiration_time`
 
 ### Release / refuse
 
-- Release: `POST /v2/payments/authorizations/{id}/capture` with `final_capture: true`, `invoice_id`, `note_to_payer = sentence`, and `PayPal-Request-Id: <tranche_id>:capture`.
-- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with `PayPal-Request-Id: <tranche_id>:void`.
+- Release: `POST /v2/payments/authorizations/{id}/capture` with `final_capture: true`, `invoice_id`, `note_to_payer = sentence`, and a stable operation UUID as `PayPal-Request-Id`.
+- Refuse / expire: `POST /v2/payments/authorizations/{id}/void` with its own stable operation UUID. Persist request identities per authorisation attempt, action and settlement attempt. Reuse them for ambiguous retries; after a confirmed definite failure, increment the settlement-attempt counter and allocate a fresh operation UUID. Never reuse an old hold's identity after redispatch. The pure domain key includes this counter; the adapter must persist its mapping to the provider UUID and the counter before calling PayPal.
 
 ### Timers (Render Workflows or pg-boss)
 
 | When | Action |
 |---|---|
-| Day 3 + still undecided | `reauthorize` (allowed days 4–29). Records a new authorisation id |
+| From day 4 + still undecided | `reauthorize` (allowed days 4–29). Records a new authorisation id |
 | Day 27 | Emit `tranche.hold_expiring`. Notify the payer and reviewer |
 | Day 29 | Void. State `EXPIRED`. Sentence: "The hold ended. Nothing was paid." |
+
+The domain now reserves REAUTHORIZE_PENDING with its own effect/key/result types. Start after three elapsed days from the latest confirmed authorisation and before the expiry margin. Confirm using the new id, prior id, operation key, completion timestamp and expiry; preserve the original dispatch/nonce/deadline and visit count. Reject a returned expiry beyond the original deadline. Later captures/voids use the new id. Completion time denotes when PayPal confirmed the renewal, not when a delayed reconciliation received it. These rules follow [PayPal's authorisation/honour-period guidance](https://developer.paypal.com/payment-methods/auth-honor/), checked 3 Oct 2026. Timer execution, durable operations and live contracts remain unimplemented.
 
 ### Failure handling
 
 | Failure | Handling |
 |---|---|
-| Timeout / 5xx | Retry with the **same** `PayPal-Request-Id` (PayPal idempotency), up to 3 times with backoff. Then `WAIT_SYSTEM` and the reconciliation job |
+| Timeout / 5xx (ambiguous outcome) | Retry with the **same** `PayPal-Request-Id` (PayPal idempotency), up to 3 times with backoff. Keep the pending reservation for reconciliation; surface an operational system wait, without permitting a competing payment |
+| Definite declined / system failure, confirmed no payment | `settlementFailed` matches the reserved effect and authorisation, clears the reservation and returns to `WAITING`. Expiry rules can then run |
 | Capture succeeded, DB write failed | Reconciler sees `PAYMENT.CAPTURE.COMPLETED` / Transaction Search and completes the state transition |
-| `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, notify. Requires a re-signature or new authorisation |
+| `AUTHORIZATION_EXPIRED` on capture | Never treated as a release. → `EXPIRED`, with an `EXPIRE` confirmation record and provider response reference; notify. Requires a re-signature or new authorisation |
 | `INSTRUMENT_DECLINED` on authorise | `WAIT_FUNDING`. Sentence: "PayPal could not hold £4,000. Nothing was sent to inspect." |
 | Webhook missing | The poller checks open authorisations hourly (and on the tick endpoint) |
 
+`REJECTED_NO_PAYMENT` replaces `SYSTEM_FAULT` and means a confirmed failure with no payment effect. A timeout, connection loss or PayPal 5xx is always `AMBIGUOUS`. `classifyPaymentFailure` is a pure response policy, not a payment client. It only accepts operation-correlated, authenticated responses; it makes no SDK/network calls.
+
+### Implemented response policy (T-0129)
+
+| Endpoint / response | Classification | Reference |
+|---|---|---|
+| Capture, HTTP 200/201 with resource status DECLINED and non-empty capture id | DECLINED | Capture id |
+| Capture, HTTP 422 UNPROCESSABLE_ENTITY, AUTHORIZATION_EXPIRED | AUTHORIZATION_EXPIRED | PayPal debug id |
+| Capture, HTTP 422, MAX_CAPTURE_AMOUNT_EXCEEDED | REJECTED_NO_PAYMENT | PayPal debug id |
+| Reauthorise, HTTP 422, AUTH_CURRENCY_MISMATCH or REAUTHORIZATION_TOO_SOON | REJECTED_NO_REAUTHORIZATION (separate renewal result) | PayPal debug id |
+| Void, PREVIOUSLY_CAPTURED | AMBIGUOUS; reconcile and alert, never infer successful void | Logged response |
+| Other endpoint/code/status combinations, transport failures, 5xx, missing or conflicting details | AMBIGUOUS | Logged response |
+
+HTTP 422 mappings require UNPROCESSABLE_ENTITY, non-empty message/debug id and a non-empty detail array. Every issue must map to the same known classification. Unknown errors keep the reservation; additional definite mappings need documented evidence and tests. These tests use synthetic bodies, not recorded sandbox responses. Sources checked 3 Oct 2026: [PayPal's official Payments v2 OpenAPI examples and capture statuses](https://github.com/paypal/paypal-rest-api-specifications/blob/main/openapi/payments_payment_v2.json), [capture reference](https://developer.paypal.com/api/payments/v2/authorizations-capture), [reauthorisation reference](https://developer.paypal.com/api/payments/v2/authorizations-reauthorize), [void reference](https://developer.paypal.com/api/payments/v2/authorizations-void).
+
+`classifyPaymentFailure` accepts only CAPTURE/VOID; `classifyReauthorizationFailure` returns effect REAUTHORIZE and its own failure kind. A definite renewal rejection restores the prior state and gets a fresh retry key; ambiguous renewal outcomes block all competing operations for reconciliation. A PENDING capture is neither confirmation nor a definite failure: keep CAPTURE_PENDING until completion is confirmed. T-0056 must provide status reconciliation before wiring voids, because every void error is ambiguous; it must also resolve uncertain renewals.
+
+### Capture window and currencies
+
+Stood reserves no new capture within **five minutes** of the provider hold expiry. This is our operational buffer, not a PayPal guarantee. The payment client must recheck `captureAllowedAt` immediately before an external capture, after durable reservation, using the same server Clock as assessment. If no request was ever submitted and the window closed, record a local REJECTED_NO_PAYMENT failure; if it may have been submitted, preserve the reservation for reconciliation. Never race a void against an unresolved capture.
+
+Allowance and direct tranche creation accept only GBP/USD/EUR, Stood's current subset of the [PayPal currency codes](https://developer.paypal.com/reference/currency-codes/). General Money retains other currencies. No automatic conversion is implemented. Merchant capabilities and real sandbox funding still need contract tests. Durable counters and key/provider-UUID mappings are still mandatory before the payment client is wired.
+
 ## Sandbox setup
+
+Wiring T-0027 is blocked on durable payment operations (T-0132), reconciliation/status checks (T-0056 / T-0138) and guided key onboarding/readiness (T-0135). The local `scripts/dev setup` tool asks for sandbox app/webhook credentials, keeps them out of output/Git and validates client credentials with sandbox OAuth. Missing/invalid keys leave payment readiness false; guarded financial writes return `503 payments_not_configured` with setup guidance. Health lists missing variable names, never values. See [USAGE: keys and configuration](../USAGE.md#keys-and-configuration); the local prompt/OAuth check and readiness guards are implemented with fake-response tests; hosted issuance/rotation remain planned under T-0150.
+
+An ambiguous renewal must remain reserved past the deadline until provider status resolves whether it renewed. A confirmed renewal supplies the new id for expiry; a confirmed absence of renewal plus provider expiry/no payment needs a matched typed renewal-reconciliation exit (T-0138). The domain now has the matched `confirmNoRenewalExpiry` exit; elapsed time or an inconclusive lookup cannot clear it. Package intake during REAUTHORIZE_PENDING must queue durably and retry when the operation resolves (T-0137).
 
 - One sandbox **business** account (the platform merchant: "[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) Demo") and two sandbox **personal** accounts (Ama-success, Ama-declined).
 - Webhook subscription created per environment (`demo`, `ci`). The webhook ID is in env.
 - CI contract tests run against sandbox with **recorded** responses (replayed by default). A nightly job runs them live against sandbox.
 - **Never** a live client id or secret in any environment. CI asserts the base URL is `api-m.sandbox.paypal.com`.
+
+### Provider-status core (T-0056, integration-tested)
+
+`ProviderStatusReader` reads status only and returns untrusted normalised proof. The application requires a complete lookup, the exact operation key, original authorisation id, provider request UUID and a non-empty provider reference. A completed capture must also match amount and currency and explicitly contradict no absence flags: noCapture is false for CAPTURED; noRenewal is false for RENEWED. Any inconsistent or missing flag retains the reservation. Proof outcomes are CAPTURED, VOIDED, DECLINED, EXPIRED, RENEWED or NOT_RENEWED; missing, PENDING and UNKNOWN results cannot resolve an operation. The future adapter must establish `noCapture` and `noRenewal` from complete provider data, never from a timeout or a single missing search result. RENEWED requires the new authorisation identity and valid confirmation/deadline times.
+
+The coordinator validates a candidate transition without writing, then records it through the atomic tranche store. Repeated resolved reconciliation reads no provider; stale workers return RETRY. Reconciliation command identities include the recorded server clock, so competing expiry lookups with different clocks cannot collide as changed idempotent commands; the stream version still permits only one outcome. Unknown lookups retain their reservation and return an alert signal. A confirmed renewal is adopted before expiry reserves a void against its new id; a restart between those transactions safely resumes expiry. Existing captures may be reconciled even in old-rule safe mode, but no new capture is dispatched.
+
+Tests use a fake reader, including real Postgres persistence. No PayPal status reader or executor exists yet. Scheduled polling, Transaction Search and delivered alerts remain T-0149; real provider proof requires T-0027 sandbox contracts.
+
+### Server SDK settlement slice (T-0027)
+
+The pinned TypeScript Server SDK 2.5.0 is confined to the PayPal adapter. It uses explicit sandbox configuration, a ten-second timeout, zero automatic retries and a silent logger. Integer minor units format provider amounts. Capture sets `invoice_id` to the reserved operation key; the request UUID remains its persisted `PayPal-Request-Id`. The capture endpoint does not accept `custom_id`, so that field stays the tranche identity on its order.
+
+Status lookup requires the authorisation's related order, one matching purchase unit, complete explicit capture/authorisation arrays and exact amount/currency. A capture must carry the matching invoice and related authorisation. Only then does the adapter attach our durable UUID to normalised proof; it is not an echoed provider field. Extra/unknown captures, renewals, partial resources and identity mismatches remain unresolved. A successful void response alone remains pending until the reader proves cancellation with no capture. Absence of a capture while an authorisation is still active cannot prove a timed-out request never happened.
+
+`executePayment` records possible submission as AMBIGUOUS before the provider call and uses a fresh unique claim per invocation. Reserved means no call was attempted. Only one competing version claim wins. Failed database confirmation leaves the UUID and ambiguity intact for status reconciliation. Old-rule captures and rental returns without a human/rule safeguard are blocked. Clock checks run before claiming and immediately before calling; after a claim, uncertainty cannot be cleared by an elapsed deadline.
+
+This slice has synthetic-response and real-Postgres/fake-executor evidence. No actual SDK payment calls ran. Vault and initial funding need the separate durable phases under T-0154; the runtime keeps financial endpoints off. Official SDK/reference sources: [pinned SDK payments controller](https://github.com/paypal/PayPal-TypeScript-Server-SDK/blob/2.5.0/src/controllers/paymentsController.ts), [capture request model](https://github.com/paypal/PayPal-TypeScript-Server-SDK/blob/2.5.0/src/models/captureRequest.ts), [SDK authorisation model](https://github.com/paypal/PayPal-TypeScript-Server-SDK/blob/2.5.0/src/models/paymentAuthorization.ts).

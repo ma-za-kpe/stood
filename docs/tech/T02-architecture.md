@@ -67,7 +67,7 @@ flowchart TB
 | Container | Responsibility | Holds secrets for |
 |---|---|---|
 | `stood-api` | HTTP API, domain core, payments adapter, webhooks in and out, receipt signing | PayPal (sandbox), DB, R2 (write), webhook HMAC, receipt signing key |
-| `stood-workflows` | Durable steps and timers (dispatch → await package → checks → decide; day-3 reauthorise, day-27 warn, day-29 void). Calls back into the API's internal endpoints | Internal service token only |
+| `stood-workflows` | Durable steps and timers (dispatch → await package → checks → decide; reauthorise from day 4, day-27 warn, day-29 void). Calls back into the API's internal endpoints | Internal service token only |
 | `stood-web` | Static SPA: Allowance, Decision, Receipt, Dispute packet, Reviewer file (AG Studio), Gantt (Bryntum) | None (public build) |
 | `evidence-agent` | Returns **findings** (nonce text, stage class, recapture, fixtures match) with confidence. Never decides | Workers AI token, Channel3 key, index read key. **No PayPal** |
 
@@ -163,28 +163,40 @@ stateDiagram-v2
   PENDING --> WAIT_FUNDING: authorise declined
   WAIT_FUNDING --> HELD: retry ok
   HELD --> DECIDING: package complete
-  DECIDING --> RELEASED: all checks pass → capture ok
-  DECIDING --> REFUSED: hard check fails → void ok
+  DECIDING --> CAPTURE_PENDING: pass → reserve capture
+  CAPTURE_PENDING --> RELEASED: capture confirmed
+  DECIDING --> VOID_PENDING: hard failure → reserve void
+  VOID_PENDING --> REFUSED: refusal void confirmed
   DECIDING --> WAITING: uncertain / system fault
-  WAITING --> RELEASED: reviewer or payer release → capture ok
-  WAITING --> REFUSED: reviewer refuse → void
+  WAITING --> CAPTURE_PENDING: reviewer or payer release → reserve capture
+  WAITING --> VOID_PENDING: reviewer refuse → reserve void
+  HELD --> REAUTHORIZE_PENDING: day four → reserve renewal
+  DECIDING --> REAUTHORIZE_PENDING: day four → reserve renewal
+  WAITING --> REAUTHORIZE_PENDING: day four → reserve renewal
+  REAUTHORIZE_PENDING --> HELD: confirmed / rejected; previously HELD
+  REAUTHORIZE_PENDING --> DECIDING: confirmed / rejected; previously DECIDING
+  REAUTHORIZE_PENDING --> WAITING: confirmed / rejected; previously WAITING
   REFUSED --> PENDING: re-dispatch allowed (≤ max re-submits)
-  HELD --> EXPIRED: day 29 without decision → void
-  WAITING --> EXPIRED: day 29 → void
+  HELD --> VOID_PENDING: expiry → reserve void
+  DECIDING --> VOID_PENDING: expiry → reserve void
+  WAITING --> VOID_PENDING: expiry → reserve void
+  VOID_PENDING --> EXPIRED: expiry void confirmed
   RELEASED --> DISPUTED: payer disputes
   RELEASED --> [*]
   EXPIRED --> [*]
 ```
 
-`RELEASED` requires a capture id. `REFUSED` and `EXPIRED` require a void id (or PayPal's own expiry event). These are invariants of the aggregate, not just conventions.
+The diagram shows construction's effects. `RELEASED` requires the profile's confirmed effect: CAPTURE for construction, VOID for a successful rental return ([ADR-0009](../adr/0009-assessment-and-payment-confirmation.md)). `REFUSED` and `EXPIRED` require a void id (or PayPal's own expiry confirmation). Pending operations block conflicting effects. A disputed capture keeps its reference.
+
+Renewal is a separate operation, never a settlement. REAUTHORIZE_PENDING blocks capture, void and expiry until confirmed or definitely rejected; ambiguous failures retain the reservation. Its durable reservation and status reconciliation remain prerequisites for enabling the payment client (T-0132 / T-0056).
 
 ## 6. Cross-cutting
 
 | Concern | Approach |
 |---|---|
-| Idempotency | `Idempotency-Key` header on all POSTs (stored 24h). PayPal `PayPal-Request-Id` derived from `tranche_id:action:attempt` |
-| Consistency | Transactional outbox in Postgres for domain events → webhook dispatcher. PayPal call first, then the state write, with the reconciliation job as the safety net for "PayPal succeeded, our write failed" |
-| Concurrency | Optimistic locking (`version` column) on aggregates. One decision per package (unique constraint) |
+| Idempotency | `Idempotency-Key` header on all POSTs (stored 24h). Persist a provider UUID for each domain operation key, including hold attempt, action, renewal revision and definite-failure retry counter as applicable |
+| Consistency | Persist the operation reservation and stable provider request ID transactionally before calling PayPal. Confirm the effect and append outbox events together afterward. Reconcile "PayPal succeeded, our write failed" without inventing a payment result |
+| Concurrency | Optimistic locking (`version` column) plus one active effect per authorisation. Append immutable decisions; a later decision references the WAIT it supersedes. Durable persistence is still queued |
 | Time | An injected `Clock`. All times are UTC ISO-8601 |
 | Config | 12-factor env vars, validated at boot with Zod. Fail fast on missing config |
 | Versioning | URL `/v1`. Additive changes only within v1. Webhook payloads carry `schema_version` |

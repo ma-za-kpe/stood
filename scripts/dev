@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+if [ "$#" -eq 0 ]; then set -- validate; fi
+case "$1" in
+  setup) exec docker compose run --rm -it app sh -c 'pnpm --filter @stood/api build && node services/api/dist/setup-cli.js' ;;
+  reconcile) exec docker compose --profile operations run --rm reconciler ;;
+  up) exec docker compose up -d db s3 mail ;;
+  install) exec docker compose run --rm app pnpm install --frozen-lockfile ;;
+  validate) exec scripts/check-product ;;
+  test:db)
+    docker compose up -d --wait db
+    exec docker compose run --rm app pnpm test:db ;;
+  *) exec docker compose run --rm app pnpm "$@" ;;
+esac
