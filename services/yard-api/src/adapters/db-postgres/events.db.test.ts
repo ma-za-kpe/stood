@@ -39,3 +39,15 @@ it('serialises writes with consecutive events and exact retries, and rolls back 
   await expect(fixture.limited.query("UPDATE yard.events SET type='changed'")).rejects.toThrow();
   await expect(fixture.limited.query('DELETE FROM yard.events')).rejects.toThrow();
 });
+
+it('timestamps durable events from the shared server-controlled mock clock', async () => {
+  let now = 1791158400000;
+  const controlled = new PostgresYardEvents(fixture.limited, async () => now);
+  await controlled.create('timed', 'buyer', {}, 'create');
+  now += 86400000;
+  await controlled.mutate('timed', 1, 'buyer', 'next', 'next', () => ({ data: {}, type: 'next', payload: {} }));
+  expect((await controlled.read('timed', 0)).map((e) => e.at)).toEqual([
+    '2026-10-05T00:00:00.000Z',
+    '2026-10-06T00:00:00.000Z',
+  ]);
+});

@@ -168,3 +168,5 @@ Pending commands time out after 20s into "Didn't hear back. Checking…" and the
 The restricted Yard runtime can now append project state, an exact command receipt and the next numbered event in one Postgres transaction. Events cannot be updated or deleted. Concurrent stale writes and failed event insertion are tested against a disposable database. The authenticated SSE adapter supports `Last-Event-ID`, rejects future/malformed cursors and requests a snapshot after a gap or more than 500 missed events.
 
 This first transport polls the durable log once per second across instances, with a 15-second heartbeat and disconnect cleanup. LISTEN/NOTIFY fan-out, role-filtered public Board streams and site-log retention remain planned. The adapter is enabled only when an authenticated event port is configured; the unconfigured shell still reports events unavailable. This is local integration evidence, not hosted operation.
+
+In mock mode, Yard event timestamps are supplied by the same server-side controlled clock used by Stood and PayPal. Outside mock composition, events default to database `clock_timestamp()`. Clients cannot supply event timestamps.

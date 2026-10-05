@@ -37,18 +37,26 @@ const snapshot = (r: Record<string, unknown>): YardSnapshot => ({
   data: r.data,
 });
 export class PostgresYardEvents implements YardEvents {
-  constructor(private readonly pool: pg.Pool) {}
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly clock?: () => Promise<number>,
+  ) {}
+  private async timestamp(): Promise<Date | null> {
+    if (!this.clock) return null;
+    const now = await this.clock();
+    if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
+    return new Date(now);
+  }
   async create(id: string, owner: string, data: unknown, key: string): Promise<YardSnapshot> {
     const c = await this.pool.connect();
     const result = { id, owner, version: 1, data };
     try {
       await c.query('BEGIN');
       await c.query('INSERT INTO yard.projects VALUES($1,$2,1,$3)', [id, owner, JSON.stringify(data)]);
-      await c.query("INSERT INTO yard.events(project_id,seq,type,actor,payload) VALUES($1,1,'blueprint.ready',$2,$3)", [
-        id,
-        owner,
-        JSON.stringify({ id }),
-      ]);
+      await c.query(
+        "INSERT INTO yard.events(project_id,seq,type,actor,payload,at) VALUES($1,1,'blueprint.ready',$2,$3,COALESCE($4,clock_timestamp()))",
+        [id, owner, JSON.stringify({ id }), await this.timestamp()],
+      );
       await c.query('INSERT INTO yard.commands VALUES($1,$2,$3,$4)', [
         id,
         key,
@@ -122,13 +130,10 @@ export class PostgresYardEvents implements YardEvents {
         result.version,
         JSON.stringify(next.data),
       ]);
-      await c.query('INSERT INTO yard.events(project_id,seq,type,actor,payload) VALUES($1,$2,$3,$4,$5)', [
-        id,
-        result.version,
-        next.type,
-        actor,
-        JSON.stringify(next.payload),
-      ]);
+      await c.query(
+        'INSERT INTO yard.events(project_id,seq,type,actor,payload,at) VALUES($1,$2,$3,$4,$5,COALESCE($6,clock_timestamp()))',
+        [id, result.version, next.type, actor, JSON.stringify(next.payload), await this.timestamp()],
+      );
       await c.query('INSERT INTO yard.commands VALUES($1,$2,$3,$4)', [
         id,
         key,

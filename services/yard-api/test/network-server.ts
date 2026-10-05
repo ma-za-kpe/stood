@@ -23,7 +23,7 @@ const clock = async () => {
 const app = createYardApp({
   environment: 'ci',
   board: {
-    board: new Board(new PostgresYardEvents(pool)),
+    board: new Board(new PostgresYardEvents(pool, clock)),
     clock,
     packages: {
       submit: async (input) => {
