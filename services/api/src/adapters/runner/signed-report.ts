@@ -1,4 +1,4 @@
-import { type KeyObject, sign, verify } from 'node:crypto';
+import { type KeyObject, verify } from 'node:crypto';
 import type { CheckResult } from '../../domain/decision.js';
 import type { FrozenCodeContract, RunnerReportVerifier } from '../../ports/runner-report.js';
 
@@ -134,27 +134,4 @@ export class SignedReportVerifier implements RunnerReportVerifier {
       return null;
     }
   }
-}
-
-// Synthetic signed findings only. This adapter never fetches, imports or executes a repository.
-export function fakeReport(
-  contract: FrozenCodeContract,
-  privateKey: KeyObject,
-  recordedAt: number,
-  patch: Readonly<Record<string, unknown>> = {},
-): Readonly<{ payload: string; signature: string }> {
-  const binding = Object.fromEntries(bindings.map((k) => [k, contract[k]]));
-  const payload = JSON.stringify({
-    ...binding,
-    testBundleHash: contract.testBundleHash,
-    tests: contract.testIds.map((id) => ({ id, status: 'PASS' })),
-    diffHash: 'f'.repeat(64),
-    mutationScore: 1,
-    spentMinor: contract.maxMinor,
-    currency: contract.currency,
-    recordedAt,
-    evidenceTier: 'fixture',
-    ...patch,
-  });
-  return Object.freeze({ payload, signature: sign(null, Buffer.from(payload), privateKey).toString('base64') });
 }

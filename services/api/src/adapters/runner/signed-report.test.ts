@@ -1,7 +1,8 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { fakeReport } from '../../../test/fakes/runner-report.js';
 import { decide } from '../../domain/decision.js';
-import { fakeReport, SignedReportVerifier } from './signed-report.js';
+import { SignedReportVerifier } from './signed-report.js';
 
 const keys = generateKeyPairSync('ed25519');
 const contract = {
