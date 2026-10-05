@@ -133,6 +133,7 @@ services:
     environment:
       APP_ENV: local
       PORT: "8080"
+      SIM_BIND_HOST: "0.0.0.0"
     ports:
       - "127.0.0.1:8080:8080"
     healthcheck:

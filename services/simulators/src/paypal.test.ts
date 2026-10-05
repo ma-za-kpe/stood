@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FaultController } from './faults.js';
 import { createPayPalSimulator } from './paypal.js';
 
 const headers = {
@@ -7,6 +8,54 @@ const headers = {
   'PayPal-Request-Id': 'fixture-request',
 };
 describe('PayPal HTTP simulator protocol', () => {
+  it('injects token faults only for the fixed synthetic client without issuing an access token', async () => {
+    const faults = new FaultController([{ method: 'POST', path: '/v1/oauth2/token', kind: 'HTTP_500' }]);
+    const { app } = createPayPalSimulator({ environment: 'ci', clock: () => 0, faults });
+    const token = (authorization: string) =>
+      app.request('/v1/oauth2/token', {
+        method: 'POST',
+        headers: { Authorization: authorization },
+        body: 'grant_type=client_credentials',
+      });
+    expect((await token('Basic invalid')).status).toBe(401);
+    expect((await token('Bearer sim-access-token')).status).toBe(401);
+    const credential = `Basic ${Buffer.from('sim-client:sim-secret').toString('base64')}`;
+    const failed = await token(credential);
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).not.toHaveProperty('access_token');
+    expect((await token(credential)).status).toBe(200);
+  });
+  it('allows omitted renewal amount but never renews a renewed hold or the original twice', async () => {
+    let now = 0;
+    const sim = createPayPalSimulator({ environment: 'ci', clock: () => now });
+    let key = 0;
+    const post = (path: string, body: unknown) =>
+      sim.app.request(path, {
+        method: 'POST',
+        headers: { ...headers, 'PayPal-Request-Id': `renewal-${++key}` },
+        body: JSON.stringify(body),
+      });
+    const order = await (
+      await post('/v2/checkout/orders', {
+        intent: 'AUTHORIZE',
+        purchase_units: [{ custom_id: 'renewal', amount: { currency_code: 'USD', value: '10.00' } }],
+      })
+    ).json();
+    sim.approve(order.id);
+    const authorized = await (await post(`/v2/checkout/orders/${order.id}/authorize`, {})).json();
+    const original = authorized.purchase_units[0].payments.authorizations[0].id;
+    now = 4 * 86400000;
+    const response = await post(`/v2/payments/authorizations/${original}/reauthorize`, {});
+    expect(response.status).toBe(201);
+    const renewed = await response.json();
+    expect(renewed.amount).toEqual({ currency_code: 'USD', value: '10.00' });
+    now = 8 * 86400000;
+    for (const auth of [original, renewed.id]) {
+      expect((await post(`/v2/payments/authorizations/${auth}/reauthorize`, {})).status).toBe(422);
+    }
+    const stored = await (await sim.app.request(`/v2/checkout/orders/${order.id}`, { headers })).json();
+    expect(stored.purchase_units[0].payments.authorizations).toHaveLength(2);
+  });
   it('rejects malformed commands, unsupported money and unknown resources', async () => {
     const { app } = createPayPalSimulator({ environment: 'ci', clock: () => 0 });
     let key = 0;

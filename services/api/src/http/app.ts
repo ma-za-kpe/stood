@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { missingPaymentKeys, type PaymentKeys, SETUP_GUIDANCE } from '../application/payment-readiness.js';
 import type { ProviderHealth } from '../application/provider-registry.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
@@ -16,6 +17,10 @@ export type AppConfig = Readonly<{
   paymentKeys?: PaymentKeys;
   api?: PlatformApiConfig;
   providerHealth?: () => readonly ProviderHealth[];
+  providerEvents?: Readonly<{
+    verify(body: string, headers: Headers): Promise<boolean>;
+    enqueue(event: Readonly<{ id: string; event_type: string; resource: unknown; simulated?: true }>): Promise<void>;
+  }>;
 }>;
 
 type Scenario = Readonly<{ profileId: string; changed?: CheckResult }>;
@@ -122,6 +127,40 @@ export function createApp(config: AppConfig): Hono {
     throw new Error('Only explicitly configured sandbox environments are supported');
   }
   const app = new Hono();
+  app.post('/v1/webhooks/paypal', bodyLimit({ maxSize: 65536 }), async (c) => {
+    if (!config.providerEvents) return c.json({ code: 'webhooks_not_configured' }, 503);
+    try {
+      const body = await c.req.text();
+      if ((await config.providerEvents.verify(body, c.req.raw.headers)) !== true)
+        return c.json({ code: 'unauthorized' }, 401);
+      const event: unknown = JSON.parse(body);
+      if (!event || typeof event !== 'object' || Array.isArray(event)) return c.json({ code: 'invalid_event' }, 422);
+      const e = event as Record<string, unknown>;
+      if (
+        typeof e.id !== 'string' ||
+        !e.id.trim() ||
+        e.id.length > 200 ||
+        typeof e.event_type !== 'string' ||
+        !e.event_type.trim() ||
+        e.event_type.length > 200 ||
+        !e.resource ||
+        typeof e.resource !== 'object' ||
+        Array.isArray(e.resource) ||
+        (e.simulated !== undefined && e.simulated !== true)
+      )
+        return c.json({ code: 'invalid_event' }, 422);
+      // Notification only. A reconciler must obtain matching provider proof before changing money state.
+      await config.providerEvents.enqueue({
+        id: e.id,
+        event_type: e.event_type,
+        resource: e.resource,
+        ...(e.simulated === true ? { simulated: true } : {}),
+      });
+      return c.json({ accepted: true }, 202);
+    } catch {
+      return c.json({ code: 'event_unavailable' }, 503);
+    }
+  });
   app.get('/health', (c) =>
     c.json({
       status: 'ok',
