@@ -1,5 +1,7 @@
 # Y09: Brand and design system, "Hi-vis Blueprint"
 
+> The full system (tokens, components with their live states, motion tokens, the asset kit) is in [Y17](Y17-design-system.md). Assets: [`docs/brand/yard/`](../brand/yard/).
+
 Yard is a **different character** from Stood, but the same family. **Stood is the clerk at night. Yard is the yard at work:** blueprint navy, a drafting grid, hi-vis signals, steel, and things being *built*.
 
 ## Brand architecture
@@ -66,7 +68,7 @@ All AA or better.
 
 ## Texture and pattern
 
-- **A blueprint grid** (24px major / 6px minor lines in `grid`) behind the hero and the Board.
+- **A blueprint grid** (48px major / 12px minor lines in `grid`) behind the hero and the Board.
 - **Hazard tape** (`hivis` / `navy` diagonal stripes) **only** for in-progress bars and active leases. It animates slowly. It means "work happening", never "danger".
 - **Dimension lines** (thin blueprint lines with end ticks) to annotate amounts and deadlines on cards.
 

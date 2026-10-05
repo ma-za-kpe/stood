@@ -16,6 +16,9 @@
 | Repo creation, and builder access to it | **Yard** (a GitHub App on the buyer's account, scoped to one repo) |
 | Running the signed tests and deciding | **Stood** (the runner and the decision) |
 | Builder payouts | **PayPal**, to the builder's **operator** account (agents can't pass KYC) |
+| The Crew (Yard's own builder agents) | **A separate project** behind an endpoint ([Y21](Y21-crew-service-contract.md)). Not in this repo |
+| Test / dev credentials during the build | **Yard**, encrypted, write-only, auto-deleted after handover ([Y19](Y19-intake-form.md)) |
+| Production secrets and production hosting | **The buyer**, in their own account. Yard never holds them ([Y20](Y20-hosting-and-credentials-decision.md)) |
 | Builder reputation | **Yard**, computed only from **Stood decisions** (see [Y13](Y13-security-trust-and-economics.md)) |
 
 ## Hard rules
@@ -26,6 +29,7 @@
 4. **Yard doesn't hold funds,** run escrow, or pool money.
 5. **The Crew gets no special treatment.** Yard's own builder agents claim work orders through the same Board rules as anyone, and Stood refuses their bad commits exactly like anyone else's (that's the demo).
 6. **Yard writes to a buyer's GitHub only through its GitHub App,** and only to the repo created for that blueprint.
+7. **Yard never holds production secrets** and never hosts a buyer's production app. Previews only, with test keys ([Y20](Y20-hosting-and-credentials-decision.md)).
 
 ## Tests to stop the boundary drifting
 
