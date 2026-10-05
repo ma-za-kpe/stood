@@ -329,7 +329,7 @@ T-0173 evidence: the original hook failed with exit 100 under inherited worktree
 
 Y-A foundations: T-0174 supplies the designed ADR and tested import rules. The remaining five tasks form the next Yard foundation round; money blockers remain ahead of payment activation.
 
-- `[ ]` T-0175 Yard Hono skeleton and health endpoint, separate configuration; no money endpoints or Stood imports.
+- `[x]` T-0175 Yard Hono skeleton and health endpoint, separate configuration; no money endpoints or Stood imports.
 - `[ ]` T-0176 Separate yard Postgres schema/role and migration owner; real-database tests prove no Stood-table grants or cross-schema writes.
 - `[ ]` T-0177 Blueprint/Milestone domain: versions, immutable signed terms, test hashes, intermediate/final profile binding; tests first.
 - `[ ]` T-0178 WorkOrder/Claim domain: one current claim, 48-hour lease, explicit expiry/recovery and outside-operator identity; property tests.
@@ -364,3 +364,5 @@ T-0174 evidence: six forbidden-import fixtures failed first, then pass with the 
 T-0175–T-0179 implement the next foundation slices. Production Crew code is external; Y18 events, Y19 credentials and Y20 hosting require separate qualified implementation. Money blockers T-0154/T-0158/full T-0156 remain open.
 
 - `[x]` T-0193 Apply Y21 external-Crew follow-up: ADR-0017, Y11/Y15 and ledger supersession; forbid production Crew graph edges, permit only contract/fake paths. Tier: designed boundary and dependency gate. Separate-repository placement does not prove capability isolation.
+
+T-0175: three shell tests failed first on the absent module. Yard health and guarded workflows are unit-tested; the opt-in local Docker service uses YARD_ENV/YARD_PORT only and receives no Stood or PayPal credentials. No Board, model, SSE, secret storage or funding workflow is exposed.

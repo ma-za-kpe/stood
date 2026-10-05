@@ -1,0 +1,26 @@
+import { Hono } from 'hono';
+export function createYardApp(config: Readonly<{ environment: string }>): Hono {
+  if (!['local', 'ci', 'demo'].includes(config.environment))
+    throw new RangeError('Yard is not configured for hosted operation');
+  const app = new Hono();
+  app.get('/health', (c) =>
+    c.json({
+      status: 'ok',
+      product: 'yard',
+      environment: config.environment,
+      capabilities: { board: false, foreman: false, credentials: false, events: false, payments: false },
+    }),
+  );
+  app.all('/yard/v1/*', (c) =>
+    c.json(
+      {
+        type: 'urn:yard:problem:not_implemented',
+        status: 503,
+        code: 'not_implemented',
+        detail: 'This Yard workflow is not implemented yet.',
+      },
+      503,
+    ),
+  );
+  return app;
+}
