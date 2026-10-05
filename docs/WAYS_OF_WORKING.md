@@ -307,3 +307,9 @@ Report:
 - the next deterministic step
 
 Don't round up: a fixture pass isn't a sandbox pass, and a sandbox pass isn't a field test.
+
+### Superseded and runner-starved CI runs
+
+The CI workflow already groups runs by `ci-${{ github.ref }}` with `cancel-in-progress: true`. A new push cancels older work on the same ref. Review the checks for the current head commit, rather than treating superseded runs as product failures.
+
+If GitHub cancels a job before assigning a runner, rerun it and inspect the resulting log. A cancelled job supplies no validation evidence. The complete Docker product gate and required mock-network check must actually run and pass before merge.
