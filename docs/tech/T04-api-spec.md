@@ -12,7 +12,7 @@ The lead example uses the actual DRAFT fields; bearer/HMAC and idempotency conve
       "params": { "repository": "owner/repo", "base_commit": "full-sha",
                   "frozen_tests_manifest": "sha256-manifest", "usage_required": false } },
     { "name": "usage release", "amount": { "minor": 280000, "currency": "USD" },
-      "profile": "code.milestone@1", "params": { "usage_required": true } }
+      "profile": "code.final@1", "params": { "usage_required": true } }
   ], "window_days": 7, "max_resubmits": 2 }
 ```
 

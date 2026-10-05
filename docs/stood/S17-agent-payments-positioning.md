@@ -13,11 +13,11 @@ Status: product direction aligned with approved PR #24, 5 October 2026. A2A/AP2 
 
 This mapping is Stood's proposed architecture, not protocol certification. Primary references checked 5 October 2026: [A2A specification](https://a2a-protocol.org/latest/specification/) and [AP2 specification](https://ap2-protocol.org/ap2/specification/). A task result does not itself prove payment authority or acceptance. The current local HMAC API is not an A2A or AP2 implementation.
 
-## code.milestone@1 contract
+## Intermediate and final code contracts
 
 Freeze repository identity, base commit, exact signed acceptance-test hashes and required test IDs, allowed runner identities, mutation scope/threshold, payee, currency, budget and release conditions in the payer-approved allowance. Bind each runner attestation to that allowance, package and exact new commit. Count every required test, reject edits and skips, and report absent or malformed proof as WAIT. A low mutation score is WAIT, requiring stronger tests or review; it is not an inferred release.
 
-The profile requires RULE findings for signed_tests, test_integrity, test_execution, new_commit, mutation_score, budget_mandate and usage_release. Definite contract violations refuse with a named reason. A build milestone may have usage_release marked satisfied only when its frozen mandate explicitly says usage is not required. A final usage milestone requires an independently signed outside usage signal. Agent buyer/builder labels never enter the decision function.
+code.milestone@1 requires six RULE findings: signed_tests, test_integrity, test_execution, new_commit, mutation_score and budget_mandate. Intermediate milestones release without a usage or buyer-touch finding. code.final@1 adds usage_release for final handover; missing outside usage or agreed buyer acceptance means WAIT. Definite contract violations refuse with a named reason. The frozen allowance selects the profile; the builder cannot switch it. Rule set 1.2.0 makes this distinction explicit. Older records restore in cancellation/reconciliation-only safe mode, preserving pending identities and confirmed facts. Agent buyer/builder labels never enter the decision function.
 
 The profile is a rule contract, not a verifier. T-0159 must authenticate runner/usage signatures and derive the findings before code payments ship. Never accept submitted PASS results or run a customer's repository in the payments process. Signed tests alone do not establish test quality, signer independence or real use.
 

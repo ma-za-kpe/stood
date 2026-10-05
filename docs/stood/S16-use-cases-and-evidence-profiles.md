@@ -4,7 +4,7 @@
 
 Freeze repository, base commit, acceptance manifest/test hashes and identities, allowed paths/dependencies, runner signing key/image, mutation threshold/scope, operator/payee and mandate cap. Usage-required milestones name an independent outside authority and receipt policy. A no-usage exemption must be explicit in the signed contract.
 
-All seven code findings are RULE-sourced: signed_tests, test_integrity, test_execution, new_commit, mutation_score, budget_mandate and usage_release. Weak mutation and missing usage stay WAIT; authenticated definite integrity/execution/budget failure can refuse. The current profile consumes synthetic findings only, not submitted repository code. Parameter schemas, signatures, runner and usage proof ingestion are planned.
+The six intermediate code findings are RULE-sourced: signed_tests, test_integrity, test_execution, new_commit, mutation_score and budget_mandate. code.final@1 additionally requires usage_release at final handover. Weak mutation and missing usage stay WAIT; authenticated definite integrity/execution/budget failure can refuse. The current profile consumes synthetic findings only, not submitted repository code. Parameter schemas, signatures, runner and usage proof ingestion are planned.
 
 > **Stood isn't a housing product. It's a rule:** a signed definition of done + a package of evidence → a PayPal capture **only if they match**. [U]
 > **If a use case needs Stood to understand houses, it has already failed.** [U]
@@ -66,7 +66,8 @@ The **decision rule doesn't change**: hard failure → REFUSE (named field). Unc
 
 | Profile id | Checks |
 |---|---|
-| `code.milestone@1` | signed_tests, test_integrity, test_execution, new_commit, mutation_score (WAIT on weak tests), budget_mandate, usage_release. Rule contract implemented; trusted signature/runner/use ingestion remains T-0159 |
+| `code.final@1` | The six intermediate code checks plus usage_release; final handover only |
+| `code.milestone@1` | signed_tests, test_integrity, test_execution, new_commit, mutation_score (WAIT on weak tests), budget_mandate. Rule contract implemented; trusted signature/runner/use ingestion remains T-0159 |
 | `construction.stage@1` | required_items, location, capture_window, novelty, nonce, classifier_label(stage), attestation(optional) |
 | `freelance.milestone@1` | required_items(files / screens), artifact_hash(differs), link_check, classifier_label("screens present", WAIT-only), novelty(recording) |
 | `claims.field_visit@1` | required_items, location, capture_window, novelty, pair_match(before / after), human_review(if amount > X) |

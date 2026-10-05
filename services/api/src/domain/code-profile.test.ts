@@ -27,7 +27,7 @@ describe('Code milestone evidence profile', () => {
     },
   );
   it('waits for unsigned, weak or missing outside-usage evidence, including missing results', () => {
-    for (const code of ['signed_tests', 'mutation_score', 'usage_release']) {
+    for (const code of ['signed_tests', 'mutation_score']) {
       expect(
         decide(
           'code.milestone@1',

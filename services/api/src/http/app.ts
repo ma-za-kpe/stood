@@ -44,7 +44,7 @@ const codeScenarios: Readonly<Record<string, Scenario>> = Object.freeze({
     changed: { code: 'mutation_score', source: 'RULE', status: 'FAIL', namedField: 'weak_tests', reason: 'weak_tests' },
   },
   'usage-pending': {
-    profileId: 'code.milestone@1',
+    profileId: 'code.final@1',
     changed: { code: 'usage_release', source: 'RULE', status: 'UNCERTAIN', reason: 'usage_pending' },
   },
 });

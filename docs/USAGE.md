@@ -42,7 +42,7 @@ Create a signed local DRAFT using the bearer/HMAC conventions in [T04](tech/T04-
       "params": { "repository": "owner/repo", "base_commit": "full-commit-sha",
                   "frozen_tests_manifest": "sha256-manifest", "usage_required": false } },
     { "name": "usage release", "amount": { "minor": 280000, "currency": "USD" },
-      "profile": "code.milestone@1", "params": { "usage_required": true } }
+      "profile": "code.final@1", "params": { "usage_required": true } }
   ], "window_days": 7, "max_resubmits": 2 }
 ```
 
@@ -64,7 +64,7 @@ Changed-test response (excerpt):
 
 ```json
 { "outcome": "REFUSE", "effect": "VOID", "namedField": "signed_tests_changed",
-  "profileId": "code.milestone@1", "ruleSetVersion": "1.1.0", "scenario": "code_milestone",
+  "profileId": "code.milestone@1", "ruleSetVersion": "1.2.0", "scenario": "code_milestone",
   "sentence": "The signed tests were changed. Nothing was paid. No payment was executed.",
   "sentences": {
     "payer": "The signed tests were changed. Nothing was paid. No payment was executed.",
@@ -285,7 +285,8 @@ Every event includes `sentence.payer` and `sentence.inspector`, plain-language t
 
 | Profile | Use it for | Key params |
 |---|---|---|
-| `code.milestone@1` | Code milestones (lead) | Frozen tests, commit, runner report, mutation, mandate and outside usage; ingestion planned |
+| `code.milestone@1` | Intermediate code milestones | Frozen tests, commit, runner report, mutation and mandate; authentic ingestion planned |
+| `code.final@1` | Final handover | Intermediate code checks plus independent outside usage / buyer acceptance |
 | `construction.stage@1` | Build stages verified on site | `location`, `required_items`, stage label |
 | `freelance.milestone@1` | Digital deliverables | `required_items`, `artifact_hash`, `link_check` |
 | `claims.field_visit@1` | Insurance / lending field visits | `location`, `pair_match` (before / after) |

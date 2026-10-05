@@ -54,7 +54,7 @@ describe('Code milestones are the default synthetic judge demo (T-0169)', () => 
         outcome,
         effect,
         namedField,
-        profileId: 'code.milestone@1',
+        profileId: name === 'usage-pending' ? 'code.final@1' : 'code.milestone@1',
         scenario: 'code_milestone',
         evidenceTier: 'fixture',
         source: 'synthetic_check_results',
