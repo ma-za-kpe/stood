@@ -355,6 +355,12 @@ Y-C Board (depends on funding/dispatch and qualified runner):
 Y-D/Y-E:
 
 - `[ ]` T-0191 Scripted demo Crew: ordinary Board caller, pass/tamper/skip/expired-lease fixtures and site log; clearly synthetic without sandbox evidence.
-- `[ ]` T-0192 Real Crew stretch: select model deliberately, qualify isolated execution, bounded Vast lifecycle/cost guard/teardown and metrics before GPU spend.
+- `[-]` T-0192 Real Crew implementation moved to the separate closed project by ADR-0017 / Y21. This repo retains endpoint contracts and fake qualification under T-0191; no GPU spend here.
 
 T-0174 evidence: six forbidden-import fixtures failed first, then pass with the dependency rules; the allowed HTTP SDK/contracts fixture passes. Runtime/database permission boundaries are designed and remain separate open tasks.
+
+## Yard foundation implementation round (PRs #32/#33 merged)
+
+T-0175–T-0179 implement the next foundation slices. Production Crew code is external; Y18 events, Y19 credentials and Y20 hosting require separate qualified implementation. Money blockers T-0154/T-0158/full T-0156 remain open.
+
+- `[x]` T-0193 Apply Y21 external-Crew follow-up: ADR-0017, Y11/Y15 and ledger supersession; forbid production Crew graph edges, permit only contract/fake paths. Tier: designed boundary and dependency gate. Separate-repository placement does not prove capability isolation.

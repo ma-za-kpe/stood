@@ -8,7 +8,7 @@
 services/api/                 Stood (unchanged)
 services/yard-api/            Yard: Board, blueprints, work orders, A2A surface, GitHub App
 services/yard-foreman/        Foreman planner (LangGraph.js), no side-effect tools
-services/yard-crew/           Crew builder agent (Python, LangGraph), LAST PHASE, Vast.ai
+external: Crew service       Separate closed project on Vast.ai; public Board + endpoint contract
 apps/yard-web/                Yard app (React + Vite): describe, blueprint, project room, Board
 packages/contracts/           Shared types (already exists): Stood API types used by Yard
 packages/stood-sdk/           Generated Stood SDK (APIMatic, from the OpenAPI spec)
@@ -21,7 +21,7 @@ docs/yard/                    These docs
 
 - `services/yard-*` and `apps/yard-web` **may not import** `services/api/**`. They talk to Stood only through `packages/stood-sdk` over HTTP. Yard must work against a hosted Stood exactly like EyeOnSite does.
 - `services/yard-foreman` may not import the GitHub App, Stood SDK or payment code. It returns blueprints. The Yard API acts on them after buyer approval.
-- `services/yard-crew` is a **separate deployable**. No database credentials for Yard's core. It talks to the Board over A2A / HTTP like any third-party builder.
+- The real Crew is a **separate closed project**, reached by the public Board and [Y21 endpoint contract](Y21-crew-service-contract.md). No database credentials for Yard's core. It talks to the Board over A2A / HTTP like any third-party builder.
 
 ## Runtime map
 
@@ -33,7 +33,7 @@ flowchart LR
   STOOD --> PP[(PayPal sandbox)]
   YAPI -->|GitHub App| GH[(Buyer's GitHub)]
   YAPI --> YDB[(Postgres · yard schema)]
-  CREW[yard-crew · LangGraph Py · Vast.ai] -->|A2A| YAPI
+  CREW[Crew service · external · Vast.ai] -->|A2A| YAPI
   CREW -->|scoped token| GH
   HUMAN[Human builder] --> WEB
   STOOD -->|webhooks| YAPI

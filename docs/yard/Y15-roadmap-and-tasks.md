@@ -34,9 +34,9 @@ Allocated IDs are in [TASKS.md](../../TASKS.md), T-0174–T-0192. Delivered in t
 
 **Round Y-C (Board):** claims / leases + Stood dispatch, the GitHub App (repo bootstrap, scoped branch tokens, read-only tests), submit → Stood package, webhook → work-order state + punch list, handover.
 
-**Round Y-D (demo Crew):** a scripted Crew + fixtures (pass, `signed-tests-changed`, `tests-skipped`, lease-expired), a site-log stream.
+**Round Y-D (demo Crew):** a fake Crew + endpoint contract specification + fixtures (pass, `signed-tests-changed`, `tests-skipped`, lease-expired), a site-log stream.
 
-**Round Y-E (real Crew):** Vast lifecycle (inventory → rent → serve vLLM → teardown), LangGraph Python graph, sandbox, cost guard, metrics.
+**Round Y-E (real Crew):** implementation lives in the separate closed Crew project. This repository owns only endpoint contract tests; no GPU/model lifecycle code.
 
 ## Hackathon cut (by 11 Nov)
 

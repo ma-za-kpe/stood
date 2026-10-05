@@ -1,6 +1,18 @@
 module.exports = {
   forbidden: [
     {
+      name: 'real-crew-is-external',
+      severity: 'error',
+      from: { path: '^(services|packages|apps)/.*crew', pathNot: '/(fakes|contracts)/' },
+      to: {},
+    },
+    {
+      name: 'no-internal-crew-imports',
+      severity: 'error',
+      from: {},
+      to: { path: '^(services|packages|apps)/.*crew', pathNot: '/(fakes|contracts)/' },
+    },
+    {
       name: 'yard-calls-stood-over-http',
       severity: 'error',
       from: { path: '^(services/yard-[^/]+/|apps/yard-web/|packages/stood-sdk/)' },
