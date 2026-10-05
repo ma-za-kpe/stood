@@ -10,57 +10,70 @@
   };
   const chip = (tone, label) => `<span class="chip chip--${tone}">${ICONS[tone]}${label}</span>`;
 
-  // Fixture scenarios: synthetic, illustrative only.
+  // Fixture scenarios for the code-milestone profile: synthetic, illustrative only.
   const SCENARIOS = {
     good: {
       checks: {
-        plot: ['ok', '8 m from pin'],
-        fresh: ['ok', 'no match'],
-        code: ['ok', 'read'],
-        stage: ['ok', 'foundation'],
+        tests: ['ok', '14/14 pass'],
+        files: ['ok', 'unchanged'],
+        commit: ['ok', 'new · a4f9c1e'],
+        mutation: ['ok', '81%'],
       },
       tone: 'volt',
       label: 'Released',
-      sentence: 'Foundation released. £4,000 paid. Kojo stood on the plot at 10:42.',
-      money: 'PayPal · CAPTURED · £4,000',
+      sentence: (w) => `Milestone 2 released. $1,200 paid to ${w.builder}, approved under ${w.buyer}’s signed budget.`,
+      money: 'PayPal · CAPTURED · $1,200',
     },
-    plot: {
+    edited: {
       checks: {
-        plot: ['bad', '1.4 km off'],
-        fresh: ['run', 'skipped'],
-        code: ['run', 'skipped'],
-        stage: ['run', 'skipped'],
+        tests: ['ok', '14/14 pass'],
+        files: ['bad', '1 file changed'],
+        commit: ['run', 'skipped'],
+        mutation: ['run', 'skipped'],
       },
       tone: 'flare',
       label: 'Refused',
-      sentence: 'Wrong plot. 1.4 km off. Nothing was paid.',
-      money: 'PayPal · VOIDED · £0 moved',
+      sentence: () => 'The signed tests were changed. Nothing was paid.',
+      money: 'PayPal · VOIDED · $0 moved',
     },
-    reused: {
+    skipped: {
       checks: {
-        plot: ['ok', '11 m from pin'],
-        fresh: ['bad', 'matches 12 March'],
-        code: ['run', 'skipped'],
-        stage: ['run', 'skipped'],
+        tests: ['bad', '3 of 14 skipped'],
+        files: ['ok', 'unchanged'],
+        commit: ['run', 'skipped'],
+        mutation: ['run', 'skipped'],
       },
       tone: 'flare',
       label: 'Refused',
-      sentence: 'Old photos. These match the photos from 12 March. Nothing was paid.',
-      money: 'PayPal · VOIDED · £0 moved',
+      sentence: () => '3 signed tests were skipped. Nothing was paid.',
+      money: 'PayPal · VOIDED · $0 moved',
     },
-    blurry: {
+    weak: {
       checks: {
-        plot: ['ok', '6 m from pin'],
-        fresh: ['ok', 'no match'],
-        code: ['unsure', 'can’t read'],
-        stage: ['ok', 'foundation'],
+        tests: ['ok', '14/14 pass'],
+        files: ['ok', 'unchanged'],
+        commit: ['ok', 'new · c71e0d2'],
+        mutation: ['unsure', '41%'],
       },
       tone: 'sun',
       label: 'In review',
-      sentence: 'A person is checking these photos. £4,000 is still held, not paid.',
+      sentence: () => 'A person is checking these tests. $1,200 is still held, not paid.',
       money: 'PayPal · AUTHORIZED · held',
     },
   };
+
+  // Who is on each side. The verdict never depends on it.
+  const who = { buyer: 'Adaeze', builder: 'Yard (agent)' };
+  let last = null;
+  for (const seg of document.querySelectorAll('.seg')) {
+    seg.addEventListener('click', () => {
+      who[seg.dataset.who] = seg.dataset.val;
+      for (const peer of document.querySelectorAll(`.seg[data-who="${seg.dataset.who}"]`)) {
+        peer.setAttribute('aria-pressed', String(peer === seg));
+      }
+      if (last) run(last);
+    });
+  }
 
   const picks = document.querySelectorAll('.pick');
   const rows = document.querySelectorAll('#live-checks li');
@@ -75,11 +88,12 @@
 
   const run = (key) => {
     const sc = SCENARIOS[key];
+    last = key;
     timer.forEach(clearTimeout);
     timer = [];
     for (const p of picks) p.setAttribute('aria-pressed', String(p.dataset.scenario === key));
     for (const li of rows) setRow(li, 'run', 'checking…');
-    result.innerHTML = `${chip('sun', 'Checking')}<p class="result__sentence">£4,000 is held, not paid.</p><p class="result__money mono">PayPal · AUTHORIZED</p>`;
+    result.innerHTML = `${chip('sun', 'Checking')}<p class="result__sentence">$1,200 is held, not paid.</p><p class="result__money mono">PayPal · AUTHORIZED</p>`;
     const step = reduce ? 0 : 380;
     rows.forEach((li, i) => {
       timer.push(
@@ -95,7 +109,7 @@
     timer.push(
       setTimeout(
         () => {
-          result.innerHTML = `${chip(sc.tone, sc.label)}<p class="result__sentence">${sc.sentence}</p><p class="result__money mono">${sc.money}</p>`;
+          result.innerHTML = `${chip(sc.tone, sc.label)}<p class="result__sentence">${sc.sentence(who)}</p><p class="result__money mono">${sc.money}</p>`;
         },
         step * (rows.length + 1),
       ),
@@ -108,9 +122,9 @@
   const card = document.querySelector('[data-cycle]');
   const money = document.querySelector('[data-money]');
   const states = [
-    { html: chip('sun', 'In review'), s: '£4,000 is held, not paid.', m: 'AUTHORIZED · £4,000' },
-    { html: chip('volt', 'Released'), s: 'Foundation released. £4,000 paid.', m: 'CAPTURED · £4,000' },
-    { html: chip('flare', 'Refused'), s: 'Wrong plot. 1.4 km off. Nothing was paid.', m: 'VOIDED · £0 moved' },
+    { html: chip('sun', 'In review'), s: '$1,200 is held, not paid.', m: 'AUTHORIZED · $1,200' },
+    { html: chip('volt', 'Released'), s: 'Milestone 2 released. $1,200 paid to yard-7.', m: 'CAPTURED · $1,200' },
+    { html: chip('flare', 'Refused'), s: 'The signed tests were changed. Nothing was paid.', m: 'VOIDED · $0 moved' },
   ];
   if (card && !reduce) {
     let i = 0;
