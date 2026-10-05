@@ -26,6 +26,8 @@ You run a platform where someone pays for work in **stages**: a house build, a f
 
 Stood **never holds money**, never pays anyone locally, and never knows your industry. You choose an **evidence profile** (`construction.stage@1`, `freelance.milestone@1`, …).
 
+The lead product direction is now code milestones and agent-to-agent payments: **Agents pay agents. Only when the work stands.** `code.milestone@1` adds deterministic signed-test, integrity, execution, new-commit, mutation, mandate and usage findings. The profile is unit-tested; authentic runner/usage ingestion, Yard and A2A/AP2 remain planned. See [S17](stood/S17-agent-payments-positioning.md). A signed DRAFT is not a payer-approved mandate, and a synthetic passing finding is not actual execution evidence.
+
 ---
 
 ## For hackathon judges: try it in 2 minutes

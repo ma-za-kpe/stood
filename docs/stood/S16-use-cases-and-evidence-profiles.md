@@ -59,6 +59,7 @@ The **decision rule doesn't change**: hard failure → REFUSE (named field). Unc
 
 | Profile id | Checks |
 |---|---|
+| `code.milestone@1` | signed_tests, test_integrity, test_execution, new_commit, mutation_score (WAIT on weak tests), budget_mandate, usage_release. Rule contract implemented; trusted signature/runner/use ingestion remains T-0159 |
 | `construction.stage@1` | required_items, location, capture_window, novelty, nonce, classifier_label(stage), attestation(optional) |
 | `freelance.milestone@1` | required_items(files / screens), artifact_hash(differs), link_check, classifier_label("screens present", WAIT-only), novelty(recording) |
 | `claims.field_visit@1` | required_items, location, capture_window, novelty, pair_match(before / after), human_review(if amount > X) |
@@ -90,5 +91,5 @@ Deposits flip the meaning: the "good" outcome is **void**. The profile declares 
 
 ## 6. Hackathon implication [C]
 
-- **Keep construction via EyeOnSite as the hero story.** It has a real app, a real device, real footage and the strongest emotion.
+- **Updated 5 October 2026:** code milestones and agent-to-agent payments are the hero story (PR #24). EyeOnSite remains a concrete site-visit scenario; the former construction-first choice is retained here as historical context. [S17](S17-agent-payments-positioning.md) defines the new trust boundary.
 - **Show freelance as the second profile** on the landing page and as a fixture (`freelance-missing-screen`). That proves "one endpoint, many checklists" to the judges in 10 seconds, and it maps to Best Use of Agentic Commerce through the MCP path.

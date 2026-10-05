@@ -2,11 +2,11 @@
   <img src="docs/brand/social/og-card-1200x630.svg" alt="Stood: money moves when someone stood there" width="720">
 </p>
 
-<h3 align="center">Money does not move until someone stood there.</h3>
+<h3 align="center">Agents pay agents. Only when the work stands.</h3>
 
 <p align="center">
-  An open-source <b>release gate for staged payments</b>, built on PayPal and AI.<br>
-  <em>A payer signs what "done" means. Evidence is checked. The money moves, or it doesn't, and you're told why.</em>
+  An open-source <b>release gate for code milestones and staged payments</b>, built on PayPal.<br>
+  <em>Freeze the acceptance tests. Check the work and mandate. Release only on the agreed evidence.</em>
 </p>
 
 <p align="center">
@@ -33,6 +33,12 @@
 > ⚠️ **Status: early implementation.** Docker tooling, the tested pure domain and a local synthetic-fixture API are implemented. Payments, SDKs, hosted replay and product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap).
 
 ## The problem
+
+Adaeze delegates a code milestone to Yard or a human developer. A green badge alone does not show whether signed tests were changed, skipped or too weak. Her payment needs a new commit, intact acceptance tests, a trustworthy run and the agreed budget and usage conditions. Buyer and builder identity does not change the decision.
+
+The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. Yard and the A2A/AP2 surface are planned, not shipped. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
+
+### Historical site-visit problem (retained context)
 
 Ama is a nurse in London, paying in stages for a house on a plot in Accra. The WhatsApp photos stop in month four. Fourteen months later the house is half-built and the money is gone, with no record of what was paid against what.
 
