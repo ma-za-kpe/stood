@@ -1,6 +1,12 @@
 module.exports = {
   forbidden: [
     {
+      name: 'production-cannot-import-simulation',
+      severity: 'error',
+      from: { path: '^(services|packages|apps)/', pathNot: '/(test|tests|fakes|simulators)/' },
+      to: { path: '/(fakes|simulators)/' },
+    },
+    {
       name: 'platform-sdk-is-server-only',
       severity: 'error',
       from: { path: '^apps/yard-web/' },

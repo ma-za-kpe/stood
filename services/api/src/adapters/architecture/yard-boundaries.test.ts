@@ -65,8 +65,14 @@ describe('Real Yard dependency graph boundaries (T-0174)', () => {
     expect(violations('services/yard-api/src/index.js', '../../../packages/stood-sdk/src/index.js')).toEqual([]);
     expect(violations('services/yard-foreman/src/index.js', '../../../packages/contracts/src/index.js')).toEqual([]);
   });
-  it('permits explicitly labelled fake Crew and contracts only', () => {
-    expect(violations('services/yard-api/src/index.js', '../test/fakes/crew/index.js')).toEqual([]);
+  it('rejects runtime fake imports while allowing test harnesses and contracts', () => {
+    expect(
+      violations('packages/contracts/src/index.js', '../../../services/yard-api/test/fakes/crew/index.js'),
+    ).toContain('production-cannot-import-simulation');
+    expect(violations('services/yard-api/src/index.js', '../test/fakes/crew/index.js')).toContain(
+      'production-cannot-import-simulation',
+    );
+    expect(violations('services/yard-api/test/harness.js', './fakes/crew/index.js')).toEqual([]);
     expect(violations('services/yard-api/src/index.js', '../../../packages/contracts/crew/index.js')).toEqual([]);
   });
 });
