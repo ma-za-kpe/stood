@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.0](https://github.com/ma-za-kpe/stood/compare/v0.1.0...v0.2.0) (2026-10-05)
+
+
+### Features
+
+* **core:** add guarded PayPal operations and signed draft API ([#23](https://github.com/ma-za-kpe/stood/issues/23)) ([523c899](https://github.com/ma-za-kpe/stood/commit/523c8994b8d5bc2ace2aef7b841b0f64541282c0))
+* **core:** bootstrap Docker and tested decision gate ([#9](https://github.com/ma-za-kpe/stood/issues/9)) ([2854815](https://github.com/ma-za-kpe/stood/commit/2854815efc18328facdd74cff71ce4604be9e806))
+* **decision:** enforce model confidence and preserve evidence details ([#10](https://github.com/ma-za-kpe/stood/issues/10)) ([31176e2](https://github.com/ma-za-kpe/stood/commit/31176e2f182211fa5676184faace2157aac60df3))
+* **payments:** add durable operation schema and database checks ([#16](https://github.com/ma-za-kpe/stood/issues/16)) ([86ab9f2](https://github.com/ma-za-kpe/stood/commit/86ab9f267cc2076a6261f70dd03ec26a8a9a14cf))
+* **payments:** persist operation reservations and outcomes atomically ([#18](https://github.com/ma-za-kpe/stood/issues/18)) ([a62dff4](https://github.com/ma-za-kpe/stood/commit/a62dff4e200f30eaec2bcbac7167e71d696cec2d)), closes [#15](https://github.com/ma-za-kpe/stood/issues/15)
+* **payments:** recover tranche state through validated transitions ([#20](https://github.com/ma-za-kpe/stood/issues/20)) ([cd0028b](https://github.com/ma-za-kpe/stood/commit/cd0028bfeb93812acf6164f9942d97e7ce6cd557)), closes [#19](https://github.com/ma-za-kpe/stood/issues/19)
+* **payments:** recover, persist and reconcile holds safely ([#21](https://github.com/ma-za-kpe/stood/issues/21)) ([f5020ec](https://github.com/ma-za-kpe/stood/commit/f5020ec0480c285cdaeacba8d62d2894f1eb7abd))
+* **payments:** reserve day-four reauthorisation safely ([#13](https://github.com/ma-za-kpe/stood/issues/13)) ([c3cc338](https://github.com/ma-za-kpe/stood/commit/c3cc338237638e928725f5ee6e8101ed77ef8c76)), closes [#12](https://github.com/ma-za-kpe/stood/issues/12)
+* **payments:** validate allowance currency and capture safety policies ([#11](https://github.com/ma-za-kpe/stood/issues/11)) ([82e5e25](https://github.com/ma-za-kpe/stood/commit/82e5e25a3e71c087e5937a64edfb17e0bfec1380))
+* **site:** reposition landing page on agent-to-agent payments ([#24](https://github.com/ma-za-kpe/stood/issues/24)) ([9eebf39](https://github.com/ma-za-kpe/stood/commit/9eebf392deb92b6d9d71a85c99ecc22743225b34))
+
+
+### Fixes
+
+* **payments:** enforce forward ledger history and server timestamps ([#17](https://github.com/ma-za-kpe/stood/issues/17)) ([1056457](https://github.com/ma-za-kpe/stood/commit/10564571505b03587a1d10b0e30166101bb58247)), closes [#15](https://github.com/ma-za-kpe/stood/issues/15)
+
+
+### Documentation
+
+* **payments:** track onboarding and reconciliation prerequisites ([#14](https://github.com/ma-za-kpe/stood/issues/14)) ([994b47f](https://github.com/ma-za-kpe/stood/commit/994b47f063677f11c8b1de78c56e5cb45138233f))
+
 ## 0.1.0 (2026-10-03)
 
 
