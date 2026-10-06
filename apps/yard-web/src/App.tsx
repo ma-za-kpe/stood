@@ -9,6 +9,7 @@ import releasedStamp from '../../../docs/brand/logo/stamp-released.svg';
 import logo from '../../../docs/brand/yard/logo/yard-lockup-on-dark.svg';
 import { BoardPanel } from './BoardPanel.js';
 import { connectionMachine, staleConnection } from './connection.js';
+import { HandoverPanel } from './HandoverPanel.js';
 import { api } from './http.js';
 import { IntakePanel } from './IntakePanel.js';
 import { applyEvent, type ProjectRoom, type RoomEvent, roomChecked } from './project-state.js';
@@ -361,6 +362,7 @@ export function App() {
                       </article>
                     ))}
                   </section>
+                  <HandoverPanel room={room.data} buyer={role === 'buyer'} />
                   <aside className="truth-panel">
                     <p className="eyebrow">Yard builds. Stood pays.</p>
                     <h3>

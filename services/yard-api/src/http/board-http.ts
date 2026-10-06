@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { IntakeError } from '@stood/yard-contracts';
+import { handoverConfirmation, IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -254,6 +254,22 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       body(c, []);
       return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
     });
+  app.post('/yard/v1/blueprints/:id/handover', async (c) => {
+    const { key, version, actor, now } = command(c),
+      id = c.req.param('id');
+    let confirmed: readonly string[];
+    try {
+      confirmed = handoverConfirmation(body(c, ['confirmed']));
+    } catch (error) {
+      if (error instanceof YardError) throw error;
+      throw new YardError('INVALID');
+    }
+    const result = await config.board.closeHandover(id, actor, version, key, now, confirmed);
+    // Yard's own checklist item: stored test keys are deleted within seven days of handover.
+    const keysDeletedBy = now + 7 * 86400000;
+    if (config.secrets) await config.secrets.scheduleDeletion(id, actor.id, keysDeletedBy);
+    return c.json({ ...ack(result), keysDeletedBy });
+  });
   if (config.secrets) {
     const vault = config.secrets;
     const name = (c: Context) => {

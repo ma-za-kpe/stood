@@ -1,3 +1,4 @@
+import { BUYER_HANDOVER_ITEMS } from '@stood/yard-contracts';
 import { WORK_ORDER_TRANSITIONS } from '@stood/yard-domain';
 export type MoneyProof = Readonly<{
   trancheId: string;
@@ -23,9 +24,11 @@ export type OrderView = Readonly<{
   punchList?: readonly PunchItem[] | null;
   refusals?: readonly RefusalView[];
 }>;
+export type Handover = Readonly<{ status: 'CLOSED'; closedAt: number; confirmed: readonly string[] }>;
 export type ProjectRoom = Readonly<{
   id: string;
   version: number;
+  handover?: Handover | null;
   summary: string;
   currency: string;
   simulated: true;
@@ -135,6 +138,19 @@ export function roomChecked(value: unknown): ProjectRoom {
     !Array.isArray(value.orders)
   )
     throw new Error('Invalid project snapshot');
+  const h = value.handover;
+  if (
+    h !== undefined &&
+    h !== null &&
+    (!object(h) ||
+      h.status !== 'CLOSED' ||
+      !Number.isSafeInteger(h.closedAt) ||
+      Number(h.closedAt) < 0 ||
+      !Array.isArray(h.confirmed) ||
+      h.confirmed.length !== BUYER_HANDOVER_ITEMS.length ||
+      h.confirmed.some((id) => !BUYER_HANDOVER_ITEMS.includes(String(id))))
+  )
+    throw new Error('Invalid handover');
   const seen = new Set<string>();
   for (const o of value.orders) {
     if (
