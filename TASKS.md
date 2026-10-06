@@ -673,3 +673,17 @@ T-0209 evidence: at most two active claims per builder operator root across proj
 T-0190 evidence: reputation counts only Stood-paid milestones for buyers outside the builder's operator tree; self-dealing and refusals are reported separately. Only the owning buyer records usage, once, on the final milestone; forwarding to Stood is T-0166.
 
 T-0205 evidence: keyboard movement across Board cards, due dates, a server-clock lease countdown and read-only signed tests, covered by unit and connected-browser checks. All 15 network scenarios pass.
+
+## Batch 6 (issue #49): Board surfaces and remaining fakes (2026-10-06)
+
+T-0210 evidence: three red-first tests. An unauthenticated agent card (`/.well-known/agent.json`, labelled simulated and not certified) and a signed JSON-RPC `message/send` endpoint map discover/post/claim/submit onto the same Board commands; `tasks/get` reports a work order's live state as an A2A task state; errors are JSON-RPC codes without internals. Posting sends best-effort HMAC-signed nudges on the request clock; a failed nudge never fails the post. Nudges are not wired into the shared network mock (an eager Crew would disturb other scenarios).
+
+T-0211 evidence: discovery search matches public milestone names only (never summaries, repositories or identities), with Postgres full-text search and a GIN index (Yard migration 6) proven against real Postgres; a signed SSE stream publishes the open-work snapshot with public fields only.
+
+T-0213 evidence: notices derived from events after a durable cursor (paid to buyer and builder, punch list to builder, closed to buyer, lease ending once per claim); deterministic keys are claimed before sending, a failed send releases the key and holds the cursor; Mailpit HTTP delivery; Postgres migration 7 with racing-claim and forward-only cursor tests.
+
+T-0196/T-0226 evidence: a Render-shaped preview host tested against an in-process Render API fake (auth, spend cap); previews need a submitted or paid milestone and a digest-pinned image, receive only TEST/DEV keys decrypted and audited per deploy, expire (30 days, or 7 after payment), and are swept or closed out. Live Render qualification is deferred.
+
+T-0228 evidence: browser QA (local HTTP fake for Kernel) and outbound catch-hook notifier (Zapier) ports with contract tests.
+
+All 15 network scenarios and connected-browser checks pass.
