@@ -349,7 +349,7 @@ Y-C Board (depends on funding/dispatch and qualified runner):
 - `[~]` T-0186 Work-order posting, tenant-scoped discovery and atomic claim/lease storage; concurrent claimant tests.
 - `[ ]` T-0187 Lease-to-confirmed-hold dispatch through public Stood API; durable intent/recovery, no invented hold.
 - `[ ]` T-0188 GitHub App bootstrap and brokered branch/test permissions; prove token/repository/path attacks and branch restrictions.
-- `[ ]` T-0189 Submit SHA to Stood package, trusted webhook projection and punch list; signed deduplication, never infer paid from a passing assessment.
+- `[~]` T-0189 Submit SHA to Stood package, trusted webhook projection and punch list; signed deduplication, never infer paid from a passing assessment.
 - `[ ]` T-0190 Handover and outside-operator reputation: independent final usage signal, refund/dispute projection and anti-self-dealing tests.
 
 Y-D/Y-E:
@@ -395,7 +395,7 @@ Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The
 - `[~]` T-0201 Yard component kit with every Y17 §5 state: button (pending), status chips, Stood verdict chip imported from Stood's kit (never restyled), work-order card (optimistic/stale), milestone row, lease timer, progress rail, site log, connection pill, secret field, Foreman message, punch list, empty state. Reduced-motion, greyscale and axe checks.
 - `[~]` T-0202 `apps/yard-web` shell (React + Vite): TanStack Query, XState, Zustand and React Hook Form + Zod wired per Y18 §4; the client event applier consumes T-0194 (pure `applyEvent`, gap → snapshot, shared transition table from `packages/yard-domain`). Money states are never optimistic: a test asserts no PAID/REFUSED render without a Stood-originated event.
 - `[~]` T-0203 Intake wizard UI (Y19 steps 1–8): XState wizard, autosave via `intake.saved`, shared Zod schemas, "Let the Foreman decide" on every step, plain-language summary before signing, and the free-text secret scanner that blocks a pasted key. Step 9 (keys) waits for T-0195.
-- `[ ]` T-0204 Project room (Y10 #5): milestone cards, progress rail, per-milestone preview URL, Stood chips, connection pill, burst summaries ("Caught up: 14 updates"), and focus-safe live updates (a focused card never moves).
+- `[~]` T-0204 Project room (Y10 #5): milestone cards, progress rail, per-milestone preview URL, Stood chips, connection pill, burst summaries ("Caught up: 14 updates"), and focus-safe live updates (a focused card never moves).
 - `[~]` T-0205 Builder Board and work-order screens (Y10 #7, #8): filters, keyboard navigation across columns, lease timer, read-only signed tests, submit SHA, punch list. Qualify AG Grid terms before adopting it.
 - `[x]` T-0206 Site log (Y21 §4, Y10 #9): per-work-order stream with its own sequence, at most 1 write per second per builder, fixed kinds, every line secret-scanned before storage, 90-day retention then summary. Not an aria-live region.
 - `[ ]` T-0207 Handover screen and rotation checklist (Y20 §5): Deploy to Render button from `render.yaml`, `HANDOVER.md` generator listing every variable, the nine checklist items (auto items shown done), and `handover.rotation_confirmed` gating CLOSED, independent of Stood's final release. Depends on T-0196.
