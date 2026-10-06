@@ -2,7 +2,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 docker compose run --rm app pnpm install --frozen-lockfile
-docker compose run --rm app sh -c 'pnpm --filter @stood/yard-domain build && pnpm --filter @stood/yard-web build && npm ci --prefix tools/site && node tools/site/build.mjs'
+docker compose run --rm app sh -c 'pnpm --filter @stood/yard-domain build && pnpm --filter @stood/yard-contracts build && pnpm --filter @stood/yard-web build && npm ci --prefix tools/site && node tools/site/build.mjs'
 docker build -f tools/site/Dockerfile.test -t stood-site-browser .
 # A dedicated browser container with only built static files, the test and screenshots.
 mkdir -p artifacts/site
