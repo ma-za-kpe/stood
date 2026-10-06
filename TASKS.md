@@ -615,3 +615,21 @@ T-0185 local manual-review slice: unsigned drafts can be edited, merged, split a
 T-0185 local verification: the Docker gate passes 631 unit and 129 real-Postgres cases with both pure domains at 100% coverage. All twelve network scenarios pass. Desktop/mobile axe and overflow checks cover the editor; the browser deliberately loses a committed save reply, proves retry uses the same key/body with one new review version, and verifies focus returns to the review controls. Partner-component qualification and the baseline/signing prerequisites remain open.
 
 - `[x]` T-0245 Standalone site check builds local package declarations in dependency order after workspace installation. GitHub CI exposed missing `@stood/yard-contracts` declarations after T-0244 fixed clean-runner `tsc`; `scripts/check-site` builds yard-domain, yard-contracts, then yard-web before bundling. `scripts/check-site` passes locally, including Chromium desktop/mobile checks.
+
+## Pre-credentials round 2: refusal, rework and the full judge path (2026-10-06)
+
+Taken over by Claude (product owner direction). One signed-off Conventional commit per task, tests first, full Docker gate in every commit hook, all 14 network scenarios green.
+
+T-0189 rework domain evidence: four red-first domain tests (rework of the exact checked package, same lease, attempt count, clock-out and expiry while reworking, late refusal after lease end) plus the shared transition test. `REWORK` is a build state; `PAID`/`REFUSED` stay out of shared transitions. Yard domain coverage remains 100%.
+
+T-0189 Board refusal evidence: three red-first signed-HTTP tests and one real-Postgres test. A `stood.refused` notification acts only after a fresh Stood read shows a confirmed VOID for the exact checked package, a valid named punch list and remaining resubmissions. Rework archives the confirmed submission; a final refusal closes the order as `REFUSED` (no claim, build, submit or repost). Two racing refusals produce one event; replay after reconnect restores state; a replayed first refusal cannot touch the second package. Submitting from `REWORK` before rebuilding now returns 409 and reserves nothing (previously an unmapped domain error).
+
+T-0232 evidence: the shared contract allows exactly one `REDISPATCH` after a refused, voided and reconciled attempt, with a separate `reworkAssessment`; nine invalid shapes are rejected first. `refuse-then-pass` runs in both drivers (in-process Postgres and network) and checks one confirmed VOID followed by one CAPTURE, never two captures.
+
+T-0158 follow-up evidence (PR #46 review): a consumed but unresolved capture retry raises a named `CAPTURE_RETRY_CONSUMED` alert for the owning reviewer on every tick and never calls the provider again. Forward migration 0016 extends the alert constraint; real-Postgres tests prove storage and rejection of unknown codes.
+
+T-0231 evidence: the network Crew treats `REWORK` as a punch list, restarts the build with a fresh command key per rebuild (a reused key replayed the first build), and can switch scripted scenarios per run.
+
+T-0233 evidence: `yard-rework` drives the full judge path over isolated Docker services: Crew submits, Stood refuses and voids, Yard shows the punch list, Stood places a fresh hold, the same Crew reworks and resubmits, and only the matching capture marks the milestone paid. Forged types and replayed refusals are rejected. All 14 network scenarios pass.
+
+T-0204 punch-list slice: the web reducer applies `stood.refused` only from Stood on a checking order with a valid punch list and expected attempt (otherwise reload); snapshots accept `REWORK`/`REFUSED` only with no payment or submission and a matching final flag. The milestone card shows Stood's own Refused stamp, the attempt and each named check. Browser/axe coverage of the refused card remains open.
