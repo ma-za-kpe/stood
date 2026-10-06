@@ -15,8 +15,24 @@ it('network Foreman: signed draft, owner review, revision and baseline wait with
       ...(raw ? { body: raw } : {}),
       headers: {
         'Yard-Key-Id': `sim-${role}-key`,
-        'Yard-Signature': `t=${t},v1=${createHmac('sha256', `sim-${role}-secret`).update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+        'Yard-Signature': `t=${t},v2=${createHmac('sha256', `sim-${role}-secret`)
+          .update(
+            JSON.stringify([
+              'yard.request@2',
+              t,
+              `sim-${role}-key`,
+              method,
+              path,
+              'planner-scenario',
+              String(version),
+              'application/json',
+              '',
+              raw,
+            ]),
+          )
+          .digest('hex')}`,
         'Idempotency-Key': 'planner-scenario',
+        'Content-Type': 'application/json',
         'If-Match': String(version),
       },
       signal: AbortSignal.timeout(10000),

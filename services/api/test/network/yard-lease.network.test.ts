@@ -26,7 +26,23 @@ it('Yard network: lease expires, owner reposts, and a new claim gets a fresh ide
       ...(raw ? { body: raw } : {}),
       headers: {
         'Yard-Key-Id': `sim-${role}-key`,
-        'Yard-Signature': `t=${t},v1=${createHmac('sha256', `sim-${role}-secret`).update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+        'Yard-Signature': `t=${t},v2=${createHmac('sha256', `sim-${role}-secret`)
+          .update(
+            JSON.stringify([
+              'yard.request@2',
+              t,
+              `sim-${role}-key`,
+              method,
+              path,
+              key,
+              String(version),
+              'application/json',
+              '',
+              raw,
+            ]),
+          )
+          .digest('hex')}`,
+        'Content-Type': 'application/json',
         'If-Match': String(version),
         'Idempotency-Key': key,
       },

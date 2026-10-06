@@ -32,10 +32,24 @@ const yard = async (path: string, method = 'GET', body?: unknown, key = 'request
     ...(raw ? { body: raw } : {}),
     headers: {
       'Yard-Key-Id': 'sim-builder-key',
-      'Yard-Signature': `t=${t},v1=${createHmac('sha256', 'sim-builder-secret')
-        .update(`${t}.${method}.${path.split('?')[0]}.${raw}`)
+      'Yard-Signature': `t=${t},v2=${createHmac('sha256', 'sim-builder-secret')
+        .update(
+          JSON.stringify([
+            'yard.request@2',
+            t,
+            'sim-builder-key',
+            method,
+            path,
+            key,
+            String(version),
+            'application/json',
+            '',
+            raw,
+          ]),
+        )
         .digest('hex')}`,
       'Idempotency-Key': key,
+      'Content-Type': 'application/json',
       'If-Match': String(version),
     },
     signal: AbortSignal.timeout(5000),

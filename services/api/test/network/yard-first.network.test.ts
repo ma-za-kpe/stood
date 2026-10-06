@@ -35,7 +35,23 @@ it('Yard network: frozen terms → ordinary Crew → confirmed simulated Stood c
       ...(raw ? { body: raw } : {}),
       headers: {
         'Yard-Key-Id': 'sim-buyer-key',
-        'Yard-Signature': `t=${t},v1=${createHmac('sha256', 'sim-buyer-secret').update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+        'Yard-Signature': `t=${t},v2=${createHmac('sha256', 'sim-buyer-secret')
+          .update(
+            JSON.stringify([
+              'yard.request@2',
+              t,
+              'sim-buyer-key',
+              method,
+              path,
+              key,
+              String(version),
+              'application/json',
+              '',
+              raw,
+            ]),
+          )
+          .digest('hex')}`,
+        'Content-Type': 'application/json',
         'If-Match': String(version),
         'Idempotency-Key': key,
       },

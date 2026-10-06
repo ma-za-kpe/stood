@@ -32,14 +32,32 @@ export function browserSession(app: Hono, clock: () => Promise<number>): void {
       secret = role === 'buyer' ? 'sim-buyer-secret' : 'sim-builder-secret';
     const headers = new Headers({
       'Yard-Key-Id': key,
-      'Yard-Signature': `t=${t},v1=${createHmac('sha256', secret).update(`${t}.${c.req.method}.${path}.${body}`).digest('hex')}`,
     });
-    for (const name of ['If-Match', 'Idempotency-Key', 'Last-Event-ID']) {
+    for (const name of ['If-Match', 'Idempotency-Key', 'Last-Event-ID', 'Content-Type']) {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
     }
     const url = new URL(c.req.url);
     url.pathname = path;
+    headers.set(
+      'Yard-Signature',
+      `t=${t},v2=${createHmac('sha256', secret)
+        .update(
+          JSON.stringify([
+            'yard.request@2',
+            t,
+            key,
+            c.req.method,
+            `${url.pathname}${url.search}`,
+            headers.get('Idempotency-Key') ?? '',
+            headers.get('If-Match') ?? '',
+            headers.get('Content-Type') ?? '',
+            headers.get('Last-Event-ID') ?? '',
+            body,
+          ]),
+        )
+        .digest('hex')}`,
+    );
     const response = await app.fetch(
       new Request(url, { method: c.req.method, headers, ...(body ? { body } : {}), signal: c.req.raw.signal }),
     );

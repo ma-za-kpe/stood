@@ -49,7 +49,23 @@ const fixture = () => {
       ...(raw ? { body: raw } : {}),
       headers: {
         'Yard-Key-Id': `${actor}-key`,
-        'Yard-Signature': `t=${t},v1=${createHmac('sha256', `${actor}-secret`).update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+        'Yard-Signature': `t=${t},v2=${createHmac('sha256', `${actor}-secret`)
+          .update(
+            JSON.stringify([
+              'yard.request@2',
+              t,
+              `${actor}-key`,
+              method,
+              path,
+              'test-request',
+              String(version),
+              'application/json',
+              '',
+              raw,
+            ]),
+          )
+          .digest('hex')}`,
+        'Content-Type': 'application/json',
         'If-Match': String(version),
         'Idempotency-Key': 'test-request',
       },

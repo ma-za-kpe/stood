@@ -16,10 +16,10 @@ export type BoardConfig = Readonly<{
   foreman?: ForemanPlans;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
 }>;
-function signature(value: string | null, body: string, secret: string, now: number, prefix = ''): boolean {
+function signature(value: string | null, body: string, secret: string, now: number): boolean {
   const match = /^t=(\d{1,12}),v1=([a-f0-9]{64})$/.exec(value ?? '');
   if (!match || !Number.isSafeInteger(now) || Math.abs(now / 1000 - Number(match[1])) > 300) return false;
-  const expected = createHmac('sha256', secret).update(`${match[1]}.${prefix}${body}`).digest();
+  const expected = createHmac('sha256', secret).update(`${match[1]}.${body}`).digest();
   return timingSafeEqual(expected, Buffer.from(match[2] ?? '', 'hex'));
 }
 export function boardHttp(app: Hono, config: BoardConfig): void {
@@ -39,8 +39,26 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     throw new YardError('INVALID');
   const identify = (headers: Headers, method: string, path: string, body: string, now: number): Operator | null => {
     const credential = config.operators.find((o) => o.key === headers.get('Yard-Key-Id'));
-    if (!credential || !signature(headers.get('Yard-Signature'), body, credential.secret, now, `${method}.${path}.`))
+    const match = /^t=(\d{1,12}),v2=([a-f0-9]{64})$/.exec(headers.get('Yard-Signature') ?? '');
+    if (!credential || !match || !Number.isSafeInteger(now) || now < 0 || Math.abs(now / 1000 - Number(match[1])) > 300)
       return null;
+    const expected = createHmac('sha256', credential.secret)
+      .update(
+        JSON.stringify([
+          'yard.request@2',
+          match[1],
+          credential.key,
+          method,
+          path,
+          headers.get('Idempotency-Key') ?? '',
+          headers.get('If-Match') ?? '',
+          headers.get('Content-Type') ?? '',
+          headers.get('Last-Event-ID') ?? '',
+          body,
+        ]),
+      )
+      .digest();
+    if (!timingSafeEqual(expected, Buffer.from(match[2]!, 'hex'))) return null;
     return credential.actor;
   };
   app.use('/yard/v1/*', bodyLimit({ maxSize: 65536 }));
@@ -53,7 +71,8 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       return c.json({ code: 'clock_unavailable' }, 503);
     }
     const raw = await c.req.text();
-    const actor = identify(c.req.raw.headers, c.req.method, c.req.path, raw, now);
+    const url = new URL(c.req.url);
+    const actor = identify(c.req.raw.headers, c.req.method, `${url.pathname}${url.search}`, raw, now);
     if (!actor) return c.json({ code: 'unauthorized' }, 401);
     requests.set(c.req.raw, { actor, body: raw, now });
     return next();
@@ -175,8 +194,8 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     });
   eventFeed(app, {
     store: config.board.events,
-    authorize: async (headers, id) => {
-      const actor = identify(headers, 'GET', `/yard/v1/blueprints/${id}/events`, '', await config.clock());
+    authorize: async (headers, id, target) => {
+      const actor = identify(headers, 'GET', target, '', await config.clock());
       if (!actor) return false;
       try {
         await config.board.read(id, actor);

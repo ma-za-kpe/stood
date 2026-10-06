@@ -43,7 +43,7 @@ site_log          (work_order_id, seq, at, kind, message)          -- append-onl
 | POST | `/blueprints/{id}/handover` | The buyer confirms the handover flow → Stood final release |
 | POST | `/webhooks/stood` | Signed Stood events → work-order state |
 
-**Auth:** buyers and humans through the app session. Builders and agents through an operator key + signed requests (the same HMAC scheme as Stood).
+**Auth:** buyers and humans through the app session. Builders and agents through an operator key + signed requests. The local Board uses `Yard-Key-Id` plus request signature v2, described below; production sessions, operator issuance and rotation remain planned.
 
 ## A2A (planned)
 
@@ -66,7 +66,11 @@ The server-side Stood SDK implements only DRAFT creation/read and QUEUED package
 
 ## Durable local Board slice
 
-An explicitly configured Board now persists checked Blueprint terms and replayable WorkOrder actions in the restricted `yard` schema. Posting requires frozen terms. Signed operator commands bind the method, path and body; operator identity/root comes from server configuration. Claims serialize under the project row lock, last exactly 48 hours and replay without extending the lease. Submit enters CHECKING, never PAID.
+An explicitly configured Board now persists checked Blueprint terms and replayable WorkOrder actions in the restricted `yard` schema. Posting requires frozen terms. Signed operator commands bind their complete command context; operator identity/root comes from server configuration. Claims serialize under the project row lock, last exactly 48 hours and replay without extending the lease. Submit enters CHECKING, never PAID.
+
+`Yard-Signature: t=<unix-seconds>,v2=<hex HMAC-SHA256(operatorSecret, canonical-request)>` signs the UTF-8 encoding of `JSON.stringify(["yard.request@2", timestamp, keyId, method, target, idempotencyKey, ifMatch, contentType, lastEventId, rawBody])`. All values are strings; absent headers and GET bodies use empty strings. `keyId` is the actual Yard-Key-Id, method is uppercase and target is the external pathname plus exact query, including `/yard/v1`. Sign the URL and normalised header values actually sent. The five-minute window and 64 KiB body bound still apply. Request v1 is rejected. The browser mock gateway signs on the server; no HMAC secret enters the browser. Stood notification delivery v1 remains separate and uses its webhook secret.
+
+Event subscriptions sign both the query cursor and Last-Event-ID header. Reconnects must use a fresh signature for the actual target/header values. The mock browser gateway handles that per request. Event-feed permission checking verifies the same target as the outer router; it does not reconstruct a query-free path. See [ADR-0021](../adr/0021-yard-command-signatures-and-event-cursors.md).
 
 This local slice uses `/yard/v1/blueprints/{project}/work-orders/{milestone}` for read/claim/build/submit, and POST `/yard/v1/blueprints/{project}/work-orders` to post. Commands require `Idempotency-Key` and `If-Match` (the project event version). Responses acknowledge `{id, version, accepted, simulated}`; snapshots and numbered SSE events carry state. Discovery exposes work terms rather than the full private project.
 

@@ -4,13 +4,15 @@ import type { YardEvents } from '../ports/events.js';
 import { EventWake } from './event-wake.js';
 export type EventFeed = Readonly<{
   store: YardEvents;
-  authorize(headers: Headers, projectId: string): Promise<boolean>;
+  authorize(headers: Headers, projectId: string, target: string): Promise<boolean>;
 }>;
 export function eventFeed(app: Hono, feed: EventFeed): void {
   const wake = new EventWake(feed.store);
   app.get('/yard/v1/blueprints/:id/events', async (c) => {
     const id = c.req.param('id');
-    if (!(await feed.authorize(c.req.raw.headers, id))) return c.json({ code: 'unauthorized' }, 401);
+    const url = new URL(c.req.url);
+    if (!(await feed.authorize(c.req.raw.headers, id, `${url.pathname}${url.search}`)))
+      return c.json({ code: 'unauthorized' }, 401);
     const raw = c.req.header('Last-Event-ID') ?? c.req.query('since') ?? '0';
     if (!/^\d{1,10}$/.test(raw)) return c.json({ code: 'invalid_cursor' }, 400);
     let cursor = Number(raw);
