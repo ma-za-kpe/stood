@@ -48,7 +48,7 @@ export function foremanHttp(
     const buyer = actor(c).id;
     const key = c.req.header('Idempotency-Key') ?? '';
     if (!/^[A-Za-z0-9:._-]{1,120}$/.test(key)) throw new YardError('INVALID');
-    const input = body(c, ['id', 'repository', 'baseCommit', 'description', 'capMinor', 'currency']);
+    const input = body(c, ['id', 'repository', 'baseCommit', 'description', 'capMinor', 'currency', 'context']);
     return c.json(
       await invoke(() =>
         config.foreman.draft({

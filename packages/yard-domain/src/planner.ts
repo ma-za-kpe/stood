@@ -1,5 +1,6 @@
 import type { Blueprint, BlueprintInput } from './blueprint.js';
-export type PlannerIntake = Omit<BlueprintInput, 'summary' | 'milestones'> & Readonly<{ description: string }>;
+export type PlannerIntake = Omit<BlueprintInput, 'summary' | 'milestones'> &
+  Readonly<{ description: string; context?: string }>;
 export type Plan = Readonly<{
   status: 'BUYER_REVIEW' | 'READY_FOR_BASELINE' | 'REVISION_REQUESTED';
   blueprint: Blueprint['snapshot'];
@@ -8,5 +9,6 @@ export type Plan = Readonly<{
   risks: readonly string[];
   version: number;
   simulated: boolean;
+  intakeContext?: string;
 }>;
 export type PlannerErrorCode = 'INVALID' | 'FORBIDDEN' | 'CONFLICT' | 'NOT_FOUND' | 'INVALID_DRAFT';

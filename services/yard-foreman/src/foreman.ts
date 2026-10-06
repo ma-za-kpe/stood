@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Annotation, type BaseCheckpointSaver, Command, END, interrupt, START, StateGraph } from '@langchain/langgraph';
 import { uuid6 } from '@langchain/langgraph-checkpoint';
-import { assertPublicInput } from '@stood/yard-contracts';
+import { assertPublicInput, completeIntakeChecked } from '@stood/yard-contracts';
 import { Blueprint, type Plan, type PlannerErrorCode, type PlannerIntake } from '@stood/yard-domain';
 
 export type { Plan, PlannerIntake } from '@stood/yard-domain';
@@ -61,6 +61,7 @@ function intakeChecked(value: PlannerIntake): PlannerIntake {
     'currency',
     'createdAt',
     'description',
+    'context',
   ]);
   if (
     !/^[A-Za-z0-9_-]{1,100}$/.test(value.id) ||
@@ -75,6 +76,23 @@ function intakeChecked(value: PlannerIntake): PlannerIntake {
     !['USD', 'GBP', 'EUR'].includes(value.currency)
   )
     throw new PlannerError('INVALID');
+  if (value.context !== undefined) {
+    try {
+      if (typeof value.context !== 'string') throw new Error('Invalid context');
+      const context = completeIntakeChecked(JSON.parse(value.context), 0);
+      if (
+        context.idea.description !== value.description ||
+        context.timing.capMinor !== value.capMinor ||
+        context.timing.currency !== value.currency ||
+        context.handover.repository !== value.repository ||
+        context.handover.baseCommit !== value.baseCommit
+      )
+        throw new Error('Conflicting context');
+      return Object.freeze(structuredClone({ ...value, context: JSON.stringify(context) }));
+    } catch {
+      throw new PlannerError('INVALID');
+    }
+  }
   return Object.freeze(structuredClone(value));
 }
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -112,6 +130,11 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
       testIds: bundle.map((t) => t.id),
     };
   });
+  const checked = intakeChecked(input);
+  if (checked.context !== undefined) {
+    const context = completeIntakeChecked(JSON.parse(checked.context), 0);
+    if (milestones.some((m) => m.deadline > context.timing.deadline)) throw new PlannerError('INVALID');
+  }
   const requirements = list(d.requirements, 1, 100).map((raw) => {
     const r = object(raw, ['id', 'text', 'testIds']);
     const ids = list(r.testIds, 1, 100);
@@ -127,7 +150,7 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
   if (new Set(requirements.map((r) => r.id)).size !== requirements.length) throw new PlannerError('INVALID');
   const risks = list(d.risks, 0, 30);
   if (!risks.every(text)) throw new PlannerError('INVALID');
-  const { description: _description, ...fixed } = intakeChecked(input);
+  const { description: _description, context: _context, ...fixed } = checked;
   return structuredClone({
     status: 'BUYER_REVIEW',
     blueprint: Blueprint.create({ ...fixed, summary: d.summary, milestones }).snapshot,
@@ -136,6 +159,7 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
     risks: risks as string[],
     version: 1,
     simulated,
+    ...(checked.context !== undefined ? { intakeContext: checked.context } : {}),
   });
 }
 export class Foreman {
@@ -202,6 +226,11 @@ export class Foreman {
         // requires an owner-authorised recover call, never a fresh intake.
         return this.read(intake.id);
       }
+      if (
+        intake.context !== undefined &&
+        completeIntakeChecked(JSON.parse(intake.context), 0).timing.deadline <= intake.createdAt
+      )
+        throw new PlannerError('INVALID');
       await this.graph.invoke({ intake, revision: null }, config);
       return this.read(intake.id);
     });

@@ -1,6 +1,7 @@
 import { intakeChecked } from '@stood/yard-contracts';
 import type { Context, Hono } from 'hono';
 import type { Operator } from '../application/board.js';
+import type { IntakePlanner } from '../application/intake-planner.js';
 import { YardError } from '../ports/events.js';
 import type { IntakeStore } from '../ports/intakes.js';
 import { eventFeed } from './event-feed.js';
@@ -8,6 +9,7 @@ export function intakeHttp(
   app: Hono,
   config: Readonly<{
     store: IntakeStore;
+    planner?: Pick<IntakePlanner, 'create'>;
     request(c: Context): Readonly<{ actor: Operator; body: string; now: number }>;
     authorize(headers: Headers, id: string, target: string): Promise<boolean>;
   }>,
@@ -50,6 +52,35 @@ export function intakeHttp(
       initial ? 201 : 200,
     );
   };
+  if (config.planner)
+    app.post('/yard/v1/intakes/:id/plan', async (c) => {
+      const owner = buyer(c),
+        rawVersion = c.req.header('If-Match') ?? '',
+        key = c.req.header('Idempotency-Key') ?? '';
+      const value: unknown = JSON.parse(config.request(c).body);
+      if (
+        !/^[1-9]\d{0,9}$/.test(rawVersion) ||
+        !/^[A-Za-z0-9:._-]{1,120}$/.test(key) ||
+        !value ||
+        typeof value !== 'object' ||
+        Array.isArray(value) ||
+        Object.keys(value).length
+      )
+        throw new YardError('INVALID');
+      try {
+        const plan = await config.planner!.create(c.req.param('id'), owner, Number(rawVersion), config.request(c).now);
+        c.header('Cache-Control', 'private, no-store');
+        return c.json(plan, 201);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          'code' in error &&
+          ['INVALID', 'FORBIDDEN', 'CONFLICT', 'NOT_FOUND'].includes(String(error.code))
+        )
+          throw new YardError(error.code as 'INVALID' | 'FORBIDDEN' | 'CONFLICT' | 'NOT_FOUND');
+        throw error;
+      }
+    });
   app.post('/yard/v1/intakes', (c) => save(c, true));
   app.put('/yard/v1/intakes/:id', (c) => save(c, false));
   app.get('/yard/v1/intakes/:id', async (c) => {

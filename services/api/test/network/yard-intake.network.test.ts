@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { expect, it } from 'vitest';
+import { intakeFixture } from '../../../../packages/yard-contracts/test/fakes/intake.js';
 
 it('Yard network: private resumable autosave with metadata-only events and no credential intake', async () => {
   const clock = await fetch('http://paypal-sim:8080/__sim/time', {
@@ -74,6 +75,23 @@ it('Yard network: private resumable autosave with metadata-only events and no cr
   expect(events).toContain('"seq":2');
   expect(events).not.toContain(draft.idea.description);
   expect(events).not.toContain('Supabase');
+  const complete = intakeFixture(now);
+  // Buyers supply a repository, never a trusted commit identity.
+  const { baseCommit: _untrusted, ...handover } = complete.handover;
+  expect((await request(path, 'PUT', { step: 7, draft: { ...complete, handover } }, 2, 'complete')).status).toBe(200);
+  const planned = await request(`${path}/plan`, 'POST', {}, 3, 'plan');
+  expect(planned.status).toBe(201);
+  const plan = await planned.json();
+  expect(plan).toMatchObject({ status: 'BUYER_REVIEW', simulated: true, version: 1 });
+  expect(JSON.parse(plan.intakeContext)).toMatchObject({
+    idea: complete.idea,
+    timing: complete.timing,
+    handover: { repository: 'buyer/project' },
+  });
+  expect(plan.blueprint.baseCommit).toMatch(/^[a-f0-9]{40}$/);
+  expect(await (await request(`${path}/plan`, 'POST', {}, 3, 'plan-retry')).json()).toEqual(plan);
+  expect((await request(`${path}/plan`, 'POST', {}, 2, 'stale-plan')).status).toBe(409);
+  expect((await request(`${path}/plan`, 'POST', {}, 3, 'builder-plan', 'builder')).status).toBe(403);
   const health = await (await fetch('http://yard-api:3001/health')).json();
   expect(health.capabilities).toMatchObject({ intake: true, credentials: false, payments: false });
 });

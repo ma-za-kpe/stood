@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { MemorySaver } from '@langchain/langgraph';
 import { expect, it, vi } from 'vitest';
+import { intakeFixture } from '../../../packages/yard-contracts/test/fakes/intake.js';
 import { checkpointTimeFloor, Foreman, type PlannerIntake, type PlannerModel } from './foreman.js';
 
 const intake: PlannerIntake = {
@@ -31,6 +32,36 @@ const draft = () => ({
       },
     ],
   })),
+});
+it('passes the complete immutable intake to the model and preserves it through review and revision', async () => {
+  const context = JSON.stringify(intakeFixture(intake.createdAt));
+  const model = { draft: vi.fn(async (_input: Parameters<PlannerModel['draft']>[0]) => draft()) };
+  const f = new Foreman(model, new MemorySaver());
+  const input = { ...intake, context };
+  const plan = await f.draft(input);
+  expect(model.draft.mock.calls[0]?.[0].intake.context).toBe(context);
+  expect(plan).toHaveProperty('intakeContext', context);
+  await f.resume(intake.id, 'buyer', 1, 'REVISE');
+  expect(await f.revise(intake.id, 'buyer', 1, 'Add a reminder')).toHaveProperty('intakeContext', context);
+  expect(await f.draft({ ...input, createdAt: intake.createdAt + 30 * 86400000 })).toHaveProperty(
+    'intakeContext',
+    context,
+  );
+  expect(model.draft).toHaveBeenCalledTimes(2);
+});
+it('refuses intake-context conflicts and scope expansion before saving model work', async () => {
+  const context = intakeFixture(intake.createdAt);
+  const model = { draft: vi.fn(async () => draft()) };
+  const f = new Foreman(model, new MemorySaver());
+  for (const change of [
+    { ...context, timing: { ...context.timing, capMinor: 4000 } },
+    { ...context, handover: { ...context.handover, repository: 'foreign/project' } },
+    { ...context, idea: { ...context.idea, description: 'Other work' } },
+    { ...context, timing: { ...context.timing, deadline: intake.createdAt } },
+  ])
+    await expect(f.draft({ ...intake, context: JSON.stringify(change) })).rejects.toThrow('INVALID');
+  expect(model.draft).not.toHaveBeenCalled();
+  await expect(f.read(intake.id)).rejects.toThrow('NOT_FOUND');
 });
 it('refuses recognised pasted credentials before checkpointing or calling the model', async () => {
   const model = { draft: vi.fn(async () => draft()) };
@@ -255,4 +286,11 @@ it('bounds revisions and keeps accepted baseline work outside the revision loop'
   await f.resume('plan', 'buyer', 20, 'REVISE');
   await expect(f.revise('plan', 'buyer', 20, 'One more')).rejects.toThrow('CONFLICT');
   expect(model.draft).toHaveBeenCalledTimes(20);
+});
+
+it('rejects model deadlines beyond the complete intake deadline', async () => {
+  const context = intakeFixture(intake.createdAt);
+  context.timing.deadline = intake.createdAt + 86400000;
+  const f = new Foreman({ draft: async () => draft() }, new MemorySaver());
+  await expect(f.draft({ ...intake, context: JSON.stringify(context) })).rejects.toThrow('INVALID_DRAFT');
 });

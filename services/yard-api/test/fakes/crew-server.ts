@@ -148,6 +148,14 @@ app.use('/__mock/*', async (c, next) => {
   if (c.req.header('Authorization') !== 'Bearer sim-control-key') return c.json({ code: 'unauthorized' }, 401);
   return next();
 });
+app.get('/__mock/repository/head', async (c) => {
+  await clock();
+  if (c.req.query('buyer') !== 'buyer' || c.req.query('repository') !== repository.repository)
+    return c.json({ code: 'forbidden' }, 403);
+  const token = await github.issue('installation', repository.repository, 'READ');
+  const head = await github.head(token.value, repository.repository, 'main');
+  return c.json({ repository: repository.repository, baseCommit: head, simulated: true });
+});
 app.get('/__mock/repository', (c) => c.json({ ...repository, simulated: true }));
 app.post('/__mock/poll', async (c) => {
   await clock();

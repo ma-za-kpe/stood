@@ -4,6 +4,7 @@ import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Board, Operator, SettlementProof } from '../application/board.js';
+import type { IntakePlanner } from '../application/intake-planner.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
@@ -18,6 +19,7 @@ export type BoardConfig = Readonly<{
   packages?: PackageGateway;
   foreman?: ForemanPlans;
   intakes?: IntakeStore;
+  intakePlanner?: Pick<IntakePlanner, 'create'>;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
@@ -97,6 +99,7 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     const store = config.intakes;
     intakeHttp(app, {
       store,
+      ...(config.intakePlanner ? { planner: config.intakePlanner } : {}),
       request,
       authorize: async (headers, id, target) => {
         const actor = identify(headers, 'GET', target, '', await config.clock());

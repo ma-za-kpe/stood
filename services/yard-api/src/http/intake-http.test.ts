@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import type { Plan } from '@stood/yard-domain';
 import { expect, it, vi } from 'vitest';
 import { MemoryEvents } from '../../test/fakes/events.js';
 import { Board } from '../application/board.js';
@@ -17,12 +18,37 @@ function fixture() {
     updatedAt: now,
   };
   const store = { load: vi.fn(async () => saved), read: vi.fn(async () => []), save: vi.fn(async () => saved) };
+  const createPlan = vi.fn(
+    async (): Promise<Plan> => ({
+      status: 'BUYER_REVIEW',
+      simulated: true,
+      version: 1,
+      blueprint: {
+        id: 'plan',
+        buyerOperatorId: 'buyer',
+        repository: 'buyer/project',
+        baseCommit: 'a'.repeat(40),
+        summary: 'Synthetic plan',
+        createdAt: now,
+        capMinor: 3,
+        currency: 'USD',
+        milestones: [],
+        version: 1,
+        status: 'DRAFT',
+        termsProof: null,
+      },
+      requirements: [],
+      tests: [],
+      risks: ['Synthetic HTTP port response'],
+    }),
+  );
   const app = createYardApp({
     environment: 'ci',
     board: {
       board: new Board(new MemoryEvents()),
       clock: async () => now,
       intakes: store,
+      intakePlanner: { create: createPlan },
       operators: ['buyer', 'foreign', 'builder'].map((id) => ({
         key: `${id}-key`,
         secret: `${id}-secret`,
@@ -58,7 +84,7 @@ function fixture() {
     };
     return app.request(path, { method, headers, ...(body ? { body } : {}) });
   };
-  return { store, app, request, saved };
+  return { store, app, request, saved, createPlan };
 }
 it('owns autosave identity and clock on the server and returns a resumable private record', async () => {
   const { request, store, saved } = fixture();
@@ -103,4 +129,21 @@ it('rejects a missing version instead of confusing it with a new draft', async (
   expect((await request('/yard/v1/intakes', 'POST', { id: 'idea', step: 0, draft: saved.draft }, '')).status).toBe(422);
   expect((await request('/yard/v1/intakes/idea', 'PUT', { step: 0, draft: saved.draft }, '0')).status).toBe(422);
   expect(store.save).not.toHaveBeenCalled();
+});
+
+it('plans only a buyer-owned saved version using a signed empty command', async () => {
+  const { request, createPlan } = fixture();
+  expect((await request('/yard/v1/intakes/idea/plan', 'POST', {}, '1')).status).toBe(201);
+  expect(createPlan).toHaveBeenCalledWith('idea', 'buyer', 1, now);
+  createPlan.mockClear();
+  for (const [body, version, actor] of [
+    [{}, '0', 'buyer'],
+    [{}, '', 'buyer'],
+    [{ repository: 'foreign/project' }, '1', 'buyer'],
+    [{}, '1', 'builder'],
+  ] as const)
+    expect((await request('/yard/v1/intakes/idea/plan', 'POST', body, version, actor)).status).toBe(
+      actor === 'builder' ? 403 : 422,
+    );
+  expect(createPlan).not.toHaveBeenCalled();
 });

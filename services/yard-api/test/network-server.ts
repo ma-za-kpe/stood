@@ -9,6 +9,7 @@ import { PostgresYardEvents } from '../src/adapters/db-postgres/events.js';
 import { PostgresIntakes } from '../src/adapters/db-postgres/intakes.js';
 import type { SettlementProof } from '../src/application/board.js';
 import { Board } from '../src/application/board.js';
+import { IntakePlanner } from '../src/application/intake-planner.js';
 import { createYardApp } from '../src/http/app.js';
 import { browserSession } from './fakes/browser-session.js';
 
@@ -26,18 +27,32 @@ const clock = async () => {
     throw new Error('Mock clock unavailable');
   return value.now;
 };
+const intakes = new PostgresIntakes(pool);
+const foreman = new Foreman(
+  new ScriptedPlannerModel('ci'),
+  new PostgresSaver(pool, undefined, { schema: 'yard' }),
+  true,
+  new PostgresForemanCoordinator(pool),
+);
 const app = createYardApp({
   environment: 'ci',
   board: {
     board: new Board(new PostgresYardEvents(pool, clock)),
     clock,
-    intakes: new PostgresIntakes(pool),
-    foreman: new Foreman(
-      new ScriptedPlannerModel('ci'),
-      new PostgresSaver(pool, undefined, { schema: 'yard' }),
-      true,
-      new PostgresForemanCoordinator(pool),
-    ),
+    intakes,
+    foreman,
+    intakePlanner: new IntakePlanner(intakes, foreman, {
+      resolve: async (buyer, repository) => {
+        const response = await fetch(
+          `http://crew:8081/__mock/repository/head?buyer=${encodeURIComponent(buyer)}&repository=${encodeURIComponent(repository)}`,
+          { headers: { Authorization: 'Bearer sim-control-key' }, signal: AbortSignal.timeout(5000) },
+        );
+        if (!response.ok) throw new Error('Simulated repository unavailable');
+        const proof = (await response.json()) as { repository: string; baseCommit: string; simulated: boolean };
+        if (proof.simulated !== true) throw new Error('Repository proof is not simulated');
+        return proof;
+      },
+    }),
     packages: {
       submit: async (input) => {
         const now = await clock();
