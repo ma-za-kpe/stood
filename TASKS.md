@@ -645,3 +645,17 @@ T-0214 evidence: `render.yaml` declares `stood-api` and `stood-reconciler` (Fran
 T-0207 evidence: the Y20 §5 checklist is a shared contract; a signed handover closes the project only for the owning buyer, after every milestone is paid and every buyer item is confirmed exactly once, and schedules stored test keys for deletion seven days later. The project room shows Yard's items locked as done and why closing is blocked. Browser/axe coverage of the panel remains open.
 
 Handoff: [docs/HANDOFF.md](docs/HANDOFF.md) lists every credential with its minimum scope and destination, and every test deferred until keys exist.
+
+## Batch 4 (issue #49): role-filtered stream, key screen, planner contract, browser coverage (2026-10-06)
+
+T-0194 evidence: two red-first tests. The project stream is filtered per viewer: the owning buyer sees every event; a builder sees only build events for work orders it currently holds, and access ends with the claim. Hidden events are sent as sequence-only `yard.private` placeholders, so replay stays gap-free and no hidden payload leaves the server. The room advances past placeholders and metadata events without reloading (that reducer test was written together with its fix, not before it).
+
+T-0195 evidence: secret metadata events (`secret.added` / `secret.revoked`, name/provider/environment/version only, idempotent on the request key) failed first, then pass; the role filter keeps them buyer-only. The step 9 key screen stores keys write-only, clears the value as soon as it is sent, lists metadata, revokes, and explains a refused live key. The provider allowlist moved into the shared contracts.
+
+T-0221 evidence: a reusable PlannerModel contract suite (normal intake, smallest cap, revision, saved deadline, prompt injection) checks the Foreman validator, intake-fixed terms, exact cap, final usage milestone and requirement→test mapping, without asserting wording. The scripted model passes; the live adapter joins after the credential handoff.
+
+T-0207 fix evidence: the browser check found the handover panel offering to close a project with an unposted milestone. The room now carries the milestone count and signing state; unposted milestones count as unpaid (the server already refused).
+
+T-0201/T-0204 evidence: the connected-room smoke stores a test key through the browser (listed by name, cleared, never rendered), refuses a live key, keeps handover blocked with the unpaid reason, opens the reworked project (paid after one Stood refusal) and runs WCAG A/AA axe scans over each. Explicit `htmlFor` labels fixed an unnamed provider select. All 14 network scenarios and browser checks pass.
+
+T-0205 (remaining Board screen work) moves to the next batch.
