@@ -267,6 +267,19 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       body(c, []);
       return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
     });
+  app.post('/yard/v1/blueprints/:id/changes', async (c) => {
+    const { key, version, actor, now } = command(c),
+      input = body(c, ['changes']);
+    if (!Array.isArray(input.changes)) throw new YardError('INVALID');
+    return c.json(
+      ack(await config.board.proposeChange(c.req.param('id'), actor, version, key, now, input.changes as never)),
+    );
+  });
+  app.post('/yard/v1/blueprints/:id/changes/:change/approve', async (c) => {
+    const { key, version, actor } = command(c);
+    body(c, []);
+    return c.json(ack(await config.board.approveChange(c.req.param('id'), actor, version, key, c.req.param('change'))));
+  });
   app.post('/yard/v1/blueprints/:id/mandate', async (c) => {
     if (!config.mandates) throw new YardError('CONFLICT');
     const { key, version, actor, now } = command(c);

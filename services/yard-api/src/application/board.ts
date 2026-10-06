@@ -92,14 +92,34 @@ export type MandateIntent = Readonly<{
   allowanceId: string | null;
   tranches: Readonly<Record<string, string>> | null;
 }>;
+export type MilestoneChange = Readonly<{ milestoneId: string; name: string; budgetMinor: number; deadline: number }>;
+type ChangeOrder = {
+  id: string;
+  status: 'PROPOSED' | 'APPROVED';
+  changes: MilestoneChange[];
+  proposedAt: number;
+};
 type Handover = { status: 'CLOSED'; closedAt: number; confirmed: readonly string[] };
 type Data = {
   blueprint: Blueprint['snapshot'];
   buyerRoot: string;
   orders: Record<string, Order>;
   handover?: Handover;
-  mandate?: MandateIntent;
+  mandate?: MandateIntent & { amendmentRequired?: string[] };
+  changes?: ChangeOrder[];
 };
+// Effective milestone terms: the immutable signed milestone with approved change orders applied in order.
+function terms(d: Data, milestoneId: string) {
+  const base = d.blueprint.milestones.find((m) => m.id === milestoneId);
+  if (!base) return undefined;
+  let effective = { ...base };
+  for (const order of d.changes ?? [])
+    if (order.status === 'APPROVED')
+      for (const c of order.changes)
+        if (c.milestoneId === milestoneId)
+          effective = { ...effective, name: c.name, budgetMinor: c.budgetMinor, deadline: c.deadline };
+  return effective;
+}
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -177,7 +197,7 @@ function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
 }
 function beforeDeadline(d: Data, milestoneId: string, now: number): void {
   if (!Number.isSafeInteger(now) || now < d.blueprint.createdAt) throw new YardError('INVALID');
-  const milestone = d.blueprint.milestones.find((m) => m.id === milestoneId);
+  const milestone = terms(d, milestoneId);
   if (!milestone) throw new YardError('INVALID');
   if (now >= milestone.deadline) throw new YardError('CONFLICT');
 }
@@ -333,6 +353,69 @@ export class Board {
         throw new YardError('CONFLICT');
     }
   }
+  // T-0212: a change order proposes new terms for unposted milestones; the signed snapshot never changes.
+  proposeChange(
+    id: string,
+    actor: Operator,
+    version: number,
+    key: string,
+    now: number,
+    changes: readonly MilestoneChange[],
+  ) {
+    return this.mutate(id, actor, version, key, { changes }, 'blueprint.change_proposed', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      if (d.blueprint.status !== 'FROZEN' || d.handover || d.changes?.some((c) => c.status === 'PROPOSED'))
+        throw new YardError('CONFLICT');
+      if (!Array.isArray(changes) || changes.length < 1 || changes.length > d.blueprint.milestones.length)
+        throw new YardError('INVALID');
+      const ids = changes.map((c) => c?.milestoneId);
+      if (new Set(ids).size !== ids.length) throw new YardError('INVALID');
+      let before = 0;
+      let after = 0;
+      for (const c of changes) {
+        const current = typeof c?.milestoneId === 'string' ? terms(d, c.milestoneId) : undefined;
+        if (
+          !current ||
+          Object.keys(c).sort().join() !== 'budgetMinor,deadline,milestoneId,name' ||
+          typeof c.name !== 'string' ||
+          !c.name.trim() ||
+          c.name.length > 200 ||
+          !Number.isSafeInteger(c.budgetMinor) ||
+          c.budgetMinor < 1 ||
+          !Number.isSafeInteger(c.deadline) ||
+          c.deadline <= now ||
+          c.deadline <= d.blueprint.createdAt
+        )
+          throw new YardError('INVALID');
+        if (Object.hasOwn(d.orders, c.milestoneId)) throw new YardError('CONFLICT');
+        before += current.budgetMinor;
+        after += c.budgetMinor;
+      }
+      // The signed cap never moves: changed milestones keep their combined budget.
+      if (before !== after) throw new YardError('INVALID');
+      const changeId = `change-${(d.changes?.length ?? 0) + 1}`;
+      d.changes = [
+        ...(d.changes ?? []),
+        { id: changeId, status: 'PROPOSED', changes: structuredClone([...changes]), proposedAt: now },
+      ];
+      return { changeId, milestones: ids, simulated: true };
+    });
+  }
+  approveChange(id: string, actor: Operator, version: number, key: string, changeId: string) {
+    return this.mutate(id, actor, version, key, { approve: changeId }, 'blueprint.change_approved', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      const order = d.changes?.find((c) => c.id === changeId);
+      if (!order || order.status !== 'PROPOSED' || order.changes.some((c) => Object.hasOwn(d.orders, c.milestoneId)))
+        throw new YardError('CONFLICT');
+      order.status = 'APPROVED';
+      const changed = order.changes.map((c) => c.milestoneId);
+      if (d.mandate?.status === 'CREATED')
+        d.mandate.amendmentRequired = [...new Set([...(d.mandate.amendmentRequired ?? []), ...changed])];
+      return { changeId, milestones: changed, amendmentRequired: d.mandate?.status === 'CREATED', simulated: true };
+    });
+  }
   // T-0184: reserve the exact allowance request derived from the frozen terms before any Stood call.
   async prepareMandate(id: string, actor: Operator, version: number, key: string, now: number): Promise<MandateIntent> {
     const current = await this.events.load(id);
@@ -353,12 +436,13 @@ export class Board {
           throw new YardError('FORBIDDEN');
         if (d.blueprint.status !== 'FROZEN' || d.mandate || !Number.isSafeInteger(now) || now < d.blueprint.createdAt)
           throw new YardError('CONFLICT');
-        const latest = Math.max(...d.blueprint.milestones.map((m) => m.deadline));
+        const effective = d.blueprint.milestones.map((m) => terms(d, m.id) ?? m);
+        const latest = Math.max(...effective.map((m) => m.deadline));
         const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
         const request: MandateRequest = {
           payee_ref: `yard:${id}`,
           cap: { minor: d.blueprint.capMinor, currency: d.blueprint.currency },
-          milestones: d.blueprint.milestones.map((m) => ({
+          milestones: effective.map((m) => ({
             name: m.name,
             amount: { minor: m.budgetMinor, currency: d.blueprint.currency },
             profile: m.profileId,
@@ -461,7 +545,7 @@ export class Board {
       const d = data(s.data);
       return Object.keys(d.orders).flatMap((id) => {
         const { work, order } = workOrder(d, id);
-        const milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+        const milestone = terms(d, order.milestone)!;
         if (
           order.payment ||
           order.closed ||
@@ -523,6 +607,8 @@ export class Board {
       const mapped = d.mandate?.status === 'CREATED' ? d.mandate.tranches?.[milestone] : undefined;
       if (mapped && requested !== undefined && requested !== mapped) throw new YardError('INVALID');
       const trancheId = mapped ?? requested ?? '';
+      // A change approved after the Stood allowance exists needs a Stood amendment first.
+      if (d.mandate?.amendmentRequired?.includes(milestone)) throw new YardError('CONFLICT');
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
       if (
         d.blueprint.status !== 'FROZEN' ||
@@ -646,7 +732,18 @@ export class Board {
       id: snapshot.id,
       version: snapshot.version,
       handover: d.handover ?? null,
-      mandate: d.mandate?.allowanceId ? { allowanceId: d.mandate.allowanceId, status: 'DRAFT' } : null,
+      mandate: d.mandate?.allowanceId
+        ? {
+            allowanceId: d.mandate.allowanceId,
+            status: 'DRAFT',
+            ...(d.mandate.amendmentRequired?.length ? { amendmentRequired: [...d.mandate.amendmentRequired] } : {}),
+          }
+        : null,
+      changes: (d.changes ?? []).map((c) => ({
+        id: c.id,
+        status: c.status,
+        milestones: c.changes.map((x) => x.milestoneId),
+      })),
       signed: d.blueprint.status === 'FROZEN',
       milestoneCount: d.blueprint.milestones.length,
       summary: d.blueprint.summary,
@@ -654,7 +751,7 @@ export class Board {
       simulated: true,
       orders: Object.keys(d.orders).map((wo) => {
         const { work, order } = workOrder(d, wo),
-          milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+          milestone = terms(d, order.milestone)!;
         return {
           id: wo,
           name: milestone.name,
@@ -813,7 +910,7 @@ export class Board {
     return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {
       const d = data(raw);
       const { work, order } = workOrder(d, wo);
-      const m = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+      const m = terms(d, order.milestone)!;
       if (
         work.snapshot.state !== 'CHECKING' ||
         order.payment ||
