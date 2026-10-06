@@ -171,8 +171,130 @@ try {
   await nestedPage.getByRole('link', { name: 'Yard story', exact: true }).click();
   assert.equal(new URL(nestedPage.url()).pathname, '/__pages/yard/');
   await nested.close();
+  const intakeContext = await browser.newContext({ viewport: { width: 1100, height: 900 }, reducedMotion: 'reduce' });
+  const intakePage = await intakeContext.newPage();
+  await intakePage.goto('http://web:3002/yard/app/');
+  await intakePage.getByRole('button', { name: 'Buyer', exact: true }).click();
+  await intakePage.getByRole('button', { name: 'Describe a project', exact: true }).click();
+  await intakePage.getByRole('button', { name: 'Start a private intake', exact: true }).click();
+  await intakePage.getByRole('heading', { name: '1. The idea', exact: true }).waitFor();
+  const intakeId = new URL(intakePage.url()).searchParams.get('intake');
+  assert(intakeId);
+  let writes = 0;
+  intakePage.on('request', (r) => {
+    if (r.method() === 'PUT' && r.url().includes('/intakes/')) writes++;
+  });
+  await intakePage.getByLabel('What are we building?', { exact: true }).fill('client_secret = synthetic-secret-value');
+  await intakePage.getByRole('alert').filter({ hasText: 'That looks like a key' }).waitFor();
+  assert.equal(writes, 0, 'recognised credentials never reach autosave');
+  const retryHeaders = [];
+  await intakePage.route(`**/app/api/intakes/${intakeId}`, async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    retryHeaders.push({
+      key: route.request().headers()['idempotency-key'],
+      version: route.request().headers()['if-match'],
+      body: route.request().postData(),
+    });
+    if (retryHeaders.length === 1) {
+      await route.fetch();
+      return route.abort('failed');
+    }
+    return route.continue();
+  });
+  const lostReply = intakePage.waitForEvent(
+    'requestfailed',
+    (r) => r.method() === 'PUT' && r.url().includes(`/intakes/${intakeId}`),
+  );
+  await intakePage.getByLabel('What are we building?', { exact: true }).fill('Build a booking app');
+  await lostReply;
+  await intakePage.getByRole('alert').filter({ hasText: 'Failed to fetch' }).waitFor();
+  await intakePage.getByRole('button', { name: 'Save now', exact: true }).click();
+  await intakePage.getByText('Saved privately.', { exact: true }).waitFor();
+  assert.equal(retryHeaders.length, 2, 'lost autosave reply is retried once by the user');
+  assert.deepEqual(retryHeaders[1], retryHeaders[0], 'autosave retry keeps the exact key, version and body');
+  await intakePage.unroute(`**/app/api/intakes/${intakeId}`);
+  for (let step = 0; step < 6; step++) {
+    await intakePage.getByRole('button', { name: 'Let the Foreman decide', exact: true }).click();
+    await intakePage.getByRole('button', { name: 'Next step', exact: true }).click();
+  }
+  await intakePage.getByLabel('Total builder budget', { exact: true }).fill('30.00');
+  await intakePage.getByLabel('Budget currency', { exact: true }).selectOption('USD');
+  await intakePage
+    .getByLabel('Target deadline (UTC)', { exact: true })
+    .fill(new Date(at + 21 * 86400000).toISOString().slice(0, 16));
+  await intakePage.getByLabel('Who signs off at handover?', { exact: true }).fill('Demo buyer');
+  await intakePage.getByLabel('Sign-off email', { exact: true }).fill('buyer@example.invalid');
+  await intakePage.getByRole('button', { name: 'Let the Foreman decide', exact: true }).click();
+  await intakePage.getByRole('button', { name: 'Next step', exact: true }).click();
+  await intakePage.getByLabel('Your GitHub repository', { exact: true }).fill('buyer/project');
+  await intakePage.getByRole('button', { name: 'Let the Foreman decide', exact: true }).click();
+  await intakePage
+    .getByLabel('Allow assigned agents or human builders to build this', { exact: true })
+    .selectOption('true');
+  await intakePage.getByRole('button', { name: 'Review my choices', exact: true }).click();
+  await intakePage.getByRole('heading', { name: 'Read your choices.', exact: true }).waitFor();
+  await accessible(intakePage, 'intake summary accessibility');
+  await intakePage.getByRole('button', { name: 'Ask the Foreman for a blueprint', exact: true }).click();
+  await intakePage.getByRole('heading', { name: 'Blueprint’s ready. Read the tests.', exact: true }).waitFor();
+  assert(await intakePage.getByText('SIMULATED PLANNER', { exact: true }).isVisible());
+  await intakePage.getByRole('button', { name: 'Request a revision', exact: true }).click();
+  await intakePage.getByLabel('What should change?', { exact: true }).fill('Add a booking reminder');
+  await intakePage.getByRole('button', { name: 'Revise the blueprint', exact: true }).click();
+  await intakePage.getByText('Build a booking app — revised scope', { exact: true }).waitFor();
+  await intakePage.getByRole('button', { name: 'Accept draft for baseline checks', exact: true }).click();
+  await intakePage.getByText('Draft accepted. Baseline checks are required before signing.', { exact: true }).waitFor();
+  await accessible(intakePage, 'intake plan accessibility');
+  await intakePage.setViewportSize({ width: 390, height: 844 });
+  assert(
+    await intakePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    'intake mobile overflow',
+  );
+  await intakePage.screenshot({ path: 'artifacts/mock-network/intake-plan-mobile.png', fullPage: true });
+  await accessible(intakePage, 'intake mobile accessibility');
+  await intakePage.reload();
+  await intakePage.getByRole('button', { name: 'Buyer', exact: true }).click();
+  await intakePage.getByRole('button', { name: 'Resume saved intake', exact: true }).click();
+  await intakePage.getByRole('heading', { name: '8. Ownership and handover', exact: true }).waitFor();
+  assert.equal(await intakePage.getByLabel('Your GitHub repository', { exact: true }).inputValue(), 'buyer/project');
+  assert.equal(
+    await intakePage.evaluate(async (id) => {
+      const record = await (await fetch(`/app/api/intakes/${id}`)).json();
+      return (
+        await fetch(`/app/api/intakes/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'If-Match': String(record.version),
+            'Idempotency-Key': 'other-tab',
+          },
+          body: JSON.stringify({
+            step: 0,
+            draft: { ...record.draft, idea: { ...record.draft.idea, description: 'Other tab changed the scope' } },
+          }),
+        })
+      ).status;
+    }, intakeId),
+    200,
+  );
+  await intakePage.getByRole('alert').filter({ hasText: 'These answers changed in another tab' }).waitFor();
+  await intakePage.getByRole('button', { name: 'Reload saved version', exact: true }).click();
+  await intakePage.getByRole('heading', { name: '1. The idea', exact: true }).waitFor();
+  assert.equal(
+    await intakePage.getByLabel('What are we building?', { exact: true }).inputValue(),
+    'Other tab changed the scope',
+  );
+  await intakePage.getByRole('button', { name: 'Builder', exact: true }).click();
+  await intakePage
+    .getByText('Choose the simulated buyer to start or resume a private intake.', { exact: true })
+    .waitFor();
+  assert.equal(
+    await intakePage.getByLabel('Your GitHub repository', { exact: true }).count(),
+    0,
+    'builder cannot retain buyer intake',
+  );
+  await intakeContext.close();
   console.log(
-    'Connected mock room: operator cancellation/isolation, desktop/mobile proof, SSE, simulation, theme and overflow checks passed.',
+    'Connected mock room: operator cancellation/isolation, desktop/mobile proof, SSE, simulation, theme, intake autosave/revision/recovery and overflow checks passed.',
   );
 } catch (error) {
   for (const [index, context] of browser.contexts().entries()) {

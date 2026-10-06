@@ -9,6 +9,7 @@ import logo from '../../../docs/brand/yard/logo/yard-lockup-on-dark.svg';
 import { BoardPanel } from './BoardPanel.js';
 import { connectionMachine, staleConnection } from './connection.js';
 import { api } from './http.js';
+import { IntakePanel } from './IntakePanel.js';
 import { applyEvent, type ProjectRoom, type RoomEvent, roomChecked } from './project-state.js';
 
 const useUI = create<{ theme: 'dark' | 'paper'; toggle(): void }>((set) => ({
@@ -99,9 +100,12 @@ function useRoomStream(id: string, version: number, ready: boolean, generation: 
 }
 export function App() {
   const client = useQueryClient();
-  const [pane, setPane] = useState<'room' | 'board'>('room');
+  const [pane, setPane] = useState<'room' | 'board' | 'intake'>(
+    new URLSearchParams(window.location.search).has('intake') ? 'intake' : 'room',
+  );
   const [selected, setSelected] = useState(new URLSearchParams(window.location.search).get('project') ?? '');
   const [session, setSession] = useState({ ready: false, generation: 0, switching: false });
+  const [role, setRole] = useState<'buyer' | 'builder' | null>(null);
   const [sessionError, setSessionError] = useState('');
   const generation = useRef(0),
     switching = useRef(false);
@@ -125,11 +129,12 @@ export function App() {
     const nextGeneration = ++generation.current;
     setSession({ ready: false, generation: nextGeneration, switching: true });
     setSessionError('');
+    setRole(null);
     try {
       await client.cancelQueries({
-        predicate: (query) => ['room', 'board', 'plans'].includes(String(query.queryKey[0])),
+        predicate: (query) => ['room', 'board', 'plans', 'intakes'].includes(String(query.queryKey[0])),
       });
-      for (const key of ['room', 'board', 'plans']) client.removeQueries({ queryKey: [key] });
+      for (const key of ['room', 'board', 'plans', 'intakes']) client.removeQueries({ queryKey: [key] });
       const result = await api('/demo/session', { method: 'POST', body: JSON.stringify({ role }) });
       if (
         !z
@@ -138,6 +143,7 @@ export function App() {
           .safeParse(result).success
       )
         throw new Error('The simulated operator could not be confirmed. Try again.');
+      setRole(role);
       setSession({ ready: true, generation: nextGeneration, switching: false });
     } catch (e) {
       setSession({ ready: false, generation: nextGeneration, switching: false });
@@ -158,6 +164,9 @@ export function App() {
         <nav aria-label="Product navigation">
           <a href="../../">Stood ↗</a>
           <a href="../">Yard story</a>
+          <button type="button" aria-pressed={pane === 'intake'} onClick={() => setPane('intake')}>
+            Describe a project
+          </button>
           <button type="button" aria-pressed={pane === 'board'} onClick={() => setPane('board')}>
             The Board
           </button>
@@ -201,6 +210,7 @@ export function App() {
             {sessionError && <p role="alert">{sessionError}</p>}
           </div>
         </div>
+        {pane === 'intake' && <IntakePanel key={session.generation} enabled={session.ready && role === 'buyer'} />}
         {pane === 'board' && (
           <BoardPanel
             key={session.generation}

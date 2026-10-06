@@ -1,3 +1,12 @@
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 export async function api(path: string, options?: RequestInit) {
   const response = await fetch(`/app/api${path}`, {
     ...options,
@@ -8,7 +17,8 @@ export async function api(path: string, options?: RequestInit) {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
   if (!response.ok)
-    throw new Error(
+    throw new ApiError(
+      response.status,
       response.status === 401
         ? 'Choose a simulated operator to open the room.'
         : response.status === 403

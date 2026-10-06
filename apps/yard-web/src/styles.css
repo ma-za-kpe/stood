@@ -381,3 +381,116 @@ button:disabled {
   background: var(--surface);
   border: 1px solid var(--text-muted);
 }
+.intake-panel {
+  padding: clamp(24px, 4vw, 48px);
+  background: var(--surface);
+  border: 1px solid var(--y-steel);
+  border-top: 6px solid var(--accent);
+  margin-top: 32px;
+  min-width: 0;
+}
+.intake-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+  margin: 32px 0;
+}
+.intake-rail li {
+  padding: 12px;
+  border-bottom: 3px solid var(--y-steel);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.intake-rail li[aria-current] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.intake-field {
+  margin: 24px 0;
+  max-width: 800px;
+}
+.intake-field label {
+  font-weight: 700;
+  font-size: 18px;
+}
+.intake-field input,
+.intake-field select,
+.intake-field textarea,
+.intake-start input {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--y-steel);
+  font: inherit;
+}
+.intake-field textarea {
+  resize: vertical;
+}
+.intake-field select:focus-visible,
+.intake-field textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+.intake-panel fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.intake-actions,
+.intake-start {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 24px 0;
+}
+.intake-start input {
+  max-width: 420px;
+}
+.intake-panel dl > div {
+  margin: 12px 0;
+}
+.intake-panel dt {
+  font-weight: 700;
+}
+.intake-panel dd {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.intake-milestone {
+  padding: 24px;
+  border: 1px solid var(--y-steel);
+  margin: 24px 0;
+}
+.intake-panel pre {
+  overflow: auto;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .intake-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .intake-panel {
+    padding: 24px 16px;
+  }
+  .intake-actions button {
+    width: 100%;
+  }
+}

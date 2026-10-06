@@ -456,3 +456,9 @@ The configured mock Yard API now supports signed POST `/yard/v1/intakes` with `{
 Drafts accept service choices before keys. They reject unknown credential fields and recognised pasted test/live tokens. The numbered `/intakes/{id}/events` stream reports step/version metadata without answers. A stale save conflicts instead of overwriting another tab; an exact lost-response retry returns its original record. Intake, audit event and retry receipt commit atomically. `/health` exposes `capabilities.intake`; `credentials` and `payments` remain false.
 
 The connected wizard is still being built. These routes do not sign terms, create a mandate, upload credentials or execute a payment. The credential scanner is a bounded accidental-paste guard, not provider/environment qualification. The ordinary unconfigured Yard service still returns not_implemented for these workflows.
+
+### Try the private Yard intake (simulated)
+
+After `scripts/dev demo`, open `http://localhost:3002/yard/app/`, choose **Buyer**, then **Describe a project**. Start an intake, fill the eight choice steps and review the summary. **Let the Foreman decide** fills planning preferences; you still supply the idea, budget, repository, human sign-off and consent. Services are names only. Do not paste keys.
+
+The scripted Foreman proposes a blueprint for review and revision. Accepting a draft stops at **baseline checks required**, with no signing or payment. Keep the saved intake link to resume. If another tab changes the draft, reload its saved version before continuing. Simulation dates come from the shared demo clock. Credential intake and live providers remain disabled; this is not live AI or payment evidence.
