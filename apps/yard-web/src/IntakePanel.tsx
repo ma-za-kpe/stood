@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { assign, createActor, createMachine } from 'xstate';
 import { z } from 'zod';
+import { BlueprintEditor } from './BlueprintEditor.js';
+import type { EditableDraft } from './blueprint-edit.js';
 import { browserRequestKey } from './claim-keys.js';
 import { ApiError, api } from './http.js';
 import { foremanChoices, formDraft, formFields, formValues, type IntakeValues, stepNames } from './intake-form.js';
@@ -32,6 +34,7 @@ const planSchema = z.object({
     ),
   }),
   tests: z.array(z.object({ milestoneId: z.string(), id: z.string(), path: z.string(), content: z.string() })),
+  requirements: z.array(z.object({ id: z.string(), text: z.string(), testIds: z.array(z.string()) })),
   risks: z.array(z.string()),
 });
 type Plan = z.infer<typeof planSchema>;
@@ -71,6 +74,15 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
     [status, setStatus] = useState('');
   const [revision, setRevision] = useState(0),
     [plan, setPlan] = useState<Plan | null>(null);
+  const [editingPlan, setEditingPlan] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null),
+    returnToReview = useRef(false);
+  useEffect(() => {
+    if (!editingPlan && returnToReview.current && editButton.current) {
+      returnToReview.current = false;
+      editButton.current.focus();
+    }
+  }, [editingPlan]);
   const [resumeId, setResumeId] = useState(new URLSearchParams(window.location.search).get('intake') ?? '');
   const { register, getValues, reset, setValue, watch } = useForm<IntakeValues>();
   const controller = useRef<AbortController | null>(null),
@@ -134,6 +146,7 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
     recordRef.current = next;
     setExternalStale(false);
     setPlan(null);
+    setEditingPlan(false);
     actorRef.current?.send({ type: 'EDIT' });
     retryWrite.current = null;
     setRecord(next);
@@ -283,6 +296,48 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
         setError((e as Error).message);
         actorRef.current?.send({ type: 'ERROR' });
       }
+    } finally {
+      pending.current = false;
+      if (live.current) setBusy(false);
+    }
+  };
+  const saveEditedPlan = async (draft: EditableDraft, key: string) => {
+    if (!plan || pending.current || externalStale) throw new Error('Review unavailable');
+    pending.current = true;
+    setBusy(true);
+    try {
+      const next = planSchema.parse(
+        await request(`/plans/${plan.blueprint.id}/edits`, {
+          method: 'POST',
+          headers: { 'If-Match': String(plan.version), 'Idempotency-Key': key },
+          body: JSON.stringify(draft),
+        }),
+      );
+      if (live.current) {
+        setPlan(next);
+        returnToReview.current = true;
+        setEditingPlan(false);
+        setStatus(`Review version ${next.version} saved. Read the tests before approving.`);
+      }
+    } finally {
+      pending.current = false;
+      if (live.current) setBusy(false);
+    }
+  };
+  const reloadEditedPlan = async () => {
+    if (!plan || pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    try {
+      const next = planSchema.parse(await request(`/plans/${plan.blueprint.id}`));
+      if (live.current) {
+        setPlan(next);
+        returnToReview.current = true;
+        setEditingPlan(false);
+        setStatus(`Review version ${next.version} saved. Read the tests before approving.`);
+      }
+    } catch {
+      if (live.current) setError('Could not reload the saved draft.');
     } finally {
       pending.current = false;
       if (live.current) setBusy(false);
@@ -515,6 +570,7 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
               <p className="signal">{plan.simulated ? 'SIMULATED PLANNER' : 'PLANNER DRAFT'}</p>
               <h3>Blueprint’s ready. Read the tests.</h3>
               <p>{plan.blueprint.summary}</p>
+              <p className="fine">Review version {plan.version} · unsigned blueprint.</p>
               <p>No signing or funding yet. Accepting this draft sends it to the baseline gate.</p>
               {plan.blueprint.milestones.map((m) => (
                 <article className="intake-milestone" key={m.id}>
@@ -554,8 +610,35 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
                   <li key={r}>{r}</li>
                 ))}
               </ul>
-              {plan.status === 'BUYER_REVIEW' ? (
+              {plan.status === 'BUYER_REVIEW' && editingPlan ? (
+                <BlueprintEditor
+                  key={`${plan.blueprint.id}:${plan.version}`}
+                  initial={{
+                    summary: plan.blueprint.summary,
+                    requirements: plan.requirements,
+                    risks: plan.risks,
+                    milestones: plan.blueprint.milestones.map((m) => ({
+                      ...m,
+                      tests: plan.tests
+                        .filter((t) => t.milestoneId === m.id)
+                        .map(({ id, path, content }) => ({ id, path, content })),
+                    })),
+                  }}
+                  currency={plan.blueprint.currency}
+                  capMinor={plan.blueprint.capMinor}
+                  busy={busy}
+                  save={saveEditedPlan}
+                  close={() => {
+                    returnToReview.current = true;
+                    setEditingPlan(false);
+                  }}
+                  reload={reloadEditedPlan}
+                />
+              ) : plan.status === 'BUYER_REVIEW' ? (
                 <>
+                  <button ref={editButton} type="button" disabled={busy} onClick={() => setEditingPlan(true)}>
+                    Edit blueprint
+                  </button>
                   <button type="button" disabled={busy} onClick={() => void review('ACCEPT')}>
                     Accept draft for baseline checks
                   </button>

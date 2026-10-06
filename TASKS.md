@@ -342,7 +342,7 @@ Y-B Foreman (depends on tested domains and runner isolation):
 - `[ ]` T-0182 Blueprint validation and red-first acceptance-test gate in a qualified isolated runner; empty scaffold must fail.
 - `[~]` T-0183 Intake/repository prompt-injection corpus and tool-capability tests; reject tampering with signed terms.
 - `[ ]` T-0184 Buyer-approved blueprint to Stood mandate after T-0154/full T-0156; frozen test bundle and final-only usage condition.
-- `[ ]` T-0185 Blueprint review UI: edit/merge/split/reprice and explicit approval, accessible timeline; qualify partner component terms.
+- `[~]` T-0185 Blueprint review UI: edit/merge/split/reprice and explicit approval, accessible timeline; qualify partner component terms.
 
 Y-C Board (depends on funding/dispatch and qualified runner):
 
@@ -608,3 +608,7 @@ T-0206 local site-log evidence: shared strict schemas and client replay tests fa
 T-0206 final batch check: the full Docker gate passes 626 unit and 128 real-Postgres cases, with both pure domains at 100% coverage. All twelve network scenarios and expanded desktop/mobile axe checks pass. A browser regression proves a new builder log line arrives over SSE with one snapshot read, keeps keyboard focus and leaves the milestone CLAIMED without a money stamp. The running local demo was migrated/restarted in place; saved intakes were retained and older progress was not invented.
 
 T-0206 retention replay: two red-first HTTP/stream regressions distinguish the actual archive boundary from the latest 200 displayed lines and force an open viewer to clear/refetch its cache when retention advances without a new event. Stream bounds use a compact metadata query; real-Postgres checks verify missing and archived boundaries.
+
+T-0185 local manual-review slice: unsigned drafts can be edited, merged, split and repriced through an accessible native timeline and signed owner-scoped HTTP. Every save re-runs the full draft validator against the immutable intake, re-hashes tests and derives intermediate/final profiles by position. It saves an exact request receipt in the same checkpoint as the new review version, with a fresh buyer pause and no model execution. Two failing-first core regressions and an HTTP route regression protect stale/foreign/competing writes and exact retries; a real-Postgres test repeats them across connections. Merge/split helper tests preserve integer budgets and acceptance tests. The qualified baseline runner, signing flow and partner-component qualification remain open; native controls do not claim Bryntum integration.
+
+T-0185 local verification: the Docker gate passes 631 unit and 129 real-Postgres cases with both pure domains at 100% coverage. All twelve network scenarios pass. Desktop/mobile axe and overflow checks cover the editor; the browser deliberately loses a committed save reply, proves retry uses the same key/body with one new review version, and verifies focus returns to the review controls. Partner-component qualification and the baseline/signing prerequisites remain open.

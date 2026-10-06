@@ -26,7 +26,7 @@ export function foremanHttp(
       version = Number(c.req.header('If-Match'));
     if (!/^[A-Za-z0-9:._-]{1,120}$/.test(key) || !Number.isSafeInteger(version) || version < 1)
       throw new YardError('INVALID');
-    return { version, buyer: actor(c).id };
+    return { version, buyer: actor(c).id, key };
   };
   const invoke = async <T>(work: () => Promise<T>): Promise<T> => {
     try {
@@ -72,6 +72,11 @@ export function foremanHttp(
     if (input.decision !== 'ACCEPT' && input.decision !== 'REVISE') throw new YardError('INVALID');
     const decision = input.decision;
     return c.json(await invoke(() => config.foreman.resume(c.req.param('id'), buyer, version, decision)));
+  });
+  app.post('/yard/v1/plans/:id/edits', async (c) => {
+    const { version, buyer, key } = command(c);
+    const draft = body(c, ['summary', 'requirements', 'milestones', 'risks']);
+    return c.json(await invoke(() => config.foreman.edit(c.req.param('id'), buyer, version, key, draft)));
   });
   app.post('/yard/v1/plans/:id/revisions', async (c) => {
     const { version, buyer } = command(c),

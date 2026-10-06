@@ -461,7 +461,7 @@ The connected wizard is still being built. These routes do not sign terms, creat
 
 After `scripts/dev demo`, open `http://localhost:3002/yard/app/`, choose **Buyer**, then **Describe a project**. Start an intake, fill the eight choice steps and review the summary. **Let the Foreman decide** fills planning preferences; you still supply the idea, budget, repository, human sign-off and consent. Services are names only. Do not paste keys.
 
-The scripted Foreman proposes a blueprint for review and revision. Accepting a draft stops at **baseline checks required**, with no signing or payment. Keep the saved intake link to resume. If another tab changes the draft, reload its saved version before continuing. Simulation dates come from the shared demo clock. Credential intake and live providers remain disabled; this is not live AI or payment evidence.
+The scripted Foreman proposes a blueprint for review and revision. **Edit blueprint** changes the unsigned summary, milestone names, prices, deadlines and test content. Merge compatible neighbouring milestones or split a milestone with at least two tests; keep 3–6 milestones and the exact approved total. Saving creates a fresh review version. If the reply is lost, retry the same edit or reload the saved draft before making another change. Accepting a draft stops at **baseline checks required**, with no signing or payment. Keep the saved intake link to resume. If another tab changes the draft, reload its saved version before continuing. Simulation dates come from the shared demo clock. Credential intake and live providers remain disabled; this is not live AI or payment evidence.
 
 ### Local Yard build log
 

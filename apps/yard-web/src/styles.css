@@ -536,3 +536,42 @@ button:disabled {
   font: 12px var(--mono);
   color: var(--text-muted);
 }
+
+.blueprint-editor {
+  padding: 1.25rem;
+  border: 1px solid var(--y-steel);
+}
+.blueprint-timeline {
+  display: grid;
+  gap: 1rem;
+  padding-left: 1.5rem;
+}
+.blueprint-timeline fieldset {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid currentColor;
+}
+.blueprint-editor label {
+  display: block;
+  margin-top: 0.75rem;
+}
+.blueprint-editor input,
+.blueprint-editor textarea {
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--y-steel);
+  padding: 0.75rem;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+.blueprint-editor textarea {
+  min-height: 6rem;
+}
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}

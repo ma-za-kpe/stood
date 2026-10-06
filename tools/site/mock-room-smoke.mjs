@@ -285,6 +285,44 @@ try {
   await intakePage.getByRole('button', { name: 'Ask the Foreman for a blueprint', exact: true }).click();
   await intakePage.getByRole('heading', { name: 'Blueprint’s ready. Read the tests.', exact: true }).waitFor();
   assert(await intakePage.getByText('SIMULATED PLANNER', { exact: true }).isVisible());
+  await intakePage.getByRole('button', { name: 'Edit blueprint', exact: true }).click();
+  await intakePage.getByLabel('Project summary', { exact: true }).fill('Booking with reminders');
+  await accessible(intakePage, 'unsigned blueprint editor');
+  await intakePage.setViewportSize({ width: 390, height: 844 });
+  assert(
+    await intakePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    'blueprint editor mobile overflow',
+  );
+  await accessible(intakePage, 'unsigned blueprint editor mobile');
+  await intakePage.screenshot({ path: 'artifacts/mock-network/blueprint-editor-mobile.png', fullPage: true });
+  await intakePage.setViewportSize({ width: 1280, height: 900 });
+  const editRequests = [];
+  await intakePage.route('**/app/api/plans/*/edits', async (route) => {
+    editRequests.push({ key: route.request().headers()['idempotency-key'], body: route.request().postData() });
+    const response = await route.fetch();
+    assert.equal(response.status(), 200);
+    if (editRequests.length === 1) await route.abort('failed');
+    else await route.fulfill({ response });
+  });
+  await intakePage.getByRole('button', { name: 'Save draft for fresh review', exact: true }).click();
+  await intakePage.getByRole('alert').filter({ hasText: 'The save is unresolved' }).waitFor();
+  assert(
+    await intakePage.getByLabel('Project summary', { exact: true }).isDisabled(),
+    'unresolved edit must retain its exact body',
+  );
+  await intakePage.getByRole('button', { name: 'Retry same edit', exact: true }).click();
+  await intakePage.getByRole('button', { name: 'Edit blueprint', exact: true }).waitFor();
+  await intakePage.getByText('Booking with reminders', { exact: true }).waitFor();
+  await intakePage.waitForFunction(() => document.activeElement?.textContent?.trim() === 'Edit blueprint');
+  assert.equal(
+    await intakePage.evaluate(() => document.activeElement?.textContent?.trim()),
+    'Edit blueprint',
+    'saving restores review focus',
+  );
+  await intakePage.getByText('Review version 2 · unsigned blueprint.', { exact: true }).waitFor();
+  assert.equal(editRequests.length, 2);
+  assert.deepEqual(editRequests[0], editRequests[1], 'lost edit reply keeps the exact request key and body');
+  await intakePage.unroute('**/app/api/plans/*/edits');
   await intakePage.getByRole('button', { name: 'Request a revision', exact: true }).click();
   await intakePage.getByLabel('What should change?', { exact: true }).fill('Add a booking reminder');
   await intakePage.getByRole('button', { name: 'Revise the blueprint', exact: true }).click();

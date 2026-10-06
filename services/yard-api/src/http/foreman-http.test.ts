@@ -154,3 +154,24 @@ it('treats malformed planner output as unavailable rather than a buyer input err
   expect(await response.json()).toEqual({ code: 'yard_unavailable' });
   await expect(f.foreman.read('plan')).rejects.toThrow('NOT_FOUND');
 });
+
+it('saves owner-only manual edits through signed requests and replays an exact retry', async () => {
+  const f = fixture();
+  await f.request('/yard/v1/plans', 'POST', f.input);
+  const raw = structuredClone(await f.model.draft.mock.results[0]!.value);
+  raw.summary = 'Edited booking blueprint';
+  const response = await f.request('/yard/v1/plans/plan/edits', 'POST', raw);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    version: 2,
+    status: 'BUYER_REVIEW',
+    blueprint: { summary: raw.summary },
+  });
+  expect((await f.request('/yard/v1/plans/plan/edits', 'POST', raw)).status).toBe(200);
+  expect((await f.request('/yard/v1/plans/plan/edits', 'POST', raw, 2, 'foreign')).status).toBe(403);
+  expect((await f.request('/yard/v1/plans/plan/edits', 'POST', { ...raw, currency: 'EUR' })).status).toBe(422);
+  const badBudget = structuredClone(raw);
+  badBudget.milestones[0]!.budgetMinor = 9000;
+  expect((await f.request('/yard/v1/plans/plan/edits', 'POST', badBudget)).status).toBe(422);
+  expect((await f.request('/yard/v1/plans/plan/edits', 'POST', { ...raw, summary: 'Changed again' })).status).toBe(409);
+});

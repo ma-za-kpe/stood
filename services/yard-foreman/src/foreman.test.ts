@@ -294,3 +294,46 @@ it('rejects model deadlines beyond the complete intake deadline', async () => {
   const f = new Foreman({ draft: async () => draft() }, new MemorySaver());
   await expect(f.draft({ ...intake, context: JSON.stringify(context) })).rejects.toThrow('INVALID_DRAFT');
 });
+
+it('edits unsigned drafts without a model call, persists an exact retry receipt and requires fresh approval', async () => {
+  const model = { draft: vi.fn(async () => draft()) };
+  const saver = new MemorySaver();
+  const f = new Foreman(model, saver);
+  const original = await f.draft(intake);
+  const changes = draft();
+  changes.summary = 'Booking and reminders';
+  changes.milestones[0]!.budgetMinor = 800;
+  changes.milestones[1]!.budgetMinor = 1200;
+  const edited = await f.edit('plan', 'buyer', 1, 'edit-one', changes);
+  expect(edited).toMatchObject({
+    status: 'BUYER_REVIEW',
+    version: 2,
+    blueprint: { summary: changes.summary, capMinor: 3000, repository: intake.repository },
+  });
+  expect(original.blueprint.summary).toBe('A booking app');
+  const restored = new Foreman(model, saver);
+  expect(await restored.edit('plan', 'buyer', 1, 'edit-one', changes)).toEqual(edited);
+  await expect(restored.resume('plan', 'buyer', 1, 'ACCEPT')).rejects.toThrow('CONFLICT');
+  expect((await restored.resume('plan', 'buyer', 2, 'ACCEPT')).status).toBe('READY_FOR_BASELINE');
+  expect(await restored.edit('plan', 'buyer', 1, 'edit-one', changes)).toEqual(edited);
+  await expect(restored.edit('plan', 'buyer', 2, 'edit-two', changes)).rejects.toThrow('CONFLICT');
+  expect(model.draft).toHaveBeenCalledTimes(1);
+});
+it('refuses foreign, stale, invalid and competing manual edits without losing the prior draft', async () => {
+  const f = new Foreman({ draft: async () => draft() }, new MemorySaver());
+  const original = await f.draft(intake);
+  await expect(f.edit('plan', 'foreign', 1, 'edit', draft())).rejects.toThrow('FORBIDDEN');
+  await expect(f.edit('plan', 'buyer', 0, 'edit', draft())).rejects.toThrow('CONFLICT');
+  await expect(f.edit('plan', 'buyer', 1, '', draft())).rejects.toThrow('INVALID');
+  await expect(f.edit('plan', 'buyer', 1, 'edit', { ...draft(), capMinor: 9999 })).rejects.toThrow('INVALID');
+  const bad = draft();
+  bad.milestones[0]!.budgetMinor = 9999;
+  await expect(f.edit('plan', 'buyer', 1, 'edit', bad)).rejects.toThrow();
+  expect(await f.read('plan')).toEqual(original);
+  const results = await Promise.allSettled([
+    f.edit('plan', 'buyer', 1, 'a', draft()),
+    f.edit('plan', 'buyer', 1, 'b', draft()),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  await expect(f.edit('plan', 'buyer', 1, 'a', { ...draft(), summary: 'Different' })).rejects.toThrow('CONFLICT');
+});

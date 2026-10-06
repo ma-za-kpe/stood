@@ -200,3 +200,53 @@ it('never persists a recognised key from model output in real Postgres checkpoin
     await f.close();
   }
 });
+
+it('persists competing manual edit receipts and the new approval pause across Postgres connections', async () => {
+  const f = await yardDatabase();
+  const restarted = f.connectRuntime();
+  try {
+    await new PostgresSaver(f.migration, undefined, { schema: 'yard' }).setup();
+    const intake = {
+      id: 'manual',
+      buyerOperatorId: 'buyer',
+      repository: 'buyer/project',
+      baseCommit: 'a'.repeat(40),
+      description: 'A booking app',
+      capMinor: 3000,
+      currency: 'USD' as const,
+      createdAt: 1791158400000,
+    };
+    const model = new ScriptedPlannerModel('ci');
+    const make = (pool: typeof f.limited) =>
+      new Foreman(
+        model,
+        new PostgresSaver(pool, undefined, { schema: 'yard' }),
+        true,
+        new PostgresForemanCoordinator(pool),
+      );
+    const first = make(f.limited),
+      other = make(restarted);
+    const original = await first.draft(intake);
+    const draft = await model.draft({ policy: '', intake });
+    draft.summary = 'Manually reviewed booking';
+    const competing = await Promise.allSettled([
+      first.edit(intake.id, 'buyer', 1, 'edit-one', draft),
+      other.edit(intake.id, 'buyer', 1, 'edit-two', draft),
+    ]);
+    expect(competing.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const key = competing[0]!.status === 'fulfilled' ? 'edit-one' : 'edit-two';
+    const recovered = make(restarted);
+    const edited = await recovered.read(intake.id);
+    expect(edited).toMatchObject({ version: 2, status: 'BUYER_REVIEW', blueprint: { summary: draft.summary } });
+    expect(await recovered.edit(intake.id, 'buyer', 1, key, draft)).toEqual(edited);
+    await expect(recovered.edit(intake.id, 'buyer', 1, key, { ...draft, summary: 'Different' })).rejects.toThrow(
+      'CONFLICT',
+    );
+    await expect(recovered.resume(intake.id, 'buyer', 1, 'ACCEPT')).rejects.toThrow('CONFLICT');
+    expect((await recovered.resume(intake.id, 'buyer', 2, 'ACCEPT')).status).toBe('READY_FOR_BASELINE');
+    expect(original.blueprint.summary).not.toBe(draft.summary);
+  } finally {
+    await restarted.end();
+    await f.close();
+  }
+});
