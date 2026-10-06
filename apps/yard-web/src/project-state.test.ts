@@ -89,3 +89,73 @@ it('rejects malformed snapshots before displaying work or money', () => {
   ])
     expect(() => roomChecked({ ...paid, orders: [{ ...paid.orders[0], payment }] })).toThrow();
 });
+
+const refusal = {
+  seq: 7,
+  type: 'stood.refused',
+  actor: 'stood',
+  payload: {
+    wo: 'one',
+    state: 'REWORK',
+    reference: 'void',
+    attempt: 2,
+    punchList: [{ field: 'signed_tests_changed', reason: 'The signed tests were changed.' }],
+    simulated: true,
+  },
+};
+it('shows a Stood refusal as rework with its punch list and never as a payment (T-0189)', () => {
+  const reworked = applyEvent(room, refusal);
+  if (reworked === 'GAP') throw new Error('expected room');
+  expect(reworked.orders[0]).toMatchObject({
+    state: 'REWORK',
+    attempt: 2,
+    submission: null,
+    payment: null,
+    punchList: [{ field: 'signed_tests_changed' }],
+  });
+  for (const bad of [
+    { ...refusal, actor: 'builder' },
+    { ...refusal, payload: { ...refusal.payload, state: 'PAID' } },
+    { ...refusal, payload: { ...refusal.payload, punchList: [] } },
+    { ...refusal, payload: { ...refusal.payload, punchList: [{ field: 'Bad', reason: 'x' }] } },
+    { ...refusal, payload: { ...refusal.payload, attempt: 1 } },
+  ])
+    expect(applyEvent(room, bad)).toBe('GAP');
+  const paidRoom = applyEvent(room, event);
+  if (paidRoom === 'GAP') throw new Error('expected room');
+  expect(applyEvent(paidRoom, { ...refusal, seq: 8 })).toBe('GAP');
+  // The same builder restarts from rework using the shared transition table.
+  const building = applyEvent(reworked, {
+    seq: 8,
+    type: 'wo.building',
+    actor: 'builder',
+    payload: { wo: 'one', state: 'BUILDING' },
+  });
+  if (building === 'GAP') throw new Error('expected room');
+  expect(building.orders[0]).toMatchObject({ state: 'BUILDING', punchList: [{ field: 'signed_tests_changed' }] });
+  // A final refusal closes the order without starting another attempt.
+  const closed = applyEvent(room, { ...refusal, payload: { ...refusal.payload, state: 'REFUSED', attempt: 1 } });
+  if (closed === 'GAP') throw new Error('expected room');
+  expect(closed.orders[0]).toMatchObject({ state: 'REFUSED', payment: null });
+});
+it('accepts rework and closed refusals in snapshots only with a punch list and no payment', () => {
+  const order = room.orders[0]!;
+  const punchList = [{ field: 'weak_tests', reason: 'Weak tests.' }];
+  const refusals = [{ packageId: 'package', reference: 'void', attempt: 1, final: false }];
+  const snapshot = (patch: Record<string, unknown>) => ({
+    ...room,
+    orders: [{ ...order, submission: null, ...patch }],
+  });
+  expect(roomChecked(snapshot({ state: 'REWORK', attempt: 2, punchList, refusals })).orders[0]?.state).toBe('REWORK');
+  expect(
+    roomChecked(snapshot({ state: 'REFUSED', attempt: 1, punchList, refusals: [{ ...refusals[0], final: true }] }))
+      .orders[0]?.state,
+  ).toBe('REFUSED');
+  for (const bad of [
+    snapshot({ state: 'REWORK', attempt: 2, punchList: null, refusals }),
+    snapshot({ state: 'REWORK', attempt: 2, punchList: [{ field: 'x y', reason: 'r' }], refusals }),
+    snapshot({ state: 'REFUSED', attempt: 1, punchList, refusals }),
+    snapshot({ state: 'REFUSED', attempt: 1, punchList, refusals: [{ ...refusals[0], final: true }], payment: {} }),
+  ])
+    expect(() => roomChecked(bad)).toThrow();
+});

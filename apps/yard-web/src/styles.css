@@ -575,3 +575,29 @@ button:disabled {
   gap: 0.75rem;
   margin-top: 1rem;
 }
+
+/* Punch list: Stood's named failed checks. Build feedback, never a payment state. */
+.punch-list {
+  margin-top: var(--s-3, 12px);
+  border-left: 2px solid var(--blocker);
+  padding-left: var(--s-3, 12px);
+}
+.punch-list h4 {
+  margin: 0 0 var(--s-2, 8px);
+}
+.punch-list ul {
+  margin: 0;
+  padding-left: 1.1em;
+}
+.punch-list li {
+  margin: 0.25em 0;
+}
+.punch-list code {
+  font-family: var(--mono);
+  color: var(--blocker);
+}
+.state-chip.punch {
+  background: var(--y-rebar);
+  color: var(--y-navy);
+  border-color: var(--y-rebar);
+}

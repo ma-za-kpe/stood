@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { createActor } from 'xstate';
 import { z } from 'zod';
 import { create } from 'zustand';
+import refusedStamp from '../../../docs/brand/logo/stamp-refused.svg';
 import releasedStamp from '../../../docs/brand/logo/stamp-released.svg';
 import logo from '../../../docs/brand/yard/logo/yard-lockup-on-dark.svg';
 import { BoardPanel } from './BoardPanel.js';
@@ -308,6 +309,29 @@ export function App() {
                                 Simulated capture confirmed. {money(o.budgetMinor, room.data.currency)} recorded as
                                 paid.
                               </p>
+                            </div>
+                          ) : o.state === 'REWORK' || o.state === 'REFUSED' ? (
+                            <div className="stood-verdict refused">
+                              <img className="stamp" src={refusedStamp} alt="Stood / Refused" width="160" height="56" />
+                              <p>
+                                {o.state === 'REWORK'
+                                  ? `Not yet. Back to the builder for attempt ${o.attempt ?? 2}. Nothing was paid.`
+                                  : 'Refused with no attempts left. Nothing was paid.'}
+                              </p>
+                              {o.punchList && (
+                                <section className="punch-list" aria-label="Punch list from Stood">
+                                  <h4>
+                                    <span className="state-chip punch">PUNCH LIST</span>
+                                  </h4>
+                                  <ul>
+                                    {o.punchList.map((item) => (
+                                      <li key={item.field}>
+                                        <code>{item.field}</code> {item.reason}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </section>
+                              )}
                             </div>
                           ) : (
                             <>
