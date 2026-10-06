@@ -79,10 +79,11 @@ controls.onError((error) => {
 });
 controls.post('/sessions/:id', (c) => {
   const id = c.req.param('id'),
-    scenario =
-      id === 'yard-first'
-        ? scenarioDefinition({ ...fixtures.find((s) => s.id === 'code-good'), id })
-        : fixtures.find((s) => s.id === id);
+    // Yard scenarios reuse a shared Stood money flow under their own session id.
+    base = { 'yard-first': 'code-good', 'yard-rework': 'refuse-then-pass' }[id],
+    scenario = base
+      ? scenarioDefinition({ ...fixtures.find((s) => s.id === base), id })
+      : fixtures.find((s) => s.id === id);
   if (!scenario || sessions.has(id)) return c.json({ code: 'invalid_session' }, 409);
   sessions.set(id, new NetworkFlow(scenario, runtime.transport!, runtime.clock));
   return c.json({ id, simulated: true });
