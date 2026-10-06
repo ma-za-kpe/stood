@@ -299,3 +299,16 @@ it('recovers a durable submission through a new connection and serialises compet
     await restartedPool.end();
   }
 });
+it('uses Postgres full-text search over milestone names only (T-0211)', async () => {
+  const { migrateYardSearch } = await import('./events.js');
+  await migrateYardSearch(f.pool, f.owner);
+  await migrateYardSearch(f.pool, f.owner);
+  const events = new PostgresYardEvents(f.limited);
+  const { board: b, id } = await claimedFixture(events, 'search-project');
+  await b.post(id, 'two', 'trn-search', leaseBuyer, 6, 'post-2', leaseAt);
+  const hits = (await b.discoverPage('', leaseAt, 'two')).orders.filter((o) => o.projectId === id);
+  expect(hits.map((o) => o.workOrderId)).toEqual(['two']);
+  expect((await b.discoverPage('', leaseAt, 'project')).orders.filter((o) => o.projectId === id)).toHaveLength(0);
+  // Leave no open offer behind for the pagination tests.
+  await b.claim(id, 'two', leaseBuilder, 7, 'cleanup', leaseAt);
+});

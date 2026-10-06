@@ -3,6 +3,7 @@ import { handoverConfirmation, IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { streamSSE } from 'hono/streaming';
 import {
   type Board,
   type HoldProof,
@@ -47,6 +48,7 @@ export type BoardConfig = Readonly<{
   secrets?: SecretVault;
   mandates?: DraftGateway;
   nudges?: NudgeConfig;
+  boardStreamMs?: number;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<StoodProof> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
@@ -202,8 +204,32 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     simulated: true,
   });
   app.get('/yard/v1/board', async (c) =>
-    c.json({ ...(await config.board.discoverPage(c.req.query('after'), request(c).now)), simulated: true }),
+    c.json({
+      ...(await config.board.discoverPage(c.req.query('after'), request(c).now, c.req.query('q'))),
+      simulated: true,
+    }),
   );
+  // T-0211: the public Board as a live stream of open work. Public fields only; no buyer identity.
+  app.get('/yard/v1/board/events', (c) => {
+    const interval = config.boardStreamMs ?? 2000;
+    c.header('Cache-Control', 'no-store');
+    return streamSSE(c, async (stream) => {
+      let last = '';
+      let stopped = false;
+      stream.onAbort(() => {
+        stopped = true;
+      });
+      while (!stopped && !stream.aborted) {
+        const page = await config.board.discoverPage('', await config.clock());
+        const raw = JSON.stringify({ orders: page.orders, nextCursor: page.nextCursor, simulated: true });
+        if (raw !== last) {
+          await stream.writeSSE({ event: 'board.snapshot', data: raw });
+          last = raw;
+        } else await stream.writeSSE({ event: 'heartbeat', data: '{}' });
+        await stream.sleep(interval);
+      }
+    });
+  });
   app.post('/yard/v1/blueprints', async (c) => {
     const key = c.req.header('Idempotency-Key') ?? '';
     if (!/^[A-Za-z0-9:._-]{1,120}$/.test(key)) throw new YardError('INVALID');

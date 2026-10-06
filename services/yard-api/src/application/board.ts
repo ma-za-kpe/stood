@@ -601,17 +601,26 @@ export class Board {
   async discover(now: number) {
     return (await this.discoverPage('', now)).orders;
   }
-  async discoverPage(after: string = '', now: number) {
+  async discoverPage(after: string = '', now: number, query?: string) {
     if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
     if (after && !/^[A-Za-z0-9_-]{1,100}$/.test(after)) throw new YardError('INVALID');
-    const projects = await this.events.list(after);
+    const q = query?.trim();
+    if (q !== undefined && (!q || q.length > 100)) throw new YardError('INVALID');
+    const words = q?.toLowerCase().split(/\s+/) ?? [];
+    const projects = q
+      ? this.events.search
+        ? await this.events.search(q, after)
+        : (await this.events.list(after)).filter(() => true)
+      : await this.events.list(after);
     const page = projects.slice(0, 100);
     const orders = page.flatMap((s) => {
       const d = data(s.data);
       return Object.keys(d.orders).flatMap((id) => {
         const { work, order } = workOrder(d, id);
         const milestone = terms(d, order.milestone)!;
+        const tokens = milestone.name.toLowerCase().split(/[^a-z0-9]+/);
         if (
+          (q && !words.every((w) => tokens.includes(w))) ||
           order.payment ||
           order.closed ||
           work.snapshot.state !== 'POSTED' ||
