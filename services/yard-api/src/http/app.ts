@@ -14,7 +14,7 @@ export function createYardApp(
       environment: config.environment,
       capabilities: {
         board: !!config.board,
-        foreman: false,
+        foreman: !!config.board?.foreman,
         credentials: false,
         events: !!config.eventFeed || !!config.board,
         payments: false,

@@ -5,12 +5,15 @@ import { bodyLimit } from 'hono/body-limit';
 import type { Board, Operator, SettlementProof } from '../application/board.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
 import { YardError } from '../ports/events.js';
+import type { ForemanPlans } from '../ports/foreman.js';
 import { eventFeed } from './event-feed.js';
+import { foremanHttp } from './foreman-http.js';
 export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
   operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
   packages?: PackageGateway;
+  foreman?: ForemanPlans;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number, prefix = ''): boolean {
@@ -65,6 +68,7 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       return c.json({ code: 'invalid_request' }, 422);
     return c.json({ code: 'yard_unavailable' }, 503);
   });
+  if (config.foreman) foremanHttp(app, { foreman: config.foreman, request });
   const command = (c: Context) => {
     const key = c.req.header('Idempotency-Key') ?? '',
       version = Number(c.req.header('If-Match'));

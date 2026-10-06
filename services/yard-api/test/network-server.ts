@@ -1,6 +1,10 @@
 import { serve } from '@hono/node-server';
 import pg from 'pg';
 import { StoodClient } from '../../../packages/stood-sdk/src/client.js';
+import { PostgresForemanCoordinator } from '../../yard-foreman/src/adapters/db-postgres/coordinator.js';
+import { Foreman } from '../../yard-foreman/src/foreman.js';
+import { PostgresSaver } from '../../yard-foreman/test/fakes/checkpoint.js';
+import { ScriptedPlannerModel } from '../../yard-foreman/test/fakes/model.js';
 import { PostgresYardEvents } from '../src/adapters/db-postgres/events.js';
 import type { SettlementProof } from '../src/application/board.js';
 import { Board } from '../src/application/board.js';
@@ -26,6 +30,12 @@ const app = createYardApp({
   board: {
     board: new Board(new PostgresYardEvents(pool, clock)),
     clock,
+    foreman: new Foreman(
+      new ScriptedPlannerModel('ci'),
+      new PostgresSaver(pool, undefined, { schema: 'yard' }),
+      true,
+      new PostgresForemanCoordinator(pool),
+    ),
     packages: {
       submit: async (input) => {
         const now = await clock();

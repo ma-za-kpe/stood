@@ -440,3 +440,9 @@ Stopping deletes this demo's disposable volumes. It leaves the ordinary developm
 The full pre-credentials batch is still in progress. Do not add keys to the demo or switch it to live. Provider qualification and hosted authentication are separate from this synthetic composition. The credential handoff will name each provider's required scopes and the tests that need real sandbox keys. See TASKS.md, issue #41, for unfinished work.
 
 The shared mock scenarios now include a missed capture recovered by one same-ID retry after a matched fresh status lookup, plus a captured payment whose reply was lost and is reconciled without another submission. Both assert exactly one simulated capture and matching payment history. A consumed retry is not reset by restarting a service. This adds local recovery evidence; real financial HTTP remains off until funding/evidence integration and sandbox qualification are complete.
+
+### Foreman in the isolated mock network
+
+The mock composition now runs the real LangGraph planner with a scripted PlannerModel and Yard's restricted Postgres runtime role. Signed server requests create/read drafts under `/yard/v1/plans`, review under `/plans/{id}/review`, request a revised draft under `/plans/{id}/revisions`, and recover failed model work under `/plans/{id}/recover`. Review/revision requests use the current review version in If-Match; exact repeated creation preserves the original server time. Operator signatures remain on the server.
+
+Only the owning buyer can read or change a draft. ACCEPT yields READY_FOR_BASELINE and a DRAFT blueprint; it posts no work, signs no mandate and executes no payment. The result identifies its simulated provenance and states that no AI provider was called. The shared network scenario exercises creation, rejection, revision, stale-version protection and baseline wait. Clarification, the buyer intake screen and qualified baseline execution remain under construction in the pre-key batch.

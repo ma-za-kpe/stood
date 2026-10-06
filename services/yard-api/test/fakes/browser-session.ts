@@ -24,7 +24,7 @@ export function browserSession(app: Hono, clock: () => Promise<number>): void {
     const role = getCookie(c, 'yard-mock-session');
     if (role !== 'buyer' && role !== 'builder') return c.json({ code: 'unauthorized' }, 401);
     const suffix = c.req.path.slice('/app/api'.length);
-    if (!/^\/(board|blueprints)(\/|$)/.test(suffix)) return c.json({ code: 'forbidden' }, 403);
+    if (!/^\/(board|blueprints|plans)(\/|$)/.test(suffix)) return c.json({ code: 'forbidden' }, 403);
     const path = `/yard/v1${suffix}`,
       body = c.req.method === 'GET' ? '' : await c.req.text(),
       t = String(Math.floor((await clock()) / 1000));
