@@ -242,6 +242,7 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       'capMinor',
       'currency',
       'milestones',
+      'costLines',
     ]);
     return c.json(
       ack(await config.board.create({ ...input, createdAt: request(c).now } as BlueprintInput, request(c).actor, key)),
