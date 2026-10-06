@@ -1,7 +1,9 @@
 export async function api(path: string, options?: RequestInit) {
   const response = await fetch(`/app/api${path}`, {
     ...options,
-    signal: options?.signal ?? AbortSignal.timeout(20_000),
+    signal: options?.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(20_000)])
+      : AbortSignal.timeout(20_000),
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   });

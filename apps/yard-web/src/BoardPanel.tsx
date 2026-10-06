@@ -3,16 +3,27 @@ import { useRef, useState } from 'react';
 import { boardChecked, claimAck, type Offer } from './board-contract.js';
 import { ClaimKeys } from './claim-keys.js';
 import { api } from './http.js';
-export function BoardPanel({ enabled, onOpen }: { enabled: boolean; onOpen(id: string): void }) {
+export function BoardPanel({
+  enabled,
+  generation,
+  onOpen,
+}: {
+  enabled: boolean;
+  generation: number;
+  onOpen(id: string): void;
+}) {
   const client = useQueryClient(),
     [filter, setFilter] = useState('');
   const keys = useRef(new ClaimKeys());
   const board = useInfiniteQuery({
-    queryKey: ['board'],
+    queryKey: ['board', generation],
     enabled,
     initialPageParam: '',
-    queryFn: async ({ pageParam }) =>
-      boardChecked(await api(`/board${pageParam ? `?after=${encodeURIComponent(pageParam)}` : ''}`), pageParam),
+    queryFn: async ({ pageParam, signal }) =>
+      boardChecked(
+        await api(`/board${pageParam ? `?after=${encodeURIComponent(pageParam)}` : ''}`, { signal }),
+        pageParam,
+      ),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const claim = useMutation({
@@ -73,7 +84,7 @@ export function BoardPanel({ enabled, onOpen }: { enabled: boolean; onOpen(id: s
               {new Intl.NumberFormat('en', { style: 'currency', currency: o.currency }).format(o.priceMinor / 100)}
             </p>
             <p className="fine">Fixed price. No bidding. Repository access follows a scoped claim.</p>
-            <button type="button" disabled={claim.isPending} onClick={() => claim.mutate(o)}>
+            <button type="button" disabled={!enabled || claim.isPending} onClick={() => claim.mutate(o)}>
               {claim.isPending && claim.variables?.id === o.id ? 'Clocking in…' : 'Clock in →'}
             </button>
           </article>

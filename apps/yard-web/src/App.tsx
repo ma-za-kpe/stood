@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { createActor } from 'xstate';
 import { z } from 'zod';
@@ -18,12 +18,16 @@ const useUI = create<{ theme: 'dark' | 'paper'; toggle(): void }>((set) => ({
 const projectId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const money = (minor: number, currency: string) =>
   new Intl.NumberFormat('en', { style: 'currency', currency }).format(minor / 100);
-function useRoomStream(id: string, version: number, ready: boolean) {
+function useRoomStream(id: string, version: number, ready: boolean, generation: number) {
   const client = useQueryClient(),
     [connection, setConnection] = useState('disconnected');
   const [reconnect, setReconnect] = useState(0);
   useEffect(() => {
-    if (!ready || !id) return;
+    if (!ready || !id) {
+      setConnection('disconnected');
+      return;
+    }
+    const queryKey = ['room', id, generation];
     const actor = createActor(connectionMachine).start();
     const subscription = actor.subscribe((s) => setConnection(String(s.value)));
     actor.send({ type: 'CONNECT' });
@@ -32,7 +36,7 @@ function useRoomStream(id: string, version: number, ready: boolean) {
     );
     const reload = () => {
       actor.send({ type: 'GAP' });
-      void client.invalidateQueries({ queryKey: ['room', id] });
+      void client.invalidateQueries({ queryKey });
     };
     let lastReceived = performance.now();
     const touch = () => {
@@ -49,7 +53,7 @@ function useRoomStream(id: string, version: number, ready: boolean) {
         source.close();
         actor.send({ type: 'ERROR' });
         setReconnect((value) => value + 1);
-        void client.invalidateQueries({ queryKey: ['room', id] });
+        void client.invalidateQueries({ queryKey });
       }
     }, 5_000);
     source.onerror = () => actor.send({ type: 'ERROR' });
@@ -61,11 +65,11 @@ function useRoomStream(id: string, version: number, ready: boolean) {
       touch();
       try {
         const event = JSON.parse((raw as MessageEvent<string>).data) as RoomEvent;
-        const current = client.getQueryData<ProjectRoom>(['room', id]);
+        const current = client.getQueryData<ProjectRoom>(queryKey);
         if (!current) return reload();
         const next = applyEvent(current, event);
         if (next === 'GAP') reload();
-        else client.setQueryData(['room', id], next);
+        else client.setQueryData(queryKey, next);
       } catch {
         reload();
       }
@@ -90,15 +94,17 @@ function useRoomStream(id: string, version: number, ready: boolean) {
       subscription.unsubscribe();
       actor.stop();
     };
-  }, [client, id, version, ready, reconnect]);
+  }, [client, id, version, ready, reconnect, generation]);
   return connection;
 }
 export function App() {
   const client = useQueryClient();
   const [pane, setPane] = useState<'room' | 'board'>('room');
   const [selected, setSelected] = useState(new URLSearchParams(window.location.search).get('project') ?? '');
-  const [session, setSession] = useState(false),
-    [sessionError, setSessionError] = useState('');
+  const [session, setSession] = useState({ ready: false, generation: 0, switching: false });
+  const [sessionError, setSessionError] = useState('');
+  const generation = useRef(0),
+    switching = useRef(false);
   const { theme, toggle } = useUI(),
     {
       register,
@@ -107,22 +113,37 @@ export function App() {
       setError,
     } = useForm<{ id: string }>({ defaultValues: { id: selected } });
   const room = useQuery({
-    queryKey: ['room', selected],
-    enabled: session && !!selected,
-    queryFn: async () => roomChecked(await api(`/blueprints/${encodeURIComponent(selected)}/room`)),
+    queryKey: ['room', selected, session.generation],
+    enabled: session.ready && !!selected,
+    queryFn: async ({ signal }) =>
+      roomChecked(await api(`/blueprints/${encodeURIComponent(selected)}/room`, { signal })),
   });
-  const connection = useRoomStream(selected, room.data?.version ?? 0, session && !!room.data);
+  const connection = useRoomStream(selected, room.data?.version ?? 0, session.ready && !!room.data, session.generation);
   const choose = async (role: 'buyer' | 'builder') => {
-    setSession(false);
-    client.removeQueries({ queryKey: ['room'] });
-    client.removeQueries({ queryKey: ['board'] });
+    if (switching.current) return;
+    switching.current = true;
+    const nextGeneration = ++generation.current;
+    setSession({ ready: false, generation: nextGeneration, switching: true });
+    setSessionError('');
     try {
-      await api('/demo/session', { method: 'POST', body: JSON.stringify({ role }) });
-      setSession(true);
-      setSessionError('');
-      if (selected) await room.refetch();
+      await client.cancelQueries({
+        predicate: (query) => ['room', 'board', 'plans'].includes(String(query.queryKey[0])),
+      });
+      for (const key of ['room', 'board', 'plans']) client.removeQueries({ queryKey: [key] });
+      const result = await api('/demo/session', { method: 'POST', body: JSON.stringify({ role }) });
+      if (
+        !z
+          .object({ role: z.literal(role), simulated: z.literal(true) })
+          .strict()
+          .safeParse(result).success
+      )
+        throw new Error('The simulated operator could not be confirmed. Try again.');
+      setSession({ ready: true, generation: nextGeneration, switching: false });
     } catch (e) {
+      setSession({ ready: false, generation: nextGeneration, switching: false });
       setSessionError((e as Error).message);
+    } finally {
+      switching.current = false;
     }
   };
   return (
@@ -168,21 +189,25 @@ export function App() {
           <div className="operator-card">
             <fieldset>
               <legend>Demo operator</legend>
-              <button type="button" onClick={() => void choose('buyer')}>
+              <button type="button" disabled={session.switching} onClick={() => void choose('buyer')}>
                 Buyer
               </button>
-              <button type="button" onClick={() => void choose('builder')}>
+              <button type="button" disabled={session.switching} onClick={() => void choose('builder')}>
                 Builder
               </button>
             </fieldset>
             <p className="fine">Synthetic accounts only. Operator keys stay on the server.</p>
+            {session.switching && <p role="status">Switching simulated operator…</p>}
             {sessionError && <p role="alert">{sessionError}</p>}
           </div>
         </div>
         {pane === 'board' && (
           <BoardPanel
-            enabled={session}
+            key={session.generation}
+            generation={session.generation}
+            enabled={session.ready}
             onOpen={(id) => {
+              if (session.generation !== generation.current) return;
               void client.invalidateQueries({ queryKey: ['room', id] });
               setSelected(id);
               setPane('room');
@@ -200,6 +225,7 @@ export function App() {
                   return;
                 }
                 setSelected(id);
+                void client.invalidateQueries({ queryKey: ['room', id, session.generation] });
                 window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
               })}
             >
@@ -229,7 +255,7 @@ export function App() {
                 <p className="fine">This screen does not invent progress or payment.</p>
               </section>
             )}
-            {room.data && (
+            {session.ready && room.data && (
               <>
                 <section className="project-head">
                   <div>

@@ -15,6 +15,94 @@ async function accessible(page, label) {
 mkdirSync('artifacts/mock-network', { recursive: true });
 const browser = await chromium.launch({ headless: true });
 try {
+  const privacy = await browser.newContext({ viewport: { width: 1100, height: 850 }, reducedMotion: 'reduce' });
+  const privatePage = await privacy.newPage();
+  await privatePage.goto('http://web:3002/yard/app/');
+  const [sessionResponse] = await Promise.all([
+    privatePage.waitForResponse((response) => new URL(response.url()).pathname === '/app/api/demo/session'),
+    privatePage.getByRole('button', { name: 'Buyer', exact: true }).click(),
+  ]);
+  assert.equal(sessionResponse.status(), 200);
+  await sessionResponse.finished();
+  const at = Number(
+    (
+      await (
+        await fetch('http://paypal-sim:8080/__sim/time', {
+          headers: { Authorization: 'Bearer sim-access-token' },
+        })
+      ).json()
+    ).now,
+  );
+  const privateId = `privacy-${Date.now()}`;
+  const blueprint = {
+    id: privateId,
+    buyerOperatorId: 'buyer',
+    repository: 'buyer/private',
+    baseCommit: 'a'.repeat(40),
+    summary: 'Private buyer room',
+    capMinor: 2000,
+    currency: 'USD',
+    milestones: ['build', 'handover'].map((id, i) => ({
+      id,
+      name: id,
+      budgetMinor: 1000,
+      deadline: at + 7 * 86400000,
+      profileId: i ? 'code.final@1' : 'code.milestone@1',
+      testBundleHash: 'b'.repeat(64),
+      manifestHash: 'c'.repeat(64),
+      testIds: ['works'],
+    })),
+  };
+  assert.equal(
+    await privatePage.evaluate(async (input) => {
+      const response = await fetch('/app/api/blueprints', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': input.id,
+        },
+        body: JSON.stringify(input),
+      });
+      return response.status;
+    }, blueprint),
+    201,
+  );
+  let heldRequest,
+    aborted = false,
+    releaseOld;
+  let captured;
+  const ready = new Promise((resolve) => {
+    captured = resolve;
+  });
+  const release = new Promise((resolve) => {
+    releaseOld = resolve;
+  });
+  privatePage.on('requestfailed', (request) => {
+    if (request === heldRequest) aborted = true;
+  });
+  await privatePage.route(`**/app/api/blueprints/${privateId}/room`, async (route) => {
+    if (heldRequest) return route.continue();
+    heldRequest = route.request();
+    const response = await route.fetch();
+    assert.equal(response.status(), 200);
+    captured();
+    await release;
+    await route.fulfill({ response }).catch(() => {});
+  });
+  await privatePage.getByRole('textbox', { name: 'Project ID', exact: true }).fill(privateId);
+  await privatePage.getByRole('button', { name: 'Open project →', exact: true }).click();
+  await ready;
+  await privatePage.getByRole('button', { name: 'Builder', exact: true }).click();
+  await privatePage.getByRole('alert').filter({ hasText: 'does not have access' }).waitFor();
+  releaseOld();
+  await privatePage.waitForTimeout(200);
+  assert(aborted, 'operator switch must abort the previous buyer HTTP request');
+  assert.equal(
+    await privatePage.getByRole('heading', { name: 'Private buyer room', exact: true }).count(),
+    0,
+    'a delayed buyer response must never populate the builder room',
+  );
+  await privacy.close();
   for (const [name, width, height] of [
     ['desktop', 1440, 1000],
     ['mobile', 390, 844],
@@ -83,7 +171,9 @@ try {
   await nestedPage.getByRole('link', { name: 'Yard story', exact: true }).click();
   assert.equal(new URL(nestedPage.url()).pathname, '/__pages/yard/');
   await nested.close();
-  console.log('Connected mock room: desktop/mobile proof, SSE, simulation, theme and overflow checks passed.');
+  console.log(
+    'Connected mock room: operator cancellation/isolation, desktop/mobile proof, SSE, simulation, theme and overflow checks passed.',
+  );
 } catch (error) {
   for (const [index, context] of browser.contexts().entries()) {
     for (const [number, page] of context.pages().entries())
