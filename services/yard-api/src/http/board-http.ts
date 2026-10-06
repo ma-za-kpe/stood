@@ -3,7 +3,7 @@ import { IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { Board, Operator, SettlementProof } from '../application/board.js';
+import type { Board, Operator, RefusalProof, SettlementProof, StoodProof } from '../application/board.js';
 import type { IntakePlanner } from '../application/intake-planner.js';
 import type { SiteLog } from '../application/site-log.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
@@ -24,7 +24,7 @@ export type BoardConfig = Readonly<{
   foreman?: ForemanPlans;
   intakes?: IntakeStore;
   intakePlanner?: Pick<IntakePlanner, 'create'>;
-  stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
+  stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<StoodProof> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
   const match = /^t=(\d{1,12}),v1=([a-f0-9]{64})$/.exec(value ?? '');
@@ -267,30 +267,40 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     const e = input as Record<string, unknown>;
     if (
       e.simulated !== true ||
-      e.type !== 'stood.released' ||
+      (e.type !== 'stood.released' && e.type !== 'stood.refused') ||
       !['id', 'projectId', 'wo', 'trancheId', 'packageId', 'reference'].every(
         (k) => typeof e[k] === 'string' && String(e[k]).length > 0 && String(e[k]).length <= 200,
       )
     )
       throw new YardError('INVALID');
+    // The notification is only a hint: the decision comes from a fresh signed Stood read.
     const proof = await config.stood.read(String(e.trancheId));
     if (
+      !proof ||
       proof.trancheId !== e.trancheId ||
       proof.packageId !== e.packageId ||
       proof.reference !== e.reference ||
       proof.simulated !== true ||
-      proof.effect !== 'CAPTURE'
+      proof.effect !== (e.type === 'stood.released' ? 'CAPTURE' : 'VOID')
     )
       throw new YardError('INVALID');
     const snapshot = await config.board.events.load(String(e.projectId));
+    const eventId = String(e.id);
     return c.json(
       ack(
-        await config.board.settlement(
-          String(e.projectId),
-          String(e.wo),
-          { ...proof, eventId: String(e.id) },
-          snapshot.version,
-        ),
+        proof.effect === 'CAPTURE'
+          ? await config.board.settlement(
+              String(e.projectId),
+              String(e.wo),
+              { ...(proof as Omit<SettlementProof, 'eventId'>), eventId },
+              snapshot.version,
+            )
+          : await config.board.refusal(
+              String(e.projectId),
+              String(e.wo),
+              { ...(proof as Omit<RefusalProof, 'eventId'>), eventId },
+              snapshot.version,
+            ),
       ),
     );
   });

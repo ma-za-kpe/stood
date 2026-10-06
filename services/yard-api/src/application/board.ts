@@ -12,10 +12,31 @@ export type SettlementProof = Readonly<{
   currency: string;
   simulated: true;
 }>;
+export type PunchItem = Readonly<{ field: string; reason: string }>;
+export type RefusalProof = Readonly<{
+  eventId: string;
+  trancheId: string;
+  packageId: string;
+  reference: string;
+  effect: 'VOID';
+  punchList: readonly PunchItem[];
+  resubmissionsLeft: number;
+  simulated: true;
+}>;
+export type StoodProof = Omit<SettlementProof, 'eventId'> | Omit<RefusalProof, 'eventId'>;
+type Refusal = Readonly<{
+  eventId: string;
+  packageId: string;
+  reference: string;
+  punchList: readonly PunchItem[];
+  attempt: number;
+  final: boolean;
+}>;
 type Action =
   | { kind: 'claim'; id: string; actor: Operator; now: number }
   | { kind: 'build'; claim: string; now: number }
   | { kind: 'submit'; claim: string; commit: string; packageId: string; now: number }
+  | { kind: 'rework'; packageId: string; now: number }
   | { kind: 'expire'; now: number }
   | { kind: 'release'; claim: string; now: number }
   | { kind: 'repost'; now: number };
@@ -39,6 +60,9 @@ type Order = {
   actions: Action[];
   payment: SettlementProof | null;
   submissionIntent?: SubmissionIntent;
+  pastSubmissions?: SubmissionIntent[];
+  refusals?: Refusal[];
+  closed?: 'REFUSED';
 };
 type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order> };
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -98,6 +122,9 @@ function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
         work.submit(a.claim, a.commit, a.packageId, a.now);
         work.checking(a.packageId, a.now);
         break;
+      case 'rework':
+        work.rework(a.packageId, a.now);
+        break;
       case 'expire':
         work.expire(a.now);
         break;
@@ -118,6 +145,48 @@ function beforeDeadline(d: Data, milestoneId: string, now: number): void {
   const milestone = d.blueprint.milestones.find((m) => m.id === milestoneId);
   if (!milestone) throw new YardError('INVALID');
   if (now >= milestone.deadline) throw new YardError('CONFLICT');
+}
+function open(order: Order): void {
+  if (order.payment || order.closed) throw new YardError('CONFLICT');
+}
+const field = /^[a-z][a-z0-9_]{0,63}$/;
+function punchList(value: unknown): readonly PunchItem[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 20) throw new YardError('INVALID');
+  return Object.freeze(
+    value.map((item) => {
+      const i = item as Record<string, unknown>;
+      if (
+        !i ||
+        typeof i !== 'object' ||
+        Object.keys(i).sort().join() !== 'field,reason' ||
+        typeof i.field !== 'string' ||
+        !field.test(i.field) ||
+        typeof i.reason !== 'string' ||
+        !i.reason.trim() ||
+        i.reason.length > 300
+      )
+        throw new YardError('INVALID');
+      return Object.freeze({ field: i.field, reason: i.reason });
+    }),
+  );
+}
+function status(order: Order, work: WorkOrder): string {
+  if (order.payment) return 'PAID';
+  if (order.closed) return order.closed;
+  if (order.submissionIntent?.status === 'RESERVED') return 'SUBMITTING';
+  return work.snapshot.state;
+}
+function feedback(order: Order) {
+  const last = order.refusals?.at(-1);
+  return {
+    punchList: order.payment || !last ? null : last.punchList,
+    refusals: (order.refusals ?? []).map((r) => ({
+      packageId: r.packageId,
+      reference: r.reference,
+      attempt: r.attempt,
+      final: r.final,
+    })),
+  };
 }
 export class Board {
   constructor(readonly events: YardEvents) {}
@@ -160,8 +229,9 @@ export class Board {
         now < claim.claimedAt ||
         now >= claim.leasedUntil ||
         order.payment ||
+        order.closed ||
         order.submissionIntent?.status === 'RESERVED' ||
-        !['CLAIMED', 'BUILDING'].includes(work.snapshot.state)
+        !['CLAIMED', 'BUILDING', 'REWORK'].includes(work.snapshot.state)
       )
         throw new YardError('CONFLICT');
     }
@@ -181,6 +251,7 @@ export class Board {
         const milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
         if (
           order.payment ||
+          order.closed ||
           work.snapshot.state !== 'POSTED' ||
           now < d.blueprint.createdAt ||
           now >= milestone.deadline
@@ -245,7 +316,7 @@ export class Board {
     return this.mutate(id, actor, version, key, { claim: wo }, 'wo.claimed', (d) => {
       if (actor.kind !== 'BUILDER') throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);
-      if (order.payment) throw new YardError('CONFLICT');
+      open(order);
       beforeDeadline(d, order.milestone, now);
       const claimId = fingerprint({ id, wo, actor: actor.id, key });
       const claim = work.claim(
@@ -261,8 +332,9 @@ export class Board {
       const { work, order } = workOrder(d, wo);
       const claim = work.snapshot.currentClaim;
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
+      open(order);
       beforeDeadline(d, order.milestone, now);
-      work.build(claim.id, now);
+      leaseChange(() => work.build(claim.id, now));
       order.actions.push({ kind: 'build', claim: claim.id, now });
       return { wo, state: 'BUILDING', simulated: true };
     });
@@ -271,7 +343,8 @@ export class Board {
     return this.mutate(id, actor, version, key, { expire: wo }, 'wo.lease_expired', (d) => {
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);
-      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      if (order.payment || order.closed || order.submissionIntent?.status === 'RESERVED')
+        throw new YardError('CONFLICT');
       leaseChange(() => work.expire(now));
       order.actions.push({ kind: 'expire', now });
       return { wo, state: 'LEASE_EXPIRED', simulated: true };
@@ -282,7 +355,8 @@ export class Board {
       const { work, order } = workOrder(d, wo),
         claim = work.snapshot.currentClaim;
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
-      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      if (order.payment || order.closed || order.submissionIntent?.status === 'RESERVED')
+        throw new YardError('CONFLICT');
       leaseChange(() => work.release(claim.id, now));
       order.actions.push({ kind: 'release', claim: claim.id, now });
       return { wo, state: 'ABANDONED', simulated: true };
@@ -292,7 +366,8 @@ export class Board {
     return this.mutate(id, actor, version, key, { repost: wo }, 'wo.reposted', (d) => {
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);
-      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      if (order.payment || order.closed || order.submissionIntent?.status === 'RESERVED')
+        throw new YardError('CONFLICT');
       beforeDeadline(d, order.milestone, now);
       leaseChange(() => work.repost(now));
       order.actions.push({ kind: 'repost', now });
@@ -313,8 +388,9 @@ export class Board {
       const { work, order } = workOrder(d, wo);
       const claim = work.snapshot.currentClaim;
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id || order.payment) throw new YardError('FORBIDDEN');
+      open(order);
       beforeDeadline(d, order.milestone, now);
-      work.submit(claim.id, commit, packageId, now);
+      leaseChange(() => work.submit(claim.id, commit, packageId, now));
       work.checking(packageId, now);
       order.actions.push({ kind: 'submit', claim: claim.id, commit, packageId, now });
       return { wo, state: 'CHECKING', packageId, simulated: true };
@@ -325,11 +401,10 @@ export class Board {
     const { work, order } = workOrder(data(snapshot.data), wo);
     return {
       ...work.snapshot,
-      state: order.payment
-        ? 'PAID'
-        : order.submissionIntent?.status === 'RESERVED'
-          ? 'SUBMITTING'
-          : work.snapshot.state,
+      ...feedback(order),
+      attempt: work.snapshot.attempt,
+      currentClaim: order.closed ? null : work.snapshot.currentClaim,
+      state: status(order, work),
       payment: order.payment,
       projectVersion: snapshot.version,
       simulated: true,
@@ -352,11 +427,9 @@ export class Board {
           name: milestone.name,
           budgetMinor: milestone.budgetMinor,
           trancheId: order.trancheId,
-          state: order.payment
-            ? 'PAID'
-            : order.submissionIntent?.status === 'RESERVED'
-              ? 'SUBMITTING'
-              : work.snapshot.state,
+          state: status(order, work),
+          ...feedback(order),
+          attempt: work.snapshot.attempt,
           payment: order.payment,
           submission: work.snapshot.submission,
           leasedUntil: work.snapshot.currentClaim?.leasedUntil ?? null,
@@ -411,8 +484,9 @@ export class Board {
         const claim = work.snapshot.currentClaim;
         if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id || order.payment || order.submissionIntent)
           throw new YardError('FORBIDDEN');
+        open(order);
         beforeDeadline(d, order.milestone, now);
-        work.submit(claim.id, commit, 'reservation-only', now); // validate lease and commit before any HTTP
+        leaseChange(() => work.submit(claim.id, commit, 'reservation-only', now)); // validate lease and commit before any HTTP
         order.submissionIntent = {
           key,
           actor: structuredClone(actor),
@@ -509,6 +583,7 @@ export class Board {
       if (
         work.snapshot.state !== 'CHECKING' ||
         order.payment ||
+        order.closed ||
         proof.trancheId !== order.trancheId ||
         proof.packageId !== work.snapshot.submission?.packageId ||
         proof.effect !== 'CAPTURE' ||
@@ -524,6 +599,69 @@ export class Board {
         data: d,
         type: 'stood.released',
         payload: { wo, state: 'PAID', reference: proof.reference, payment: structuredClone(proof), simulated: true },
+      };
+    });
+  }
+  // Only an authenticated Stood integration calls this after a matching provider-backed VOID read.
+  // A refusal is build feedback: it never confirms or invents a payment.
+  refusal(id: string, wo: string, proof: RefusalProof, version: number) {
+    return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {
+      const d = data(raw);
+      const { work, order } = workOrder(d, wo);
+      const submission = work.snapshot.submission;
+      if (
+        work.snapshot.state !== 'CHECKING' ||
+        order.payment ||
+        order.closed ||
+        !submission ||
+        proof.trancheId !== order.trancheId ||
+        proof.packageId !== submission.packageId ||
+        proof.effect !== 'VOID' ||
+        typeof proof.reference !== 'string' ||
+        !proof.reference.trim() ||
+        proof.reference.length > 200 ||
+        typeof proof.eventId !== 'string' ||
+        !proof.eventId.trim() ||
+        !Number.isSafeInteger(proof.resubmissionsLeft) ||
+        proof.resubmissionsLeft < 0 ||
+        proof.resubmissionsLeft > 5 ||
+        proof.simulated !== true
+      )
+        throw new YardError('INVALID');
+      const items = punchList(proof.punchList);
+      const final = proof.resubmissionsLeft === 0;
+      const at = work.snapshot.lastAt;
+      order.refusals = [
+        ...(order.refusals ?? []),
+        {
+          eventId: proof.eventId,
+          packageId: proof.packageId,
+          reference: proof.reference,
+          punchList: items,
+          attempt: work.snapshot.attempt,
+          final,
+        },
+      ];
+      if (order.submissionIntent) {
+        order.pastSubmissions = [...(order.pastSubmissions ?? []), order.submissionIntent];
+        delete order.submissionIntent;
+      }
+      if (final) order.closed = 'REFUSED';
+      else {
+        work.rework(proof.packageId, at);
+        order.actions.push({ kind: 'rework', packageId: proof.packageId, now: at });
+      }
+      return {
+        data: d,
+        type: 'stood.refused',
+        payload: {
+          wo,
+          state: final ? 'REFUSED' : 'REWORK',
+          reference: proof.reference,
+          punchList: items,
+          attempt: work.snapshot.attempt,
+          simulated: true,
+        },
       };
     });
   }

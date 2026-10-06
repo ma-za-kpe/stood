@@ -72,6 +72,52 @@ it('keeps expired work unclaimable after a database reconnect without adding an 
     await connection.end();
   }
 });
+it('persists a verified refusal as rework and replays it after a reconnect (T-0189)', async () => {
+  const events = new PostgresYardEvents(f.limited);
+  const { board: initial, id } = await claimedFixture(events, 'refusal-project');
+  await initial.submit(id, 'one', 'd'.repeat(40), 'package-1', leaseBuilder, 5, 'submit-1', leaseAt + 1);
+  const refusal = {
+    eventId: 'refusal-1',
+    trancheId: 'tranche',
+    packageId: 'package-1',
+    reference: 'void-1',
+    effect: 'VOID' as const,
+    punchList: [{ field: 'weak_tests', reason: 'The tests did not catch planted bugs.' }],
+    resubmissionsLeft: 1,
+    simulated: true as const,
+  };
+  const results = await Promise.allSettled([
+    initial.refusal(id, 'one', refusal, 6),
+    initial.refusal(id, 'one', { ...refusal, eventId: 'refusal-race' }, 6),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  const connection = f.connectRuntime();
+  try {
+    const restored = new Board(new PostgresYardEvents(connection));
+    expect(await restored.view(id, 'one', leaseBuyer)).toMatchObject({
+      state: 'REWORK',
+      attempt: 2,
+      submission: null,
+      punchList: [{ field: 'weak_tests' }],
+    });
+    const history = await events.read(id, 0);
+    expect(history.at(-1)).toMatchObject({ type: 'stood.refused', actor: 'stood' });
+    expect(history.at(-1)?.payload).toMatchObject({ state: 'REWORK', attempt: 2, simulated: true });
+    await restored.build(id, 'one', leaseBuilder, 7, 'rebuild', leaseAt + 2);
+    await restored.submit(id, 'one', 'e'.repeat(40), 'package-2', leaseBuilder, 8, 'submit-2', leaseAt + 3);
+    await expect(restored.refusal(id, 'one', { ...refusal, eventId: 'stale' }, 9)).rejects.toThrow('INVALID');
+    await restored.refusal(
+      id,
+      'one',
+      { ...refusal, eventId: 'final', packageId: 'package-2', resubmissionsLeft: 0 },
+      9,
+    );
+    expect(await restored.view(id, 'one', leaseBuyer)).toMatchObject({ state: 'REFUSED', currentClaim: null });
+    expect((await restored.discoverPage('', leaseAt + 4)).orders.filter((o) => o.projectId === id)).toHaveLength(0);
+  } finally {
+    await connection.end();
+  }
+});
 it('posts frozen terms and serialises real claims using authenticated operator identities', async () => {
   await board.create(input, buyer, 'create');
   await expect(board.post('bp', 'one', 'tranche', buyer, 1, 'early', at)).rejects.toThrow();
