@@ -11,6 +11,7 @@ import { connectionMachine, staleConnection } from './connection.js';
 import { api } from './http.js';
 import { IntakePanel } from './IntakePanel.js';
 import { applyEvent, type ProjectRoom, type RoomEvent, roomChecked } from './project-state.js';
+import { SiteLogPanel } from './SiteLogPanel.js';
 
 const useUI = create<{ theme: 'dark' | 'paper'; toggle(): void }>((set) => ({
   theme: 'dark',
@@ -132,9 +133,9 @@ export function App() {
     setRole(null);
     try {
       await client.cancelQueries({
-        predicate: (query) => ['room', 'board', 'plans', 'intakes'].includes(String(query.queryKey[0])),
+        predicate: (query) => ['room', 'board', 'plans', 'intakes', 'site-log'].includes(String(query.queryKey[0])),
       });
-      for (const key of ['room', 'board', 'plans', 'intakes']) client.removeQueries({ queryKey: [key] });
+      for (const key of ['room', 'board', 'plans', 'intakes', 'site-log']) client.removeQueries({ queryKey: [key] });
       const result = await api('/demo/session', { method: 'POST', body: JSON.stringify({ role }) });
       if (
         !z
@@ -320,6 +321,12 @@ export function App() {
                               </p>
                             </>
                           )}
+                          <SiteLogPanel
+                            key={session.generation}
+                            projectId={room.data.id}
+                            workOrderId={o.id}
+                            generation={session.generation}
+                          />
                           {o.submission && <p className="commit">Commit {o.submission.commit.slice(0, 12)}</p>}
                           {o.leasedUntil && (
                             <p className="fine">

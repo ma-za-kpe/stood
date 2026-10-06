@@ -17,6 +17,7 @@ export function createYardApp(
         foreman: !!config.board?.foreman,
         intake: !!config.board?.intakes,
         credentials: false,
+        siteLog: !!config.board?.siteLog,
         events: !!config.eventFeed || !!config.board,
         payments: false,
       },

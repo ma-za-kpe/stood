@@ -462,3 +462,9 @@ The connected wizard is still being built. These routes do not sign terms, creat
 After `scripts/dev demo`, open `http://localhost:3002/yard/app/`, choose **Buyer**, then **Describe a project**. Start an intake, fill the eight choice steps and review the summary. **Let the Foreman decide** fills planning preferences; you still supply the idea, budget, repository, human sign-off and consent. Services are names only. Do not paste keys.
 
 The scripted Foreman proposes a blueprint for review and revision. Accepting a draft stops at **baseline checks required**, with no signing or payment. Keep the saved intake link to resume. If another tab changes the draft, reload its saved version before continuing. Simulation dates come from the shared demo clock. Credential intake and live providers remain disabled; this is not live AI or payment evidence.
+
+### Local Yard build log
+
+In the connected mock project room, choose **Show site log** on a milestone to read Crew progress. **Pause scrolling** keeps your place; **Follow latest** resumes following new rows. The log is private to the owning buyer or that work order's current claimed builder. Progress text is display only and cannot mark work paid.
+
+The configured mock services use real restricted Postgres storage and the pinned Gitleaks scanner for these rows. Payment, Crew and repository outcomes remain simulated. The local retention worker uses the shared simulated clock and replaces message rows older than 90 days with counts; hosted job deployment is still planned. Ordinary unconfigured Yard startup reports `siteLog: false` and refuses the log workflow.

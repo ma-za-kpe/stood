@@ -21,7 +21,14 @@ export interface CrewBoard {
   log(
     id: string,
     lease: string,
-    event: Readonly<{ seq: number; at: string; kind: string; message: string; simulated: true }>,
+    event: Readonly<{
+      seq: number;
+      at: string;
+      kind: string;
+      message: string;
+      data?: Readonly<{ sha: string }>;
+      simulated: true;
+    }>,
   ): Promise<void>;
   submit(id: string, lease: string, commit: string, idempotencyKey: string): Promise<void>;
   clockOut(id: string, lease: string): Promise<void>;

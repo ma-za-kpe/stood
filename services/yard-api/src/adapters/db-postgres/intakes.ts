@@ -93,8 +93,11 @@ function record(row: Record<string, unknown>): IntakeRecord {
 }
 export class PostgresIntakes implements IntakeStore {
   private readonly wake: PostgresYardEvents;
-  constructor(private readonly pool: pg.Pool) {
-    this.wake = new PostgresYardEvents(pool);
+  constructor(
+    private readonly pool: pg.Pool,
+    wake?: PostgresYardEvents,
+  ) {
+    this.wake = wake ?? new PostgresYardEvents(pool);
   }
   subscribe(id: string, wake: () => void) {
     return this.wake.subscribe(`intake:${id}`, wake);

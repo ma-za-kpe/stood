@@ -7,10 +7,14 @@ import { PostgresSaver } from '../../yard-foreman/test/fakes/checkpoint.js';
 import { ScriptedPlannerModel } from '../../yard-foreman/test/fakes/model.js';
 import { PostgresYardEvents } from '../src/adapters/db-postgres/events.js';
 import { PostgresIntakes } from '../src/adapters/db-postgres/intakes.js';
+import { PostgresSiteLogs } from '../src/adapters/db-postgres/site-log.js';
+import { GitleaksScanner } from '../src/adapters/log-scanner/gitleaks.js';
 import type { SettlementProof } from '../src/application/board.js';
 import { Board } from '../src/application/board.js';
 import { IntakePlanner } from '../src/application/intake-planner.js';
+import { SiteLog } from '../src/application/site-log.js';
 import { createYardApp } from '../src/http/app.js';
+import { startLogRetention } from '../src/jobs/site-log-retention.js';
 import { browserSession } from './fakes/browser-session.js';
 
 if (process.env.NETWORK_MOCK !== 'true' || process.env.APP_ENV !== 'ci') throw new Error('Mock Yard refused');
@@ -27,17 +31,25 @@ const clock = async () => {
     throw new Error('Mock clock unavailable');
   return value.now;
 };
-const intakes = new PostgresIntakes(pool);
+const events = new PostgresYardEvents(pool, clock);
+const intakes = new PostgresIntakes(pool, events);
 const foreman = new Foreman(
   new ScriptedPlannerModel('ci'),
   new PostgresSaver(pool, undefined, { schema: 'yard' }),
   true,
   new PostgresForemanCoordinator(pool),
 );
+const board = new Board(events);
+const logs = new PostgresSiteLogs(pool, events);
+const retention = startLogRetention(logs, clock, (code) => console.warn(JSON.stringify({ code })));
+await retention.run();
+const scanner = new GitleaksScanner();
+await scanner.ready();
 const app = createYardApp({
   environment: 'ci',
   board: {
-    board: new Board(new PostgresYardEvents(pool, clock)),
+    board,
+    siteLog: new SiteLog(logs, board, scanner),
     clock,
     intakes,
     foreman,
@@ -112,8 +124,9 @@ const app = createYardApp({
 browserSession(app, clock);
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: 3001 });
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
-  process.once(signal, () =>
+  process.once(signal, () => {
+    retention.stop();
     server.close(() => {
       void pool.end();
-    }),
-  );
+    });
+  });

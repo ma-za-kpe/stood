@@ -1,16 +1,22 @@
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { YardEvents } from '../ports/events.js';
 import { EventWake } from './event-wake.js';
 export type EventFeed = Readonly<{
-  store: Pick<YardEvents, 'read' | 'subscribe'> & { load(id: string): Promise<{ version: number }> };
-  route?: '/yard/v1/blueprints/:id/events' | '/yard/v1/intakes/:id/events';
+  store: Pick<YardEvents, 'read' | 'subscribe'> & {
+    load(id: string): Promise<{ version: number; retainedFrom?: number }>;
+  };
+  route?:
+    | '/yard/v1/blueprints/:id/events'
+    | '/yard/v1/intakes/:id/events'
+    | '/yard/v1/blueprints/:id/work-orders/:wo/log/events';
+  resource?(c: Context): string;
   authorize(headers: Headers, projectId: string, target: string): Promise<boolean>;
 }>;
 export function eventFeed(app: Hono, feed: EventFeed): void {
   const wake = new EventWake(feed.store);
   app.get(feed.route ?? '/yard/v1/blueprints/:id/events', async (c) => {
-    const id = c.req.param('id');
+    const id = feed.resource?.(c) ?? c.req.param('id');
     const url = new URL(c.req.url);
     const headers = new Headers(c.req.raw.headers),
       target = `${url.pathname}${url.search}`;
@@ -19,7 +25,8 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
     if (!/^\d{1,10}$/.test(raw)) return c.json({ code: 'invalid_cursor' }, 400);
     let cursor = Number(raw);
     const snapshot = await feed.store.load(id);
-    if (cursor > snapshot.version) return c.json({ code: 'snapshot_required' }, 409);
+    if (cursor > snapshot.version || cursor < (snapshot.retainedFrom ?? 1) - 1)
+      return c.json({ code: 'snapshot_required' }, 409);
     c.header('Cache-Control', 'no-store');
     return streamSSE(c, async (stream) => {
       const subscription = await wake.attach(id);
@@ -42,6 +49,14 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
         while (!stopped && !stream.aborted) {
           if (!(await access())) break;
           const generation = subscription.generation();
+          if (snapshot.retainedFrom !== undefined) {
+            const bounds = await feed.store.load(id);
+            if (!(await access())) break;
+            if (bounds.retainedFrom !== snapshot.retainedFrom) {
+              await stream.writeSSE({ event: 'snapshot.required', data: '{}' });
+              break;
+            }
+          }
           const events = await feed.store.read(id, cursor);
           if (!(await access())) break;
           if (events.length > 500 || (events[0] && events[0].seq !== cursor + 1)) {

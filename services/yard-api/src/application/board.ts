@@ -146,6 +146,26 @@ export class Board {
       throw new YardError('FORBIDDEN');
     return snapshot;
   }
+  logScope(snapshot: YardSnapshot, wo: string, actor: Operator, now: number, write: boolean): void {
+    if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
+    const d = data(snapshot.data),
+      { work, order } = workOrder(d, wo),
+      claim = work.snapshot.currentClaim;
+    if (!write && actor.kind === 'BUYER' && snapshot.owner === actor.id && d.buyerRoot === actor.root) return;
+    if (actor.kind !== 'BUILDER' || !claim || claim.builderId !== actor.id || claim.operatorRootId !== actor.root)
+      throw new YardError('FORBIDDEN');
+    if (write) {
+      beforeDeadline(d, order.milestone, now);
+      if (
+        now < claim.claimedAt ||
+        now >= claim.leasedUntil ||
+        order.payment ||
+        order.submissionIntent?.status === 'RESERVED' ||
+        !['CLAIMED', 'BUILDING'].includes(work.snapshot.state)
+      )
+        throw new YardError('CONFLICT');
+    }
+  }
   async discover(now: number) {
     return (await this.discoverPage('', now)).orders;
   }

@@ -150,3 +150,24 @@ it('closes with a value-free reauthentication event if the access check becomes 
   expect(read).not.toHaveBeenCalled();
   expect(release).toHaveBeenCalledOnce();
 });
+
+it('refreshes an open log when retention advances without a new event', async () => {
+  let loads = 0;
+  const app = createYardApp({
+    environment: 'ci',
+    eventFeed: {
+      store: {
+        load: async () => ({ version: 1, retainedFrom: ++loads === 1 ? 1 : 2 }),
+        read: async () => [],
+      },
+      authorize: async () => true,
+    },
+  });
+  const response = await app.request('/yard/v1/blueprints/p/events?since=1');
+  const reader = response.body!.getReader();
+  try {
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain('event: snapshot.required');
+  } finally {
+    await reader.cancel();
+  }
+});

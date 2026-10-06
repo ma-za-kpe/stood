@@ -119,6 +119,12 @@ const board: CrewBoard = {
     assert.equal(view.currentClaim.id, lease);
     if (view.state === 'CLAIMED' && _event.kind === 'commit')
       await yard(`${path(id)}/build`, 'POST', {}, `${id}:build`, view.projectVersion);
+    await yard(
+      `${path(id)}/log`,
+      'POST',
+      { lines: [{ kind: _event.kind, message: _event.message, ...(_event.data ? { data: _event.data } : {}) }] },
+      `${lease}:log:${_event.seq}`,
+    );
   },
   submit: async (id, lease, commit, key) => {
     const view = (await yard(path(id))) as { projectVersion: number; currentClaim: { id: string } };

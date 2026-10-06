@@ -10,7 +10,15 @@ describe('Yard shell, no payment capabilities (T-0175)', () => {
       status: 'ok',
       product: 'yard',
       environment: 'ci',
-      capabilities: { board: false, foreman: false, intake: false, credentials: false, events: false, payments: false },
+      capabilities: {
+        board: false,
+        foreman: false,
+        intake: false,
+        credentials: false,
+        siteLog: false,
+        events: false,
+        payments: false,
+      },
     });
   });
   it('fails closed for every unimplemented command with no body reflection', async () => {

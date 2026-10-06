@@ -494,3 +494,45 @@ button:disabled {
     width: 100%;
   }
 }
+.site-log {
+  margin-top: 24px;
+}
+.log-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.log-heading h4 {
+  font: 700 18px var(--mono);
+}
+.log-viewport {
+  max-height: 20rem;
+  overflow: auto;
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg);
+  border: 1px solid var(--y-steel);
+}
+.log-viewport:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+.log-viewport ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.log-viewport li {
+  border-bottom: 1px solid var(--y-steel);
+  padding: 16px 0;
+}
+.log-viewport p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.log-meta {
+  font: 12px var(--mono);
+  color: var(--text-muted);
+}

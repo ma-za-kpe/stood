@@ -5,18 +5,22 @@ import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Board, Operator, SettlementProof } from '../application/board.js';
 import type { IntakePlanner } from '../application/intake-planner.js';
+import type { SiteLog } from '../application/site-log.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
 import type { IntakeStore } from '../ports/intakes.js';
+import { SiteLogError } from '../ports/site-log.js';
 import { eventFeed } from './event-feed.js';
 import { foremanHttp } from './foreman-http.js';
 import { intakeHttp } from './intake-http.js';
+import { siteLogHttp } from './site-log-http.js';
 export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
   operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
   packages?: PackageGateway;
+  siteLog?: SiteLog;
   foreman?: ForemanPlans;
   intakes?: IntakeStore;
   intakePlanner?: Pick<IntakePlanner, 'create'>;
@@ -84,6 +88,11 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     return next();
   });
   app.onError((error, c) => {
+    if (error instanceof SiteLogError)
+      return c.json(
+        { code: error.code },
+        error.code === 'RATE_LIMITED' ? 429 : error.code === 'SCAN_UNAVAILABLE' ? 503 : 422,
+      );
     if (error instanceof IntakeError) return c.json({ code: error.code }, 422);
     if (error instanceof YardError)
       return c.json(
@@ -106,6 +115,24 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
         if (!actor || actor.kind !== 'BUYER') return false;
         try {
           return (await store.load(id)).owner === actor.id;
+        } catch {
+          return false;
+        }
+      },
+    });
+  }
+  if (config.siteLog) {
+    const log = config.siteLog;
+    siteLogHttp(app, {
+      log,
+      request,
+      authorize: async (headers, project, wo, target) => {
+        const now = await config.clock(),
+          actor = identify(headers, 'GET', target, '', now);
+        if (!actor) return false;
+        try {
+          await log.authorize(project, wo, actor, now);
+          return true;
         } catch {
           return false;
         }

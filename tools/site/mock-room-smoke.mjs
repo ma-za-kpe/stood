@@ -123,6 +123,19 @@ try {
         .then((t) => t.includes('No real payment is executed')),
     );
     await page.getByRole('status').filter({ hasText: 'Connected' }).waitFor();
+    await page.getByRole('button', { name: 'Show site log', exact: true }).click();
+    await page.getByText('Simulated build started.', { exact: true }).waitFor();
+    await page.getByText('Simulated commit submitted for checking.', { exact: true }).waitFor();
+    const logRegion = page.getByRole('region', { name: 'Build updates', exact: true });
+    assert.equal(await logRegion.locator('[aria-live]').count(), 0, 'build lines are not live announcements');
+    assert.equal(await logRegion.locator('li').count(), 2);
+    await page.getByRole('button', { name: 'Pause scrolling', exact: true }).click();
+    assert.equal(
+      await page.getByRole('button', { name: 'Follow latest', exact: true }).getAttribute('aria-pressed'),
+      'true',
+    );
+    await page.getByRole('button', { name: 'Follow latest', exact: true }).click();
+
     await accessible(page, `${name} dark room`);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
     assert(
@@ -157,6 +170,38 @@ try {
       await page.locator('.state-chip').filter({ hasText: 'CLAIMED' }).waitFor();
       assert.equal(await page.getByAltText('Stood / Released').count(), 0);
       assert.equal(await page.locator('.stood-verdict').count(), 0);
+      let logReads = 0;
+      page.on('request', (request) => {
+        if (
+          request.method() === 'GET' &&
+          new URL(request.url()).pathname === '/app/api/blueprints/yard-lease/work-orders/build/log'
+        )
+          logReads++;
+      });
+      await page.getByRole('button', { name: 'Show site log', exact: true }).click();
+      await page.getByText('No retained build updates yet.', { exact: true }).waitFor();
+      const liveLog = page.getByRole('region', { name: 'Build updates', exact: true });
+      await liveLog.focus();
+      assert.equal(
+        await page.evaluate(async () => {
+          const response = await fetch('/app/api/blueprints/yard-lease/work-orders/build/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'browser-live-log' },
+            body: JSON.stringify({ lines: [{ kind: 'note', message: 'Builder update arrived over the stream.' }] }),
+          });
+          return response.status;
+        }),
+        201,
+      );
+      await page.getByText('Builder update arrived over the stream.', { exact: true }).waitFor();
+      assert.equal(logReads, 1, 'a consecutive log event updates the cache without a snapshot reload');
+      assert(
+        await liveLog.evaluate((element) => element === document.activeElement),
+        'live updates preserve keyboard focus',
+      );
+      assert.equal(await page.locator('.state-chip').innerText(), 'CLAIMED', 'progress cannot change money state');
+      assert.equal(await page.locator('.stood-verdict').count(), 0);
+      await accessible(page, 'live builder log accessibility');
     } else {
       await page.screenshot({ path: 'artifacts/mock-network/yard-board-mobile.png', fullPage: true });
     }
