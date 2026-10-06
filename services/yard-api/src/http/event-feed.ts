@@ -12,8 +12,9 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
   app.get(feed.route ?? '/yard/v1/blueprints/:id/events', async (c) => {
     const id = c.req.param('id');
     const url = new URL(c.req.url);
-    if (!(await feed.authorize(c.req.raw.headers, id, `${url.pathname}${url.search}`)))
-      return c.json({ code: 'unauthorized' }, 401);
+    const headers = new Headers(c.req.raw.headers),
+      target = `${url.pathname}${url.search}`;
+    if (!(await feed.authorize(headers, id, target))) return c.json({ code: 'unauthorized' }, 401);
     const raw = c.req.header('Last-Event-ID') ?? c.req.query('since') ?? '0';
     if (!/^\d{1,10}$/.test(raw)) return c.json({ code: 'invalid_cursor' }, 400);
     let cursor = Number(raw);
@@ -27,15 +28,31 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
         stopped = true;
         subscription.close();
       });
+      const access = async () => {
+        let allowed = false;
+        try {
+          allowed = await feed.authorize(headers, id, target);
+        } catch {
+          allowed = false;
+        }
+        if (!allowed) await stream.writeSSE({ event: 'authorization.required', data: '{}' });
+        return allowed;
+      };
       try {
         while (!stopped && !stream.aborted) {
+          if (!(await access())) break;
           const generation = subscription.generation();
           const events = await feed.store.read(id, cursor);
+          if (!(await access())) break;
           if (events.length > 500 || (events[0] && events[0].seq !== cursor + 1)) {
             await stream.writeSSE({ event: 'snapshot.required', data: JSON.stringify({ code: 'snapshot_required' }) });
             break;
           }
           for (const event of events) {
+            if (!(await access())) {
+              stopped = true;
+              break;
+            }
             if (event.seq !== cursor + 1) {
               stopped = true;
               await stream.writeSSE({ event: 'snapshot.required', data: '{}' });
@@ -44,6 +61,7 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
             await stream.writeSSE({ id: String(event.seq), event: event.type, data: JSON.stringify(event) });
             cursor = event.seq;
           }
+          if (stopped || stream.aborted) break;
           await stream.write(': hb\n\n');
           await stream.writeSSE({ event: 'heartbeat', data: JSON.stringify({ seq: cursor }) });
           if (!stopped && !stream.aborted) await subscription.wait(generation);
