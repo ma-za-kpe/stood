@@ -236,6 +236,14 @@ export class Board {
         throw new YardError('CONFLICT');
     }
   }
+  // Step 9 keys: only the owning buyer, and only after the blueprint terms are signed (frozen).
+  async secretScope(id: string, actor: Operator): Promise<void> {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    if (actor.kind !== 'BUYER' || snapshot.owner !== actor.id || d.buyerRoot !== actor.root)
+      throw new YardError('FORBIDDEN');
+    if (d.blueprint.status !== 'FROZEN') throw new YardError('CONFLICT');
+  }
   async discover(now: number) {
     return (await this.discoverPage('', now)).orders;
   }
