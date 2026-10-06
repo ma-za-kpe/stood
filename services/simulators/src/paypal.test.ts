@@ -8,6 +8,53 @@ const headers = {
   'PayPal-Request-Id': 'fixture-request',
 };
 describe('PayPal HTTP simulator protocol', () => {
+  it('preserves Vault customer correlation and requires the approved customer when creating a token', async () => {
+    const sim = createPayPalSimulator({ environment: 'ci', clock: () => 0 });
+    const setup = await (
+      await sim.app.request('/v3/vault/setup-tokens', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          customer: { merchant_customer_id: 'signed-terms-reference' },
+          payment_source: { paypal: {} },
+        }),
+      })
+    ).json();
+    expect(setup.customer).toMatchObject({ merchant_customer_id: 'signed-terms-reference' });
+    expect(setup.customer.id).toMatch(/^SIM/);
+    sim.approveSetup(setup.id);
+    const approved = await (await sim.app.request(`/v3/vault/setup-tokens/${setup.id}`, { headers })).json();
+    expect(approved.payment_source.paypal.payer_id).toMatch(/^SIM/);
+    const create = (customer: unknown, key: string) =>
+      sim.app.request('/v3/vault/payment-tokens', {
+        method: 'POST',
+        headers: { ...headers, 'PayPal-Request-Id': key },
+        body: JSON.stringify({
+          customer,
+          payment_source: { token: { id: setup.id, type: 'SETUP_TOKEN' } },
+        }),
+      });
+    expect((await create({ id: 'another', merchant_customer_id: 'signed-terms-reference' }, 'wrong')).status).toBe(422);
+    const token = await (await create(setup.customer, 'right')).json();
+    expect(token.customer).toEqual(setup.customer);
+    expect(token.payment_source.paypal.payer_id).toBe(approved.payment_source.paypal.payer_id);
+    expect((await create(setup.customer, 'another-token')).status).toBe(422);
+  });
+  it('expires Vault request-ID replay after three hours rather than promising unlimited idempotency', async () => {
+    let time = 0;
+    const sim = createPayPalSimulator({ environment: 'ci', clock: () => time });
+    const create = () =>
+      sim.app.request('/v3/vault/setup-tokens', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ payment_source: { paypal: {} } }),
+      });
+    const first = await (await create()).json();
+    time = 3 * 3600000 - 1;
+    expect(await (await create()).json()).toEqual(first);
+    time += 1;
+    expect((await (await create()).json()).id).not.toBe(first.id);
+  });
   it('preserves the explicit funding operation and merchant identity through create, approval and authorization', async () => {
     const sim = createPayPalSimulator({ environment: 'ci', clock: () => Date.parse('2026-10-06T00:00:00Z') });
     const response = await sim.app.request('/v2/checkout/orders', {
