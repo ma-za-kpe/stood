@@ -8,6 +8,7 @@ import refusedStamp from '../../../docs/brand/logo/stamp-refused.svg';
 import releasedStamp from '../../../docs/brand/logo/stamp-released.svg';
 import logo from '../../../docs/brand/yard/logo/yard-lockup-on-dark.svg';
 import { BoardPanel } from './BoardPanel.js';
+import { leaseRemaining } from './board-ui.js';
 import { connectionMachine, staleConnection } from './connection.js';
 import { HandoverPanel } from './HandoverPanel.js';
 import { api } from './http.js';
@@ -368,9 +369,16 @@ export function App() {
                             generation={session.generation}
                           />
                           {o.submission && <p className="commit">Commit {o.submission.commit.slice(0, 12)}</p>}
-                          {o.leasedUntil && (
+                          {o.leasedUntil && o.state !== 'PAID' && (
                             <p className="fine">
-                              Lease ends {new Date(o.leasedUntil).toISOString().replace('T', ' ').slice(0, 16)} UTC
+                              {leaseRemaining(o.leasedUntil, room.data.clock ?? Date.now())} (ends{' '}
+                              {new Date(o.leasedUntil).toISOString().replace('T', ' ').slice(0, 16)} UTC)
+                            </p>
+                          )}
+                          {o.tests && (
+                            <p className="fine">
+                              Signed tests (read-only): {o.tests.ids.join(', ')} · bundle{' '}
+                              <code>{o.tests.bundleHash.slice(0, 12)}</code>
                             </p>
                           )}
                         </div>

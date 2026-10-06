@@ -659,3 +659,17 @@ T-0207 fix evidence: the browser check found the handover panel offering to clos
 T-0201/T-0204 evidence: the connected-room smoke stores a test key through the browser (listed by name, cleared, never rendered), refuses a live key, keeps handover blocked with the unpaid reason, opens the reworked project (paid after one Stood refusal) and runs WCAG A/AA axe scans over each. Explicit `htmlFor` labels fixed an unnamed provider select. All 14 network scenarios and browser checks pass.
 
 T-0205 (remaining Board screen work) moves to the next batch.
+
+## Batch 5 (issue #49): money-flow joins and Board screens (2026-10-06)
+
+T-0187 evidence: `StoodClient.getTranche` parses Stood's public tranche view strictly (contract-tested against the real router). Building now requires a hold for the current attempt confirmed by a signed `stood.held` plus a fresh read showing HELD with a future expiry; a refused attempt's hold never carries over. 25 existing tests failed first under the new gate and were updated to deliver holds the way Stood would; a new HTTP test covers forged, mismatched, expired and replayed holds. (The SDK-only slice failed the full commit gate alone and landed together with the gate in one commit.)
+
+T-0184 evidence: three red-first tests plus a network scenario. The signed blueprint becomes a real Stood allowance draft: the exact request (frozen test hashes, final-only profile, bounded window) is reserved before the call, a lost reply recovers with the same key, mismatched drafts are rejected, and posting then uses Stood's tranche and refuses any other.
+
+T-0212 evidence: change orders for unposted milestones keep the signed snapshot immutable and the cap fixed, need explicit buyer approval, feed every term lookup and a later mandate, and block posting milestones whose Stood allowance needs amending (amendment API is T-0156).
+
+T-0209 evidence: at most two active claims per builder operator root across projects (replays and clock-outs behave), rotating operator keys with `notAfter`, and payee references limited to PayPal email or payer id.
+
+T-0190 evidence: reputation counts only Stood-paid milestones for buyers outside the builder's operator tree; self-dealing and refusals are reported separately. Only the owning buyer records usage, once, on the final milestone; forwarding to Stood is T-0166.
+
+T-0205 evidence: keyboard movement across Board cards, due dates, a server-clock lease countdown and read-only signed tests, covered by unit and connected-browser checks. All 15 network scenarios pass.

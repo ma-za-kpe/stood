@@ -23,7 +23,14 @@ export type RefusalProof = Readonly<{
   resubmissionsLeft: number;
   simulated: true;
 }>;
-export type StoodProof = Omit<SettlementProof, 'eventId'> | Omit<RefusalProof, 'eventId'>;
+export type HoldProof = Readonly<{
+  eventId: string;
+  trancheId: string;
+  effect: 'HOLD';
+  expiresAt: number;
+  simulated: true;
+}>;
+export type StoodProof = Omit<SettlementProof, 'eventId'> | Omit<RefusalProof, 'eventId'> | Omit<HoldProof, 'eventId'>;
 type Refusal = Readonly<{
   eventId: string;
   packageId: string;
@@ -63,9 +70,57 @@ type Order = {
   pastSubmissions?: SubmissionIntent[];
   refusals?: Refusal[];
   closed?: 'REFUSED';
+  holds?: { attempt: number; expiresAt: number; eventId: string }[];
+  usage?: { confirmedAt: number };
+};
+export type MandateRequest = Readonly<{
+  payee_ref: string;
+  cap: Readonly<{ minor: number; currency: string }>;
+  milestones: readonly Readonly<{
+    name: string;
+    amount: Readonly<{ minor: number; currency: string }>;
+    profile: string;
+    params: Readonly<{ testBundleHash: string; manifestHash: string; testIds: readonly string[] }>;
+  }>[];
+  window_days: number;
+  max_resubmits: number;
+}>;
+export type MandateIntent = Readonly<{
+  key: string;
+  request: MandateRequest;
+  reservedVersion: number;
+  status: 'RESERVED' | 'CREATED';
+  allowanceId: string | null;
+  tranches: Readonly<Record<string, string>> | null;
+}>;
+export type MilestoneChange = Readonly<{ milestoneId: string; name: string; budgetMinor: number; deadline: number }>;
+type ChangeOrder = {
+  id: string;
+  status: 'PROPOSED' | 'APPROVED';
+  changes: MilestoneChange[];
+  proposedAt: number;
 };
 type Handover = { status: 'CLOSED'; closedAt: number; confirmed: readonly string[] };
-type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order>; handover?: Handover };
+type Data = {
+  blueprint: Blueprint['snapshot'];
+  buyerRoot: string;
+  orders: Record<string, Order>;
+  handover?: Handover;
+  mandate?: MandateIntent & { amendmentRequired?: string[] };
+  changes?: ChangeOrder[];
+};
+// Effective milestone terms: the immutable signed milestone with approved change orders applied in order.
+function terms(d: Data, milestoneId: string) {
+  const base = d.blueprint.milestones.find((m) => m.id === milestoneId);
+  if (!base) return undefined;
+  let effective = { ...base };
+  for (const order of d.changes ?? [])
+    if (order.status === 'APPROVED')
+      for (const c of order.changes)
+        if (c.milestoneId === milestoneId)
+          effective = { ...effective, name: c.name, budgetMinor: c.budgetMinor, deadline: c.deadline };
+  return effective;
+}
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -143,7 +198,7 @@ function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
 }
 function beforeDeadline(d: Data, milestoneId: string, now: number): void {
   if (!Number.isSafeInteger(now) || now < d.blueprint.createdAt) throw new YardError('INVALID');
-  const milestone = d.blueprint.milestones.find((m) => m.id === milestoneId);
+  const milestone = terms(d, milestoneId);
   if (!milestone) throw new YardError('INVALID');
   if (now >= milestone.deadline) throw new YardError('CONFLICT');
 }
@@ -171,6 +226,10 @@ function punchList(value: unknown): readonly PunchItem[] {
     }),
   );
 }
+// The confirmed Stood hold for the work order's current attempt, if any. Never a payment.
+function currentHold(order: Order, work: WorkOrder) {
+  return order.holds?.find((h) => h.attempt === work.snapshot.attempt) ?? null;
+}
 function status(order: Order, work: WorkOrder): string {
   if (order.payment) return 'PAID';
   if (order.closed) return order.closed;
@@ -191,6 +250,7 @@ function feedback(order: Order) {
 }
 const BUILDER_EVENTS = new Set([
   'wo.claimed',
+  'stood.held',
   'wo.building',
   'submission.reserved',
   'wo.submitted',
@@ -199,8 +259,33 @@ const BUILDER_EVENTS = new Set([
   'stood.released',
   'stood.refused',
 ]);
+// Y13: one operator root cannot squat the Board. Checked before claiming; replays are unaffected.
+export const MAX_ACTIVE_CLAIMS = 2;
 export class Board {
-  constructor(readonly events: YardEvents) {}
+  constructor(
+    readonly events: YardEvents,
+    private readonly limits: Readonly<{ maxActiveClaims: number }> = { maxActiveClaims: MAX_ACTIVE_CLAIMS },
+  ) {}
+  // Active, unexpired leases held by an operator root across every project (paged).
+  async activeClaims(root: string, now: number, except?: Readonly<{ id: string; wo: string }>): Promise<number> {
+    let count = 0;
+    let after = '';
+    do {
+      const projects = await this.events.list(after);
+      const page = projects.slice(0, 100);
+      for (const p of page) {
+        const d = data(p.data);
+        for (const wo of Object.keys(d.orders)) {
+          if (except && p.id === except.id && wo === except.wo) continue;
+          const { work, order } = workOrder(d, wo);
+          const claim = work.snapshot.currentClaim;
+          if (claim?.operatorRootId === root && now < claim.leasedUntil && !order.payment && !order.closed) count++;
+        }
+      }
+      after = projects.length > 100 ? (page.at(-1)?.id ?? '') : '';
+    } while (after);
+    return count;
+  }
   async create(input: BlueprintInput, actor: Operator, key: string): Promise<YardSnapshot> {
     if (actor.kind !== 'BUYER' || input.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
     if (
@@ -294,6 +379,198 @@ export class Board {
         throw new YardError('CONFLICT');
     }
   }
+  // Y13: reputation counts only Stood-paid milestones for buyers outside the builder's operator tree.
+  async reputation(root: string) {
+    const result = { root, counted: 0, selfDealing: 0, refusals: 0 };
+    let after = '';
+    do {
+      const projects = await this.events.list(after);
+      const page = projects.slice(0, 100);
+      for (const p of page) {
+        const d = data(p.data);
+        for (const wo of Object.keys(d.orders)) {
+          const { work, order } = workOrder(d, wo);
+          const claim = work.snapshot.currentClaim;
+          if (!claim || claim.operatorRootId !== root) continue;
+          result.refusals += order.refusals?.length ?? 0;
+          if (order.payment) {
+            if (claim.outsideOperator) result.counted++;
+            else result.selfDealing++;
+          }
+        }
+      }
+      after = projects.length > 100 ? (page.at(-1)?.id ?? '') : '';
+    } while (after);
+    return result;
+  }
+  // The buyer, an outside authority, confirms use of the delivered product for the final milestone.
+  confirmUsage(id: string, actor: Operator, version: number, key: string, now: number, wo: string) {
+    return this.mutate(id, actor, version, key, { usage: wo }, 'usage.confirmed', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      const { order } = workOrder(d, wo);
+      if (terms(d, order.milestone)?.profileId !== 'code.final@1' || !Number.isSafeInteger(now))
+        throw new YardError('INVALID');
+      if (order.usage || order.closed) throw new YardError('CONFLICT');
+      order.usage = { confirmedAt: now };
+      return { wo, confirmedAt: now, simulated: true };
+    });
+  }
+  // T-0212: a change order proposes new terms for unposted milestones; the signed snapshot never changes.
+  proposeChange(
+    id: string,
+    actor: Operator,
+    version: number,
+    key: string,
+    now: number,
+    changes: readonly MilestoneChange[],
+  ) {
+    return this.mutate(id, actor, version, key, { changes }, 'blueprint.change_proposed', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      if (d.blueprint.status !== 'FROZEN' || d.handover || d.changes?.some((c) => c.status === 'PROPOSED'))
+        throw new YardError('CONFLICT');
+      if (!Array.isArray(changes) || changes.length < 1 || changes.length > d.blueprint.milestones.length)
+        throw new YardError('INVALID');
+      const ids = changes.map((c) => c?.milestoneId);
+      if (new Set(ids).size !== ids.length) throw new YardError('INVALID');
+      let before = 0;
+      let after = 0;
+      for (const c of changes) {
+        const current = typeof c?.milestoneId === 'string' ? terms(d, c.milestoneId) : undefined;
+        if (
+          !current ||
+          Object.keys(c).sort().join() !== 'budgetMinor,deadline,milestoneId,name' ||
+          typeof c.name !== 'string' ||
+          !c.name.trim() ||
+          c.name.length > 200 ||
+          !Number.isSafeInteger(c.budgetMinor) ||
+          c.budgetMinor < 1 ||
+          !Number.isSafeInteger(c.deadline) ||
+          c.deadline <= now ||
+          c.deadline <= d.blueprint.createdAt
+        )
+          throw new YardError('INVALID');
+        if (Object.hasOwn(d.orders, c.milestoneId)) throw new YardError('CONFLICT');
+        before += current.budgetMinor;
+        after += c.budgetMinor;
+      }
+      // The signed cap never moves: changed milestones keep their combined budget.
+      if (before !== after) throw new YardError('INVALID');
+      const changeId = `change-${(d.changes?.length ?? 0) + 1}`;
+      d.changes = [
+        ...(d.changes ?? []),
+        { id: changeId, status: 'PROPOSED', changes: structuredClone([...changes]), proposedAt: now },
+      ];
+      return { changeId, milestones: ids, simulated: true };
+    });
+  }
+  approveChange(id: string, actor: Operator, version: number, key: string, changeId: string) {
+    return this.mutate(id, actor, version, key, { approve: changeId }, 'blueprint.change_approved', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      const order = d.changes?.find((c) => c.id === changeId);
+      if (!order || order.status !== 'PROPOSED' || order.changes.some((c) => Object.hasOwn(d.orders, c.milestoneId)))
+        throw new YardError('CONFLICT');
+      order.status = 'APPROVED';
+      const changed = order.changes.map((c) => c.milestoneId);
+      if (d.mandate?.status === 'CREATED')
+        d.mandate.amendmentRequired = [...new Set([...(d.mandate.amendmentRequired ?? []), ...changed])];
+      return { changeId, milestones: changed, amendmentRequired: d.mandate?.status === 'CREATED', simulated: true };
+    });
+  }
+  // T-0184: reserve the exact allowance request derived from the frozen terms before any Stood call.
+  async prepareMandate(id: string, actor: Operator, version: number, key: string, now: number): Promise<MandateIntent> {
+    const current = await this.events.load(id);
+    const existing = data(current.data).mandate;
+    if (existing) {
+      if (existing.key !== `yard-mandate:${fingerprint({ id, actor, key })}`) throw new YardError('CONFLICT');
+      return structuredClone(existing);
+    }
+    const snapshot = await this.mutate(
+      id,
+      actor,
+      version,
+      `mandate-reserve:${key}`,
+      { key },
+      'stood.allowance_reserved',
+      (d) => {
+        if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+          throw new YardError('FORBIDDEN');
+        if (d.blueprint.status !== 'FROZEN' || d.mandate || !Number.isSafeInteger(now) || now < d.blueprint.createdAt)
+          throw new YardError('CONFLICT');
+        const effective = d.blueprint.milestones.map((m) => terms(d, m.id) ?? m);
+        const latest = Math.max(...effective.map((m) => m.deadline));
+        const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
+        const request: MandateRequest = {
+          payee_ref: `yard:${id}`,
+          cap: { minor: d.blueprint.capMinor, currency: d.blueprint.currency },
+          milestones: effective.map((m) => ({
+            name: m.name,
+            amount: { minor: m.budgetMinor, currency: d.blueprint.currency },
+            profile: m.profileId,
+            params: { testBundleHash: m.testBundleHash, manifestHash: m.manifestHash, testIds: [...m.testIds] },
+          })),
+          window_days: days,
+          max_resubmits: 1,
+        };
+        d.mandate = {
+          key: `yard-mandate:${fingerprint({ id, actor, key })}`,
+          request,
+          reservedVersion: version + 1,
+          status: 'RESERVED',
+          allowanceId: null,
+          tranches: null,
+        };
+        return { state: 'RESERVED', simulated: true };
+      },
+    );
+    return structuredClone(data(snapshot.data).mandate as MandateIntent);
+  }
+  completeMandate(
+    id: string,
+    intent: MandateIntent,
+    draft: Readonly<{ id: string; tranches: readonly Readonly<{ id: string; name: string }>[] }>,
+  ) {
+    return this.events.mutate(
+      id,
+      intent.reservedVersion,
+      'stood',
+      `mandate-complete:${intent.key}`,
+      fingerprint({ draft }),
+      (raw) => {
+        const d = data(raw);
+        if (
+          !same(d.mandate, intent) ||
+          typeof draft.id !== 'string' ||
+          !draft.id.trim() ||
+          draft.tranches.length !== intent.request.milestones.length ||
+          draft.tranches.some((t, i) => !t.id?.trim() || t.name !== intent.request.milestones[i]?.name)
+        )
+          throw new YardError('INVALID');
+        const tranches = Object.fromEntries(
+          d.blueprint.milestones.map((m, i) => [m.id, draft.tranches[i]?.id as string]),
+        );
+        d.mandate = { ...intent, status: 'CREATED', allowanceId: draft.id, tranches };
+        return {
+          data: d,
+          type: 'stood.allowance_created',
+          payload: { allowanceId: draft.id, milestones: Object.keys(tranches), simulated: true },
+        };
+      },
+    );
+  }
+  async pendingMandates(after = '') {
+    const projects = await this.events.list(after),
+      page = projects.slice(0, 100);
+    return {
+      mandates: page.flatMap((p) => {
+        const m = data(p.data).mandate;
+        return m?.status === 'RESERVED' ? [{ projectId: p.id, intent: structuredClone(m) }] : [];
+      }),
+      nextCursor: projects.length > 100 ? (page.at(-1)?.id ?? null) : null,
+    };
+  }
   // Y20 §5: the buyer confirms their rotation items once every milestone is paid. This closes the
   // project; it never changes or waits for a Stood money decision.
   closeHandover(id: string, actor: Operator, version: number, key: string, now: number, confirmed: readonly string[]) {
@@ -331,7 +608,7 @@ export class Board {
       const d = data(s.data);
       return Object.keys(d.orders).flatMap((id) => {
         const { work, order } = workOrder(d, id);
-        const milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+        const milestone = terms(d, order.milestone)!;
         if (
           order.payment ||
           order.closed ||
@@ -347,6 +624,7 @@ export class Board {
             workOrderId: id,
             name: milestone.name,
             priceMinor: milestone.budgetMinor,
+            deadline: milestone.deadline,
             currency: d.blueprint.currency,
             profile: milestone.profileId,
             version: s.version,
@@ -379,8 +657,22 @@ export class Board {
       return { id, simulated: true, authority: 'local-terms-only' };
     });
   }
-  post(id: string, milestone: string, trancheId: string, actor: Operator, version: number, key: string, now: number) {
-    return this.mutate(id, actor, version, key, { post: milestone, trancheId }, 'wo.posted', (d) => {
+  post(
+    id: string,
+    milestone: string,
+    requested: string | undefined,
+    actor: Operator,
+    version: number,
+    key: string,
+    now: number,
+  ) {
+    return this.mutate(id, actor, version, key, { post: milestone, trancheId: requested ?? null }, 'wo.posted', (d) => {
+      // Once Stood has created the allowance, its tranche is the only one this milestone can use.
+      const mapped = d.mandate?.status === 'CREATED' ? d.mandate.tranches?.[milestone] : undefined;
+      if (mapped && requested !== undefined && requested !== mapped) throw new YardError('INVALID');
+      const trancheId = mapped ?? requested ?? '';
+      // A change approved after the Stood allowance exists needs a Stood amendment first.
+      if (d.mandate?.amendmentRequired?.includes(milestone)) throw new YardError('CONFLICT');
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
       if (
         d.blueprint.status !== 'FROZEN' ||
@@ -395,7 +687,17 @@ export class Board {
       return { wo: milestone, state: 'POSTED', simulated: true };
     });
   }
-  claim(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+  async claim(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    const current = await this.events.load(id);
+    const existing = Object.hasOwn(data(current.data).orders, wo)
+      ? workOrder(data(current.data), wo).work.snapshot.currentClaim
+      : null;
+    // A replay of this builder's own claim is not a new claim; anything else counts against the cap.
+    if (
+      existing?.builderId !== actor.id &&
+      (await this.activeClaims(actor.root, now, { id, wo })) >= this.limits.maxActiveClaims
+    )
+      throw new YardError('CONFLICT');
     return this.mutate(id, actor, version, key, { claim: wo }, 'wo.claimed', (d) => {
       if (actor.kind !== 'BUILDER') throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);
@@ -417,6 +719,9 @@ export class Board {
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
       open(order);
       beforeDeadline(d, order.milestone, now);
+      // Work starts only against a confirmed, unexpired Stood hold for this attempt.
+      const hold = currentHold(order, work);
+      if (!hold || now >= hold.expiresAt) throw new YardError('CONFLICT');
       leaseChange(() => work.build(claim.id, now));
       order.actions.push({ kind: 'build', claim: claim.id, now });
       return { wo, state: 'BUILDING', simulated: true };
@@ -486,6 +791,8 @@ export class Board {
       ...work.snapshot,
       ...feedback(order),
       attempt: work.snapshot.attempt,
+      hold: currentHold(order, work) ? { expiresAt: currentHold(order, work)?.expiresAt } : null,
+      usage: order.usage ?? null,
       currentClaim: order.closed ? null : work.snapshot.currentClaim,
       state: status(order, work),
       payment: order.payment,
@@ -493,13 +800,26 @@ export class Board {
       simulated: true,
     };
   }
-  async room(id: string, actor: Operator) {
+  async room(id: string, actor: Operator, now?: number) {
     const snapshot = await this.read(id, actor),
       d = data(snapshot.data);
     return {
       id: snapshot.id,
       version: snapshot.version,
       handover: d.handover ?? null,
+      ...(now === undefined ? {} : { clock: now }),
+      mandate: d.mandate?.allowanceId
+        ? {
+            allowanceId: d.mandate.allowanceId,
+            status: 'DRAFT',
+            ...(d.mandate.amendmentRequired?.length ? { amendmentRequired: [...d.mandate.amendmentRequired] } : {}),
+          }
+        : null,
+      changes: (d.changes ?? []).map((c) => ({
+        id: c.id,
+        status: c.status,
+        milestones: c.changes.map((x) => x.milestoneId),
+      })),
       signed: d.blueprint.status === 'FROZEN',
       milestoneCount: d.blueprint.milestones.length,
       summary: d.blueprint.summary,
@@ -507,7 +827,7 @@ export class Board {
       simulated: true,
       orders: Object.keys(d.orders).map((wo) => {
         const { work, order } = workOrder(d, wo),
-          milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+          milestone = terms(d, order.milestone)!;
         return {
           id: wo,
           name: milestone.name,
@@ -516,6 +836,9 @@ export class Board {
           state: status(order, work),
           ...feedback(order),
           attempt: work.snapshot.attempt,
+          held: !!currentHold(order, work),
+          // Signed acceptance tests are read-only: identity and bundle hash, never editable.
+          tests: { ids: [...milestone.testIds], bundleHash: milestone.testBundleHash },
           payment: order.payment,
           submission: work.snapshot.submission,
           leasedUntil: work.snapshot.currentClaim?.leasedUntil ?? null,
@@ -665,7 +988,7 @@ export class Board {
     return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {
       const d = data(raw);
       const { work, order } = workOrder(d, wo);
-      const m = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+      const m = terms(d, order.milestone)!;
       if (
         work.snapshot.state !== 'CHECKING' ||
         order.payment ||
@@ -685,6 +1008,37 @@ export class Board {
         data: d,
         type: 'stood.released',
         payload: { wo, state: 'PAID', reference: proof.reference, payment: structuredClone(proof), simulated: true },
+      };
+    });
+  }
+  // Only an authenticated Stood integration calls this after a matching read shows the tranche HELD.
+  holdConfirmed(id: string, wo: string, proof: HoldProof, version: number) {
+    return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {
+      const d = data(raw);
+      const { work, order } = workOrder(d, wo);
+      if (
+        order.payment ||
+        order.closed ||
+        !work.snapshot.currentClaim ||
+        !['CLAIMED', 'REWORK'].includes(work.snapshot.state) ||
+        currentHold(order, work) ||
+        proof.trancheId !== order.trancheId ||
+        proof.effect !== 'HOLD' ||
+        !Number.isSafeInteger(proof.expiresAt) ||
+        proof.expiresAt <= work.snapshot.lastAt ||
+        typeof proof.eventId !== 'string' ||
+        !proof.eventId.trim() ||
+        proof.simulated !== true
+      )
+        throw new YardError('INVALID');
+      order.holds = [
+        ...(order.holds ?? []),
+        { attempt: work.snapshot.attempt, expiresAt: proof.expiresAt, eventId: proof.eventId },
+      ];
+      return {
+        data: d,
+        type: 'stood.held',
+        payload: { wo, attempt: work.snapshot.attempt, expiresAt: proof.expiresAt, simulated: true },
       };
     });
   }

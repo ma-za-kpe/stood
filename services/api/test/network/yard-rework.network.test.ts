@@ -84,6 +84,31 @@ const webhook = async (event: Record<string, unknown>) => {
   });
 };
 
+// Stood's signed hold notification: Yard acts on it only after reading the tranche as HELD.
+const notifyHeld = async (project: string, wo: string, trancheId: string, id: string) => {
+  const raw = JSON.stringify({ id, type: 'stood.held', projectId: project, wo, trancheId, simulated: true }),
+    t = String(
+      Math.floor(
+        Number(
+          (
+            await (
+              await fetch('http://paypal-sim:8080/__sim/time', {
+                headers: { Authorization: 'Bearer sim-access-token' },
+              })
+            ).json()
+          ).now,
+        ) / 1000,
+      ),
+    );
+  const response = await fetch('http://yard-api:3001/yard/v1/webhooks/stood', {
+    method: 'POST',
+    body: raw,
+    headers: {
+      'Stood-Signature': `t=${t},v1=${createHmac('sha256', 'sim-stood-webhook-secret').update(`${t}.${raw}`).digest('hex')}`,
+    },
+  });
+  expect(response.status, 'stood.held').toBe(200);
+};
 // Network-only runner coordinates synthetic setup. Yard never imports Stood internals; Crew is an ordinary builder.
 it('Yard network: refused check → punch list → same Crew reworks → fresh hold → paid projection (T-0233)', async () => {
   const stood = (step: string, extra: Record<string, unknown> = {}) =>
@@ -156,6 +181,7 @@ async function reworkFlow(
   expect(await (await yard(path)).json()).toMatchObject({ state: 'CLAIMED', attempt: 1, punchList: null });
   // Attempt 1: held, built, submitted, refused because the signed tests were changed.
   for (const step of ['AUTHORIZE_FIXTURE', 'DISPATCH']) await stood(step);
+  await notifyHeld(project, 'one', String(draft.trancheId), 'yard-rework-held-1');
   await advance();
   for (let i = 0; i < 3; i++) await tick();
   const first = await (await yard(path)).json();
@@ -189,6 +215,8 @@ async function reworkFlow(
   expect(rework.punchList.map((p: { field: string }) => p.field)).toEqual(scenario.expected.punchList);
   // Attempt 2: Stood places a fresh hold; the same Crew reads the punch list, rebuilds and resubmits.
   for (const step of ['REDISPATCH', 'AUTHORIZE_FIXTURE', 'DISPATCH']) await stood(step);
+  // The voided first hold does not carry over: the rework builds against Stood's fresh hold.
+  await notifyHeld(project, 'one', String(draft.trancheId), 'yard-rework-held-2');
   for (let i = 0; i < 3; i++) {
     await advance();
     await tick();

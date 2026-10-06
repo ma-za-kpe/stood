@@ -1,6 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { BUYER_HANDOVER_ITEMS } from '@stood/yard-contracts';
 import { expect, it } from 'vitest';
+import { confirmHold } from '../../test/fakes/board-fixture.js';
 import { MemoryEvents } from '../../test/fakes/events.js';
 import { MemorySecretRows } from '../../test/fakes/secrets.js';
 import { LocalKeyWrapper } from '../adapters/crypto/local-key-wrapper.js';
@@ -105,6 +106,7 @@ async function harness() {
   const pay = async (wo: string) => {
     await board.post('p', wo, `tranche-${wo}`, buyer, await version(), `post-${wo}`, now);
     await board.claim('p', wo, builder, await version(), `claim-${wo}`, now);
+    await confirmHold(board, 'p', wo, now);
     await board.build('p', wo, builder, await version(), `build-${wo}`, now);
     await board.submit('p', wo, 'd'.repeat(40), `pkg-${wo}`, builder, await version(), `submit-${wo}`, now);
     await board.settlement(

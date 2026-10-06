@@ -20,7 +20,7 @@ it('lets the owning buyer see every event and a builder only build events for wo
   expect(builder.see(event('blueprint.closed', {}))).toBe(false);
   expect(builder.see(event('wo.claimed', {}))).toBe(false);
   // After clocking out the builder no longer holds the work, so access ends.
-  await board.releaseClaim(id, 'one', leaseBuilder, 5, 'out', leaseAt + 1);
+  await board.releaseClaim(id, 'one', leaseBuilder, 6, 'out', leaseAt + 1);
   await expect(board.viewer(id, leaseBuilder)).rejects.toThrow('FORBIDDEN');
   await expect(board.viewer(id, { id: 'other', root: 'x', kind: 'BUYER' })).rejects.toThrow('FORBIDDEN');
 });

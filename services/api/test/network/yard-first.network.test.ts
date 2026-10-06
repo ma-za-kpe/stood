@@ -7,6 +7,31 @@ const scenario = JSON.parse(readFileSync('services/yard-api/test/scenarios/yard-
   id: string;
   expected: { yardState: string; captures: number; stoodState: string; simulated: boolean; moneyExecuted: boolean };
 };
+// Stood's signed hold notification: Yard acts on it only after reading the tranche as HELD.
+const notifyHeld = async (project: string, wo: string, trancheId: string, id: string) => {
+  const raw = JSON.stringify({ id, type: 'stood.held', projectId: project, wo, trancheId, simulated: true }),
+    t = String(
+      Math.floor(
+        Number(
+          (
+            await (
+              await fetch('http://paypal-sim:8080/__sim/time', {
+                headers: { Authorization: 'Bearer sim-access-token' },
+              })
+            ).json()
+          ).now,
+        ) / 1000,
+      ),
+    );
+  const response = await fetch('http://yard-api:3001/yard/v1/webhooks/stood', {
+    method: 'POST',
+    body: raw,
+    headers: {
+      'Stood-Signature': `t=${t},v1=${createHmac('sha256', 'sim-stood-webhook-secret').update(`${t}.${raw}`).digest('hex')}`,
+    },
+  });
+  expect(response.status, 'stood.held').toBe(200);
+};
 // Network-only runner coordinates synthetic setup. The Yard runtime never imports Stood internals.
 it('Yard network: frozen terms → ordinary Crew → confirmed simulated Stood capture → paid projection', async () => {
   const clock = async () =>
@@ -138,6 +163,7 @@ it('Yard network: frozen terms → ordinary Crew → confirmed simulated Stood c
   });
   for (const step of ['AUTHORIZE_FIXTURE', 'DISPATCH'])
     await control(`/__mock/sessions/${scenario.id}/steps`, { step });
+  await notifyHeld('yard-project', 'one', draft.trancheId, 'yard-first-held');
   const advanced = await fetch('http://paypal-sim:8080/__sim/advance', {
     method: 'POST',
     headers: { Authorization: 'Bearer sim-access-token', 'Content-Type': 'application/json' },

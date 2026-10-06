@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { expect, it } from 'vitest';
+import { confirmHold } from '../../test/fakes/board-fixture.js';
 import { MemoryEvents } from '../../test/fakes/events.js';
 import { Board } from '../application/board.js';
 import { createYardApp } from './app.js';
@@ -205,20 +206,23 @@ it('runs signed Board commands, keeps submissions checking and requires matching
   expect((await (await request('/yard/v1/board')).json()).orders).toHaveLength(1);
   const base = '/yard/v1/blueprints/p/work-orders/one';
   expect((await request(`${base}/claim`, 'POST', {}, 3, 'claim', 'builder')).status).toBe(200);
-  expect((await request(`${base}/build`, 'POST', {}, 4, 'build', 'buyer')).status).toBe(403);
-  expect((await request(`${base}/build`, 'POST', {}, 4, 'build', 'builder')).status).toBe(200);
-  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 5, 'submit', 'builder')).status).toBe(
+  // Work cannot start until Stood confirms a hold for this attempt.
+  expect((await request(`${base}/build`, 'POST', {}, 4, 'early', 'builder')).status).toBe(409);
+  await confirmHold(board, 'p', 'one', now);
+  expect((await request(`${base}/build`, 'POST', {}, 5, 'build', 'buyer')).status).toBe(403);
+  expect((await request(`${base}/build`, 'POST', {}, 5, 'build', 'builder')).status).toBe(200);
+  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 6, 'submit', 'builder')).status).toBe(
     200,
   );
   expect(submissions).toHaveLength(1);
-  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 5, 'submit', 'builder')).status).toBe(
+  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 6, 'submit', 'builder')).status).toBe(
     200,
   );
   expect(submissions).toHaveLength(1);
-  expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 5, 'submit', 'builder')).status).toBe(
+  expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 6, 'submit', 'builder')).status).toBe(
     409,
   );
-  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 6, 'different', 'builder')).status).toBe(
+  expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 7, 'different', 'builder')).status).toBe(
     409,
   );
   expect(submissions).toHaveLength(1);
@@ -252,10 +256,10 @@ it('runs signed Board commands, keeps submissions checking and requires matching
   expect((await webhook(event)).status).toBe(200);
   expect((await (await request(base)).json()).state).toBe('PAID');
   expect((await (await request('/yard/v1/board')).json()).orders).toHaveLength(0);
-  expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 7, 'changed', 'builder')).status).toBe(
+  expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 8, 'changed', 'builder')).status).toBe(
     409,
   );
-  await expect(board.settlement('p', 'one', { ...proof, eventId: 'different' }, 8)).rejects.toThrow('INVALID');
+  await expect(board.settlement('p', 'one', { ...proof, eventId: 'different' }, 9)).rejects.toThrow('INVALID');
   await expect(
     board.create({ ...input, id: '__proto__' } as never, { id: 'buyer', root: 'buyer-root', kind: 'BUYER' }, 'bad'),
   ).rejects.toThrow('INVALID');

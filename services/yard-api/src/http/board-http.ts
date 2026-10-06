@@ -3,8 +3,9 @@ import { handoverConfirmation, IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { Board, Operator, RefusalProof, SettlementProof, StoodProof } from '../application/board.js';
+import type { Board, HoldProof, Operator, RefusalProof, SettlementProof, StoodProof } from '../application/board.js';
 import type { IntakePlanner } from '../application/intake-planner.js';
+import { type DraftGateway, MandateBridge } from '../application/mandate-bridge.js';
 import type { SecretVault } from '../application/secret-vault.js';
 import type { SiteLog } from '../application/site-log.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
@@ -20,13 +21,22 @@ import { siteLogHttp } from './site-log-http.js';
 export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
-  operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
+  // A key may be retired at notAfter (rotation overlaps old and new keys). payeeRef is a PayPal email or
+  // payer id only: payouts reach the operator's own PayPal account; Yard holds no PayPal credentials.
+  operators: readonly Readonly<{
+    key: string;
+    secret: string;
+    actor: Operator;
+    notAfter?: number;
+    payeeRef?: string;
+  }>[];
   packages?: PackageGateway;
   siteLog?: SiteLog;
   foreman?: ForemanPlans;
   intakes?: IntakeStore;
   intakePlanner?: Pick<IntakePlanner, 'create'>;
   secrets?: SecretVault;
+  mandates?: DraftGateway;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<StoodProof> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
@@ -46,12 +56,19 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     !config.operators.length ||
     new Set(config.operators.map((o) => o.key)).size !== config.operators.length ||
     config.operators.some(
-      (o) => ![o.key, o.secret, o.actor.id, o.actor.root].every((v) => typeof v === 'string' && v.trim().length > 0),
+      (o) =>
+        ![o.key, o.secret, o.actor.id, o.actor.root].every((v) => typeof v === 'string' && v.trim().length > 0) ||
+        (o.notAfter !== undefined && (!Number.isSafeInteger(o.notAfter) || o.notAfter < 0)) ||
+        (o.payeeRef !== undefined &&
+          !/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,24}$/.test(o.payeeRef) &&
+          !/^[A-Z0-9]{13}$/.test(o.payeeRef)),
     )
   )
     throw new YardError('INVALID');
   const identify = (headers: Headers, method: string, path: string, body: string, now: number): Operator | null => {
-    const credential = config.operators.find((o) => o.key === headers.get('Yard-Key-Id'));
+    const credential = config.operators.find(
+      (o) => o.key === headers.get('Yard-Key-Id') && (o.notAfter === undefined || now < o.notAfter),
+    );
     const match = /^t=(\d{1,12}),v2=([a-f0-9]{64})$/.exec(headers.get('Yard-Signature') ?? '');
     if (!credential || !match || !Number.isSafeInteger(now) || now < 0 || Math.abs(now / 1000 - Number(match[1])) > 300)
       return null;
@@ -197,7 +214,7 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
   });
   app.get('/yard/v1/blueprints/:id', async (c) => c.json(await config.board.read(c.req.param('id'), request(c).actor)));
   app.get('/yard/v1/blueprints/:id/room', async (c) =>
-    c.json(await config.board.room(c.req.param('id'), request(c).actor)),
+    c.json(await config.board.room(c.req.param('id'), request(c).actor, request(c).now)),
   );
   app.post('/yard/v1/blueprints/:id/approve', async (c) => {
     const { key, version, actor } = command(c);
@@ -207,9 +224,20 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
   app.post('/yard/v1/blueprints/:id/work-orders', async (c) => {
     const { key, version, actor, now } = command(c),
       input = body(c, ['milestone', 'trancheId']);
-    if (typeof input.milestone !== 'string' || typeof input.trancheId !== 'string') throw new YardError('INVALID');
+    if (typeof input.milestone !== 'string' || (input.trancheId !== undefined && typeof input.trancheId !== 'string'))
+      throw new YardError('INVALID');
     return c.json(
-      ack(await config.board.post(c.req.param('id'), input.milestone, input.trancheId, actor, version, key, now)),
+      ack(
+        await config.board.post(
+          c.req.param('id'),
+          input.milestone,
+          input.trancheId as string | undefined,
+          actor,
+          version,
+          key,
+          now,
+        ),
+      ),
     );
   });
   app.get('/yard/v1/blueprints/:id/work-orders/:wo', async (c) =>
@@ -254,6 +282,40 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       body(c, []);
       return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
     });
+  app.get('/yard/v1/operators/:root/reputation', async (c) =>
+    c.json({ ...(await config.board.reputation(c.req.param('root'))), simulated: true }),
+  );
+  app.post('/yard/v1/blueprints/:id/work-orders/:wo/usage', async (c) => {
+    const { key, version, actor, now } = command(c);
+    body(c, []);
+    return c.json(ack(await config.board.confirmUsage(c.req.param('id'), actor, version, key, now, c.req.param('wo'))));
+  });
+  app.post('/yard/v1/blueprints/:id/changes', async (c) => {
+    const { key, version, actor, now } = command(c),
+      input = body(c, ['changes']);
+    if (!Array.isArray(input.changes)) throw new YardError('INVALID');
+    return c.json(
+      ack(await config.board.proposeChange(c.req.param('id'), actor, version, key, now, input.changes as never)),
+    );
+  });
+  app.post('/yard/v1/blueprints/:id/changes/:change/approve', async (c) => {
+    const { key, version, actor } = command(c);
+    body(c, []);
+    return c.json(ack(await config.board.approveChange(c.req.param('id'), actor, version, key, c.req.param('change'))));
+  });
+  app.post('/yard/v1/blueprints/:id/mandate', async (c) => {
+    if (!config.mandates) throw new YardError('CONFLICT');
+    const { key, version, actor, now } = command(c);
+    body(c, []);
+    const result = await new MandateBridge(config.board, config.mandates).create(
+      c.req.param('id'),
+      actor,
+      version,
+      key,
+      now,
+    );
+    return c.json({ ...result, status: 'DRAFT', simulated: true });
+  });
   app.post('/yard/v1/blueprints/:id/handover', async (c) => {
     const { key, version, actor, now } = command(c),
       id = c.req.param('id');
@@ -343,42 +405,52 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     const input: unknown = JSON.parse(raw);
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new YardError('INVALID');
     const e = input as Record<string, unknown>;
+    const settled = e.type === 'stood.released' || e.type === 'stood.refused';
     if (
       e.simulated !== true ||
-      (e.type !== 'stood.released' && e.type !== 'stood.refused') ||
-      !['id', 'projectId', 'wo', 'trancheId', 'packageId', 'reference'].every(
+      (!settled && e.type !== 'stood.held') ||
+      !['id', 'projectId', 'wo', 'trancheId', ...(settled ? ['packageId', 'reference'] : [])].every(
         (k) => typeof e[k] === 'string' && String(e[k]).length > 0 && String(e[k]).length <= 200,
       )
     )
       throw new YardError('INVALID');
     // The notification is only a hint: the decision comes from a fresh signed Stood read.
     const proof = await config.stood.read(String(e.trancheId));
+    const expected = { 'stood.released': 'CAPTURE', 'stood.refused': 'VOID', 'stood.held': 'HOLD' }[String(e.type)];
     if (
       !proof ||
       proof.trancheId !== e.trancheId ||
-      proof.packageId !== e.packageId ||
-      proof.reference !== e.reference ||
       proof.simulated !== true ||
-      proof.effect !== (e.type === 'stood.released' ? 'CAPTURE' : 'VOID')
+      proof.effect !== expected ||
+      (proof.effect !== 'HOLD' && (proof.packageId !== e.packageId || proof.reference !== e.reference))
     )
       throw new YardError('INVALID');
     const snapshot = await config.board.events.load(String(e.projectId));
-    const eventId = String(e.id);
+    const eventId = String(e.id),
+      project = String(e.projectId),
+      wo = String(e.wo);
     return c.json(
       ack(
         proof.effect === 'CAPTURE'
           ? await config.board.settlement(
-              String(e.projectId),
-              String(e.wo),
+              project,
+              wo,
               { ...(proof as Omit<SettlementProof, 'eventId'>), eventId },
               snapshot.version,
             )
-          : await config.board.refusal(
-              String(e.projectId),
-              String(e.wo),
-              { ...(proof as Omit<RefusalProof, 'eventId'>), eventId },
-              snapshot.version,
-            ),
+          : proof.effect === 'VOID'
+            ? await config.board.refusal(
+                project,
+                wo,
+                { ...(proof as Omit<RefusalProof, 'eventId'>), eventId },
+                snapshot.version,
+              )
+            : await config.board.holdConfirmed(
+                project,
+                wo,
+                { ...(proof as Omit<HoldProof, 'eventId'>), eventId },
+                snapshot.version,
+              ),
       ),
     );
   });

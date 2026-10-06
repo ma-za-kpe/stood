@@ -8,6 +8,7 @@ const offer = z
     workOrderId: id,
     name: z.string().min(1).max(4096),
     priceMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    deadline: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     currency: z.enum(['USD', 'GBP', 'EUR']),
     profile: z.enum(['code.milestone@1', 'code.final@1']),
     version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),

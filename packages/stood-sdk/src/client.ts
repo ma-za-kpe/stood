@@ -32,6 +32,30 @@ export type PackageView = Readonly<{
   createdAt: string;
   metadata: PackageInput;
 }>;
+// A read of Stood's public tranche view. Callers act on it only together with a signed notification.
+export type TrancheView = Readonly<{
+  id: string;
+  state: string;
+  version: number;
+  holdExpiresAt: string | null;
+  settlement: Readonly<{ effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string }> | null;
+  decision: Readonly<{ outcome: 'RELEASE' | 'REFUSE' | 'WAIT'; namedField: string | null; reason: string }> | null;
+}>;
+const STATES = [
+  'PENDING',
+  'WAIT_FUNDING',
+  'HELD',
+  'DECIDING',
+  'WAITING',
+  'CAPTURE_PENDING',
+  'VOID_PENDING',
+  'REAUTHORIZE_PENDING',
+  'RELEASED',
+  'REFUSED',
+  'EXPIRED',
+  'CANCELLED',
+  'DISPUTED',
+];
 type Code =
   | 'INVALID_INPUT'
   | 'INVALID_RESPONSE'
@@ -78,6 +102,37 @@ function draftView(v: unknown): DraftView {
     status: 'DRAFT',
     cap: Object.freeze({ minor: Number(v.cap.minor), currency: String(v.cap.currency) }),
     tranches: Object.freeze(v.tranches.map((t) => Object.freeze({ id: String(t.id), name: String(t.name) }))),
+  });
+}
+function trancheView(v: unknown, trancheId: string): TrancheView {
+  if (
+    !object(v) ||
+    v.id !== trancheId ||
+    !STATES.includes(String(v.state)) ||
+    !Number.isSafeInteger(v.version) ||
+    Number(v.version) < 0 ||
+    (v.hold !== null &&
+      (!object(v.hold) || typeof v.hold.expires_at !== 'string' || !Number.isFinite(Date.parse(v.hold.expires_at)))) ||
+    (v.settlement !== null &&
+      (!object(v.settlement) ||
+        !['CAPTURE', 'VOID', 'EXPIRE'].includes(String(v.settlement.effect)) ||
+        !id(v.settlement.reference))) ||
+    (v.decision !== null &&
+      (!object(v.decision) ||
+        !['RELEASE', 'REFUSE', 'WAIT'].includes(String(v.decision.outcome)) ||
+        typeof v.decision.reason !== 'string' ||
+        (v.decision.namedField !== null && typeof v.decision.namedField !== 'string')))
+  )
+    throw new StoodClientError('INVALID_RESPONSE');
+  const s = v.settlement as { effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string } | null;
+  const d = v.decision as { outcome: 'RELEASE' | 'REFUSE' | 'WAIT'; namedField: string | null; reason: string } | null;
+  return Object.freeze({
+    id: trancheId,
+    state: String(v.state),
+    version: Number(v.version),
+    holdExpiresAt: v.hold === null ? null : String((v.hold as { expires_at: string }).expires_at),
+    settlement: s ? Object.freeze({ effect: s.effect, reference: s.reference }) : null,
+    decision: d ? Object.freeze({ outcome: d.outcome, namedField: d.namedField, reason: d.reason }) : null,
   });
 }
 function packageView(v: unknown, trancheId: string): PackageView {
@@ -267,6 +322,9 @@ export class StoodClient {
       await this.request('POST', `/tranches/${this.resource(trancheId)}/packages`, input, key),
       trancheId,
     );
+  }
+  async getTranche(trancheId: string): Promise<TrancheView> {
+    return trancheView(await this.request('GET', `/tranches/${this.resource(trancheId)}`), trancheId);
   }
   async getPackage(trancheId: string, packageId: string): Promise<PackageView> {
     const v = packageView(

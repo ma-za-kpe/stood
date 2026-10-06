@@ -189,8 +189,15 @@ try {
     if (name === 'desktop') {
       await page.getByRole('heading', { name: 'build', exact: true }).waitFor();
       await page.screenshot({ path: 'artifacts/mock-network/yard-board-desktop.png', fullPage: true });
+      await page.getByText('Due ', { exact: false }).first().waitFor();
+      // Keyboard: End moves focus to the last card's action.
+      await page.getByRole('button', { name: 'Clock in →', exact: true }).first().focus();
+      await page.keyboard.press('End');
+      assert(await page.evaluate(() => document.activeElement?.textContent?.includes('Clock in')));
       await page.getByRole('button', { name: 'Clock in →', exact: true }).click();
       await page.getByRole('heading', { name: 'Lease lifecycle simulation', exact: true }).waitFor();
+      await page.getByText('left on the lease', { exact: false }).waitFor();
+      await page.getByText('Signed tests (read-only):', { exact: false }).first().waitFor();
       await page.locator('.state-chip').filter({ hasText: 'CLAIMED' }).waitFor();
       assert.equal(await page.getByAltText('Stood / Released').count(), 0);
       assert.equal(await page.locator('.stood-verdict').count(), 0);

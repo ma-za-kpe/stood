@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { expect, it } from 'vitest';
+import { confirmHold } from '../../test/fakes/board-fixture.js';
 import { MemoryEvents } from '../../test/fakes/events.js';
 import { Board, type StoodProof } from '../application/board.js';
 import { createYardApp } from './app.js';
@@ -129,9 +130,10 @@ function harness() {
     const post = { milestone: 'one', trancheId: 'tranche' };
     expect((await request('/yard/v1/blueprints/p/work-orders', 'POST', post, 2, 'post')).status).toBe(200);
     expect((await request(`${base}/claim`, 'POST', {}, 3, 'claim', 'builder')).status).toBe(200);
-    expect((await request(`${base}/build`, 'POST', {}, 4, 'build', 'builder')).status).toBe(200);
+    await confirmHold(board, 'p', 'one', now);
+    expect((await request(`${base}/build`, 'POST', {}, 5, 'build', 'builder')).status).toBe(200);
     const submit = { commit: 'd'.repeat(40) };
-    expect((await request(`${base}/submit`, 'POST', submit, 5, 'submit-1', 'builder')).status).toBe(200);
+    expect((await request(`${base}/submit`, 'POST', submit, 6, 'submit-1', 'builder')).status).toBe(200);
     expect(await (await request(base)).json()).toMatchObject({
       state: 'CHECKING',
       submission: { packageId: 'package-1' },
@@ -151,7 +153,7 @@ function harness() {
 }
 
 it('projects a verified Stood refusal as rework with a punch list, then pays the reworked package (T-0189)', async () => {
-  const { state, request, webhook, version, base, setup, refused } = harness();
+  const { board, state, request, webhook, version, base, setup, refused } = harness();
   await setup();
   expect((await webhook(refused, 'forged')).status).toBe(401);
   expect((await webhook({ ...refused, type: 'stood.voided' })).status).toBe(422);
@@ -188,11 +190,15 @@ it('projects a verified Stood refusal as rework with a punch list, then pays the
     refusals: [{ packageId: 'package-1', reference: 'void-1' }],
   });
   expect((await (await request('/yard/v1/board')).json()).orders).toHaveLength(0);
-  const v = await version();
+  let v = await version();
   const fixed = { commit: 'e'.repeat(40) };
   // Rework must rebuild first; a submission straight from REWORK conflicts and reserves nothing.
   expect((await request(`${base}/submit`, 'POST', fixed, v, 'submit-early', 'builder')).status).toBe(409);
   expect(await version()).toBe(v);
+  // The voided hold does not carry over: rework waits for Stood's fresh hold.
+  expect((await request(`${base}/build`, 'POST', {}, v, 'rebuild-early', 'builder')).status).toBe(409);
+  await confirmHold(board, 'p', 'one', now);
+  v = await version();
   expect((await request(`${base}/build`, 'POST', {}, v, 'rebuild', 'builder')).status).toBe(200);
   expect((await request(`${base}/submit`, 'POST', fixed, v + 1, 'submit-2', 'builder')).status).toBe(200);
   expect(await (await request(base)).json()).toMatchObject({
