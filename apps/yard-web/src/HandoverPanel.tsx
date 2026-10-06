@@ -1,8 +1,8 @@
 import { HANDOVER_CHECKLIST } from '@stood/yard-contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { closeBlocker } from './handover.js';
 import { browserRequestKey } from './claim-keys.js';
+import { closeBlocker } from './handover.js';
 import { api } from './http.js';
 import type { ProjectRoom } from './project-state.js';
 
