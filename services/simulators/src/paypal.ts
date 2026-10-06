@@ -18,6 +18,8 @@ type Order = {
   id: string;
   status: string;
   customId: string;
+  referenceId: string;
+  payee: ObjectValue | null;
   amount: Amount;
   authorizations: string[];
   captures: ObjectValue[];
@@ -99,8 +101,9 @@ export function createPayPalSimulator(config: {
     status: order.status,
     purchase_units: [
       {
-        reference_id: 'default',
+        reference_id: order.referenceId,
         custom_id: order.customId,
+        ...(order.payee ? { payee: order.payee } : {}),
         amount: order.amount,
         payments: {
           authorizations: order.authorizations.map((a) => refresh(authorizations.get(a) as Authorization)),
@@ -108,6 +111,9 @@ export function createPayPalSimulator(config: {
         },
       },
     ],
+    links: ['CREATED', 'APPROVED'].includes(order.status)
+      ? [{ href: `http://paypal-sim:8080/__sim/approve/${order.id}`, rel: 'approve', method: 'POST' }]
+      : [],
   });
   const authorize = (order: Order, expiresAt: number) => {
     const auth: Authorization = {
@@ -268,12 +274,16 @@ export function createPayPalSimulator(config: {
       const units = Array.isArray(body.purchase_units) ? body.purchase_units : [];
       const unit = object(units[0]);
       const money = amount(unit.amount);
+      const payee = unit.payee === undefined ? null : object(unit.payee);
       if (
         body.intent !== 'AUTHORIZE' ||
         units.length !== 1 ||
         !money ||
         typeof unit.custom_id !== 'string' ||
-        !unit.custom_id.trim()
+        !unit.custom_id.trim() ||
+        (unit.reference_id !== undefined &&
+          (typeof unit.reference_id !== 'string' || !unit.reference_id.trim() || unit.reference_id.length > 256)) ||
+        (payee !== null && (typeof payee.merchant_id !== 'string' || !payee.merchant_id.trim()))
       )
         reply = error(422, 'INVALID_ORDER');
       else {
@@ -281,6 +291,8 @@ export function createPayPalSimulator(config: {
           id: id('ORDER'),
           status: 'CREATED',
           customId: unit.custom_id,
+          referenceId: typeof unit.reference_id === 'string' ? unit.reference_id : 'default',
+          payee: payee ? { merchant_id: payee.merchant_id } : null,
           amount: money,
           authorizations: [],
           captures: [],

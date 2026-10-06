@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { TrancheCommand } from '../../domain/tranche-record.js';
 import type { CommitPackageInput, StoredCommitPackage } from '../../ports/commit-package-store.js';
+import type { FundingHold, FundingInstruction, FundingStatus } from '../../ports/funding-store.js';
 import type { OperationIntent, OperationStatus } from '../../ports/payment-operation-store.js';
 import type { StoredDraft } from '../../ports/platform-api-store.js';
 import type { OperationalAlert } from '../../ports/reconciliation-queue.js';
@@ -227,6 +228,76 @@ export const apiRequests = pgTable(
     check(
       'api_request_valid',
       sql`length(trim(${table.platformId})) > 0 AND length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.fingerprint} ~ '^[a-f0-9]{64}$' AND jsonb_typeof(${table.response}) = 'object'`,
+    ),
+  ],
+);
+
+export const fundingOperations = pgTable(
+  'funding_operations',
+  {
+    key: text().primaryKey(),
+    trancheId: text('tranche_id')
+      .notNull()
+      .references(() => paymentStreams.trancheId),
+    instruction: jsonb().$type<FundingInstruction>().notNull(),
+    version: integer().notNull().default(0),
+    status: text().$type<FundingStatus>().notNull(),
+    createRequestId: uuid('create_request_id').notNull().unique(),
+    authorizeRequestId: uuid('authorize_request_id').notNull().unique(),
+    orderId: text('order_id').unique(),
+    approvalUrl: text('approval_url'),
+    hold: jsonb().$type<FundingHold & Readonly<{ now?: number }>>(),
+    reference: text(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    unique('funding_tranche_key').on(t.trancheId, t.key),
+    uniqueIndex('one_unresolved_funding').on(t.trancheId).where(sql`${t.status} NOT IN ('HELD', 'FAILED', 'EXPIRED')`),
+    check(
+      'funding_status_valid',
+      sql`${t.status} IN ('RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED')`,
+    ),
+    check('funding_version_valid', sql`${t.version} >= 0`),
+    check('funding_request_ids_distinct', sql`${t.createRequestId} <> ${t.authorizeRequestId}`),
+    check(
+      'funding_identity_valid',
+      sql`COALESCE(length(trim(${t.key})) BETWEEN 1 AND 200 AND ${t.instruction}->>'key' = ${t.key} AND ${t.instruction}->>'trancheId' = ${t.trancheId} AND ${t.instruction}->>'mode' IN ('sim', 'live'), false)`,
+    ),
+    check(
+      'funding_order_required',
+      sql`${t.status} NOT IN ('AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'EXPIRED') OR (${t.orderId} IS NOT NULL AND length(trim(${t.orderId})) > 0 AND ${t.approvalUrl} IS NOT NULL)`,
+    ),
+    check(
+      'funding_resolution_valid',
+      sql`(${t.status} NOT IN ('HELD', 'EXPIRED') OR COALESCE(jsonb_typeof(${t.hold}) = 'object' AND ${t.hold}->>'orderId' = ${t.orderId} AND ${t.hold}->>'reference' = ${t.reference}, false)) AND (${t.status} NOT IN ('HELD', 'FAILED', 'EXPIRED') OR (${t.reference} IS NOT NULL AND length(trim(${t.reference})) > 0)) AND (${t.status} IN ('HELD', 'EXPIRED') OR ${t.hold} IS NULL)`,
+    ),
+  ],
+);
+export const fundingEvents = pgTable(
+  'funding_events',
+  {
+    key: text()
+      .notNull()
+      .references(() => fundingOperations.key),
+    version: integer().notNull(),
+    status: text().$type<FundingStatus>().notNull(),
+    reference: text(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.key, t.version] }),
+    check('funding_event_version_valid', sql`${t.version} >= 0`),
+    check(
+      'funding_event_status_valid',
+      sql`${t.status} IN ('RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED')`,
+    ),
+    check(
+      'funding_event_resolution_valid',
+      sql`${t.status} NOT IN ('HELD', 'FAILED', 'EXPIRED') OR (${t.reference} IS NOT NULL AND length(trim(${t.reference})) > 0)`,
     ),
   ],
 );

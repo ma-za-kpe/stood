@@ -8,6 +8,39 @@ const headers = {
   'PayPal-Request-Id': 'fixture-request',
 };
 describe('PayPal HTTP simulator protocol', () => {
+  it('preserves the explicit funding operation and merchant identity through create, approval and authorization', async () => {
+    const sim = createPayPalSimulator({ environment: 'ci', clock: () => Date.parse('2026-10-06T00:00:00Z') });
+    const response = await sim.app.request('/v2/checkout/orders', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        intent: 'AUTHORIZE',
+        purchase_units: [
+          {
+            reference_id: 'funding',
+            custom_id: 'tranche',
+            payee: { merchant_id: 'sim-payee' },
+            amount: { currency_code: 'USD', value: '10.00' },
+          },
+        ],
+      }),
+    });
+    const created = await response.json();
+    expect(created.purchase_units[0]).toMatchObject({ reference_id: 'funding', payee: { merchant_id: 'sim-payee' } });
+    sim.approve(created.id);
+    const authorized = await (
+      await sim.app.request(`/v2/checkout/orders/${created.id}/authorize`, {
+        method: 'POST',
+        headers: { ...headers, 'PayPal-Request-Id': 'authorize-funding' },
+        body: '{}',
+      })
+    ).json();
+    expect(authorized.purchase_units[0]).toMatchObject({
+      reference_id: 'funding',
+      payee: { merchant_id: 'sim-payee' },
+    });
+    expect(authorized.purchase_units[0].payments.authorizations).toHaveLength(1);
+  });
   it('injects token faults only for the fixed synthetic client without issuing an access token', async () => {
     const faults = new FaultController([{ method: 'POST', path: '/v1/oauth2/token', kind: 'HTTP_500' }]);
     const { app } = createPayPalSimulator({ environment: 'ci', clock: () => 0, faults });

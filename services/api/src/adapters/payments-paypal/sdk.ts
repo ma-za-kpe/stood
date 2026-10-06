@@ -1,4 +1,27 @@
-import { ApiError, Client, Environment, OrdersController, PaymentsController } from '@paypal/paypal-server-sdk';
+import {
+  ApiError,
+  CheckoutPaymentIntent,
+  Client,
+  Environment,
+  OrdersController,
+  PaymentsController,
+} from '@paypal/paypal-server-sdk';
+export type PayPalFundingCall = 'CREATE_ORDER' | 'AUTHORIZE_ORDER' | 'GET_FUNDING_ORDER';
+export type PayPalFundingInput = Readonly<{
+  mode: 'sim' | 'live';
+  orderId: string | null;
+  requestId: string;
+  operationKey: string;
+  trancheId: string;
+  payeeRef: string;
+  amount: Readonly<{ currencyCode: string; value: string }>;
+}>;
+export interface PayPalFundingTransport {
+  fund(
+    action: PayPalFundingCall,
+    input: PayPalFundingInput,
+  ): Promise<Readonly<{ status: number | null; body: unknown }>>;
+}
 export type PayPalCall = 'CAPTURE' | 'VOID' | 'REAUTHORIZE' | 'GET_AUTHORIZATION' | 'GET_ORDER';
 export type PayPalInput = Readonly<{
   authorizationId: string;
@@ -12,6 +35,7 @@ export interface PayPalTransport {
 export class ServerSdkTransport implements PayPalTransport {
   private readonly payments: PaymentsController;
   private readonly orders: OrdersController;
+  private readonly mode: 'sim' | 'live';
   constructor(
     config: Readonly<{
       appEnv: string;
@@ -23,6 +47,7 @@ export class ServerSdkTransport implements PayPalTransport {
     }>,
   ) {
     const simulated = config.mode === 'sim';
+    this.mode = simulated ? 'sim' : 'live';
     let simulatorUrl: URL | null = null;
     if (simulated) {
       try {
@@ -68,6 +93,42 @@ export class ServerSdkTransport implements PayPalTransport {
     });
     this.payments = new PaymentsController(client);
     this.orders = new OrdersController(client);
+  }
+  async fund(action: PayPalFundingCall, input: PayPalFundingInput) {
+    if (input.mode !== this.mode) return { status: null, body: null };
+    try {
+      const response =
+        action === 'CREATE_ORDER'
+          ? await this.orders.createOrder({
+              paypalRequestId: input.requestId,
+              prefer: 'return=representation',
+              body: {
+                intent: CheckoutPaymentIntent.Authorize,
+                purchaseUnits: [
+                  {
+                    referenceId: input.operationKey,
+                    customId: input.trancheId,
+                    payee: { merchantId: input.payeeRef },
+                    amount: input.amount,
+                  },
+                ],
+              },
+            })
+          : action === 'AUTHORIZE_ORDER'
+            ? await this.orders.authorizeOrder({
+                id: input.orderId!,
+                paypalRequestId: input.requestId,
+                prefer: 'return=representation',
+                body: {},
+              })
+            : await this.orders.getOrder({ id: input.orderId! });
+      return { status: response.statusCode, body: parseBody(response.body) };
+    } catch (error) {
+      return {
+        status: error instanceof ApiError ? error.statusCode : null,
+        body: error instanceof ApiError ? parseBody(error.body) : null,
+      };
+    }
   }
   async call(action: PayPalCall, input: PayPalInput) {
     try {

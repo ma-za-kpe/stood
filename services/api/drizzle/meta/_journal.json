@@ -85,6 +85,20 @@
       "when": 1791208076383,
       "tag": "0011_commit_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791247811413,
+      "tag": "0012_funding_phases",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791247811414,
+      "tag": "0013_funding_guards",
+      "breakpoints": true
     }
   ]
 }

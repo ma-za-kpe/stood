@@ -1,7 +1,7 @@
 import { type Decision, getProfile, RULE_SET_VERSION } from './decision.js';
 import { assertHoldCurrency, CAPTURE_RETRY_PROOF_MAX_AGE_MS, captureAllowedAt } from './hold-policy.js';
 import type { Money } from './money.js';
-import type { Nonce } from './nonce.js';
+import { Nonce } from './nonce.js';
 
 export type TrancheState =
   | 'PENDING'
@@ -18,6 +18,25 @@ export type TrancheState =
   | 'CANCELLED'
   | 'DISPUTED';
 export type HoldAttempt = Readonly<{ authorizationId: string; nonce: string; heldAt: number; expiresAt: number }>;
+export type FundingConfirmation =
+  | Readonly<{ kind: 'FAILED'; reference: string }>
+  | Readonly<{
+      kind: 'HELD';
+      reference: string;
+      authorizationId: string;
+      nonce: string;
+      heldAt: number;
+      expiresAt: number;
+    }>
+  | Readonly<{
+      kind: 'EXPIRED';
+      reference: string;
+      authorizationId: string;
+      nonce: string;
+      heldAt: number;
+      expiresAt: number;
+      now: number;
+    }>;
 export type PaymentOperation = Readonly<{
   key: string;
   effect: 'CAPTURE' | 'VOID';
@@ -191,6 +210,40 @@ export class Tranche {
 
   dispatch(authorizationId: string, nonce: Nonce, heldAt: number, expiresAt: number): void {
     this.requireActive();
+    this.attachHold(authorizationId, nonce, heldAt, expiresAt);
+  }
+
+  // A receipt records an earlier provider operation. Safe recovery must allow
+  // this fact to be recovered without authorising another funding request.
+  confirmFunding(receipt: FundingConfirmation): void {
+    this.requireState(['PENDING', 'WAIT_FUNDING']);
+    if (!receipt.reference.trim()) throw new RangeError('Invalid funding reference');
+    if (receipt.kind === 'FAILED') {
+      this.#state = 'WAIT_FUNDING';
+      return;
+    }
+    if (
+      !['HELD', 'EXPIRED'].includes(receipt.kind) ||
+      !Number.isSafeInteger(receipt.heldAt) ||
+      receipt.heldAt < 0 ||
+      !Number.isSafeInteger(receipt.expiresAt)
+    )
+      throw new RangeError('Invalid funding confirmation');
+    if (receipt.kind === 'EXPIRED' && (!Number.isSafeInteger(receipt.now) || receipt.now < receipt.expiresAt))
+      throw new RangeError('Funding expiry requires a confirmed deadline');
+    this.attachHold(receipt.authorizationId, new Nonce(receipt.nonce), receipt.heldAt, receipt.expiresAt);
+    if (receipt.kind === 'EXPIRED') {
+      this.#settlement = Object.freeze({
+        effect: 'EXPIRE',
+        reference: receipt.reference,
+        attempt: this.#attempts.length,
+      });
+      this.#settlements.push(this.#settlement);
+      this.#state = 'EXPIRED';
+    }
+  }
+
+  private attachHold(authorizationId: string, nonce: Nonce, heldAt: number, expiresAt: number): void {
     this.requireState(['PENDING', 'WAIT_FUNDING']);
     if (
       !authorizationId.trim() ||

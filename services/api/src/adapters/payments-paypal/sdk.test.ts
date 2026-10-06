@@ -6,6 +6,8 @@ const fake = vi.hoisted(() => ({
   renew: vi.fn(),
   authorization: vi.fn(),
   order: vi.fn(),
+  createOrder: vi.fn(),
+  authorizeOrder: vi.fn(),
   client: vi.fn(),
   ApiError: class extends Error {
     statusCode = 422;
@@ -19,6 +21,7 @@ vi.mock('@paypal/paypal-server-sdk', () => ({
     }
   },
   Environment: { Sandbox: 'sandbox' },
+  CheckoutPaymentIntent: { Authorize: 'AUTHORIZE' },
   ApiError: fake.ApiError,
   PaymentsController: class {
     captureAuthorizedPayment = fake.capture;
@@ -28,6 +31,8 @@ vi.mock('@paypal/paypal-server-sdk', () => ({
   },
   OrdersController: class {
     getOrder = fake.order;
+    createOrder = fake.createOrder;
+    authorizeOrder = fake.authorizeOrder;
   },
 }));
 
@@ -45,6 +50,46 @@ const input = {
   operationKey: 'tranche:1:CAPTURE:1',
   amount: { currencyCode: 'GBP', value: '10.00' },
 };
+it('sends separate persisted IDs for order creation and authorisation through the pinned SDK', async () => {
+  const transport = new ServerSdkTransport(config);
+  const funding = {
+    mode: 'live' as const,
+    orderId: 'ORDER',
+    requestId: 'create-id',
+    operationKey: 'funding',
+    trancheId: 'tranche',
+    payeeRef: 'sandbox-payee',
+    amount: input.amount,
+  };
+  fake.createOrder.mockResolvedValue({ statusCode: 201, body: '{"id":"ORDER"}' });
+  expect(await transport.fund('CREATE_ORDER', funding)).toEqual({ status: 201, body: { id: 'ORDER' } });
+  expect(fake.createOrder).toHaveBeenCalledWith(
+    expect.objectContaining({
+      paypalRequestId: 'create-id',
+      body: {
+        intent: 'AUTHORIZE',
+        purchaseUnits: [
+          { referenceId: 'funding', customId: 'tranche', payee: { merchantId: 'sandbox-payee' }, amount: input.amount },
+        ],
+      },
+    }),
+  );
+  expect(await transport.fund('CREATE_ORDER', { ...funding, mode: 'sim' })).toEqual({ status: null, body: null });
+  expect(fake.createOrder).toHaveBeenCalledTimes(1);
+  fake.authorizeOrder.mockResolvedValue({ statusCode: 201, body: '{"id":"ORDER"}' });
+  await transport.fund('AUTHORIZE_ORDER', { ...funding, requestId: 'authorize-id' });
+  expect(fake.authorizeOrder).toHaveBeenCalledWith({
+    id: 'ORDER',
+    paypalRequestId: 'authorize-id',
+    prefer: 'return=representation',
+    body: {},
+  });
+  fake.order.mockResolvedValue({ statusCode: 200, body: '{"id":"ORDER"}' });
+  await transport.fund('GET_FUNDING_ORDER', funding);
+  expect(fake.order).toHaveBeenCalledWith({ id: 'ORDER' });
+  fake.authorizeOrder.mockRejectedValue(new Error('secret'));
+  expect(await transport.fund('AUTHORIZE_ORDER', funding)).toEqual({ status: null, body: null });
+});
 describe('Sandbox Server SDK transport', () => {
   it.each(['CAPTURE', 'VOID', 'REAUTHORIZE', 'GET_AUTHORIZATION', 'GET_ORDER'] as PayPalCall[])(
     'maps %s to the correct SDK controller with stable identifiers',
