@@ -108,6 +108,7 @@ type Data = {
   handover?: Handover;
   mandate?: MandateIntent & { amendmentRequired?: string[] };
   changes?: ChangeOrder[];
+  previews?: { wo: string; serviceId: string; url: string; expiresAt: number }[];
 };
 // Effective milestone terms: the immutable signed milestone with approved change orders applied in order.
 function terms(d: Data, milestoneId: string) {
@@ -122,6 +123,8 @@ function terms(d: Data, milestoneId: string) {
   return effective;
 }
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// The public Board identity of a posted work order (no buyer data).
+export const offerId = (projectId: string, workOrderId: string) => fingerprint({ projectId, workOrderId });
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object')
@@ -379,6 +382,129 @@ export class Board {
         throw new YardError('CONFLICT');
     }
   }
+  // T-0196: preview targets for a submitted milestone. Previews run test data only and expire.
+  async previewTarget(id: string, wo: string, now: number) {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    const { work, order } = workOrder(d, wo);
+    if (!['CHECKING', 'REWORK'].includes(work.snapshot.state) && !order.payment) throw new YardError('CONFLICT');
+    return { owner: snapshot.owner, expiresAt: order.payment ? now + 7 * 86400000 : now + 30 * 86400000 };
+  }
+  async recordPreview(id: string, preview: { wo: string; serviceId: string; url: string; expiresAt: number }) {
+    const snapshot = await this.events.load(id);
+    return this.events.mutate(
+      id,
+      snapshot.version,
+      'yard',
+      `preview:${preview.serviceId}`,
+      fingerprint(preview),
+      (raw) => {
+        const d = data(raw);
+        workOrder(d, preview.wo);
+        d.previews = [...(d.previews ?? []), structuredClone(preview)];
+        return {
+          data: d,
+          type: 'preview.deployed',
+          payload: { wo: preview.wo, url: preview.url, expiresAt: preview.expiresAt, simulated: true },
+        };
+      },
+    );
+  }
+  async removePreview(id: string, serviceId: string, reason: 'expired' | 'closed') {
+    const snapshot = await this.events.load(id);
+    return this.events.mutate(
+      id,
+      snapshot.version,
+      'yard',
+      `preview-removed:${serviceId}`,
+      fingerprint({ serviceId, reason }),
+      (raw) => {
+        const d = data(raw);
+        const p = d.previews?.find((x) => x.serviceId === serviceId);
+        if (!p) throw new YardError('NOT_FOUND');
+        d.previews = d.previews?.filter((x) => x.serviceId !== serviceId) ?? [];
+        return { data: d, type: 'preview.expired', payload: { wo: p.wo, reason, simulated: true } };
+      },
+    );
+  }
+  async previewList(id: string) {
+    return structuredClone(data((await this.events.load(id)).data).previews ?? []);
+  }
+  // T-0213: notices derived from project events after a cursor, plus lease-ending reminders.
+  // Recipients are actor ids; amounts go only to the payer and payee of that milestone.
+  async notices(id: string, after: number, now: number) {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    const out: { key: string; actor: string; subject: string; text: string }[] = [];
+    const name = (wo: string) => {
+      const order = d.orders[wo];
+      return order ? (terms(d, order.milestone)?.name ?? wo) : wo;
+    };
+    const claimant = (wo: string) =>
+      Object.hasOwn(d.orders, wo) ? workOrder(d, wo).work.snapshot.currentClaim?.builderId : undefined;
+    const money = (minor: number) =>
+      new Intl.NumberFormat('en', { style: 'currency', currency: d.blueprint.currency }).format(minor / 100);
+    const events = await this.events.read(id, after);
+    for (const e of events) {
+      const p = (e.payload ?? {}) as Record<string, unknown>;
+      const wo = typeof p.wo === 'string' ? p.wo : '';
+      if (e.type === 'stood.refused' && wo) {
+        const items = (Array.isArray(p.punchList) ? p.punchList : []) as { field: string; reason: string }[];
+        const builder = claimant(wo);
+        if (builder)
+          out.push({
+            key: `${id}:${e.seq}:builder`,
+            actor: builder,
+            subject: `Not yet: punch list for "${name(wo)}"`,
+            text: [
+              `Not yet. ${items.length} named ${items.length === 1 ? 'check' : 'checks'} failed:`,
+              ...items.map((i) => `- ${i.field}: ${i.reason}`),
+              'Nothing was paid.',
+              p.state === 'REWORK'
+                ? 'Fix it and resubmit on the same lease.'
+                : 'No attempts are left on this milestone.',
+            ].join('\n'),
+          });
+      } else if (e.type === 'stood.released' && wo) {
+        const amount = money(Number((p.payment as { minor?: number } | undefined)?.minor ?? 0));
+        const text = `${amount} released for "${name(wo)}". Stood checked it. Simulated: no real money moved.`;
+        out.push({
+          key: `${id}:${e.seq}:buyer`,
+          actor: snapshot.owner,
+          subject: `Milestone paid: "${name(wo)}"`,
+          text,
+        });
+        const builder = claimant(wo);
+        if (builder)
+          out.push({ key: `${id}:${e.seq}:builder`, actor: builder, subject: `Milestone paid: "${name(wo)}"`, text });
+      } else if (e.type === 'blueprint.closed')
+        out.push({
+          key: `${id}:${e.seq}:buyer`,
+          actor: snapshot.owner,
+          subject: 'Project closed',
+          text: 'Closed. The keys are yours. Stored test keys are deleted within seven days.',
+        });
+    }
+    for (const wo of Object.keys(d.orders)) {
+      const { work, order } = workOrder(d, wo),
+        claim = work.snapshot.currentClaim;
+      if (
+        claim &&
+        !order.payment &&
+        !order.closed &&
+        ['CLAIMED', 'BUILDING', 'REWORK'].includes(work.snapshot.state) &&
+        now >= claim.leasedUntil - 6 * 3600000 &&
+        now < claim.leasedUntil
+      )
+        out.push({
+          key: `${id}:${wo}:${claim.id}:lease-ending`,
+          actor: claim.builderId,
+          subject: `Lease ending soon: "${name(wo)}"`,
+          text: `Your lease on "${name(wo)}" ends ${new Date(claim.leasedUntil).toISOString().slice(0, 16).replace('T', ' ')} UTC. Submit or clock out before then.`,
+        });
+    }
+    return { notices: out, lastSeq: events.at(-1)?.seq ?? after };
+  }
   // Y13: reputation counts only Stood-paid milestones for buyers outside the builder's operator tree.
   async reputation(root: string) {
     const result = { root, counted: 0, selfDealing: 0, refusals: 0 };
@@ -599,17 +725,26 @@ export class Board {
   async discover(now: number) {
     return (await this.discoverPage('', now)).orders;
   }
-  async discoverPage(after: string = '', now: number) {
+  async discoverPage(after: string = '', now: number, query?: string) {
     if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
     if (after && !/^[A-Za-z0-9_-]{1,100}$/.test(after)) throw new YardError('INVALID');
-    const projects = await this.events.list(after);
+    const q = query?.trim();
+    if (q !== undefined && (!q || q.length > 100)) throw new YardError('INVALID');
+    const words = q?.toLowerCase().split(/\s+/) ?? [];
+    const projects = q
+      ? this.events.search
+        ? await this.events.search(q, after)
+        : (await this.events.list(after)).filter(() => true)
+      : await this.events.list(after);
     const page = projects.slice(0, 100);
     const orders = page.flatMap((s) => {
       const d = data(s.data);
       return Object.keys(d.orders).flatMap((id) => {
         const { work, order } = workOrder(d, id);
         const milestone = terms(d, order.milestone)!;
+        const tokens = milestone.name.toLowerCase().split(/[^a-z0-9]+/);
         if (
+          (q && !words.every((w) => tokens.includes(w))) ||
           order.payment ||
           order.closed ||
           work.snapshot.state !== 'POSTED' ||
@@ -620,7 +755,7 @@ export class Board {
         return [
           {
             projectId: s.id,
-            id: fingerprint({ projectId: s.id, workOrderId: id }),
+            id: offerId(s.id, id),
             workOrderId: id,
             name: milestone.name,
             priceMinor: milestone.budgetMinor,
@@ -808,6 +943,7 @@ export class Board {
       version: snapshot.version,
       handover: d.handover ?? null,
       ...(now === undefined ? {} : { clock: now }),
+      previews: (d.previews ?? []).map((p) => ({ wo: p.wo, url: p.url, expiresAt: p.expiresAt })),
       mandate: d.mandate?.allowanceId
         ? {
             allowanceId: d.mandate.allowanceId,

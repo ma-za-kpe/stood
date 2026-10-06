@@ -32,6 +32,26 @@ export async function migrateYardEvents(pool: pg.Pool, owner: string): Promise<v
     c.release();
   }
 }
+const searchable = "to_tsvector('simple', jsonb_path_query_array(data, '$.blueprint.milestones[*].name')::text)";
+// Operator-run migration 6: a GIN index for public milestone-name search.
+export async function migrateYardSearch(pool: pg.Pool, owner: string): Promise<void> {
+  if (!/^[a-z][a-z0-9_]{0,62}$/.test(owner)) throw new RangeError('Invalid Yard owner');
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(`SET LOCAL ROLE ${owner}`);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended('yard-search-migration',0))");
+    if (!(await c.query('SELECT 1 FROM yard.schema_migrations WHERE version=6')).rowCount)
+      await c.query(`CREATE INDEX projects_milestone_search ON yard.projects USING GIN (${searchable});
+        INSERT INTO yard.schema_migrations(version) VALUES(6);`);
+    await c.query('COMMIT');
+  } catch (error) {
+    await c.query('ROLLBACK');
+    throw error;
+  } finally {
+    c.release();
+  }
+}
 const snapshot = (r: Record<string, unknown>): YardSnapshot => ({
   id: String(r.id),
   owner: String(r.owner),
@@ -170,6 +190,14 @@ export class PostgresYardEvents implements YardEvents {
       await this.pool.query(
         'SELECT * FROM yard.projects WHERE id COLLATE "C">$1 COLLATE "C" ORDER BY id COLLATE "C" LIMIT 101',
         [after],
+      )
+    ).rows.map(snapshot);
+  }
+  async search(query: string, after = ''): Promise<readonly YardSnapshot[]> {
+    return (
+      await this.pool.query(
+        `SELECT * FROM yard.projects WHERE id COLLATE "C">$2 COLLATE "C" AND ${searchable} @@ plainto_tsquery('simple',$1) ORDER BY id COLLATE "C" LIMIT 101`,
+        [query, after],
       )
     ).rows.map(snapshot);
   }

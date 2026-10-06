@@ -3,9 +3,19 @@ import { handoverConfirmation, IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { Board, HoldProof, Operator, RefusalProof, SettlementProof, StoodProof } from '../application/board.js';
+import { streamSSE } from 'hono/streaming';
+import {
+  type Board,
+  type HoldProof,
+  type Operator,
+  offerId,
+  type RefusalProof,
+  type SettlementProof,
+  type StoodProof,
+} from '../application/board.js';
 import type { IntakePlanner } from '../application/intake-planner.js';
 import { type DraftGateway, MandateBridge } from '../application/mandate-bridge.js';
+import { type NudgeConfig, Nudges } from '../application/nudges.js';
 import type { SecretVault } from '../application/secret-vault.js';
 import type { SiteLog } from '../application/site-log.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
@@ -37,6 +47,8 @@ export type BoardConfig = Readonly<{
   intakePlanner?: Pick<IntakePlanner, 'create'>;
   secrets?: SecretVault;
   mandates?: DraftGateway;
+  nudges?: NudgeConfig;
+  boardStreamMs?: number;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<StoodProof> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
@@ -192,8 +204,32 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     simulated: true,
   });
   app.get('/yard/v1/board', async (c) =>
-    c.json({ ...(await config.board.discoverPage(c.req.query('after'), request(c).now)), simulated: true }),
+    c.json({
+      ...(await config.board.discoverPage(c.req.query('after'), request(c).now, c.req.query('q'))),
+      simulated: true,
+    }),
   );
+  // T-0211: the public Board as a live stream of open work. Public fields only; no buyer identity.
+  app.get('/yard/v1/board/events', (c) => {
+    const interval = config.boardStreamMs ?? 2000;
+    c.header('Cache-Control', 'no-store');
+    return streamSSE(c, async (stream) => {
+      let last = '';
+      let stopped = false;
+      stream.onAbort(() => {
+        stopped = true;
+      });
+      while (!stopped && !stream.aborted) {
+        const page = await config.board.discoverPage('', await config.clock());
+        const raw = JSON.stringify({ orders: page.orders, nextCursor: page.nextCursor, simulated: true });
+        if (raw !== last) {
+          await stream.writeSSE({ event: 'board.snapshot', data: raw });
+          last = raw;
+        } else await stream.writeSSE({ event: 'heartbeat', data: '{}' });
+        await stream.sleep(interval);
+      }
+    });
+  });
   app.post('/yard/v1/blueprints', async (c) => {
     const key = c.req.header('Idempotency-Key') ?? '';
     if (!/^[A-Za-z0-9:._-]{1,120}$/.test(key)) throw new YardError('INVALID');
@@ -224,18 +260,24 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
   app.post('/yard/v1/blueprints/:id/work-orders', async (c) => {
     const { key, version, actor, now } = command(c),
       input = body(c, ['milestone', 'trancheId']);
+    const posted = async (result: { id: string; version: number }) => {
+      if (nudges) void nudges.posted([offerId(c.req.param('id'), String(input.milestone))], now).catch(() => 0);
+      return result;
+    };
     if (typeof input.milestone !== 'string' || (input.trancheId !== undefined && typeof input.trancheId !== 'string'))
       throw new YardError('INVALID');
     return c.json(
       ack(
-        await config.board.post(
-          c.req.param('id'),
-          input.milestone,
-          input.trancheId as string | undefined,
-          actor,
-          version,
-          key,
-          now,
+        await posted(
+          await config.board.post(
+            c.req.param('id'),
+            input.milestone,
+            input.trancheId as string | undefined,
+            actor,
+            version,
+            key,
+            now,
+          ),
         ),
       ),
     );
@@ -331,6 +373,165 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     const keysDeletedBy = now + 7 * 86400000;
     if (config.secrets) await config.secrets.scheduleDeletion(id, actor.id, keysDeletedBy);
     return c.json({ ...ack(result), keysDeletedBy });
+  });
+  const nudges = config.nudges ? new Nudges(config.nudges) : null;
+  // T-0210: an A2A-shaped surface over the same signed Board commands. Not certified; no new authority.
+  app.get('/.well-known/agent.json', (c) =>
+    c.json({
+      name: 'Yard Board',
+      description: 'Post, discover, claim and submit fixed-price, test-defined work orders. Stood decides payment.',
+      url: '/yard/v1/a2a',
+      version: '0.1.0',
+      capabilities: { streaming: false, pushNotifications: false },
+      defaultInputModes: ['application/json'],
+      defaultOutputModes: ['application/json'],
+      skills: [
+        { id: 'discover-work', name: 'Discover work', description: 'Page through open work orders.', tags: ['board'] },
+        {
+          id: 'post-work-order',
+          name: 'Post a work order',
+          description: 'Buyer posts a signed milestone.',
+          tags: ['board'],
+        },
+        { id: 'claim-work-order', name: 'Clock in', description: 'Builder claims a 48-hour lease.', tags: ['lease'] },
+        {
+          id: 'submit-work',
+          name: 'Submit work',
+          description: 'Builder submits a commit for Stood to check.',
+          tags: ['stood'],
+        },
+      ],
+      securitySchemes: {
+        yardHmac: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'Yard-Signature',
+          description:
+            'yard.request@2 HMAC over key id, method, target, command headers and body; Yard-Key-Id names the key.',
+        },
+      },
+      security: [{ yardHmac: [] }],
+      simulated: true,
+      certification: 'none',
+    }),
+  );
+  app.post('/yard/v1/a2a', async (c) => {
+    const { actor, now, body: raw } = request(c);
+    let message: Record<string, unknown>;
+    let rpcId: unknown = null;
+    const rpcError = (code: number, text: string) =>
+      c.json({ jsonrpc: '2.0', id: rpcId, error: { code, message: text } });
+    try {
+      message = JSON.parse(raw);
+      rpcId = message.id ?? null;
+    } catch {
+      return rpcError(-32700, 'Parse error');
+    }
+    const params = (message.params ?? {}) as Record<string, unknown>;
+    const task = (id: string, context: string, state: string, data?: unknown) =>
+      c.json({
+        jsonrpc: '2.0',
+        id: rpcId,
+        result: {
+          kind: 'task',
+          id,
+          contextId: context,
+          status: { state, timestamp: new Date(now).toISOString() },
+          artifacts: data === undefined ? [] : [{ artifactId: `${id}:result`, parts: [{ kind: 'data', data }] }],
+          metadata: { simulated: true },
+        },
+      });
+    const states: Record<string, string> = {
+      POSTED: 'submitted',
+      CLAIMED: 'working',
+      BUILDING: 'working',
+      SUBMITTING: 'working',
+      SUBMITTED: 'working',
+      CHECKING: 'working',
+      REWORK: 'input-required',
+      PAID: 'completed',
+      REFUSED: 'failed',
+      LEASE_EXPIRED: 'failed',
+      ABANDONED: 'failed',
+    };
+    try {
+      if (message.jsonrpc !== '2.0') return rpcError(-32600, 'Invalid request');
+      if (message.method === 'tasks/get') {
+        const match = /^wo:([A-Za-z0-9_-]{1,100}):([A-Za-z0-9_-]{1,100})$/.exec(String(params.id ?? ''));
+        if (!match) return rpcError(-32602, 'Invalid params');
+        const view = await config.board.view(match[1] as string, match[2] as string, actor);
+        return task(String(params.id), match[1] as string, states[view.state] ?? 'unknown');
+      }
+      if (message.method !== 'message/send') return rpcError(-32601, 'Method not found');
+      const m = params.message as { messageId?: unknown; parts?: unknown } | undefined;
+      const part = Array.isArray(m?.parts) && m.parts.length === 1 ? (m.parts[0] as Record<string, unknown>) : null;
+      const data = part?.kind === 'data' ? (part.data as Record<string, unknown>) : null;
+      const key = typeof m?.messageId === 'string' ? m.messageId : '';
+      if (!data || !/^[A-Za-z0-9:._-]{1,120}$/.test(key)) return rpcError(-32602, 'Invalid params');
+      const text = (k: string) => {
+        if (typeof data[k] !== 'string') throw new YardError('INVALID');
+        return data[k] as string;
+      };
+      const version = () => {
+        if (!Number.isSafeInteger(data.version)) throw new YardError('INVALID');
+        return data.version as number;
+      };
+      switch (data.skill) {
+        case 'discover-work':
+          return task(
+            `discover:${key}`,
+            'board',
+            'completed',
+            await config.board.discoverPage(typeof data.after === 'string' ? data.after : '', now),
+          );
+        case 'post-work-order': {
+          const project = text('projectId'),
+            milestone = text('milestone');
+          const result = await config.board.post(
+            project,
+            milestone,
+            typeof data.trancheId === 'string' ? data.trancheId : undefined,
+            actor,
+            version(),
+            key,
+            now,
+          );
+          if (nudges) void nudges.posted([offerId(project, milestone)], now).catch(() => 0);
+          return task(`wo:${project}:${milestone}`, project, 'completed', ack(result));
+        }
+        case 'claim-work-order': {
+          const project = text('projectId'),
+            wo = text('workOrderId');
+          const result = await config.board.claim(project, wo, actor, version(), key, now);
+          return task(`wo:${project}:${wo}`, project, 'completed', ack(result));
+        }
+        case 'submit-work': {
+          const project = text('projectId'),
+            wo = text('workOrderId'),
+            commit = text('commit');
+          if (!config.packages || !/^[a-f0-9]{40}$/.test(commit)) throw new YardError('INVALID');
+          const result = await new SubmissionBridge(config.board, config.packages).submit(
+            project,
+            wo,
+            commit,
+            actor,
+            version(),
+            key,
+            now,
+          );
+          return task(`wo:${project}:${wo}`, project, 'completed', result);
+        }
+        default:
+          return rpcError(-32602, 'Invalid params');
+      }
+    } catch (error) {
+      if (error instanceof YardError)
+        return rpcError(
+          { FORBIDDEN: -32003, NOT_FOUND: -32001, INVALID: -32602 }[error.code as string] ?? -32009,
+          error.code,
+        );
+      return rpcError(-32603, 'Yard is unavailable');
+    }
   });
   if (config.secrets) {
     const vault = config.secrets;

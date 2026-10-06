@@ -31,6 +31,16 @@ export class MemoryEvents implements YardEvents {
       .slice(0, 101)
       .map((s) => structuredClone(s));
   }
+  async search(query: string, after = '') {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return (await this.list(after)).filter((s) => {
+      const names = ((s.data as { blueprint?: { milestones?: { name: string }[] } }).blueprint?.milestones ?? [])
+        .map((m) => m.name.toLowerCase())
+        .join(' ')
+        .split(/[^a-z0-9]+/);
+      return words.every((w) => names.includes(w));
+    });
+  }
   async read(id: string, after: number) {
     return structuredClone((this.history.get(id) ?? []).filter((e) => e.seq > after));
   }
