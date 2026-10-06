@@ -64,7 +64,8 @@ type Order = {
   refusals?: Refusal[];
   closed?: 'REFUSED';
 };
-type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order> };
+type Handover = { status: 'CLOSED'; closedAt: number; confirmed: readonly string[] };
+type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order>; handover?: Handover };
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -235,6 +236,31 @@ export class Board {
       )
         throw new YardError('CONFLICT');
     }
+  }
+  // Y20 §5: the buyer confirms their rotation items once every milestone is paid. This closes the
+  // project; it never changes or waits for a Stood money decision.
+  closeHandover(id: string, actor: Operator, version: number, key: string, now: number, confirmed: readonly string[]) {
+    return this.mutate(id, actor, version, key, { handover: confirmed }, 'blueprint.closed', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      if (!Number.isSafeInteger(now) || now < d.blueprint.createdAt) throw new YardError('INVALID');
+      if (
+        d.handover ||
+        d.blueprint.status !== 'FROZEN' ||
+        d.blueprint.milestones.some((m) => !Object.hasOwn(d.orders, m.id) || !d.orders[m.id]?.payment)
+      )
+        throw new YardError('CONFLICT');
+      d.handover = { status: 'CLOSED', closedAt: now, confirmed: [...confirmed] };
+      return { state: 'CLOSED', confirmed: [...confirmed], simulated: true };
+    });
+  }
+  // Step 9 keys: only the owning buyer, and only after the blueprint terms are signed (frozen).
+  async secretScope(id: string, actor: Operator): Promise<void> {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    if (actor.kind !== 'BUYER' || snapshot.owner !== actor.id || d.buyerRoot !== actor.root)
+      throw new YardError('FORBIDDEN');
+    if (d.blueprint.status !== 'FROZEN') throw new YardError('CONFLICT');
   }
   async discover(now: number) {
     return (await this.discoverPage('', now)).orders;
@@ -416,6 +442,7 @@ export class Board {
     return {
       id: snapshot.id,
       version: snapshot.version,
+      handover: d.handover ?? null,
       summary: d.blueprint.summary,
       currency: d.blueprint.currency,
       simulated: true,

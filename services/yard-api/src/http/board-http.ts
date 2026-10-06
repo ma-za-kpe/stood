@@ -1,15 +1,17 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { IntakeError } from '@stood/yard-contracts';
+import { handoverConfirmation, IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Board, Operator, RefusalProof, SettlementProof, StoodProof } from '../application/board.js';
 import type { IntakePlanner } from '../application/intake-planner.js';
+import type { SecretVault } from '../application/secret-vault.js';
 import type { SiteLog } from '../application/site-log.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
 import type { IntakeStore } from '../ports/intakes.js';
+import { SecretError } from '../ports/secrets.js';
 import { SiteLogError } from '../ports/site-log.js';
 import { eventFeed } from './event-feed.js';
 import { foremanHttp } from './foreman-http.js';
@@ -24,6 +26,7 @@ export type BoardConfig = Readonly<{
   foreman?: ForemanPlans;
   intakes?: IntakeStore;
   intakePlanner?: Pick<IntakePlanner, 'create'>;
+  secrets?: SecretVault;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<StoodProof> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
@@ -94,6 +97,14 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
         error.code === 'RATE_LIMITED' ? 429 : error.code === 'SCAN_UNAVAILABLE' ? 503 : 422,
       );
     if (error instanceof IntakeError) return c.json({ code: error.code }, 422);
+    // Fixed codes only: a secret error never echoes the submitted value.
+    if (error instanceof SecretError)
+      return error.code === 'LIVE_KEY'
+        ? c.json({ code: 'live_key_refused' }, 422)
+        : c.json(
+            { code: error.code },
+            ({ INVALID: 422, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409, UNAVAILABLE: 503 } as const)[error.code],
+          );
     if (error instanceof YardError)
       return c.json(
         { code: error.code },
@@ -243,6 +254,66 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       body(c, []);
       return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
     });
+  app.post('/yard/v1/blueprints/:id/handover', async (c) => {
+    const { key, version, actor, now } = command(c),
+      id = c.req.param('id');
+    let confirmed: readonly string[];
+    try {
+      confirmed = handoverConfirmation(body(c, ['confirmed']));
+    } catch (error) {
+      if (error instanceof YardError) throw error;
+      throw new YardError('INVALID');
+    }
+    const result = await config.board.closeHandover(id, actor, version, key, now, confirmed);
+    // Yard's own checklist item: stored test keys are deleted within seven days of handover.
+    const keysDeletedBy = now + 7 * 86400000;
+    if (config.secrets) await config.secrets.scheduleDeletion(id, actor.id, keysDeletedBy);
+    return c.json({ ...ack(result), keysDeletedBy });
+  });
+  if (config.secrets) {
+    const vault = config.secrets;
+    const name = (c: Context) => {
+      const value = c.req.param('name') ?? '';
+      if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(value)) throw new YardError('INVALID');
+      return value;
+    };
+    app.get('/yard/v1/blueprints/:id/secrets', async (c) => {
+      const { actor } = request(c);
+      await config.board.secretScope(c.req.param('id'), actor);
+      return c.json({ secrets: await vault.list(c.req.param('id'), actor.id), simulated: true });
+    });
+    app.put('/yard/v1/blueprints/:id/secrets/:name', async (c) => {
+      const { key, actor, now } = command(c),
+        id = c.req.param('id'),
+        input = body(c, ['provider', 'environment', 'value']);
+      if (
+        typeof input.provider !== 'string' ||
+        typeof input.environment !== 'string' ||
+        typeof input.value !== 'string'
+      )
+        throw new YardError('INVALID');
+      await config.board.secretScope(id, actor);
+      const meta = await vault.put({
+        blueprintId: id,
+        owner: actor.id,
+        provider: input.provider,
+        name: name(c),
+        environment: input.environment as 'TEST' | 'DEV',
+        value: input.value,
+        key,
+        now,
+      });
+      return c.json({ ...meta, simulated: true }, 201);
+    });
+    app.post('/yard/v1/blueprints/:id/secrets/:name/revoke', async (c) => {
+      const { actor, now } = command(c),
+        id = c.req.param('id');
+      body(c, []);
+      await config.board.secretScope(id, actor);
+      await vault.revoke(id, actor.id, name(c), now);
+      return c.json({ revoked: true, simulated: true });
+    });
+  }
   eventFeed(app, {
     store: config.board.events,
     authorize: async (headers, id, target) => {

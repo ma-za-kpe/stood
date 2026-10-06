@@ -601,3 +601,30 @@ button:disabled {
   color: var(--y-navy);
   border-color: var(--y-rebar);
 }
+
+/* Handover: the rotation checklist. Yard items are pre-ticked and locked. */
+.handover {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card, 10px);
+  padding: var(--s-5, 24px);
+  background: var(--surface);
+}
+.handover .checklist {
+  list-style: none;
+  padding: 0;
+  margin: var(--s-3, 12px) 0;
+}
+.handover .checklist li {
+  margin: var(--s-2, 8px) 0;
+}
+.handover .checklist label {
+  display: flex;
+  gap: var(--s-2, 8px);
+  align-items: flex-start;
+  min-height: 44px;
+}
+.handover input[type="checkbox"] {
+  inline-size: 20px;
+  block-size: 20px;
+  accent-color: var(--accent);
+}

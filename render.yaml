@@ -1,0 +1,65 @@
+# Render Blueprint for the hosted demo (T-0214). Sandbox only: no live PayPal host, no committed secrets.
+# Every secret is sync: false, so Render asks the owner for it in their own account. Deploys run on
+# release tags through deploy hooks, never on every push. Yard is not deployed yet: its production
+# composition root needs the credential handoff (see docs/HANDOFF.md).
+services:
+  - type: web
+    name: stood-api
+    runtime: docker
+    region: frankfurt
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: demo
+      - key: DEMO_MODE
+        value: "true"
+      - key: PORT
+        value: "3000"
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: STOOD_PLATFORM_ID
+        value: stood-demo
+      - key: PROVIDER_PAYPAL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: STOOD_API_KEY
+        sync: false
+      - key: STOOD_HMAC_SECRET
+        sync: false
+      - key: STOOD_WEBHOOK_SECRET
+        sync: false
+  - type: worker
+    name: stood-reconciler
+    runtime: docker
+    region: frankfurt
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: dist/reconcile-cli.js
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: demo
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PROVIDER_PAYPAL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: RECONCILIATION_OWNER
+        sync: false
