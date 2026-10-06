@@ -61,3 +61,7 @@ The persisted Board now replays claim, build, expiry, clock-out and repost actio
 Discovery returns a globally unique opaque offer `id`, plus `projectId` and `workOrderId` for scoped commands. This prevents two projects with the same milestone name from overwriting one another in a builder's offer map. Continuation pages remain mandatory even when a page contains no open work. Buyer repositories remain private until a scoped claim succeeds.
 
 The HTTP lease scenario exercises metadata only. It creates no hold and confirms no money movement. Lease-to-confirmed-hold dispatch and confirmed hold cancellation remain separate unfinished work; a lease event must never be interpreted as PayPal proof.
+
+### Milestone deadlines
+
+The connected Board filters elapsed offers using the same server clock as Stood. An old discovery card cannot authorise a new claim: posting, claiming, reposting, building and reserving a submission check the signed milestone deadline again. At the exact deadline they return a conflict without adding an event. A 48-hour claim never extends that deadline. Expiry cleanup and recovery of an already reserved submission remain available; matching payment facts are still reconciled after the deadline. Changing the deadline requires new approved terms, rather than silently extending the work order.

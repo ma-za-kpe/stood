@@ -113,6 +113,12 @@ function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
   }
   return { order, work };
 }
+function beforeDeadline(d: Data, milestoneId: string, now: number): void {
+  if (!Number.isSafeInteger(now) || now < d.blueprint.createdAt) throw new YardError('INVALID');
+  const milestone = d.blueprint.milestones.find((m) => m.id === milestoneId);
+  if (!milestone) throw new YardError('INVALID');
+  if (now >= milestone.deadline) throw new YardError('CONFLICT');
+}
 export class Board {
   constructor(readonly events: YardEvents) {}
   async create(input: BlueprintInput, actor: Operator, key: string): Promise<YardSnapshot> {
@@ -140,10 +146,11 @@ export class Board {
       throw new YardError('FORBIDDEN');
     return snapshot;
   }
-  async discover() {
-    return (await this.discoverPage()).orders;
+  async discover(now: number) {
+    return (await this.discoverPage('', now)).orders;
   }
-  async discoverPage(after = '') {
+  async discoverPage(after: string = '', now: number) {
+    if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
     if (after && !/^[A-Za-z0-9_-]{1,100}$/.test(after)) throw new YardError('INVALID');
     const projects = await this.events.list(after);
     const page = projects.slice(0, 100);
@@ -152,7 +159,13 @@ export class Board {
       return Object.keys(d.orders).flatMap((id) => {
         const { work, order } = workOrder(d, id);
         const milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
-        if (order.payment || work.snapshot.state !== 'POSTED') return [];
+        if (
+          order.payment ||
+          work.snapshot.state !== 'POSTED' ||
+          now < d.blueprint.createdAt ||
+          now >= milestone.deadline
+        )
+          return [];
         return [
           {
             projectId: s.id,
@@ -202,6 +215,7 @@ export class Board {
         !/^[A-Za-z0-9_-]{1,200}$/.test(trancheId)
       )
         throw new YardError('INVALID');
+      beforeDeadline(d, milestone, now);
       const work = new WorkOrder(milestone, actor.root, now);
       d.orders[milestone] = { id: work.snapshot.id, milestone, trancheId, postedAt: now, actions: [], payment: null };
       return { wo: milestone, state: 'POSTED', simulated: true };
@@ -212,6 +226,7 @@ export class Board {
       if (actor.kind !== 'BUILDER') throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);
       if (order.payment) throw new YardError('CONFLICT');
+      beforeDeadline(d, order.milestone, now);
       const claimId = fingerprint({ id, wo, actor: actor.id, key });
       const claim = work.claim(
         { id: claimId, builderId: actor.id, operatorId: actor.id, operatorRootId: actor.root },
@@ -226,6 +241,7 @@ export class Board {
       const { work, order } = workOrder(d, wo);
       const claim = work.snapshot.currentClaim;
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
+      beforeDeadline(d, order.milestone, now);
       work.build(claim.id, now);
       order.actions.push({ kind: 'build', claim: claim.id, now });
       return { wo, state: 'BUILDING', simulated: true };
@@ -257,6 +273,7 @@ export class Board {
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);
       if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      beforeDeadline(d, order.milestone, now);
       leaseChange(() => work.repost(now));
       order.actions.push({ kind: 'repost', now });
       return { wo, state: 'POSTED', simulated: true };
@@ -276,6 +293,7 @@ export class Board {
       const { work, order } = workOrder(d, wo);
       const claim = work.snapshot.currentClaim;
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id || order.payment) throw new YardError('FORBIDDEN');
+      beforeDeadline(d, order.milestone, now);
       work.submit(claim.id, commit, packageId, now);
       work.checking(packageId, now);
       order.actions.push({ kind: 'submit', claim: claim.id, commit, packageId, now });
@@ -373,6 +391,7 @@ export class Board {
         const claim = work.snapshot.currentClaim;
         if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id || order.payment || order.submissionIntent)
           throw new YardError('FORBIDDEN');
+        beforeDeadline(d, order.milestone, now);
         work.submit(claim.id, commit, 'reservation-only', now); // validate lease and commit before any HTTP
         order.submissionIntent = {
           key,

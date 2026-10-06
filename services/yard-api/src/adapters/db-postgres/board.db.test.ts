@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { yardDatabase } from '../../../test/database.js';
+import { claimedFixture, leaseAt, leaseBuilder, leaseBuyer } from '../../../test/fakes/board-fixture.js';
 import { Board } from '../../application/board.js';
 import { SubmissionBridge } from '../../application/submission-bridge.js';
 import { migrateYardEvents, PostgresYardEvents } from './events.js';
@@ -49,6 +50,27 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   if (f) await f.close();
+});
+it('keeps expired work unclaimable after a database reconnect without adding an event', async () => {
+  const events = new PostgresYardEvents(f.limited);
+  const { board: initial, id } = await claimedFixture(events, 'deadline-project');
+  await initial.releaseClaim(id, 'one', leaseBuilder, 5, 'out', leaseAt);
+  await initial.repost(id, 'one', leaseBuyer, 6, 'repost', leaseAt);
+  const connection = f.connectRuntime();
+  try {
+    const restored = new Board(new PostgresYardEvents(connection));
+    const deadline = leaseAt + 7 * 86400000;
+    const before = await events.read(id, 0);
+    expect((await restored.discoverPage('', deadline)).orders.filter((o) => o.projectId === id)).toHaveLength(0);
+    await expect(restored.claim(id, 'one', leaseBuilder, 7, 'late', deadline)).rejects.toThrow('CONFLICT');
+    expect(await events.read(id, 0)).toEqual(before);
+    expect((await restored.view(id, 'one', leaseBuyer)).state).toBe('POSTED');
+    // Leave no open offer in the shared database used by pagination tests.
+    await restored.claim(id, 'one', leaseBuilder, 7, 'on-time', deadline - 1);
+    await restored.expireLease(id, 'one', leaseBuyer, 8, 'cleanup', deadline + 2 * 86400000);
+  } finally {
+    await connection.end();
+  }
 });
 it('posts frozen terms and serialises real claims using authenticated operator identities', async () => {
   await board.create(input, buyer, 'create');
@@ -150,9 +172,9 @@ it('paginates beyond project 100 and keeps buyer repository out of discovery', a
     );
     await board.post(id, 'one', `tranche-${id}`, buyer, 2, 'post', at);
   }
-  const first = await board.discoverPage();
+  const first = await board.discoverPage('', at);
   expect(first.nextCursor).not.toBeNull();
-  const second = await board.discoverPage(first.nextCursor!);
+  const second = await board.discoverPage(first.nextCursor!, at);
   const orders = [...first.orders, ...second.orders];
   expect(orders).toHaveLength(105);
   expect(new Set(orders.map((o) => o.projectId)).size).toBe(105);
@@ -164,7 +186,7 @@ it('paginates beyond project 100 and keeps buyer repository out of discovery', a
     expect(o).not.toHaveProperty('baseCommit');
     expect(o).not.toHaveProperty('buyerOperatorId');
   }
-  await expect(board.discoverPage('invalid cursor')).rejects.toThrow('INVALID');
+  await expect(board.discoverPage('invalid cursor', at)).rejects.toThrow('INVALID');
 });
 
 it('recovers a durable submission through a new connection and serialises competing receipt writers', async () => {

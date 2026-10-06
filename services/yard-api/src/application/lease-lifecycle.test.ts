@@ -10,10 +10,10 @@ it('expires at the boundary and reposts durable work without retaining the old b
   const expired = await board.expireLease(id, 'one', leaseBuyer, 5, 'expire', end);
   expect((await board.view(id, 'one', leaseBuyer)).state).toBe('LEASE_EXPIRED');
   await expect(board.read(id, leaseBuilder)).rejects.toThrow('FORBIDDEN');
-  expect((await board.discover()).filter((o) => o.projectId === id)).toHaveLength(0);
+  expect((await board.discover(leaseAt)).filter((o) => o.projectId === id)).toHaveLength(0);
   await board.repost(id, 'one', leaseBuyer, 6, 'repost', end);
   expect(await board.expireLease(id, 'one', leaseBuyer, 5, 'expire', end + 1)).toEqual(expired);
-  expect((await board.discover()).filter((o) => o.projectId === id)).toHaveLength(1);
+  expect((await board.discover(leaseAt)).filter((o) => o.projectId === id)).toHaveLength(1);
   await expect(board.submit(id, 'one', 'd'.repeat(40), 'old', leaseBuilder, 7, 'old-submit', end)).rejects.toThrow();
   const next = { id: 'next', root: 'next-root', kind: 'BUILDER' as const };
   await board.claim(id, 'one', next, 7, 'next-claim', end);
@@ -56,7 +56,7 @@ it('keeps discovery identities distinct when projects use the same milestone nam
     await board.releaseClaim(id, 'one', leaseBuilder, 5, 'out', leaseAt);
     await board.repost(id, 'one', leaseBuyer, 6, 'repost', leaseAt);
   }
-  const offers = await board.discover();
+  const offers = await board.discover(leaseAt);
   expect(offers).toHaveLength(2);
   expect(new Set(offers.map((o) => o.id)).size).toBe(2);
   expect(offers.map((o) => o.workOrderId)).toEqual(['one', 'one']);
@@ -68,5 +68,5 @@ it('uses the same byte ordering for discovery cursors in the in-memory provider'
   await claimedFixture(store, 'A-project');
   expect((await store.list()).map((p) => p.id)).toEqual(['A-project', 'Z-project', 'a-project']);
   expect((await store.list('Z-project')).map((p) => p.id)).toEqual(['a-project']);
-  expect(await board.discoverPage('Z-project')).toMatchObject({ orders: [], nextCursor: null });
+  expect(await board.discoverPage('Z-project', leaseAt)).toMatchObject({ orders: [], nextCursor: null });
 });
