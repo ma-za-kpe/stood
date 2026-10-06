@@ -108,6 +108,7 @@ type Data = {
   handover?: Handover;
   mandate?: MandateIntent & { amendmentRequired?: string[] };
   changes?: ChangeOrder[];
+  previews?: { wo: string; serviceId: string; url: string; expiresAt: number }[];
 };
 // Effective milestone terms: the immutable signed milestone with approved change orders applied in order.
 function terms(d: Data, milestoneId: string) {
@@ -380,6 +381,54 @@ export class Board {
       )
         throw new YardError('CONFLICT');
     }
+  }
+  // T-0196: preview targets for a submitted milestone. Previews run test data only and expire.
+  async previewTarget(id: string, wo: string, now: number) {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    const { work, order } = workOrder(d, wo);
+    if (!['CHECKING', 'REWORK'].includes(work.snapshot.state) && !order.payment) throw new YardError('CONFLICT');
+    return { owner: snapshot.owner, expiresAt: order.payment ? now + 7 * 86400000 : now + 30 * 86400000 };
+  }
+  async recordPreview(id: string, preview: { wo: string; serviceId: string; url: string; expiresAt: number }) {
+    const snapshot = await this.events.load(id);
+    return this.events.mutate(
+      id,
+      snapshot.version,
+      'yard',
+      `preview:${preview.serviceId}`,
+      fingerprint(preview),
+      (raw) => {
+        const d = data(raw);
+        workOrder(d, preview.wo);
+        d.previews = [...(d.previews ?? []), structuredClone(preview)];
+        return {
+          data: d,
+          type: 'preview.deployed',
+          payload: { wo: preview.wo, url: preview.url, expiresAt: preview.expiresAt, simulated: true },
+        };
+      },
+    );
+  }
+  async removePreview(id: string, serviceId: string, reason: 'expired' | 'closed') {
+    const snapshot = await this.events.load(id);
+    return this.events.mutate(
+      id,
+      snapshot.version,
+      'yard',
+      `preview-removed:${serviceId}`,
+      fingerprint({ serviceId, reason }),
+      (raw) => {
+        const d = data(raw);
+        const p = d.previews?.find((x) => x.serviceId === serviceId);
+        if (!p) throw new YardError('NOT_FOUND');
+        d.previews = d.previews?.filter((x) => x.serviceId !== serviceId) ?? [];
+        return { data: d, type: 'preview.expired', payload: { wo: p.wo, reason, simulated: true } };
+      },
+    );
+  }
+  async previewList(id: string) {
+    return structuredClone(data((await this.events.load(id)).data).previews ?? []);
   }
   // T-0213: notices derived from project events after a cursor, plus lease-ending reminders.
   // Recipients are actor ids; amounts go only to the payer and payee of that milestone.
@@ -894,6 +943,7 @@ export class Board {
       version: snapshot.version,
       handover: d.handover ?? null,
       ...(now === undefined ? {} : { clock: now }),
+      previews: (d.previews ?? []).map((p) => ({ wo: p.wo, url: p.url, expiresAt: p.expiresAt })),
       mandate: d.mandate?.allowanceId
         ? {
             allowanceId: d.mandate.allowanceId,
