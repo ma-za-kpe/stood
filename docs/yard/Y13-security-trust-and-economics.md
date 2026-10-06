@@ -23,13 +23,20 @@ The research behind this project started with pyramid schemes ([docs/02](../02-p
 3. **Subcontracts are paid from the subcontractor's own mandate**, so a builder can't mint money by hiring itself.
 4. **Reputation can't be farmed internally** (see above).
 
-## Where the money goes (illustrative, not a pricing decision)
+## Pricing: free pilot, then a visible platform fee
+
+The product owner chose a free Yard pilot followed by a platform fee ([ADR-0019](../adr/0019-yard-free-pilot-and-visible-fees.md)). The pilot platform fee is $0. The future fee rate and start date remain undecided; charging is not implemented. A free platform does not make builder work or outside provider services free.
+
+Before signing, the buyer must see milestone budgets, the platform fee and preview/provider costs as separate line items within the approved total cap. Existing signed terms cannot acquire new fees. Current demos are simulated: no builder payment or provider charge is executed.
+
+## Where the money goes (illustrative future flow)
 
 ```text
 Buyer mandate $4,000 → milestones (held per milestone at PayPal)
   → RELEASE → builder operator (human dev's PayPal, or Manti Labs for the Crew)
-  → (planned) platform fee: an explicit line item in the blueprint, never hidden
+  → Yard platform fee: $0 during the pilot; later rate requires a disclosed line item
+  → preview/provider costs: separate disclosed line items, with limits
 Crew economics: GPU minutes × rate must be < milestone price, or the Crew doesn't claim
 ```
 
-Pricing and fees need an ADR before any real money moves. Sandbox only, as with Stood.
+The line-item schema, buyer disclosure and charging implementation remain T-0216. Actual provider compatibility still needs sandbox qualification; no real-money flow is enabled.

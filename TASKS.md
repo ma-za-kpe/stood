@@ -413,7 +413,7 @@ Everything still foreseen for **Stood** and **Yard** that wasn't yet a task. The
 
 - `[ ]` T-0214 Deploy `yard-api` and `yard-web` on Render as separate services with the restricted database role from T-0176; durable jobs (Render Workflows or pg-boss) for lease expiry, next-milestone posting, preview TTL teardown and handover reminders.
 - `[ ]` T-0215 Yard developer surfaces: OpenAPI for `/yard/v1` with a breaking-change diff in CI, a Postman workspace, and an APIMatic-generated Yard SDK / MCP. Qualify partner terms first.
-- `[ ]` T-0216 Pricing and platform-fee ADR (Y13): fees and preview hosting cost as explicit blueprint line items, nothing hidden. Required before any real money.
+- `[~]` T-0216 Pricing and platform-fee ADR (Y13): owner-selected free pilot followed by a visible platform fee recorded in ADR-0019; no rate or charging activation approved. Fees and preview/provider costs must be separate blueprint line items within the approved cap, with disclosure before signing and immutable signed prices. Cost-line schemas, UI and tests remain open. Required before any real money.
 - `[ ]` T-0217 Yard privacy and data: intake data classification (GDPR / NDPR / POPIA / Kenya DPA), export and deletion of blueprint data, retention per Y18, consent copy for agent and human builders.
 - `[ ]` T-0218 Yard demo and judge path: describe → sign → milestone paid → punch list → handover, across Yard and Stood, with honest "synthetic" labels; fits the 90s video (T-0041) and the judges' fixtures.
 
