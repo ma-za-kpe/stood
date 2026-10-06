@@ -68,7 +68,10 @@ function useRoomStream(id: string, version: number, ready: boolean, generation: 
     const listener = (raw: Event) => {
       touch();
       try {
-        const event = JSON.parse((raw as MessageEvent<string>).data) as RoomEvent;
+        const message = raw as MessageEvent<string>;
+        const parsed = JSON.parse(message.data) as Partial<RoomEvent>;
+        // A private placeholder carries only its position; its SSE name is the type.
+        const event = { actor: '', payload: {}, ...parsed, type: message.type } as RoomEvent;
         const current = client.getQueryData<ProjectRoom>(queryKey);
         if (!current) return reload();
         const next = applyEvent(current, event);
@@ -89,7 +92,12 @@ function useRoomStream(id: string, version: number, ready: boolean, generation: 
       'stood.released',
       'stood.refused',
       'wo.lease_expired',
+      'wo.released_claim',
       'wo.reposted',
+      'blueprint.closed',
+      'secret.added',
+      'secret.revoked',
+      'yard.private',
     ])
       source.addEventListener(type, listener);
     return () => {

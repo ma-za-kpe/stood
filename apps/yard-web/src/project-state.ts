@@ -64,6 +64,9 @@ const transitions: Readonly<Record<string, Readonly<{ from: readonly string[]; t
 export function applyEvent(room: ProjectRoom, e: RoomEvent): ProjectRoom | 'GAP' {
   if (!Number.isSafeInteger(e.seq) || e.seq < 1) return 'GAP';
   if (e.seq <= room.version) return room;
+  // Hidden or metadata-only events keep their position and never change what is shown.
+  if (['yard.private', 'secret.added', 'secret.revoked'].includes(e.type))
+    return e.seq === room.version + 1 ? { ...room, version: e.seq } : 'GAP';
   if (e.seq !== room.version + 1 || !object(e.payload) || typeof e.payload.wo !== 'string') return 'GAP';
   const p = e.payload,
     order = room.orders.find((o) => o.id === p.wo);

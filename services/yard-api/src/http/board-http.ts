@@ -320,8 +320,7 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       const actor = identify(headers, 'GET', target, '', await config.clock());
       if (!actor) return false;
       try {
-        await config.board.read(id, actor);
-        return true;
+        return await config.board.viewer(id, actor);
       } catch {
         return false;
       }
