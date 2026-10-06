@@ -122,6 +122,8 @@ function terms(d: Data, milestoneId: string) {
   return effective;
 }
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// The public Board identity of a posted work order (no buyer data).
+export const offerId = (projectId: string, workOrderId: string) => fingerprint({ projectId, workOrderId });
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object')
@@ -620,7 +622,7 @@ export class Board {
         return [
           {
             projectId: s.id,
-            id: fingerprint({ projectId: s.id, workOrderId: id }),
+            id: offerId(s.id, id),
             workOrderId: id,
             name: milestone.name,
             priceMinor: milestone.budgetMinor,
