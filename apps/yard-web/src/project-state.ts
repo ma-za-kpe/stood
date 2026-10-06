@@ -8,6 +8,8 @@ export type MoneyProof = Readonly<{
   currency: string;
   simulated: true;
 }>;
+export type PunchItem = Readonly<{ field: string; reason: string }>;
+export type RefusalView = Readonly<{ packageId: string; reference: string; attempt: number; final: boolean }>;
 export type OrderView = Readonly<{
   id: string;
   name: string;
@@ -17,6 +19,9 @@ export type OrderView = Readonly<{
   payment: MoneyProof | null;
   submission: Readonly<{ packageId: string; commit: string }> | null;
   leasedUntil: number | null;
+  attempt?: number;
+  punchList?: readonly PunchItem[] | null;
+  refusals?: readonly RefusalView[];
 }>;
 export type ProjectRoom = Readonly<{
   id: string;
@@ -28,6 +33,25 @@ export type ProjectRoom = Readonly<{
 }>;
 export type RoomEvent = Readonly<{ seq: number; type: string; actor: string; payload: unknown }>;
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+// A punch list names failed checks. It is build feedback, never money.
+function punchList(v: unknown): readonly PunchItem[] | null {
+  if (
+    !Array.isArray(v) ||
+    v.length < 1 ||
+    v.length > 20 ||
+    v.some(
+      (i) =>
+        !object(i) ||
+        typeof i.field !== 'string' ||
+        !/^[a-z][a-z0-9_]{0,63}$/.test(i.field) ||
+        typeof i.reason !== 'string' ||
+        !i.reason.trim() ||
+        i.reason.length > 300,
+    )
+  )
+    return null;
+  return v.map((i) => ({ field: String(i.field), reason: String(i.reason) }));
+}
 const transitions: Readonly<Record<string, Readonly<{ from: readonly string[]; to: string }>>> = {
   'wo.claimed': { from: WORK_ORDER_TRANSITIONS.CLAIMED, to: 'CLAIMED' },
   'wo.building': { from: WORK_ORDER_TRANSITIONS.BUILDING, to: 'BUILDING' },
@@ -59,7 +83,19 @@ export function applyEvent(room: ProjectRoom, e: RoomEvent): ProjectRoom | 'GAP'
       !proof.reference.trim()
     )
       return 'GAP';
-    next = { ...order, state: 'PAID', payment: proof as MoneyProof };
+    next = { ...order, state: 'PAID', payment: proof as MoneyProof, punchList: null };
+  } else if (e.type === 'stood.refused') {
+    const items = punchList(p.punchList);
+    const attempt = order.attempt ?? 1;
+    if (
+      e.actor !== 'stood' ||
+      order.state !== 'CHECKING' ||
+      !['REWORK', 'REFUSED'].includes(String(p.state)) ||
+      !items ||
+      p.attempt !== (p.state === 'REWORK' ? attempt + 1 : attempt)
+    )
+      return 'GAP';
+    next = { ...order, state: String(p.state), punchList: items, submission: null, attempt: Number(p.attempt) };
   } else {
     const rule = transitions[e.type];
     if (!rule || !rule.from.includes(order.state) || (p.state !== undefined && p.state !== rule.to)) return 'GAP';
@@ -80,6 +116,8 @@ const states = [
   'BUILDING',
   'SUBMITTING',
   'CHECKING',
+  'REWORK',
+  'REFUSED',
   'PUNCH_LIST',
   'ABANDONED',
   'LEASE_EXPIRED',
@@ -122,6 +160,32 @@ export function roomChecked(value: unknown): ProjectRoom {
       throw new Error('Invalid submission');
     if (o.leasedUntil !== null && (!Number.isSafeInteger(o.leasedUntil) || Number(o.leasedUntil) < 0))
       throw new Error('Invalid lease');
+    if (o.attempt !== undefined && (!Number.isSafeInteger(o.attempt) || Number(o.attempt) < 1))
+      throw new Error('Invalid attempt');
+    if (o.punchList !== undefined && o.punchList !== null && !punchList(o.punchList))
+      throw new Error('Invalid punch list');
+    const refusals = o.refusals === undefined ? [] : o.refusals;
+    if (
+      !Array.isArray(refusals) ||
+      refusals.some(
+        (r) =>
+          !object(r) ||
+          !identifier(r.packageId) ||
+          typeof r.reference !== 'string' ||
+          !r.reference.trim() ||
+          !Number.isSafeInteger(r.attempt) ||
+          typeof r.final !== 'boolean',
+      )
+    )
+      throw new Error('Invalid refusal history');
+    if (
+      ['REWORK', 'REFUSED'].includes(o.state) &&
+      (o.payment !== null ||
+        o.submission !== null ||
+        !punchList(o.punchList) ||
+        (refusals.at(-1) as { final?: boolean } | undefined)?.final !== (o.state === 'REFUSED'))
+    )
+      throw new Error('Invalid refusal state');
     if (o.state === 'PAID') {
       const proof = o.payment;
       if (
@@ -137,7 +201,7 @@ export function roomChecked(value: unknown): ProjectRoom {
         proof.packageId !== o.submission.packageId
       )
         throw new Error('Missing Stood proof');
-    } else if (o.payment !== null || ['REFUSED', 'RELEASED'].includes(o.state)) throw new Error('Unknown money state');
+    } else if (o.payment !== null || o.state === 'RELEASED') throw new Error('Unknown money state');
   }
   return structuredClone(value) as ProjectRoom;
 }

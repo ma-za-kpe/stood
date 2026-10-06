@@ -124,7 +124,7 @@ export const paymentAlerts = pgTable(
     check('alert_status_valid', sql`${table.status} IN ('OPEN', 'RESOLVED')`),
     check(
       'alert_code_valid',
-      sql`${table.code} IN ('PROVIDER_UNKNOWN', 'UNRESOLVED_3H', 'SAFE_CANCEL_REQUESTED', 'WORKER_FAILURE')`,
+      sql`${table.code} IN ('PROVIDER_UNKNOWN', 'UNRESOLVED_3H', 'SAFE_CANCEL_REQUESTED', 'WORKER_FAILURE', 'CAPTURE_RETRY_CONSUMED')`,
     ),
   ],
 );

@@ -117,8 +117,10 @@ const board: CrewBoard = {
   log: async (id, lease, _event) => {
     const view = (await yard(path(id))) as { state: string; projectVersion: number; currentClaim: { id: string } };
     assert.equal(view.currentClaim.id, lease);
-    if (view.state === 'CLAIMED' && _event.kind === 'commit')
-      await yard(`${path(id)}/build`, 'POST', {}, `${id}:build`, view.projectVersion);
+    // A commit starts (or restarts, after a punch list) the build on the Board.
+    if (['CLAIMED', 'REWORK'].includes(view.state) && _event.kind === 'commit')
+      // Each (re)build is a new command: a reused key would replay the first build and change nothing.
+      await yard(`${path(id)}/build`, 'POST', {}, `${lease}:build:${view.projectVersion}`, view.projectVersion);
     await yard(
       `${path(id)}/log`,
       'POST',
@@ -136,18 +138,14 @@ const board: CrewBoard = {
   },
   status: async (id) => {
     const view = (await yard(path(id))) as { state: string };
+    if (view.state === 'REWORK') return 'PUNCH_LIST';
     assert(['CHECKING', 'PAID'].includes(view.state));
     return 'SUBMITTED';
   },
 };
-const crew = fakeCrew({
-  clock: () => at,
-  board,
-  repositories: github,
-  scenario: crewScenario(
-    JSON.parse(readFileSync('services/yard-api/test/scenarios/crew/passes-first-time.json', 'utf8')),
-  ),
-});
+const scenarioFile = (name: string) =>
+  crewScenario(JSON.parse(readFileSync(`services/yard-api/test/scenarios/crew/${name}.json`, 'utf8')));
+let crew = fakeCrew({ clock: () => at, board, repositories: github, scenario: scenarioFile('passes-first-time') });
 const app = new Hono();
 app.get('/health', (c) => c.json({ status: 'ok', simulated: true, paymentAuthority: false }));
 app.use('/__mock/*', async (c, next) => {
@@ -163,6 +161,13 @@ app.get('/__mock/repository/head', async (c) => {
   return c.json({ repository: repository.repository, baseCommit: head, simulated: true });
 });
 app.get('/__mock/repository', (c) => c.json({ ...repository, simulated: true }));
+// Selects the scripted Crew behaviour for the next network scenario. Earlier jobs are dropped.
+app.post('/__mock/scenario', async (c) => {
+  const body = (await c.req.json()) as { name?: unknown };
+  if (typeof body.name !== 'string' || !/^[a-z][a-z-]{0,40}$/.test(body.name)) return c.json({ code: 'invalid' }, 422);
+  crew = fakeCrew({ clock: () => at, board, repositories: github, scenario: scenarioFile(body.name) });
+  return c.json({ scenario: body.name, simulated: true });
+});
 app.post('/__mock/poll', async (c) => {
   await clock();
   await crew.poll();

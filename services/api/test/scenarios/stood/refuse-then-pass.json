@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "refuse-then-pass",
+  "profile": "code.milestone@1",
+  "assessment": "INTEGRITY_FAIL",
+  "reworkAssessment": "PASS",
+  "steps": [
+    "DRAFT",
+    "AUTHORIZE_FIXTURE",
+    "DISPATCH",
+    "PACKAGE",
+    "ASSESS_FIXTURE",
+    "EXECUTE",
+    "RECONCILE",
+    "REDISPATCH",
+    "AUTHORIZE_FIXTURE",
+    "DISPATCH",
+    "PACKAGE",
+    "ASSESS_FIXTURE",
+    "EXECUTE",
+    "RECONCILE",
+    "VERIFY"
+  ],
+  "expected": {
+    "domainState": "RELEASED",
+    "providerState": "CAPTURED",
+    "captures": 1,
+    "settlementEffect": "CAPTURE",
+    "ledgerStatus": "CONFIRMED"
+  }
+}

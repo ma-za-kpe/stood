@@ -23,6 +23,7 @@ import { restoreTrancheRecord, type TrancheCommand } from '../src/domain/tranche
 import { createApp } from '../src/http/app.js';
 import { simulatorServer } from './contracts/paypal-simulator.js';
 import {
+  attemptAssessment,
   runScenario,
   type ScenarioEvidence,
   type ScenarioStep,
@@ -66,6 +67,7 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
   let restarted: pg.Pool | undefined;
   let trancheId = '';
   let authorizationId = '';
+  let attempt = 1;
   let at = await clock.read();
   const seen = new Set<string>();
   const app = createApp({
@@ -166,11 +168,11 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
               {
                 repository: 'buyer/project',
                 base_commit: 'a'.repeat(40),
-                commit_sha: 'b'.repeat(40),
+                commit_sha: (attempt === 1 ? 'b' : 'e').repeat(40),
                 report_ref: `reports/${scenario.id}.json`,
                 report_sha256: 'c'.repeat(64),
               },
-              `${scenario.id}:package`,
+              attempt === 1 ? `${scenario.id}:package` : `${scenario.id}:package:${attempt}`,
             );
             expect(await client.getPackage(trancheId, pkg.id)).toEqual(pkg);
             return;
@@ -191,9 +193,14 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           case 'EXPIRE':
             await apply({ method: 'expire', args: [at] });
             return;
+          case 'REDISPATCH':
+            await apply({ method: 'redispatch', args: [] });
+            attempt++;
+            return;
           case 'ASSESS_FIXTURE': {
+            const assessment = attemptAssessment(scenario, attempt);
             const checks = getProfile(scenario.profile).checks.map<CheckResult>(({ code, source }) => {
-              if (code === 'test_integrity' && scenario.assessment === 'INTEGRITY_FAIL')
+              if (code === 'test_integrity' && assessment === 'INTEGRITY_FAIL')
                 return {
                   code,
                   source: 'RULE',
@@ -201,9 +208,9 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
                   reason: 'signed_tests_changed',
                   namedField: 'signed_tests_changed',
                 };
-              if (code === 'mutation_score' && scenario.assessment === 'WEAK_TESTS')
+              if (code === 'mutation_score' && assessment === 'WEAK_TESTS')
                 return { code, source: 'RULE', status: 'FAIL', reason: 'weak_tests', namedField: 'weak_tests' };
-              if (code === 'usage_release' && scenario.assessment === 'USAGE_PENDING')
+              if (code === 'usage_release' && assessment === 'USAGE_PENDING')
                 return { code, source: 'RULE', status: 'UNCERTAIN', reason: 'usage_pending' };
               if (source === 'MODEL')
                 return { code, source, confidence: 1, status: 'PASS', reason: 'synthetic_fixture' };
@@ -212,7 +219,11 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
             await apply({ method: 'startDeciding', args: [] });
             await apply({
               method: 'beginSettlement',
-              args: [decide(scenario.profile, checks), `${scenario.id}:decision`, at],
+              args: [
+                decide(scenario.profile, checks),
+                attempt === 1 ? `${scenario.id}:decision` : `${scenario.id}:decision:${attempt}`,
+                at,
+              ],
             });
             return;
           }
@@ -266,8 +277,14 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           .from(schema.paymentOperations)
           .where(eq(schema.paymentOperations.trancheId, trancheId));
         const settlements = operations.filter((o) => o.operation.effect !== 'REAUTHORIZE');
-        expect(settlements.length).toBeLessThanOrEqual(1);
-        const ledger = settlements[0];
+        let ledger = settlements[0];
+        if (scenario.reworkAssessment) {
+          // The refused attempt is voided and confirmed before the fresh hold; only the final attempt captures.
+          expect(settlements).toHaveLength(2);
+          expect(settlements.filter((o) => o.operation.effect === 'VOID' && o.status === 'CONFIRMED')).toHaveLength(1);
+          expect(settlements.filter((o) => o.operation.effect === 'CAPTURE')).toHaveLength(1);
+          ledger = settlements.find((o) => o.operation.effect === 'CAPTURE');
+        } else expect(settlements.length).toBeLessThanOrEqual(1);
         const history = await db
           .select()
           .from(schema.paymentOperationEvents)

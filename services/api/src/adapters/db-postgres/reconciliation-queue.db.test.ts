@@ -55,6 +55,14 @@ describe('Durable reconciliation jobs and owned alerts', () => {
     expect(await queue.claim()).toBeNull();
     for (const job of [reclaimed, jobs[1]]) if (job) await queue.finish(job, 3600);
   });
+  it('stores the consumed capture-retry alert after migration 0016 and still rejects unknown codes (T-0158)', async () => {
+    await queue.alert({ trancheId: 'queue_b', operationKey: 'op', code: 'CAPTURE_RETRY_CONSUMED', owner: 'reviewer' });
+    const rows = (await pool.query('SELECT code, status FROM payment_alerts WHERE tranche_id = $1', ['queue_b'])).rows;
+    expect(rows).toContainEqual({ code: 'CAPTURE_RETRY_CONSUMED', status: 'OPEN' });
+    await expect(
+      queue.alert({ trancheId: 'queue_b', operationKey: null, code: 'MADE_UP' as never, owner: 'reviewer' }),
+    ).rejects.toThrow();
+  });
   it('deduplicates alerts while retaining opened time and resolved rows across connection restarts', async () => {
     const alert = { trancheId: 'queue_a', operationKey: null, code: 'PROVIDER_UNKNOWN' as const, owner: 'reviewer' };
     await queue.alert(alert);

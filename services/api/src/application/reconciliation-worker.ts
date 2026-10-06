@@ -56,6 +56,11 @@ export async function reconciliationTick(
         await queue.alert({ ...alert, code: 'PROVIDER_UNKNOWN' });
         if (options.clock() - Date.parse(snapshot.pending.createdAt) >= 3 * 3600000)
           await queue.alert({ ...alert, code: 'UNRESOLVED_3H' });
+        if (
+          snapshot.pending.operation.effect === 'CAPTURE' &&
+          restoreTrancheRecord(snapshot.record).captureRetryClaim !== null
+        )
+          await queue.alert({ ...alert, code: 'CAPTURE_RETRY_CONSUMED' });
       } else {
         await queue.resolve(job.trancheId);
         delay = 3600;
