@@ -56,6 +56,59 @@ describe('Work-order lease foundation, no money projection (T-0178)', () => {
     ])
       expect(action).toThrow();
   });
+  it('reworks only the exact checked package, keeps the same lease and counts attempts (T-0189)', () => {
+    const wo = order();
+    wo.claim(builder, at);
+    wo.build(builder.id, at + 1);
+    expect(() => wo.rework('pkg_1', at + 2)).toThrow();
+    wo.submit(builder.id, 'a'.repeat(40), 'pkg_1', at + 2);
+    expect(() => wo.rework('pkg_1', at + 3)).toThrow();
+    wo.checking('pkg_1', at + 3);
+    expect(wo.snapshot.attempt).toBe(1);
+    expect(() => wo.rework('other', at + 4)).toThrow();
+    wo.rework('pkg_1', at + 4);
+    expect(wo.snapshot).toMatchObject({ state: 'REWORK', submission: null, attempt: 2 });
+    expect(wo.snapshot.currentClaim?.id).toBe(builder.id);
+    expect(wo.snapshot.currentClaim?.leasedUntil).toBe(at + LEASE_MS);
+    expect(() => wo.rework('pkg_1', at + 5)).toThrow();
+    expect(() => wo.submit(builder.id, 'b'.repeat(40), 'pkg_2', at + 5)).toThrow();
+    expect(() => wo.build('foreign', at + 5)).toThrow();
+    wo.build(builder.id, at + 5);
+    wo.submit(builder.id, 'b'.repeat(40), 'pkg_2', at + 6);
+    wo.checking('pkg_2', at + 6);
+    expect(wo.snapshot.submission).toEqual({ commit: 'b'.repeat(40), packageId: 'pkg_2', claimId: builder.id });
+  });
+  it('lets a reworking builder clock out, and expires a reworking lease without reuse', () => {
+    const reworked = () => {
+      const wo = order();
+      wo.claim(builder, at);
+      wo.build(builder.id, at + 1);
+      wo.submit(builder.id, 'a'.repeat(40), 'pkg_1', at + 2);
+      wo.checking('pkg_1', at + 2);
+      wo.rework('pkg_1', at + 3);
+      return wo;
+    };
+    const released = reworked();
+    released.release(builder.id, at + 4);
+    expect(released.snapshot.state).toBe('ABANDONED');
+    const expired = reworked();
+    expect(() => expired.build(builder.id, at + LEASE_MS)).toThrow();
+    expired.expire(at + LEASE_MS);
+    expect(expired.snapshot.state).toBe('LEASE_EXPIRED');
+    expired.repost(at + LEASE_MS + 1);
+    expect(expired.snapshot).toMatchObject({ state: 'POSTED', attempt: 2, currentClaim: null });
+  });
+  it('accepts a late refusal after the lease ended, but the builder can no longer act on it', () => {
+    const wo = order();
+    wo.claim(builder, at);
+    wo.build(builder.id, at + 1);
+    wo.submit(builder.id, 'a'.repeat(40), 'pkg_1', at + 2);
+    wo.checking('pkg_1', at + 2);
+    wo.rework('pkg_1', at + LEASE_MS + 10);
+    expect(() => wo.build(builder.id, at + LEASE_MS + 11)).toThrow();
+    wo.expire(at + LEASE_MS + 12);
+    expect(wo.snapshot.state).toBe('LEASE_EXPIRED');
+  });
   it('allows explicit clock-out and rejects bad identities, invalid or backwards clocks and stale state', () => {
     expect(() => new WorkOrder('', 'root', at)).toThrow();
     expect(() => new WorkOrder('wo', '', at)).toThrow();
@@ -78,7 +131,7 @@ describe('Work-order lease foundation, no money projection (T-0178)', () => {
   it('never invents paid status, overlapping claims or mutations after rejected random commands', () => {
     fc.assert(
       fc.property(
-        fc.array(fc.tuple(fc.integer({ min: 0, max: 6 }), fc.integer({ min: 0, max: LEASE_MS })), { maxLength: 100 }),
+        fc.array(fc.tuple(fc.integer({ min: 0, max: 7 }), fc.integer({ min: 0, max: LEASE_MS })), { maxLength: 100 }),
         (actions) => {
           const wo = order();
           let now = at;
@@ -109,6 +162,9 @@ describe('Work-order lease foundation, no money projection (T-0178)', () => {
                 case 6:
                   wo.release(id, now);
                   break;
+                case 7:
+                  wo.rework('pkg_1', now);
+                  break;
               }
             } catch {
               expect(wo.snapshot).toEqual(before);
@@ -117,6 +173,8 @@ describe('Work-order lease foundation, no money projection (T-0178)', () => {
             expect(wo.snapshot.state).not.toBe('PAID');
             expect(wo.snapshot.version).toBeGreaterThanOrEqual(before.version);
             for (const c of wo.snapshot.claims) expect(c.leasedUntil - c.claimedAt).toBe(LEASE_MS);
+            expect(wo.snapshot.attempt).toBeGreaterThanOrEqual(before.attempt);
+            if (wo.snapshot.state === 'REWORK') expect(wo.snapshot.submission).toBeNull();
           }
         },
       ),

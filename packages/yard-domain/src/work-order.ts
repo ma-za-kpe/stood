@@ -1,10 +1,11 @@
 export const WORK_ORDER_TRANSITIONS = Object.freeze({
   CLAIMED: Object.freeze(['POSTED']),
-  BUILDING: Object.freeze(['CLAIMED']),
+  BUILDING: Object.freeze(['CLAIMED', 'REWORK']),
   SUBMITTED: Object.freeze(['BUILDING']),
   CHECKING: Object.freeze(['SUBMITTED']),
-  ABANDONED: Object.freeze(['CLAIMED', 'BUILDING']),
-  LEASE_EXPIRED: Object.freeze(['CLAIMED', 'BUILDING']),
+  REWORK: Object.freeze(['CHECKING']),
+  ABANDONED: Object.freeze(['CLAIMED', 'BUILDING', 'REWORK']),
+  LEASE_EXPIRED: Object.freeze(['CLAIMED', 'BUILDING', 'REWORK']),
   POSTED: Object.freeze(['LEASE_EXPIRED', 'ABANDONED']),
 });
 export const LEASE_MS = 48 * 3600000;
@@ -16,12 +17,13 @@ export type Claim = ClaimInput &
     outsideOperator: boolean;
     status: 'ACTIVE' | 'EXPIRED' | 'RELEASED';
   }>;
-type State = 'POSTED' | 'CLAIMED' | 'BUILDING' | 'SUBMITTED' | 'CHECKING' | 'LEASE_EXPIRED' | 'ABANDONED';
+type State = 'POSTED' | 'CLAIMED' | 'BUILDING' | 'SUBMITTED' | 'CHECKING' | 'REWORK' | 'LEASE_EXPIRED' | 'ABANDONED';
 type Snapshot = Readonly<{
   id: string;
   state: State;
   version: number;
   lastAt: number;
+  attempt: number;
   claims: readonly Claim[];
   currentClaim: Claim | null;
   submission: Readonly<{ commit: string; packageId: string; claimId: string }> | null;
@@ -43,6 +45,7 @@ export class WorkOrder {
       state: 'POSTED',
       version: 0,
       lastAt: postedAt,
+      attempt: 1,
       claims: Object.freeze([]),
       currentClaim: null,
       submission: null,
@@ -126,6 +129,18 @@ export class WorkOrder {
     )
       throw new Error('No matching submitted package');
     this.commit(now, { state: 'CHECKING' });
+  }
+  // Entered only from a verified Stood refusal of this exact package. It is a
+  // build state: the punch list belongs to the projection, never to this aggregate.
+  rework(packageId: string, now: number): void {
+    this.clock(now);
+    if (
+      !WORK_ORDER_TRANSITIONS.REWORK.includes(this.#snapshot.state) ||
+      !this.#snapshot.currentClaim ||
+      this.#snapshot.submission?.packageId !== packageId
+    )
+      throw new Error('No matching checked package');
+    this.commit(now, { state: 'REWORK', submission: null, attempt: this.#snapshot.attempt + 1 });
   }
   release(claimId: string, now: number): void {
     const claim = this.active(claimId, now);
