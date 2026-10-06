@@ -678,3 +678,16 @@ fieldset.board-grid {
   padding: 0;
   min-inline-size: 0;
 }
+
+.cost-breakdown dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--y-steel);
+}
+.cost-breakdown dd {
+  margin: 0;
+  text-align: right;
+}

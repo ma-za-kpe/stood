@@ -1,0 +1,59 @@
+import type { ProviderCapture } from '../ports/provider-transactions.js';
+
+// A confirmed CAPTURE in Stood's ledger: the operation key is sent to PayPal as invoice_id.
+export type LedgerCapture = Readonly<{
+  trancheId: string;
+  operationKey: string;
+  reference: string;
+  minor: number;
+  currency: string;
+}>;
+export type AuditFinding = Readonly<{
+  kind: 'CAPTURE_WITHOUT_RELEASE' | 'RELEASE_WITHOUT_CAPTURE' | 'AMOUNT_MISMATCH' | 'DUPLICATE_CAPTURE';
+  trancheId: string | null;
+  providerId: string | null;
+  operationKey: string | null;
+}>;
+// T-0155: every provider capture must match exactly one confirmed ledger capture, and vice versa.
+// Findings are for a person to resolve; the audit never moves or reverses money.
+export function auditCaptures(ledger: readonly LedgerCapture[], provider: readonly ProviderCapture[]): AuditFinding[] {
+  const findings: AuditFinding[] = [];
+  const completed = provider.filter((p) => p.status === 'COMPLETED' || p.status === 'PENDING');
+  const byInvoice = new Map<string, ProviderCapture[]>();
+  for (const p of completed) {
+    const list = byInvoice.get(p.invoiceId ?? '') ?? [];
+    list.push(p);
+    byInvoice.set(p.invoiceId ?? '', list);
+  }
+  const keys = new Set(ledger.map((l) => l.operationKey));
+  for (const p of completed)
+    if (!p.invoiceId || !keys.has(p.invoiceId))
+      findings.push({ kind: 'CAPTURE_WITHOUT_RELEASE', trancheId: null, providerId: p.id, operationKey: p.invoiceId });
+  for (const l of ledger) {
+    const matches = byInvoice.get(l.operationKey) ?? [];
+    const exact = matches.find((p) => p.id === l.reference);
+    if (!exact)
+      findings.push({
+        kind: 'RELEASE_WITHOUT_CAPTURE',
+        trancheId: l.trancheId,
+        providerId: null,
+        operationKey: l.operationKey,
+      });
+    else if (exact.minor !== l.minor || exact.currency !== l.currency)
+      findings.push({
+        kind: 'AMOUNT_MISMATCH',
+        trancheId: l.trancheId,
+        providerId: exact.id,
+        operationKey: l.operationKey,
+      });
+    if (matches.length > 1)
+      for (const extra of matches.filter((p) => p.id !== l.reference))
+        findings.push({
+          kind: 'DUPLICATE_CAPTURE',
+          trancheId: l.trancheId,
+          providerId: extra.id,
+          operationKey: l.operationKey,
+        });
+  }
+  return findings;
+}

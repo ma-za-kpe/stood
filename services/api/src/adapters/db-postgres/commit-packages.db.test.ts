@@ -133,3 +133,69 @@ describe('Durable commit-package references without execution (T-0172)', () => {
     await expect(store.submit('platform_a', id, '', 'bad', metadata)).rejects.toBeInstanceOf(CommitPackageError);
   });
 });
+
+describe('Packages queued during renewal wake up from durable state (T-0137)', () => {
+  const tranches = new PostgresTranches(db);
+  const apply = async (id: string, key: string, command: Parameters<PostgresTranches['apply']>[3]) =>
+    tranches.apply(id, (await tranches.load(id)).version, key, command);
+  const day = 86400000;
+  it('keeps evidence queued through an ambiguous renewal and releases it to the runner after confirmation', async () => {
+    const id = await tranche();
+    await apply(id, 'dispatch', { method: 'dispatch', args: ['auth_1', 'K7Q', at, at + 29 * day] });
+    await apply(id, 'renew', { method: 'beginReauthorization', args: [at + 4 * day] });
+    const receipt = await store.submit('platform_a', id, 'mid-renewal', 'a'.repeat(64), metadata);
+    expect(receipt.waitingFor).toBe('RENEWAL');
+    const pending = (await tranches.load(id)).pending;
+    if (!pending) throw new Error('missing renewal operation');
+    await apply(id, 'ambiguous', {
+      method: 'reauthorizationFailed',
+      args: [{ effect: 'REAUTHORIZE', key: pending.operation.key, authorizationId: 'auth_1', kind: 'AMBIGUOUS' }],
+    });
+    expect((await store.get('platform_a', id, receipt.id))?.waitingFor).toBe('RENEWAL');
+    await apply(id, 'renewed', {
+      method: 'confirmReauthorization',
+      args: [
+        {
+          effect: 'REAUTHORIZE',
+          key: pending.operation.key,
+          previousAuthorizationId: 'auth_1',
+          authorizationId: 'auth_2',
+          confirmedAt: at + 4 * day,
+          expiresAt: at + 29 * day,
+        },
+      ],
+    });
+    const restartedPool = new pg.Pool({ connectionString });
+    try {
+      const restarted = new PostgresCommitPackages(drizzle(restartedPool, { schema }));
+      expect((await restarted.get('platform_a', id, receipt.id))?.waitingFor).toBe('RUNNER');
+      // The intake receipt itself is immutable and replays exactly.
+      expect(await restarted.submit('platform_a', id, 'mid-renewal', 'a'.repeat(64), metadata)).toEqual(receipt);
+    } finally {
+      await restartedPool.end();
+    }
+  });
+  it('releases queued evidence after a rejected renewal, and returns to waiting for a hold once it lapses', async () => {
+    const id = await tranche();
+    await apply(id, 'dispatch', { method: 'dispatch', args: ['auth_1', 'K7Q', at, at + 29 * day] });
+    await apply(id, 'renew', { method: 'beginReauthorization', args: [at + 4 * day] });
+    const receipt = await store.submit('platform_a', id, 'queued', 'a'.repeat(64), metadata);
+    const pending = (await tranches.load(id)).pending;
+    if (!pending) throw new Error('missing renewal operation');
+    await apply(id, 'rejected', {
+      method: 'reauthorizationFailed',
+      args: [
+        {
+          effect: 'REAUTHORIZE',
+          key: pending.operation.key,
+          authorizationId: 'auth_1',
+          kind: 'REJECTED_NO_REAUTHORIZATION',
+          reference: 'provider-no-renewal',
+        },
+      ],
+    });
+    expect((await store.get('platform_a', id, receipt.id))?.waitingFor).toBe('RUNNER');
+    await apply(id, 'expire', { method: 'expire', args: [at + 29 * day] });
+    expect((await store.get('platform_a', id, receipt.id))?.waitingFor).toBe('HOLD');
+  });
+});

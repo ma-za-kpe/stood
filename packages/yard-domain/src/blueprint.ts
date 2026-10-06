@@ -1,3 +1,5 @@
+import { type CostLine, checkedCostLines, costDisclosure } from './pricing.js';
+
 export type Milestone = Readonly<{
   id: string;
   name: string;
@@ -18,6 +20,7 @@ export type BlueprintInput = Readonly<{
   capMinor: number;
   currency: string;
   milestones: readonly Milestone[];
+  costLines?: readonly CostLine[];
 }>;
 type Terms = Pick<BlueprintInput, 'summary' | 'capMinor' | 'currency' | 'milestones'>;
 export type FreezeProof = Readonly<{
@@ -78,11 +81,10 @@ function checked(input: BlueprintInput): BlueprintInput {
       testIds: Object.freeze([...m.testIds]),
     });
   });
-  if (
-    new Set(milestones.map((m) => m.id)).size !== milestones.length ||
-    milestones.reduce((n, m) => n + BigInt(m.budgetMinor), 0n) !== BigInt(input.capMinor)
-  )
+  if (new Set(milestones.map((m) => m.id)).size !== milestones.length)
     throw new RangeError('Invalid milestone total or identity');
+  const costLines = checkedCostLines(input.costLines);
+  costDisclosure({ capMinor: input.capMinor, currency: input.currency, milestones }, costLines);
   return Object.freeze({
     id: input.id,
     buyerOperatorId: input.buyerOperatorId,
@@ -93,6 +95,7 @@ function checked(input: BlueprintInput): BlueprintInput {
     capMinor: input.capMinor,
     currency: input.currency,
     milestones: Object.freeze(milestones),
+    costLines,
   });
 }
 // FROZEN is a local terms record, never a PayPal mandate or Stood payment state.

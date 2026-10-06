@@ -85,9 +85,11 @@ it('Yard network: private resumable autosave with metadata-only events and no cr
   expect(plan).toMatchObject({ status: 'BUYER_REVIEW', simulated: true, version: 1 });
   expect(JSON.parse(plan.intakeContext)).toMatchObject({
     idea: complete.idea,
-    timing: complete.timing,
-    handover: { repository: 'buyer/project' },
+    // The planner never sees the buyer's people (T-0217).
+    timing: { ...complete.timing, signoffName: 'withheld', signoffEmail: 'withheld@yard.invalid' },
+    handover: { repository: 'buyer/project', maintainer: 'withheld' },
   });
+  expect(plan.intakeContext).not.toContain(complete.timing.signoffEmail);
   expect(plan.blueprint.baseCommit).toMatch(/^[a-f0-9]{40}$/);
   expect(await (await request(`${path}/plan`, 'POST', {}, 3, 'plan-retry')).json()).toEqual(plan);
   expect((await request(`${path}/plan`, 'POST', {}, 2, 'stale-plan')).status).toBe(409);

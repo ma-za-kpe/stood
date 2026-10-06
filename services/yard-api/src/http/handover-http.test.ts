@@ -161,3 +161,26 @@ it('closes the project only after every milestone is paid and every buyer item i
   expect(h.rows.dump().every((r) => r.deleteAt === now + 7 * 86400000)).toBe(true);
   expect((await h.request(path, 'POST', confirmation, await h.version(), 'again')).status).toBe(409);
 });
+
+it('exports the project to its buyer only, with key names but never key values (T-0217)', async () => {
+  const h = await harness();
+  await h.pay('one');
+  expect((await h.request('/yard/v1/blueprints/p/export', 'GET', undefined, 1, 'x', 'other')).status).toBe(403);
+  const response = await h.request('/yard/v1/blueprints/p/export');
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Cache-Control')).toBe('no-store');
+  expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="yard-p.json"');
+  const exported = await response.json();
+  expect(exported).toMatchObject({
+    format: 'yard.export@1',
+    exportedAt: now,
+    project: { id: 'p', costs: { buyerTotalMinor: 2000 } },
+    intake: null,
+    secrets: [expect.objectContaining({ name: 'RESEND_API_KEY', provider: 'resend' })],
+    retention: { siteLogText: 90, testKeysAfterHandover: 7 },
+  });
+  expect(exported.events.map((e: { seq: number }) => e.seq)).toEqual(
+    Array.from({ length: await h.version() }, (_, i) => i + 1),
+  );
+  expect(JSON.stringify(exported)).not.toContain('re_test_value');
+});

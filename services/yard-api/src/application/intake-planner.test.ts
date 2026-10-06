@@ -39,10 +39,13 @@ it('plans an owned saved version with a server-resolved repository and every int
   expect(repositories.resolve).toHaveBeenCalledWith('buyer', 'buyer/project');
   expect(input.baseCommit).toBe('b'.repeat(40));
   expect(input.buyerOperatorId).toBe('buyer');
+  // Every choice reaches the planner except the buyer's people (T-0217).
   expect(JSON.parse(input.context)).toEqual({
     ...record.draft,
-    handover: { ...record.draft.handover, baseCommit: 'b'.repeat(40) },
+    timing: { ...record.draft.timing, signoffName: 'withheld', signoffEmail: 'withheld@yard.invalid' },
+    handover: { ...record.draft.handover, baseCommit: 'b'.repeat(40), maintainer: 'withheld' },
   });
+  expect(input.context).not.toContain(record.draft.timing.signoffEmail);
   expect(input.id.length).toBeLessThanOrEqual(100);
 });
 it('rejects unowned, stale, incomplete and expired drafts before repository or model work', async () => {

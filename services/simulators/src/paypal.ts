@@ -206,6 +206,24 @@ export function createPayPalSimulator(config: {
       const tid = /^\/v3\/vault\/payment-tokens\/([^/]+)$/.exec(path)?.[1];
       if (tid)
         return response(tokens.has(tid) ? { status: 200, body: tokens.get(tid) } : error(404, 'INVALID_RESOURCE_ID'));
+      // Transaction Search shape (captures only) for the reconciliation audit.
+      if (path === '/v1/reporting/transactions')
+        return response({
+          status: 200,
+          body: {
+            transaction_details: [...orders.values()].flatMap((o) =>
+              o.captures.map((c) => ({
+                transaction_info: {
+                  transaction_id: c.id,
+                  invoice_id: c.invoice_id,
+                  transaction_amount: c.amount,
+                  transaction_status: 'S',
+                },
+              })),
+            ),
+            simulated: true,
+          },
+        });
       if (path === '/v1/notifications/webhooks-events')
         return response({ status: 200, body: { events: structuredClone(events) } });
       const cid = /^\/v2\/payments\/captures\/([^/]+)$/.exec(path)?.[1];

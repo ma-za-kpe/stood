@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Blueprint, type BlueprintInput, type FreezeProof, WorkOrder } from '@stood/yard-domain';
+import { Blueprint, type BlueprintInput, costDisclosure, type FreezeProof, WorkOrder } from '@stood/yard-domain';
 import { YardError, type YardEvent, type YardEvents, type YardSnapshot } from '../ports/events.js';
 export type Operator = Readonly<{ id: string; root: string; kind: 'BUYER' | 'BUILDER' }>;
 export type SettlementProof = Readonly<{
@@ -630,7 +630,11 @@ export class Board {
         const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
         const request: MandateRequest = {
           payee_ref: `yard:${id}`,
-          cap: { minor: d.blueprint.capMinor, currency: d.blueprint.currency },
+          // Stood's cap covers builder milestones only; Yard and provider costs are never captured through it.
+          cap: {
+            minor: effective.reduce((n, m) => n + m.budgetMinor, 0),
+            currency: d.blueprint.currency,
+          },
           milestones: effective.map((m) => ({
             name: m.name,
             amount: { minor: m.budgetMinor, currency: d.blueprint.currency },
@@ -715,6 +719,19 @@ export class Board {
     });
   }
   // Step 9 keys: only the owning buyer, and only after the blueprint terms are signed (frozen).
+  // Data export for the owning buyer only (T-0217): the room plus every project event, read in pages.
+  async exportFor(id: string, actor: Operator, now: number) {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    if (actor.kind !== 'BUYER' || snapshot.owner !== actor.id || d.buyerRoot !== actor.root)
+      throw new YardError('FORBIDDEN');
+    const events: YardEvent[] = [];
+    for (let page = await this.events.read(id, 0); page.length; page = await this.events.read(id, events.at(-1)!.seq)) {
+      events.push(...page);
+      if (events.length >= snapshot.version) break;
+    }
+    return { room: await this.room(id, actor, now), events };
+  }
   async secretScope(id: string, actor: Operator): Promise<void> {
     const snapshot = await this.events.load(id),
       d = data(snapshot.data);
@@ -942,6 +959,7 @@ export class Board {
       id: snapshot.id,
       version: snapshot.version,
       handover: d.handover ?? null,
+      costs: costDisclosure(d.blueprint, d.blueprint.costLines),
       ...(now === undefined ? {} : { clock: now }),
       previews: (d.previews ?? []).map((p) => ({ wo: p.wo, url: p.url, expiresAt: p.expiresAt })),
       mandate: d.mandate?.allowanceId

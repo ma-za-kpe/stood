@@ -29,6 +29,7 @@
 | Y19 | [Intake form](Y19-intake-form.md) | Everything we ask, when, why. The credentials matrix and how keys are stored |
 | Y20 | [Hosting and credentials decision](Y20-hosting-and-credentials-decision.md) | Their keys vs we host vs hybrid. Recommended: hybrid. The rotation checklist |
 | Y21 | [Crew service contract](Y21-crew-service-contract.md) | The Crew is a separate, closed project on Vast.ai. Yard calls its endpoint |
+| Y22 | [Privacy and data rules](Y22-privacy-and-data.md) | What Yard holds, who reads it, export, retention and what is still open |
 
 **Vocabulary (used everywhere in Yard):**
 

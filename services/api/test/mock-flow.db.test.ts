@@ -11,12 +11,15 @@ import { StoodClient } from '../../../packages/stood-sdk/src/client.js';
 import { FaultController } from '../../simulators/src/faults.js';
 import { ControlledClockClient } from '../src/adapters/controlled-clock/client.js';
 import { PostgresCommitPackages } from '../src/adapters/db-postgres/commit-packages.js';
+import { confirmedCaptures } from '../src/adapters/db-postgres/ledger-captures.js';
 import { PostgresPlatformApi } from '../src/adapters/db-postgres/platform-api.js';
 import * as schema from '../src/adapters/db-postgres/schema.js';
 import { PostgresTranches } from '../src/adapters/db-postgres/tranches.js';
 import { PayPalAdapter } from '../src/adapters/payments-paypal/adapter.js';
+import { HttpTransactionSearch } from '../src/adapters/payments-paypal/transactions.js';
 import { executePayment } from '../src/application/execute-payment.js';
 import { reconcile } from '../src/application/reconcile.js';
+import { auditCaptures } from '../src/application/reconciliation-audit.js';
 import { retryCapture } from '../src/application/retry-capture.js';
 import { type CheckResult, decide, getProfile } from '../src/domain/decision.js';
 import { restoreTrancheRecord, type TrancheCommand } from '../src/domain/tranche-record.js';
@@ -313,6 +316,12 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           purchase_units: { payments: { captures: { id: string; invoice_id: string }[] } }[];
         };
         const captures = order.purchase_units[0]?.payments.captures ?? [];
+        // T-0155: the provider's captures and Stood's confirmed ledger agree exactly.
+        const search = new HttpTransactionSearch({ baseUrl: h.baseUrl, token: async () => 'sim-access-token' });
+        const provider = (await search.captures(0, at + 366 * 86400000)).filter((p) =>
+          captures.some((c) => c.id === p.id),
+        );
+        expect(auditCaptures(await confirmedCaptures(db, trancheId), provider)).toEqual([]);
         const captureCalls = calls.mock.calls.filter(([action]) => action === 'CAPTURE');
         expect(captureCalls).toHaveLength(scenario.expected.captures + (scenario.id === 'capture-missed-send' ? 1 : 0));
         expect(new Set(captureCalls.map(([, input]) => input.requestId)).size).toBeLessThanOrEqual(1);

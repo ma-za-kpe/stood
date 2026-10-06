@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { completeIntakeChecked } from '@stood/yard-contracts';
+import { completeIntakeChecked, withheldForPlanner } from '@stood/yard-contracts';
 import type { Plan } from '@stood/yard-domain';
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
@@ -30,9 +30,11 @@ export class IntakePlanner {
       if (!(error instanceof Error && 'code' in error && error.code === 'NOT_FOUND')) throw error;
     }
     if (existing) {
-      const context = completeIntakeChecked(
-        { ...record.draft, handover: { ...record.draft.handover, baseCommit: existing.blueprint.baseCommit } },
-        0,
+      const context = withheldForPlanner(
+        completeIntakeChecked(
+          { ...record.draft, handover: { ...record.draft.handover, baseCommit: existing.blueprint.baseCommit } },
+          0,
+        ),
       );
       if (existing.blueprint.buyerOperatorId !== buyer || JSON.stringify(context) !== existing.intakeContext)
         throw new YardError('CONFLICT');
@@ -58,7 +60,7 @@ export class IntakePlanner {
       description: snapshot.idea.description,
       capMinor: snapshot.timing.capMinor,
       currency: snapshot.timing.currency,
-      context: JSON.stringify(snapshot),
+      context: JSON.stringify(withheldForPlanner(snapshot)),
       createdAt: now,
     });
   }

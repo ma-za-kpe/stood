@@ -1,10 +1,12 @@
 import { completeIntakeChecked, intakeDraftSchema } from '@stood/yard-contracts';
+import type { CostLine } from '@stood/yard-domain';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { assign, createActor, createMachine } from 'xstate';
 import { z } from 'zod';
 import { BlueprintEditor } from './BlueprintEditor.js';
 import type { EditableDraft } from './blueprint-edit.js';
+import { CostBreakdown } from './CostBreakdown.js';
 import { browserRequestKey } from './claim-keys.js';
 import { ApiError, api } from './http.js';
 import { foremanChoices, formDraft, formFields, formValues, type IntakeValues, stepNames } from './intake-form.js';
@@ -32,6 +34,7 @@ const planSchema = z.object({
     milestones: z.array(
       z.object({ id: z.string(), name: z.string(), budgetMinor: z.number().int(), deadline: z.number().int() }),
     ),
+    costLines: z.array(z.custom<CostLine>()).optional(),
   }),
   tests: z.array(z.object({ milestoneId: z.string(), id: z.string(), path: z.string(), content: z.string() })),
   requirements: z.array(z.object({ id: z.string(), text: z.string(), testIds: z.array(z.string()) })),
@@ -591,6 +594,7 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
                     ))}
                 </article>
               ))}
+              <CostBreakdown blueprint={plan.blueprint} />
               {plan.status === 'REVISION_REQUESTED' && (
                 <div className="intake-field">
                   <label htmlFor="plan-feedback">What should change?</label>
