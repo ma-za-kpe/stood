@@ -80,6 +80,17 @@ it('rejects malformed intake and duplicate thread ids before invoking the planne
   expect(model.draft).toHaveBeenCalledTimes(1);
 });
 
+it('rejects budgets that cannot fund three positive milestones before calling the model', async () => {
+  const model = { draft: vi.fn(async (_input: Parameters<PlannerModel['draft']>[0]) => draft()) };
+  const f = new Foreman(model, new MemorySaver());
+  for (const capMinor of [1, 2]) {
+    await expect(f.draft({ ...intake, id: `small-${capMinor}`, capMinor })).rejects.toThrow('INVALID');
+  }
+  expect(model.draft).not.toHaveBeenCalled();
+  await expect(f.read('small-1')).rejects.toThrow('NOT_FOUND');
+  await expect(f.read('small-2')).rejects.toThrow('NOT_FOUND');
+});
+
 it('serialises concurrent drafts for the same durable thread without running the model twice', async () => {
   const model = { draft: vi.fn(async (_input: Parameters<PlannerModel['draft']>[0]) => draft()) };
   const saver = new MemorySaver();

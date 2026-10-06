@@ -51,7 +51,7 @@ function intakeChecked(value: PlannerIntake): PlannerIntake {
     !Number.isSafeInteger(value.createdAt) ||
     value.createdAt < 0 ||
     !Number.isSafeInteger(value.capMinor) ||
-    value.capMinor <= 0 ||
+    value.capMinor < 3 ||
     !['USD', 'GBP', 'EUR'].includes(value.currency)
   )
     throw new PlannerError('INVALID');
