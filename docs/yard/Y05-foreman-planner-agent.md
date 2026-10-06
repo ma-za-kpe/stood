@@ -65,3 +65,9 @@ Draft HTTP creation uses a stable project id and compares every request-controll
 ### Checkpoint ordering evidence
 
 Foreman recovery now seeds a monotonic logical checkpoint ID floor from the persisted UUIDv6 ID before continuing. A narrow, version-pinned dependency patch also prevents host-clock rollback from moving IDs backwards within a process. Memory, real-Postgres and separate-process regressions protect the newest review version. This ordering is independent of the configured financial clock; reads do not replay model work. See [ADR-0022](../adr/0022-monotonic-foreman-checkpoint-order.md) for scope and removal criteria.
+
+### Current controlled injection evidence
+
+The [injection corpus](../../services/yard-foreman/test/scenarios/prompt-injection.json) contains payment overrides, spoofed system instructions, repository instructions, tool/exfiltration requests, test tampering, invented receipts, final-condition removal and hidden Unicode. Unit tests pass these as untrusted intake data to a scripted model. The planner receives only policy/intake/revision data, and its result cannot invent payment authority or change the fixed budget, repository, buyer or final-use profile. Mutating the model's input copy does not mutate the stored intake.
+
+Recognised keys in model output are rejected before a review plan is checkpointed; a real-Postgres restart test checks checkpoint/task-write recovery and continues only with clean output. The model-output scan stays bounded at 64 KiB, separately from the 48 KiB intake bound. The scanner cannot detect arbitrary secrets. These tests qualify the local boundary, not a real model's behaviour or hostile-code execution. Repository ingestion, live-model evaluation and qualified baseline isolation remain separate requirements.

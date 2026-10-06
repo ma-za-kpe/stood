@@ -97,7 +97,11 @@ function intakeChecked(value: PlannerIntake): PlannerIntake {
 }
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function validateDraft(input: PlannerIntake, value: unknown, simulated: boolean): Plan {
-  if (Buffer.byteLength(JSON.stringify(value) ?? '') > 65536) throw new PlannerError('INVALID');
+  try {
+    assertPublicInput(value, 'MODEL');
+  } catch {
+    throw new PlannerError('INVALID');
+  }
   const d = object(value, ['summary', 'requirements', 'milestones', 'risks']);
   if (!text(d.summary)) throw new PlannerError('INVALID');
   const tests: { milestoneId: string; id: string; path: string; content: string }[] = [];

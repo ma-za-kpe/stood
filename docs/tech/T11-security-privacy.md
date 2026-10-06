@@ -8,7 +8,7 @@ Planned runner controls: deny all network ingress/egress including DNS, metadata
 
 Pin source and dependency digests and enumerate frozen test identities independently. Reject edits/deletions, skips/.only, empty assertions, renamed old diffs and dependency smuggling. Repository prompt injection is data, never authority for reviewing agents or tool calls. Verify runner signatures and package/commit binding outside the builder process. Missing proof, timeout, escape signal or incomplete output means WAIT with an owned alert.
 
-Sandbox technology is undecided. A separate ADR must compare isolation, cost and escape/resource tests before implementation (T-0164); no paid GPU/provider is approved here. Yard and the runner are planned. Test egress to metadata/DNS/host, fork/memory/disk bombs, archive traversal, signer theft and cross-job leakage before shipping.
+Sandbox technology is undecided. A separate ADR must compare isolation, cost and escape/resource tests before implementation (T-0164); no paid GPU/provider is approved here. Yard's local Board, private intake and planner review run with simulated providers; the qualified runner remains planned. Test egress to metadata/DNS/host, fork/memory/disk bombs, archive traversal, signer theft and cross-job leakage before shipping.
 
 Code artifacts may contain private source/secrets: private object storage, least-privilege tenant access, redaction and explicit retention/deletion policy are required before real customer repositories. Public receipts expose only agreed commit/report identifiers, never source URLs or logs. Field-photo privacy below is scenario-specific.
 

@@ -9,6 +9,7 @@ import { expect, it, vi } from 'vitest';
 import { yardDatabase } from '../../yard-api/test/database.js';
 import { PostgresForemanCoordinator } from '../src/adapters/db-postgres/coordinator.js';
 import { Foreman } from '../src/foreman.js';
+import { ScriptedPlannerModel } from './fakes/model.js';
 
 function reviseInFreshProcess(url: string, id: string, output: unknown) {
   const directory = mkdtempSync(join(tmpdir(), 'stood-planner-clock-'));
@@ -148,6 +149,52 @@ it('releases the Postgres thread lock when model work fails and requires pool ca
     f.limited.options.max = 1;
     expect(() => new PostgresForemanCoordinator(f.limited)).toThrow('COORDINATOR_CAPACITY');
     f.limited.options.max = previous;
+  } finally {
+    await recovered.end();
+    await f.close();
+  }
+});
+
+it('never persists a recognised key from model output in real Postgres checkpoints or task writes', async () => {
+  const f = await yardDatabase(),
+    recovered = f.connectRuntime();
+  try {
+    await new PostgresSaver(f.migration, undefined, { schema: 'yard' }).setup();
+    const intake = {
+      id: 'private-output',
+      buyerOperatorId: 'buyer',
+      repository: 'buyer/project',
+      baseCommit: 'a'.repeat(40),
+      description: 'Build bookings',
+      capMinor: 3000,
+      currency: 'USD',
+      createdAt: 1791158400000,
+    };
+    const model = new ScriptedPlannerModel('ci');
+    const output = await model.draft({ intake, policy: 'Draft only' });
+    const credential = ['client', 'secret'].join('_') + ' = synthetic-secret-value';
+    const first = new Foreman(
+      { draft: async () => ({ ...output, risks: [credential] }) },
+      new PostgresSaver(f.limited, undefined, { schema: 'yard' }),
+      true,
+      new PostgresForemanCoordinator(f.limited),
+    );
+    await expect(first.draft(intake)).rejects.toThrow('INVALID_DRAFT');
+    const saver = new PostgresSaver(recovered, undefined, { schema: 'yard' });
+    let records = 0;
+    for await (const checkpoint of saver.list({ configurable: { thread_id: intake.id } })) {
+      records++;
+      expect(JSON.stringify(checkpoint)).not.toContain('synthetic-secret-value');
+    }
+    expect(records).toBeGreaterThan(0);
+    const restarted = new Foreman(model, saver, true, new PostgresForemanCoordinator(recovered));
+    await expect(restarted.read(intake.id)).rejects.toThrow('NOT_FOUND');
+    expect((await restarted.recover(intake.id, 'buyer')).blueprint).toMatchObject({
+      buyerOperatorId: 'buyer',
+      capMinor: 3000,
+      status: 'DRAFT',
+      termsProof: null,
+    });
   } finally {
     await recovered.end();
     await f.close();

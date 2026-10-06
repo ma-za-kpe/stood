@@ -12,14 +12,16 @@ const credentials = [
   /\bAIza[A-Za-z0-9_-]{30,}\b/,
   /["']?(?:client_secret|private_key|api_key|access_token|secret_access_key)["']?\s*[:=]\s*["']?[^\s"',}]{8,}/i,
 ];
-export function assertPublicInput(value: unknown): void {
+export function assertPublicInput(value: unknown, boundary: 'INTAKE' | 'MODEL' = 'INTAKE'): void {
+  if (boundary !== 'INTAKE' && boundary !== 'MODEL') throw new IntakeError('INVALID_INTAKE');
+  const maxBytes = boundary === 'MODEL' ? 65536 : 49152;
   let raw: string;
   try {
     raw = JSON.stringify(value) ?? '';
   } catch {
     throw new IntakeError('INVALID_INTAKE');
   }
-  if (!raw || new TextEncoder().encode(raw).length > 49152) throw new IntakeError('INVALID_INTAKE');
+  if (!raw || new TextEncoder().encode(raw).length > maxBytes) throw new IntakeError('INVALID_INTAKE');
   const normalised = raw.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '');
   if (credentials.some((pattern) => pattern.test(normalised))) throw new IntakeError('CREDENTIAL_IN_INTAKE');
 }

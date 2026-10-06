@@ -99,3 +99,11 @@ it('requires complete consented terms and a future deadline before planning', ()
   );
   expect(() => completeIntakeChecked({ ...input, idea: { ...input.idea, users: [] } }, 100)).toThrow('INVALID_INTAKE');
 });
+
+it('keeps separate bounded intake and model-output scan limits', () => {
+  const output = { text: 'x'.repeat(50000) };
+  expect(() => assertPublicInput(output)).toThrow('INVALID_INTAKE');
+  expect(() => assertPublicInput(output, 'MODEL')).not.toThrow();
+  expect(() => assertPublicInput({ text: 'x'.repeat(65536) }, 'MODEL')).toThrow('INVALID_INTAKE');
+  expect(() => assertPublicInput(output, 'unbounded' as 'MODEL')).toThrow('INVALID_INTAKE');
+});
