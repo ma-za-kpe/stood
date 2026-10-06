@@ -624,6 +624,7 @@ export class Board {
             workOrderId: id,
             name: milestone.name,
             priceMinor: milestone.budgetMinor,
+            deadline: milestone.deadline,
             currency: d.blueprint.currency,
             profile: milestone.profileId,
             version: s.version,
@@ -799,13 +800,14 @@ export class Board {
       simulated: true,
     };
   }
-  async room(id: string, actor: Operator) {
+  async room(id: string, actor: Operator, now?: number) {
     const snapshot = await this.read(id, actor),
       d = data(snapshot.data);
     return {
       id: snapshot.id,
       version: snapshot.version,
       handover: d.handover ?? null,
+      ...(now === undefined ? {} : { clock: now }),
       mandate: d.mandate?.allowanceId
         ? {
             allowanceId: d.mandate.allowanceId,
@@ -835,6 +837,8 @@ export class Board {
           ...feedback(order),
           attempt: work.snapshot.attempt,
           held: !!currentHold(order, work),
+          // Signed acceptance tests are read-only: identity and bundle hash, never editable.
+          tests: { ids: [...milestone.testIds], bundleHash: milestone.testBundleHash },
           payment: order.payment,
           submission: work.snapshot.submission,
           leasedUntil: work.snapshot.currentClaim?.leasedUntil ?? null,

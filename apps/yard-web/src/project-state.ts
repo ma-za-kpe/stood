@@ -21,6 +21,8 @@ export type OrderView = Readonly<{
   submission: Readonly<{ packageId: string; commit: string }> | null;
   leasedUntil: number | null;
   attempt?: number;
+  held?: boolean;
+  tests?: Readonly<{ ids: readonly string[]; bundleHash: string }>;
   punchList?: readonly PunchItem[] | null;
   refusals?: readonly RefusalView[];
 }>;
@@ -31,6 +33,7 @@ export type ProjectRoom = Readonly<{
   handover?: Handover | null;
   signed?: boolean;
   milestoneCount?: number;
+  clock?: number;
   summary: string;
   currency: string;
   simulated: true;
@@ -144,6 +147,8 @@ export function roomChecked(value: unknown): ProjectRoom {
   )
     throw new Error('Invalid project snapshot');
   if (value.signed !== undefined && typeof value.signed !== 'boolean') throw new Error('Invalid signing state');
+  if (value.clock !== undefined && (!Number.isSafeInteger(value.clock) || Number(value.clock) < 0))
+    throw new Error('Invalid server clock');
   if (
     value.milestoneCount !== undefined &&
     (!Number.isSafeInteger(value.milestoneCount) || Number(value.milestoneCount) < value.orders.length)

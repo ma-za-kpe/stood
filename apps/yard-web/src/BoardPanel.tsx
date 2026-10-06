@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { boardChecked, claimAck, type Offer } from './board-contract.js';
+import { nextCard } from './board-ui.js';
 import { ClaimKeys } from './claim-keys.js';
 import { api } from './http.js';
 export function BoardPanel({
@@ -75,7 +76,18 @@ export function BoardPanel({
       {board.isFetching && <p role="status">Loading posted work…</p>}
       {board.error && <p role="alert">{board.error.message}</p>}
       {claim.error && <p role="alert">{claim.error.message} No payment is implied by this acknowledgement.</p>}
-      <div className="board-grid">
+      {/* Arrow keys, Home and End move between work cards. */}
+      <fieldset
+        className="board-grid"
+        onKeyDown={(e) => {
+          const buttons = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('.work-card button')];
+          const next = nextCard(buttons.indexOf(e.target as HTMLButtonElement), e.key, buttons.length);
+          if (next === null) return;
+          e.preventDefault();
+          buttons[next]?.focus();
+        }}
+      >
+        <legend className="visually-hidden">Posted work</legend>
         {offers.map((o) => (
           <article className="work-card" key={o.id}>
             <p className="eyebrow">Posted / {o.profile}</p>
@@ -83,13 +95,14 @@ export function BoardPanel({
             <p className="budget">
               {new Intl.NumberFormat('en', { style: 'currency', currency: o.currency }).format(o.priceMinor / 100)}
             </p>
+            <p className="fine">Due {new Date(o.deadline).toISOString().slice(0, 10)}</p>
             <p className="fine">Fixed price. No bidding. Repository access follows a scoped claim.</p>
             <button type="button" disabled={!enabled || claim.isPending} onClick={() => claim.mutate(o)}>
               {claim.isPending && claim.variables?.id === o.id ? 'Clocking in…' : 'Clock in →'}
             </button>
           </article>
         ))}
-      </div>
+      </fieldset>
       {enabled && !board.isFetching && !board.error && offers.length === 0 && (
         <div className="empty">
           <h3>No posted work in these pages.</h3>

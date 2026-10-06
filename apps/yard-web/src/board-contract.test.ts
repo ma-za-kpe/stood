@@ -7,6 +7,7 @@ const offer = {
   workOrderId: 'one',
   name: 'Booking app',
   priceMinor: 1000,
+  deadline: 1791158400000,
   currency: 'USD',
   profile: 'code.milestone@1',
   version: 3,
