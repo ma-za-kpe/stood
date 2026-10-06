@@ -719,6 +719,19 @@ export class Board {
     });
   }
   // Step 9 keys: only the owning buyer, and only after the blueprint terms are signed (frozen).
+  // Data export for the owning buyer only (T-0217): the room plus every project event, read in pages.
+  async exportFor(id: string, actor: Operator, now: number) {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    if (actor.kind !== 'BUYER' || snapshot.owner !== actor.id || d.buyerRoot !== actor.root)
+      throw new YardError('FORBIDDEN');
+    const events: YardEvent[] = [];
+    for (let page = await this.events.read(id, 0); page.length; page = await this.events.read(id, events.at(-1)!.seq)) {
+      events.push(...page);
+      if (events.length >= snapshot.version) break;
+    }
+    return { room: await this.room(id, actor, now), events };
+  }
   async secretScope(id: string, actor: Operator): Promise<void> {
     const snapshot = await this.events.load(id),
       d = data(snapshot.data);

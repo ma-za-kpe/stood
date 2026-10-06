@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { handoverConfirmation, IntakeError } from '@stood/yard-contracts';
+import { handoverConfirmation, IntakeError, RETENTION } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -250,6 +250,33 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     );
   });
   app.get('/yard/v1/blueprints/:id', async (c) => c.json(await config.board.read(c.req.param('id'), request(c).actor)));
+  app.get('/yard/v1/blueprints/:id/export', async (c) => {
+    const { actor, now } = request(c),
+      id = c.req.param('id');
+    const { room, events } = await config.board.exportFor(id, actor, now);
+    let intake: unknown = null;
+    if (config.intakes)
+      try {
+        const record = await config.intakes.load(id);
+        if (record.owner === actor.id) intake = { version: record.version, step: record.step, draft: record.draft };
+      } catch {
+        intake = null;
+      }
+    // Key values are never exported: only names, providers and dates.
+    const secrets = config.secrets ? await config.secrets.list(id, actor.id).catch(() => []) : [];
+    c.header('Content-Disposition', `attachment; filename="yard-${id.replace(/[^A-Za-z0-9_-]/g, '_')}.json"`);
+    c.header('Cache-Control', 'no-store');
+    return c.json({
+      format: 'yard.export@1',
+      exportedAt: now,
+      project: room,
+      events,
+      intake,
+      secrets,
+      retention: RETENTION,
+      simulated: true,
+    });
+  });
   app.get('/yard/v1/blueprints/:id/room', async (c) =>
     c.json(await config.board.room(c.req.param('id'), request(c).actor, request(c).now)),
   );
