@@ -1,3 +1,4 @@
+import { completeIntakeChecked } from '@stood/yard-contracts';
 import type { PlannerModel } from '../../src/foreman.js';
 // Scripted model fixture: no AI provider, network, keys, execution or tools.
 export class ScriptedPlannerModel implements PlannerModel {
@@ -6,6 +7,15 @@ export class ScriptedPlannerModel implements PlannerModel {
   }
   async draft({ intake, revision }: Parameters<PlannerModel['draft']>[0]) {
     const base = Math.floor(intake.capMinor / 3);
+    const deadline =
+      intake.context === undefined
+        ? intake.createdAt + 21 * 86400000
+        : completeIntakeChecked(JSON.parse(intake.context), intake.createdAt).timing.deadline;
+    const duration = BigInt(deadline) - BigInt(intake.createdAt);
+    const milestoneDeadline = (index: number) => {
+      const offset = (duration * BigInt(index + 1)) / 3n;
+      return Number(BigInt(intake.createdAt) + (offset > 0n ? offset : 1n));
+    };
     return {
       summary: `${intake.description.trim().slice(0, 600)}${revision ? ' — revised scope' : ''}`,
       requirements: ['Build', 'Preview', 'Handover'].map((name, i) => ({
@@ -21,7 +31,7 @@ export class ScriptedPlannerModel implements PlannerModel {
         id: `milestone-${i + 1}`,
         name,
         budgetMinor: i === 2 ? intake.capMinor - 2 * base : base,
-        deadline: intake.createdAt + (i + 1) * 7 * 86400000,
+        deadline: milestoneDeadline(i),
         tests: [
           {
             id: `acceptance-${i + 1}`,
