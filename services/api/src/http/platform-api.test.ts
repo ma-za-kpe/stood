@@ -16,13 +16,31 @@ const draft = {
   window_days: 7,
   max_resubmits: 1,
 };
-function headers(body = '', at = now) {
+function headers(
+  body = '',
+  at = now,
+  options: { path?: string; method?: string; key?: string; ifMatch?: string } = {},
+) {
   const timestamp = String(Math.floor(at / 1000));
   return {
     Authorization: `Bearer ${key}`,
-    'Stood-Signature': `t=${timestamp},v1=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`,
+    'Stood-Signature': `t=${timestamp},v2=${createHmac('sha256', secret)
+      .update(
+        JSON.stringify([
+          'stood.request@2',
+          timestamp,
+          options.method ?? (body ? 'POST' : 'GET'),
+          options.path ?? '/v1/allowances',
+          options.key ?? 'fixture_key',
+          options.ifMatch ?? '',
+          'application/json',
+          body,
+        ]),
+      )
+      .digest('hex')}`,
     'Content-Type': 'application/json',
-    'Idempotency-Key': 'fixture_key',
+    'Idempotency-Key': options.key ?? 'fixture_key',
+    ...(options.ifMatch !== undefined ? { 'If-Match': options.ifMatch } : {}),
   };
 }
 function fixture() {
@@ -45,6 +63,31 @@ function fixture() {
   return { app, store };
 }
 describe('Signed platform API draft foundation', () => {
+  it('rejects replay when the method, target, query, idempotency key or version header changes', async () => {
+    const { app, store } = fixture();
+    const body = JSON.stringify(draft),
+      signed = headers(body);
+    for (const [path, override] of [
+      ['/v1/allowances?other=1', {}],
+      ['/v1/tranches/foreign/packages', {}],
+      ['/v1/allowances', { 'Idempotency-Key': 'another-key' }],
+      ['/v1/allowances', { 'If-Match': '7' }],
+    ] as const)
+      expect((await app.request(path, { method: 'POST', body, headers: { ...signed, ...override } })).status).toBe(401);
+    expect((await app.request('/v1/allowances', { method: 'GET', headers: signed })).status).toBe(401);
+    expect(store.create).not.toHaveBeenCalled();
+  });
+  it('rejects the old body-only signature and method changes even with identical empty bodies', async () => {
+    const { app, store } = fixture();
+    const t = String(Math.floor(now / 1000));
+    const legacy = {
+      ...headers(),
+      'Stood-Signature': `t=${t},v1=${createHmac('sha256', secret).update(`${t}.`).digest('hex')}`,
+    };
+    expect((await app.request('/v1/allowances', { headers: legacy })).status).toBe(401);
+    expect((await app.request('/v1/allowances', { headers: headers('', now, { method: 'POST' }) })).status).toBe(401);
+    expect(store.allowance).not.toHaveBeenCalled();
+  });
   it('creates a draft with authenticated platform identity and no invented PayPal approval', async () => {
     const { app, store } = fixture();
     const body = JSON.stringify(draft);
@@ -84,7 +127,7 @@ describe('Signed platform API draft foundation', () => {
         await app.request('/v1/allowances', {
           method: 'POST',
           body,
-          headers: { ...headers(body), 'Idempotency-Key': '' },
+          headers: headers(body, now, { key: '' }),
         })
       ).status,
     ).toBe(422);
@@ -104,7 +147,13 @@ describe('Signed platform API draft foundation', () => {
     const { app, store } = fixture();
     for (const resource of ['allowances', 'tranches']) {
       expect((await app.request(`/v1/${resource}/foreign`)).status).toBe(401);
-      expect((await app.request(`/v1/${resource}/foreign`, { headers: headers() })).status).toBe(404);
+      expect(
+        (
+          await app.request(`/v1/${resource}/foreign`, {
+            headers: headers('', now, { path: `/v1/${resource}/foreign` }),
+          })
+        ).status,
+      ).toBe(404);
     }
     expect(store.allowance).toHaveBeenCalledWith('platform_a', 'foreign');
     expect(store.tranche).toHaveBeenCalledWith('platform_a', 'foreign');
@@ -117,7 +166,13 @@ describe('Signed platform API draft foundation', () => {
       ...draft,
       tranches: [{ id: 'trn_fixture', name: 'foundation' }],
     });
-    expect((await app.request('/v1/allowances/alw_fixture', { headers: headers() })).status).toBe(200);
+    expect(
+      (
+        await app.request('/v1/allowances/alw_fixture', {
+          headers: headers('', now, { path: '/v1/allowances/alw_fixture' }),
+        })
+      ).status,
+    ).toBe(200);
     store.tranche.mockResolvedValue({
       trancheId: 'trn_fixture',
       version: 0,
@@ -129,7 +184,9 @@ describe('Signed platform API draft foundation', () => {
         maxResubmits: 1,
       }),
     });
-    const response = await app.request('/v1/tranches/trn_fixture', { headers: headers() });
+    const response = await app.request('/v1/tranches/trn_fixture', {
+      headers: headers('', now, { path: '/v1/tranches/trn_fixture' }),
+    });
     expect(await response.json()).toMatchObject({
       state: 'PENDING',
       decision: null,
@@ -164,7 +221,9 @@ describe('Signed platform API draft foundation', () => {
       '/v1/tranches/trn',
       '/v1/allowances/alw',
     ])
-      expect((await app.request(path, { method: 'POST', body: '{}', headers: headers('{}') })).status).toBe(503);
+      expect(
+        (await app.request(path, { method: 'POST', body: '{}', headers: headers('{}', now, { path }) })).status,
+      ).toBe(503);
     expect((await app.request('/v1/demo/scenarios/good', { method: 'POST' })).status).toBe(200);
   });
 });

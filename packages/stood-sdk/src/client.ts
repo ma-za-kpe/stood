@@ -198,18 +198,32 @@ export class StoodClient {
     }
     if (Buffer.byteLength(body) > 65536) throw new StoodClientError('INVALID_INPUT');
     const timestamp = String(Math.floor(now / 1000));
-    const signature = createHmac('sha256', this.config.secret).update(`${timestamp}.${body}`).digest('hex');
-    const headers: Record<string, string> = {
+    const url = new URL(`${this.origin}/v1${path}`);
+    const headers = new Headers({
       Authorization: `Bearer ${this.config.key}`,
-      'Stood-Signature': `t=${timestamp},v1=${signature}`,
       'Content-Type': 'application/json',
-    };
-    if (key) headers['Idempotency-Key'] = key;
+    });
+    if (key) headers.set('Idempotency-Key', key);
+    const signature = createHmac('sha256', this.config.secret)
+      .update(
+        JSON.stringify([
+          'stood.request@2',
+          timestamp,
+          method,
+          `${url.pathname}${url.search}`,
+          headers.get('Idempotency-Key') ?? '',
+          headers.get('If-Match') ?? '',
+          headers.get('Content-Type') ?? '',
+          body,
+        ]),
+      )
+      .digest('hex');
+    headers.set('Stood-Signature', `t=${timestamp},v2=${signature}`);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
     try {
       const response = await this.transport(
-        new Request(`${this.origin}/v1${path}`, {
+        new Request(url, {
           method,
           headers,
           redirect: 'error',

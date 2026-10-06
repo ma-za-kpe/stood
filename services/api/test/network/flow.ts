@@ -256,7 +256,9 @@ export class NetworkFlow {
     const response = await fetch(`http://api:3000/v1/tranches/${this.trancheId}`, {
       headers: {
         Authorization: 'Bearer mock-key',
-        'Stood-Signature': `t=${t},v1=${createHmac('sha256', 'mock-secret').update(`${t}.`).digest('hex')}`,
+        'Stood-Signature': `t=${t},v2=${createHmac('sha256', 'mock-secret')
+          .update(JSON.stringify(['stood.request@2', t, 'GET', `/v1/tranches/${this.trancheId}`, '', '', '', '']))
+          .digest('hex')}`,
       },
     });
     assert(response.ok);

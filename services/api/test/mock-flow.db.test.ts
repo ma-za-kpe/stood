@@ -120,7 +120,9 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
     const response = await fetch(`${origin}/v1/tranches/${trancheId}`, {
       headers: {
         Authorization: 'Bearer mock-key',
-        'Stood-Signature': `t=${t},v1=${createHmac('sha256', 'mock-secret').update(`${t}.`).digest('hex')}`,
+        'Stood-Signature': `t=${t},v2=${createHmac('sha256', 'mock-secret')
+          .update(JSON.stringify(['stood.request@2', t, 'GET', `/v1/tranches/${trancheId}`, '', '', '', '']))
+          .digest('hex')}`,
       },
     });
     expect(response.status).toBe(200);
