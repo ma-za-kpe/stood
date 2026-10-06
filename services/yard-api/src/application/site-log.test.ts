@@ -28,7 +28,7 @@ it('checks the exact current builder before scanning and again inside the store 
   expect(f.store.append).toHaveBeenCalledOnce();
   expect(f.scanner.safe).toHaveBeenCalledWith(JSON.stringify(batch.lines[0]));
   f.scanner.safe.mockImplementation(async () => {
-    await f.board.releaseClaim(f.id, 'one', leaseBuilder, 5, 'release', leaseAt);
+    await f.board.releaseClaim(f.id, 'one', leaseBuilder, 6, 'release', leaseAt);
     return true;
   });
   await expect(f.log.append(f.id, 'one', leaseBuilder, 'race', batch, leaseAt)).rejects.toThrow('FORBIDDEN');
@@ -52,7 +52,7 @@ it('rejects expired or already-submitted writers and invalid clocks without scan
   const f = await setup();
   for (const now of [leaseAt - 1, leaseAt + 48 * 3600000, NaN])
     await expect(f.log.append(f.id, 'one', leaseBuilder, 'bad', batch, now)).rejects.toThrow();
-  await f.board.submit(f.id, 'one', 'a'.repeat(40), 'package', leaseBuilder, 5, 'submit', leaseAt);
+  await f.board.submit(f.id, 'one', 'a'.repeat(40), 'package', leaseBuilder, 6, 'submit', leaseAt);
   await expect(f.log.append(f.id, 'one', leaseBuilder, 'late', batch, leaseAt)).rejects.toThrow('CONFLICT');
   expect(f.scanner.safe).not.toHaveBeenCalled();
   expect(await f.log.snapshot(f.id, 'one', leaseBuilder, leaseAt)).toMatchObject({ version: 0 });

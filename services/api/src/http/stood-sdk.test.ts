@@ -196,3 +196,42 @@ describe('Public SDK against the actual local Stood HTTP router (T-0179)', () =>
     await expect(client.getDraft('alw')).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 });
+
+it('reads a held tranche through the public view and rejects malformed views (T-0187)', async () => {
+  const { createTrancheRecord, advanceTrancheRecord } = await import('../domain/tranche-record.js');
+  let record = createTrancheRecord({
+    id: 'trn_1',
+    amount: { minor: 120000, currency: 'USD' },
+    profileId: 'code.final@1',
+    maxResubmits: 1,
+  });
+  record = advanceTrancheRecord(record, { method: 'dispatch', args: ['auth_1', 'K7Q', at, at + 29 * 86400000] });
+  const f = contract();
+  f.store.tranche.mockResolvedValue({ trancheId: 'trn_1', version: 1, record, pending: null } as never);
+  const view = await f.client.getTranche('trn_1');
+  expect(view).toEqual({
+    id: 'trn_1',
+    state: 'HELD',
+    version: 1,
+    holdExpiresAt: new Date(at + 29 * 86400000).toISOString(),
+    settlement: null,
+    decision: null,
+  });
+  f.store.tranche.mockResolvedValue(null);
+  await expect(f.client.getTranche('trn_1')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  const forged = new StoodClient({
+    baseUrl: 'https://stood.fixture',
+    key: 'fixture_key',
+    secret: 'fixture_secret',
+    clock: () => at,
+    transport: async () =>
+      new Response(
+        JSON.stringify({ id: 'trn_other', state: 'HELD', version: 1, hold: null, settlement: null, decision: null }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+  });
+  await expect(forged.getTranche('trn_1')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+});

@@ -47,6 +47,25 @@ export async function claimedFixture(store: YardEvents = new MemoryEvents(), id 
   );
   await board.post(id, 'one', 'tranche', leaseBuyer, 2, 'post', leaseAt);
   await board.claim(id, 'one', leaseBuilder, 3, 'claim', leaseAt);
-  await board.build(id, 'one', leaseBuilder, 4, 'build', leaseAt);
+  await confirmHold(board, id, 'one', leaseAt);
+  await board.build(id, 'one', leaseBuilder, 5, 'build', leaseAt);
   return { board, store, id };
+}
+// Stands in for Stood's verified hold notification for the work order's current attempt.
+export async function confirmHold(board: Board, id: string, wo: string, at: number, days = 29) {
+  const snapshot = await board.events.load(id);
+  const order = (snapshot.data as { orders: Record<string, { trancheId: string }> }).orders[wo];
+  if (!order) throw new Error('No such work order');
+  return board.holdConfirmed(
+    id,
+    wo,
+    {
+      eventId: `hold-${id}-${wo}-${snapshot.version}`,
+      trancheId: order.trancheId,
+      effect: 'HOLD',
+      expiresAt: at + days * 86400000,
+      simulated: true,
+    },
+    snapshot.version,
+  );
 }

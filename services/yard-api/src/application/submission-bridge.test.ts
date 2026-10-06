@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { confirmHold } from '../../test/fakes/board-fixture.js';
 import { MemoryEvents } from '../../test/fakes/events.js';
 import { Board } from './board.js';
 import { SubmissionBridge } from './submission-bridge.js';
@@ -49,7 +50,8 @@ async function fixture(store = new MemoryEvents()) {
   );
   await board.post('p', 'one', 'tranche', buyer, 2, 'post', now);
   await board.claim('p', 'one', builder, 3, 'claim', now);
-  await board.build('p', 'one', builder, 4, 'build', now);
+  await confirmHold(board, 'p', 'one', now);
+  await board.build('p', 'one', builder, 5, 'build', now);
   return { board, store };
 }
 it('reserves an exact claim-bound request before HTTP and recovers a lost reply with the same key', async () => {
@@ -76,18 +78,18 @@ it('reserves an exact claim-bound request before HTTP and recovers a lost reply 
     },
   };
   const first = new SubmissionBridge(board, provider);
-  await expect(first.submit('p', 'one', 'd'.repeat(40), builder, 5, 'submit', now)).rejects.toThrow('response lost');
+  await expect(first.submit('p', 'one', 'd'.repeat(40), builder, 6, 'submit', now)).rejects.toThrow('response lost');
   const restored = new SubmissionBridge(new Board(store), provider);
   expect(await restored.recover(now + 1)).toEqual([{ projectId: 'p', wo: 'one', status: 'DELIVERED' }]);
-  const result = await restored.submit('p', 'one', 'd'.repeat(40), builder, 5, 'submit', now + 1);
+  const result = await restored.submit('p', 'one', 'd'.repeat(40), builder, 6, 'submit', now + 1);
   expect(calls[0]).toEqual(calls[1]);
-  expect(result.version).toBe(7);
+  expect(result.version).toBe(8);
   expect((await board.view('p', 'one', builder)).state).toBe('CHECKING');
-  expect(await restored.submit('p', 'one', 'd'.repeat(40), builder, 5, 'submit', now + 2)).toEqual(result);
+  expect(await restored.submit('p', 'one', 'd'.repeat(40), builder, 6, 'submit', now + 2)).toEqual(result);
   expect(calls).toHaveLength(2);
-  await expect(restored.submit('p', 'one', 'e'.repeat(40), builder, 5, 'submit', now)).rejects.toThrow('CONFLICT');
+  await expect(restored.submit('p', 'one', 'e'.repeat(40), builder, 6, 'submit', now)).rejects.toThrow('CONFLICT');
   await expect(
-    restored.submit('p', 'one', 'd'.repeat(40), { ...builder, root: 'changed' }, 5, 'submit', now),
+    restored.submit('p', 'one', 'd'.repeat(40), { ...builder, root: 'changed' }, 6, 'submit', now),
   ).rejects.toThrow('CONFLICT');
 });
 it('retains the reservation when a mismatched package receipt arrives', async () => {
@@ -100,8 +102,8 @@ it('retains the reservation when a mismatched package receipt arrives', async ()
     commit: 'd'.repeat(40),
   }));
   const bridge = new SubmissionBridge(board, { submit });
-  await expect(bridge.submit('p', 'one', 'd'.repeat(40), builder, 5, 'submit', now)).rejects.toThrow('INVALID');
+  await expect(bridge.submit('p', 'one', 'd'.repeat(40), builder, 6, 'submit', now)).rejects.toThrow('INVALID');
   expect((await board.view('p', 'one', builder)).state).toBe('SUBMITTING');
-  await expect(bridge.submit('p', 'one', 'd'.repeat(40), builder, 5, 'different', now)).rejects.toThrow('CONFLICT');
+  await expect(bridge.submit('p', 'one', 'd'.repeat(40), builder, 6, 'different', now)).rejects.toThrow('CONFLICT');
   expect(submit).toHaveBeenCalledTimes(1);
 });

@@ -23,7 +23,14 @@ export type RefusalProof = Readonly<{
   resubmissionsLeft: number;
   simulated: true;
 }>;
-export type StoodProof = Omit<SettlementProof, 'eventId'> | Omit<RefusalProof, 'eventId'>;
+export type HoldProof = Readonly<{
+  eventId: string;
+  trancheId: string;
+  effect: 'HOLD';
+  expiresAt: number;
+  simulated: true;
+}>;
+export type StoodProof = Omit<SettlementProof, 'eventId'> | Omit<RefusalProof, 'eventId'> | Omit<HoldProof, 'eventId'>;
 type Refusal = Readonly<{
   eventId: string;
   packageId: string;
@@ -63,6 +70,7 @@ type Order = {
   pastSubmissions?: SubmissionIntent[];
   refusals?: Refusal[];
   closed?: 'REFUSED';
+  holds?: { attempt: number; expiresAt: number; eventId: string }[];
 };
 type Handover = { status: 'CLOSED'; closedAt: number; confirmed: readonly string[] };
 type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order>; handover?: Handover };
@@ -171,6 +179,10 @@ function punchList(value: unknown): readonly PunchItem[] {
     }),
   );
 }
+// The confirmed Stood hold for the work order's current attempt, if any. Never a payment.
+function currentHold(order: Order, work: WorkOrder) {
+  return order.holds?.find((h) => h.attempt === work.snapshot.attempt) ?? null;
+}
 function status(order: Order, work: WorkOrder): string {
   if (order.payment) return 'PAID';
   if (order.closed) return order.closed;
@@ -191,6 +203,7 @@ function feedback(order: Order) {
 }
 const BUILDER_EVENTS = new Set([
   'wo.claimed',
+  'stood.held',
   'wo.building',
   'submission.reserved',
   'wo.submitted',
@@ -417,6 +430,9 @@ export class Board {
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
       open(order);
       beforeDeadline(d, order.milestone, now);
+      // Work starts only against a confirmed, unexpired Stood hold for this attempt.
+      const hold = currentHold(order, work);
+      if (!hold || now >= hold.expiresAt) throw new YardError('CONFLICT');
       leaseChange(() => work.build(claim.id, now));
       order.actions.push({ kind: 'build', claim: claim.id, now });
       return { wo, state: 'BUILDING', simulated: true };
@@ -486,6 +502,7 @@ export class Board {
       ...work.snapshot,
       ...feedback(order),
       attempt: work.snapshot.attempt,
+      hold: currentHold(order, work) ? { expiresAt: currentHold(order, work)?.expiresAt } : null,
       currentClaim: order.closed ? null : work.snapshot.currentClaim,
       state: status(order, work),
       payment: order.payment,
@@ -516,6 +533,7 @@ export class Board {
           state: status(order, work),
           ...feedback(order),
           attempt: work.snapshot.attempt,
+          held: !!currentHold(order, work),
           payment: order.payment,
           submission: work.snapshot.submission,
           leasedUntil: work.snapshot.currentClaim?.leasedUntil ?? null,
@@ -685,6 +703,37 @@ export class Board {
         data: d,
         type: 'stood.released',
         payload: { wo, state: 'PAID', reference: proof.reference, payment: structuredClone(proof), simulated: true },
+      };
+    });
+  }
+  // Only an authenticated Stood integration calls this after a matching read shows the tranche HELD.
+  holdConfirmed(id: string, wo: string, proof: HoldProof, version: number) {
+    return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {
+      const d = data(raw);
+      const { work, order } = workOrder(d, wo);
+      if (
+        order.payment ||
+        order.closed ||
+        !work.snapshot.currentClaim ||
+        !['CLAIMED', 'REWORK'].includes(work.snapshot.state) ||
+        currentHold(order, work) ||
+        proof.trancheId !== order.trancheId ||
+        proof.effect !== 'HOLD' ||
+        !Number.isSafeInteger(proof.expiresAt) ||
+        proof.expiresAt <= work.snapshot.lastAt ||
+        typeof proof.eventId !== 'string' ||
+        !proof.eventId.trim() ||
+        proof.simulated !== true
+      )
+        throw new YardError('INVALID');
+      order.holds = [
+        ...(order.holds ?? []),
+        { attempt: work.snapshot.attempt, expiresAt: proof.expiresAt, eventId: proof.eventId },
+      ];
+      return {
+        data: d,
+        type: 'stood.held',
+        payload: { wo, attempt: work.snapshot.attempt, expiresAt: proof.expiresAt, simulated: true },
       };
     });
   }

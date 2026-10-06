@@ -347,10 +347,12 @@ export class NetworkFlow {
   }
   async proof() {
     this.at = await this.clock();
-    // The package remains bound to the tranche through the signed public API.
-    await this.client().getPackage(this.trancheId, this.packageId);
     const value = await this.store.load(this.trancheId),
       tranche = restoreTrancheRecord(value.record);
+    if (tranche.state === 'HELD')
+      return { trancheId: this.trancheId, effect: 'HOLD', expiresAt: tranche.currentHold.expiresAt, simulated: true };
+    // The package remains bound to the tranche through the signed public API.
+    await this.client().getPackage(this.trancheId, this.packageId);
     assert(tranche.settlement?.reference);
     if (tranche.state === 'REFUSED') {
       assert.equal(tranche.settlement.effect, 'VOID');
