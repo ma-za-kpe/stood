@@ -29,6 +29,8 @@ export type ProjectRoom = Readonly<{
   id: string;
   version: number;
   handover?: Handover | null;
+  signed?: boolean;
+  milestoneCount?: number;
   summary: string;
   currency: string;
   simulated: true;
@@ -141,6 +143,12 @@ export function roomChecked(value: unknown): ProjectRoom {
     !Array.isArray(value.orders)
   )
     throw new Error('Invalid project snapshot');
+  if (value.signed !== undefined && typeof value.signed !== 'boolean') throw new Error('Invalid signing state');
+  if (
+    value.milestoneCount !== undefined &&
+    (!Number.isSafeInteger(value.milestoneCount) || Number(value.milestoneCount) < value.orders.length)
+  )
+    throw new Error('Invalid milestone count');
   const h = value.handover;
   if (
     h !== undefined &&

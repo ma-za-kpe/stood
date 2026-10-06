@@ -500,6 +500,8 @@ export class Board {
       id: snapshot.id,
       version: snapshot.version,
       handover: d.handover ?? null,
+      signed: d.blueprint.status === 'FROZEN',
+      milestoneCount: d.blueprint.milestones.length,
       summary: d.blueprint.summary,
       currency: d.blueprint.currency,
       simulated: true,
