@@ -1,4 +1,4 @@
-import { type KeyObject, sign, verify } from 'node:crypto';
+import { type KeyObject, verify } from 'node:crypto';
 import type { CheckResult } from '../../domain/decision.js';
 import type { FrozenCodeContract, RunnerReportVerifier } from '../../ports/runner-report.js';
 
@@ -27,33 +27,85 @@ const keys = [
 const hash = (s: unknown): s is string => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s);
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
+export type RunnerSigningKey = Readonly<{
+  id: string;
+  runnerId: string;
+  publicKey: KeyObject;
+  notBefore: number;
+  notAfter: number;
+  revoked: boolean;
+}>;
 export class SignedReportVerifier implements RunnerReportVerifier {
+  private readonly keys: readonly RunnerSigningKey[];
   constructor(
-    private readonly publicKey: KeyObject,
+    keySet: readonly RunnerSigningKey[],
     private readonly clock: () => number,
     private readonly allowFixture = false,
-  ) {}
+  ) {
+    if (
+      !Array.isArray(keySet) ||
+      !keySet.length ||
+      keySet.length > 32 ||
+      new Set(keySet.map((key) => key?.id)).size !== keySet.length ||
+      keySet.some(
+        (key) =>
+          !key ||
+          typeof key.id !== 'string' ||
+          !/^[A-Za-z0-9_.-]{1,64}$/.test(key.id) ||
+          typeof key.runnerId !== 'string' ||
+          !key.runnerId.trim() ||
+          key.runnerId.length > 128 ||
+          key.publicKey?.type !== 'public' ||
+          key.publicKey.asymmetricKeyType !== 'ed25519' ||
+          !Number.isSafeInteger(key.notBefore) ||
+          key.notBefore < 0 ||
+          !Number.isSafeInteger(key.notAfter) ||
+          key.notAfter <= key.notBefore ||
+          typeof key.revoked !== 'boolean',
+      )
+    )
+      throw new RangeError('Invalid runner key set');
+    this.keys = Object.freeze(keySet.map((key) => Object.freeze({ ...key })));
+  }
   verify(contract: FrozenCodeContract, envelope: unknown): readonly CheckResult[] | null {
     try {
       if (
         !object(envelope) ||
-        Object.keys(envelope).sort().join() !== 'payload,signature' ||
+        Object.keys(envelope).sort().join() !== 'keyId,payload,signature' ||
+        typeof envelope.keyId !== 'string' ||
+        !/^[A-Za-z0-9_.-]{1,64}$/.test(envelope.keyId) ||
         typeof envelope.payload !== 'string' ||
         Buffer.byteLength(envelope.payload) > 65536 ||
         typeof envelope.signature !== 'string' ||
-        !/^[A-Za-z0-9+/]{86}==$/.test(envelope.signature) ||
-        this.publicKey.asymmetricKeyType !== 'ed25519' ||
-        !verify(null, Buffer.from(envelope.payload), this.publicKey, Buffer.from(envelope.signature, 'base64'))
+        !/^[A-Za-z0-9+/]{86}==$/.test(envelope.signature)
+      )
+        return null;
+      const key = this.keys.find((key) => key.id === envelope.keyId);
+      const now = this.clock();
+      if (
+        !key ||
+        key.revoked ||
+        key.runnerId !== contract.runnerId ||
+        !Number.isSafeInteger(now) ||
+        now < key.notBefore ||
+        now >= key.notAfter ||
+        !verify(
+          null,
+          Buffer.from(`stood-runner-report/v1\0${envelope.keyId}\0${envelope.payload}`),
+          key.publicKey,
+          Buffer.from(envelope.signature, 'base64'),
+        )
       )
         return null;
       const p: unknown = JSON.parse(envelope.payload);
-      const now = this.clock();
       if (
         !object(p) ||
         Object.keys(p).sort().join() !== [...keys].sort().join() ||
         !Number.isFinite(now) ||
         typeof p.recordedAt !== 'number' ||
         !Number.isSafeInteger(p.recordedAt) ||
+        p.recordedAt < key.notBefore ||
+        p.recordedAt >= key.notAfter ||
         p.recordedAt > now ||
         now - p.recordedAt > 300000 ||
         !['attested', 'fixture'].includes(p.evidenceTier as string) ||
@@ -134,27 +186,4 @@ export class SignedReportVerifier implements RunnerReportVerifier {
       return null;
     }
   }
-}
-
-// Synthetic signed findings only. This adapter never fetches, imports or executes a repository.
-export function fakeReport(
-  contract: FrozenCodeContract,
-  privateKey: KeyObject,
-  recordedAt: number,
-  patch: Readonly<Record<string, unknown>> = {},
-): Readonly<{ payload: string; signature: string }> {
-  const binding = Object.fromEntries(bindings.map((k) => [k, contract[k]]));
-  const payload = JSON.stringify({
-    ...binding,
-    testBundleHash: contract.testBundleHash,
-    tests: contract.testIds.map((id) => ({ id, status: 'PASS' })),
-    diffHash: 'f'.repeat(64),
-    mutationScore: 1,
-    spentMinor: contract.maxMinor,
-    currency: contract.currency,
-    recordedAt,
-    evidenceTier: 'fixture',
-    ...patch,
-  });
-  return Object.freeze({ payload, signature: sign(null, Buffer.from(payload), privateKey).toString('base64') });
 }

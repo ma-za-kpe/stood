@@ -1,25 +1,35 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Board, Operator, SettlementProof } from '../application/board.js';
+import type { IntakePlanner } from '../application/intake-planner.js';
+import type { SiteLog } from '../application/site-log.js';
+import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
 import { YardError } from '../ports/events.js';
+import type { ForemanPlans } from '../ports/foreman.js';
+import type { IntakeStore } from '../ports/intakes.js';
+import { SiteLogError } from '../ports/site-log.js';
 import { eventFeed } from './event-feed.js';
+import { foremanHttp } from './foreman-http.js';
+import { intakeHttp } from './intake-http.js';
+import { siteLogHttp } from './site-log-http.js';
 export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
   operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
-  packages?: Readonly<{
-    submit(
-      input: Readonly<{ trancheId: string; repository: string; baseCommit: string; commit: string; key: string }>,
-    ): Promise<string>;
-  }>;
+  packages?: PackageGateway;
+  siteLog?: SiteLog;
+  foreman?: ForemanPlans;
+  intakes?: IntakeStore;
+  intakePlanner?: Pick<IntakePlanner, 'create'>;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
 }>;
-function signature(value: string | null, body: string, secret: string, now: number, prefix = ''): boolean {
+function signature(value: string | null, body: string, secret: string, now: number): boolean {
   const match = /^t=(\d{1,12}),v1=([a-f0-9]{64})$/.exec(value ?? '');
   if (!match || !Number.isSafeInteger(now) || Math.abs(now / 1000 - Number(match[1])) > 300) return false;
-  const expected = createHmac('sha256', secret).update(`${match[1]}.${prefix}${body}`).digest();
+  const expected = createHmac('sha256', secret).update(`${match[1]}.${body}`).digest();
   return timingSafeEqual(expected, Buffer.from(match[2] ?? '', 'hex'));
 }
 export function boardHttp(app: Hono, config: BoardConfig): void {
@@ -39,8 +49,26 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     throw new YardError('INVALID');
   const identify = (headers: Headers, method: string, path: string, body: string, now: number): Operator | null => {
     const credential = config.operators.find((o) => o.key === headers.get('Yard-Key-Id'));
-    if (!credential || !signature(headers.get('Yard-Signature'), body, credential.secret, now, `${method}.${path}.`))
+    const match = /^t=(\d{1,12}),v2=([a-f0-9]{64})$/.exec(headers.get('Yard-Signature') ?? '');
+    if (!credential || !match || !Number.isSafeInteger(now) || now < 0 || Math.abs(now / 1000 - Number(match[1])) > 300)
       return null;
+    const expected = createHmac('sha256', credential.secret)
+      .update(
+        JSON.stringify([
+          'yard.request@2',
+          match[1],
+          credential.key,
+          method,
+          path,
+          headers.get('Idempotency-Key') ?? '',
+          headers.get('If-Match') ?? '',
+          headers.get('Content-Type') ?? '',
+          headers.get('Last-Event-ID') ?? '',
+          body,
+        ]),
+      )
+      .digest();
+    if (!timingSafeEqual(expected, Buffer.from(match[2]!, 'hex'))) return null;
     return credential.actor;
   };
   app.use('/yard/v1/*', bodyLimit({ maxSize: 65536 }));
@@ -53,12 +81,19 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       return c.json({ code: 'clock_unavailable' }, 503);
     }
     const raw = await c.req.text();
-    const actor = identify(c.req.raw.headers, c.req.method, c.req.path, raw, now);
+    const url = new URL(c.req.url);
+    const actor = identify(c.req.raw.headers, c.req.method, `${url.pathname}${url.search}`, raw, now);
     if (!actor) return c.json({ code: 'unauthorized' }, 401);
     requests.set(c.req.raw, { actor, body: raw, now });
     return next();
   });
   app.onError((error, c) => {
+    if (error instanceof SiteLogError)
+      return c.json(
+        { code: error.code },
+        error.code === 'RATE_LIMITED' ? 429 : error.code === 'SCAN_UNAVAILABLE' ? 503 : 422,
+      );
+    if (error instanceof IntakeError) return c.json({ code: error.code }, 422);
     if (error instanceof YardError)
       return c.json(
         { code: error.code },
@@ -68,6 +103,42 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       return c.json({ code: 'invalid_request' }, 422);
     return c.json({ code: 'yard_unavailable' }, 503);
   });
+  if (config.foreman) foremanHttp(app, { foreman: config.foreman, request });
+  if (config.intakes) {
+    const store = config.intakes;
+    intakeHttp(app, {
+      store,
+      ...(config.intakePlanner ? { planner: config.intakePlanner } : {}),
+      request,
+      authorize: async (headers, id, target) => {
+        const actor = identify(headers, 'GET', target, '', await config.clock());
+        if (!actor || actor.kind !== 'BUYER') return false;
+        try {
+          return (await store.load(id)).owner === actor.id;
+        } catch {
+          return false;
+        }
+      },
+    });
+  }
+  if (config.siteLog) {
+    const log = config.siteLog;
+    siteLogHttp(app, {
+      log,
+      request,
+      authorize: async (headers, project, wo, target) => {
+        const now = await config.clock(),
+          actor = identify(headers, 'GET', target, '', now);
+        if (!actor) return false;
+        try {
+          await log.authorize(project, wo, actor, now);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    });
+  }
   const command = (c: Context) => {
     const key = c.req.header('Idempotency-Key') ?? '',
       version = Number(c.req.header('If-Match'));
@@ -92,7 +163,9 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     accepted: true,
     simulated: true,
   });
-  app.get('/yard/v1/board', async (c) => c.json({ orders: await config.board.discover(), simulated: true }));
+  app.get('/yard/v1/board', async (c) =>
+    c.json({ ...(await config.board.discoverPage(c.req.query('after'), request(c).now)), simulated: true }),
+  );
   app.post('/yard/v1/blueprints', async (c) => {
     const key = c.req.header('Idempotency-Key') ?? '';
     if (!/^[A-Za-z0-9:._-]{1,120}$/.test(key)) throw new YardError('INVALID');
@@ -112,6 +185,9 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     );
   });
   app.get('/yard/v1/blueprints/:id', async (c) => c.json(await config.board.read(c.req.param('id'), request(c).actor)));
+  app.get('/yard/v1/blueprints/:id/room', async (c) =>
+    c.json(await config.board.room(c.req.param('id'), request(c).actor)),
+  );
   app.post('/yard/v1/blueprints/:id/approve', async (c) => {
     const { key, version, actor } = command(c);
     const proof = body(c, ['version', 'buyerOperatorId', 'approvalReference', 'baselines']);
@@ -138,23 +214,39 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
         if (typeof input.commit !== 'string' || !/^[a-f0-9]{40}$/.test(input.commit)) throw new YardError('INVALID');
         if (config.packages) {
           if (input.packageId !== undefined) throw new YardError('INVALID');
-          const terms = await config.board.submissionTerms(id, wo, actor, input.commit, version, key, now);
-          if ('receipt' in terms) return c.json(ack(terms.receipt));
-          input.packageId = await config.packages.submit({
-            ...terms,
-            commit: input.commit,
-            key: `yard:${id}:${wo}:${key}`,
-          });
+          return c.json(
+            ack(
+              await new SubmissionBridge(config.board, config.packages).submit(
+                id,
+                wo,
+                input.commit,
+                actor,
+                version,
+                key,
+                now,
+              ),
+            ),
+          );
         }
         if (typeof input.packageId !== 'string') throw new YardError('INVALID');
         return c.json(ack(await config.board.submit(id, wo, input.commit, input.packageId, actor, version, key, now)));
       }
       return c.json(ack(await config.board[action](id, wo, actor, version, key, now)));
     });
+  for (const [route, method] of [
+    ['expire', 'expireLease'],
+    ['release', 'releaseClaim'],
+    ['repost', 'repost'],
+  ] as const)
+    app.post(`/yard/v1/blueprints/:id/work-orders/:wo/${route}`, async (c) => {
+      const { key, version, actor, now } = command(c);
+      body(c, []);
+      return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
+    });
   eventFeed(app, {
     store: config.board.events,
-    authorize: async (headers, id) => {
-      const actor = identify(headers, 'GET', `/yard/v1/blueprints/${id}/events`, '', await config.clock());
+    authorize: async (headers, id, target) => {
+      const actor = identify(headers, 'GET', target, '', await config.clock());
       if (!actor) return false;
       try {
         await config.board.read(id, actor);

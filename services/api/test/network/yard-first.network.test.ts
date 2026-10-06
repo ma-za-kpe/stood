@@ -35,7 +35,23 @@ it('Yard network: frozen terms → ordinary Crew → confirmed simulated Stood c
       ...(raw ? { body: raw } : {}),
       headers: {
         'Yard-Key-Id': 'sim-buyer-key',
-        'Yard-Signature': `t=${t},v1=${createHmac('sha256', 'sim-buyer-secret').update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+        'Yard-Signature': `t=${t},v2=${createHmac('sha256', 'sim-buyer-secret')
+          .update(
+            JSON.stringify([
+              'yard.request@2',
+              t,
+              'sim-buyer-key',
+              method,
+              path,
+              key,
+              String(version),
+              'application/json',
+              '',
+              raw,
+            ]),
+          )
+          .digest('hex')}`,
+        'Content-Type': 'application/json',
         'If-Match': String(version),
         'Idempotency-Key': key,
       },
@@ -122,7 +138,16 @@ it('Yard network: frozen terms → ordinary Crew → confirmed simulated Stood c
   });
   for (const step of ['AUTHORIZE_FIXTURE', 'DISPATCH'])
     await control(`/__mock/sessions/${scenario.id}/steps`, { step });
+  const advanced = await fetch('http://paypal-sim:8080/__sim/advance', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer sim-access-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ milliseconds: 1000 }),
+  });
+  expect(advanced.ok).toBe(true);
   for (let i = 0; i < 3; i++) await control('/__mock/tick', {}, 'http://crew:8081');
+  const log = await (await yard(`${path}/log`)).json();
+  expect(log.lines.map((line: { seq: number }) => line.seq)).toEqual([1, 2]);
+  expect(log.lines[1].line).toMatchObject({ kind: 'commit', data: { sha: expect.stringMatching(/^[a-f0-9]{40}$/) } });
   const submitted = await (await yard(path)).json();
   expect(submitted).toMatchObject({ state: 'CHECKING', payment: null });
   expect(submitted.submission.commit).toMatch(/^[a-f0-9]{40}$/);

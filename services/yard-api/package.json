@@ -13,7 +13,8 @@
     "@stood/yard-domain": "workspace:*",
     "drizzle-orm": "0.45.3",
     "hono": "4.13.12",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "@stood/yard-contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "8.23.1"

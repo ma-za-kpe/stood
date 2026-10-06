@@ -9,6 +9,7 @@ const sim = createPayPalSimulator({
   webhookUrl: 'http://api:3000/v1/webhooks/paypal',
 });
 const lost = new Set<string>();
+const missed = new Set<string>();
 const app = new Hono();
 app.post('/__mock/lose-capture', async (c) => {
   if (c.req.header('Authorization') !== 'Bearer sim-access-token') return c.json({ code: 'unauthorized' }, 401);
@@ -18,7 +19,17 @@ app.post('/__mock/lose-capture', async (c) => {
   lost.add(`/v2/payments/authorizations/${authorizationId}/capture`);
   return c.json({ simulated: true });
 });
+app.post('/__mock/miss-capture', async (c) => {
+  if (c.req.header('Authorization') !== 'Bearer sim-access-token') return c.json({ code: 'unauthorized' }, 401);
+  const { authorizationId } = await c.req.json<{ authorizationId: string }>();
+  if (typeof authorizationId !== 'string' || !/^SIM-AUTH-\d+$/.test(authorizationId) || missed.size >= 100)
+    return c.json({ code: 'invalid_fault' }, 422);
+  missed.add(`/v2/payments/authorizations/${authorizationId}/capture`);
+  return c.json({ simulated: true });
+});
 app.all('*', async (c) => {
+  if (c.req.method === 'POST' && missed.delete(c.req.path))
+    return c.json({ name: 'SIMULATED_BEFORE_CAPTURE', simulated: true }, 500);
   const response = await sim.app.fetch(c.req.raw);
   if (c.req.method === 'POST' && response.ok && lost.delete(c.req.path))
     return c.json({ name: 'SIMULATED_LOST_RESPONSE', simulated: true }, 503);

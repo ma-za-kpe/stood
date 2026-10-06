@@ -18,6 +18,8 @@ type Order = {
   id: string;
   status: string;
   customId: string;
+  referenceId: string;
+  payee: ObjectValue | null;
   amount: Amount;
   authorizations: string[];
   captures: ObjectValue[];
@@ -60,7 +62,7 @@ export function createPayPalSimulator(config: {
   const app = new Hono();
   const orders = new Map<string, Order>();
   const authorizations = new Map<string, Authorization>();
-  const cache = new Map<string, { signature: string; reply: Reply }>();
+  const cache = new Map<string, { signature: string; reply: Reply; expiresAt: number | null }>();
   const setups = new Map<string, ObjectValue>();
   const tokens = new Map<string, ObjectValue>();
   const events: ObjectValue[] = [];
@@ -99,8 +101,9 @@ export function createPayPalSimulator(config: {
     status: order.status,
     purchase_units: [
       {
-        reference_id: 'default',
+        reference_id: order.referenceId,
         custom_id: order.customId,
+        ...(order.payee ? { payee: order.payee } : {}),
         amount: order.amount,
         payments: {
           authorizations: order.authorizations.map((a) => refresh(authorizations.get(a) as Authorization)),
@@ -108,6 +111,9 @@ export function createPayPalSimulator(config: {
         },
       },
     ],
+    links: ['CREATED', 'APPROVED'].includes(order.status)
+      ? [{ href: `http://paypal-sim:8080/__sim/approve/${order.id}`, rel: 'approve', method: 'POST' }]
+      : [],
   });
   const authorize = (order: Order, expiresAt: number) => {
     const auth: Authorization = {
@@ -133,6 +139,7 @@ export function createPayPalSimulator(config: {
     const setup = setups.get(setupId);
     if (setup?.status !== 'CREATED') throw new Error('Unknown simulator setup');
     setup.status = 'APPROVED';
+    object(object(setup.payment_source).paypal).payer_id = 'SIM-PAYER';
   };
   app.onError(() => response(error(400, 'INVALID_REQUEST')));
   app.use('*', async (c, next) => {
@@ -260,7 +267,11 @@ export function createPayPalSimulator(config: {
     const key = c.req.header('paypal-request-id');
     if (!key || key.length > 108) return response(error(400, 'REQUEST_ID_REQUIRED'));
     const signature = `${method}:${path}:${canonical(body)}`;
-    const old = cache.get(key);
+    let old = cache.get(key);
+    if (old?.expiresAt !== null && old?.expiresAt !== undefined && now() >= old.expiresAt) {
+      cache.delete(key);
+      old = undefined;
+    }
     if (old)
       return response(old.signature === signature ? structuredClone(old.reply) : error(422, 'DUPLICATE_REQUEST_ID'));
     let reply: Reply;
@@ -268,12 +279,16 @@ export function createPayPalSimulator(config: {
       const units = Array.isArray(body.purchase_units) ? body.purchase_units : [];
       const unit = object(units[0]);
       const money = amount(unit.amount);
+      const payee = unit.payee === undefined ? null : object(unit.payee);
       if (
         body.intent !== 'AUTHORIZE' ||
         units.length !== 1 ||
         !money ||
         typeof unit.custom_id !== 'string' ||
-        !unit.custom_id.trim()
+        !unit.custom_id.trim() ||
+        (unit.reference_id !== undefined &&
+          (typeof unit.reference_id !== 'string' || !unit.reference_id.trim() || unit.reference_id.length > 256)) ||
+        (payee !== null && (typeof payee.merchant_id !== 'string' || !payee.merchant_id.trim()))
       )
         reply = error(422, 'INVALID_ORDER');
       else {
@@ -281,6 +296,8 @@ export function createPayPalSimulator(config: {
           id: id('ORDER'),
           status: 'CREATED',
           customId: unit.custom_id,
+          referenceId: typeof unit.reference_id === 'string' ? unit.reference_id : 'default',
+          payee: payee ? { merchant_id: payee.merchant_id } : null,
           amount: money,
           authorizations: [],
           captures: [],
@@ -357,12 +374,25 @@ export function createPayPalSimulator(config: {
             : { status: 201, body: authorize(o, Date.parse(auth.expiration_time)) };
       }
     } else if (path === '/v3/vault/setup-tokens') {
-      if (!object(body.payment_source).paypal) reply = error(422, 'INVALID_PAYMENT_SOURCE');
+      const customer = object(body.customer);
+      if (
+        !object(body.payment_source).paypal ||
+        (customer.merchant_customer_id !== undefined &&
+          (typeof customer.merchant_customer_id !== 'string' ||
+            !/^[0-9a-zA-Z\-_.^*$@#]{1,64}$/.test(customer.merchant_customer_id)))
+      )
+        reply = error(422, 'INVALID_PAYMENT_SOURCE');
       else {
         const sid = id('SETUP');
         const setup = {
           id: sid,
           status: 'CREATED',
+          customer: {
+            id: id('CUSTOMER'),
+            ...(customer.merchant_customer_id !== undefined
+              ? { merchant_customer_id: customer.merchant_customer_id }
+              : {}),
+          },
           payment_source: { paypal: {} },
           links: [{ href: `http://paypal-sim:8080/__sim/setup-approve/${sid}`, rel: 'approve', method: 'POST' }],
         };
@@ -372,20 +402,33 @@ export function createPayPalSimulator(config: {
     } else if (path === '/v3/vault/payment-tokens') {
       const source = object(object(body.payment_source).token);
       const setup = setups.get(String(source.id));
-      if (source.type !== 'SETUP_TOKEN' || setup?.status !== 'APPROVED') reply = error(422, 'SETUP_TOKEN_NOT_APPROVED');
+      const customer = object(body.customer),
+        approvedCustomer = object(setup?.customer);
+      if (
+        source.type !== 'SETUP_TOKEN' ||
+        setup?.status !== 'APPROVED' ||
+        (customer.id !== undefined && customer.id !== approvedCustomer.id) ||
+        (customer.merchant_customer_id !== undefined &&
+          customer.merchant_customer_id !== approvedCustomer.merchant_customer_id)
+      )
+        reply = error(422, 'SETUP_TOKEN_NOT_APPROVED');
       else {
         setup.status = 'VAULTED';
         const tid = id('TOKEN');
         const token = {
           id: tid,
-          customer: { id: 'SIM-CUSTOMER' },
-          payment_source: { paypal: { payer_id: 'SIM-PAYER' } },
+          customer: structuredClone(approvedCustomer),
+          payment_source: { paypal: { payer_id: object(object(setup.payment_source).paypal).payer_id } },
         };
         tokens.set(tid, token);
         reply = { status: 201, body: token };
       }
     } else reply = error(404, 'INVALID_RESOURCE_ID');
-    cache.set(key, { signature, reply: structuredClone(reply) });
+    cache.set(key, {
+      signature,
+      reply: structuredClone(reply),
+      expiresAt: path.startsWith('/v3/vault/') ? now() + 3 * 3600000 : null,
+    });
     return response(reply);
   });
   return { app, approve, approveSetup, deliver, events: () => structuredClone(events) };

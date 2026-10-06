@@ -1,7 +1,7 @@
 import { type Decision, getProfile, RULE_SET_VERSION } from './decision.js';
-import { assertHoldCurrency, captureAllowedAt } from './hold-policy.js';
+import { assertHoldCurrency, CAPTURE_RETRY_PROOF_MAX_AGE_MS, captureAllowedAt } from './hold-policy.js';
 import type { Money } from './money.js';
-import type { Nonce } from './nonce.js';
+import { Nonce } from './nonce.js';
 
 export type TrancheState =
   | 'PENDING'
@@ -18,11 +18,40 @@ export type TrancheState =
   | 'CANCELLED'
   | 'DISPUTED';
 export type HoldAttempt = Readonly<{ authorizationId: string; nonce: string; heldAt: number; expiresAt: number }>;
+export type FundingConfirmation =
+  | Readonly<{ kind: 'FAILED'; reference: string }>
+  | Readonly<{
+      kind: 'HELD';
+      reference: string;
+      authorizationId: string;
+      nonce: string;
+      heldAt: number;
+      expiresAt: number;
+    }>
+  | Readonly<{
+      kind: 'EXPIRED';
+      reference: string;
+      authorizationId: string;
+      nonce: string;
+      heldAt: number;
+      expiresAt: number;
+      now: number;
+    }>;
 export type PaymentOperation = Readonly<{
   key: string;
   effect: 'CAPTURE' | 'VOID';
   authorizationId: string;
   target: 'RELEASED' | 'REFUSED' | 'EXPIRED' | 'CANCELLED';
+}>;
+export type CaptureRetryClaim = Readonly<{
+  claimId: string;
+  effect: 'CAPTURE';
+  authorizationId: string;
+  operationKey: string;
+  providerRequestId: string;
+  reference: string;
+  observedAt: number;
+  now: number;
 }>;
 type DecisionRecord = Readonly<{ id: string; decision: Decision }>;
 export type SettlementConfirmation = Readonly<{
@@ -79,6 +108,8 @@ export class Tranche {
   #settlement: Settlement | null = null;
   #settlements: Settlement[] = [];
   #settlementAttempt = 1;
+  #possiblySubmitted = false;
+  #captureRetryClaim: CaptureRetryClaim | null = null;
   #settlementBlock: 'CAPTURE_WINDOW_CLOSING' | null = null;
   #currentHold: HoldAttempt | null = null;
   #authorizedAt = 0;
@@ -153,6 +184,9 @@ export class Tranche {
   get pendingOperation(): PaymentOperation | null {
     return this.#pending;
   }
+  get captureRetryClaim(): CaptureRetryClaim | null {
+    return this.#captureRetryClaim;
+  }
   get settlementBlock(): 'CAPTURE_WINDOW_CLOSING' | null {
     return this.#settlementBlock;
   }
@@ -176,6 +210,40 @@ export class Tranche {
 
   dispatch(authorizationId: string, nonce: Nonce, heldAt: number, expiresAt: number): void {
     this.requireActive();
+    this.attachHold(authorizationId, nonce, heldAt, expiresAt);
+  }
+
+  // A receipt records an earlier provider operation. Safe recovery must allow
+  // this fact to be recovered without authorising another funding request.
+  confirmFunding(receipt: FundingConfirmation): void {
+    this.requireState(['PENDING', 'WAIT_FUNDING']);
+    if (!receipt.reference.trim()) throw new RangeError('Invalid funding reference');
+    if (receipt.kind === 'FAILED') {
+      this.#state = 'WAIT_FUNDING';
+      return;
+    }
+    if (
+      !['HELD', 'EXPIRED'].includes(receipt.kind) ||
+      !Number.isSafeInteger(receipt.heldAt) ||
+      receipt.heldAt < 0 ||
+      !Number.isSafeInteger(receipt.expiresAt)
+    )
+      throw new RangeError('Invalid funding confirmation');
+    if (receipt.kind === 'EXPIRED' && (!Number.isSafeInteger(receipt.now) || receipt.now < receipt.expiresAt))
+      throw new RangeError('Funding expiry requires a confirmed deadline');
+    this.attachHold(receipt.authorizationId, new Nonce(receipt.nonce), receipt.heldAt, receipt.expiresAt);
+    if (receipt.kind === 'EXPIRED') {
+      this.#settlement = Object.freeze({
+        effect: 'EXPIRE',
+        reference: receipt.reference,
+        attempt: this.#attempts.length,
+      });
+      this.#settlements.push(this.#settlement);
+      this.#state = 'EXPIRED';
+    }
+  }
+
+  private attachHold(authorizationId: string, nonce: Nonce, heldAt: number, expiresAt: number): void {
     this.requireState(['PENDING', 'WAIT_FUNDING']);
     if (
       !authorizationId.trim() ||
@@ -243,7 +311,10 @@ export class Tranche {
     const pending = this.matchReauthorization(failure);
     if (!['AMBIGUOUS', 'REJECTED_NO_REAUTHORIZATION'].includes(failure.kind))
       throw new Error('Unknown reauthorisation failure');
-    if (failure.kind === 'AMBIGUOUS') return;
+    if (failure.kind === 'AMBIGUOUS') {
+      this.#possiblySubmitted = true;
+      return;
+    }
     this.#reauthorizationAttempt++;
     this.#state = pending.previousState;
     this.#pendingReauthorization = null;
@@ -354,7 +425,10 @@ export class Tranche {
     this.matchPending(failure);
     if (!['AMBIGUOUS', 'DECLINED', 'REJECTED_NO_PAYMENT', 'AUTHORIZATION_EXPIRED'].includes(failure.kind))
       throw new Error('Unknown settlement failure');
-    if (failure.kind === 'AMBIGUOUS') return;
+    if (failure.kind === 'AMBIGUOUS') {
+      this.#possiblySubmitted = true;
+      return;
+    }
     if (failure.kind === 'AUTHORIZATION_EXPIRED') {
       if (!failure.reference?.trim()) throw new Error('Confirmed expiration requires a provider reference');
       this.#settlement = Object.freeze({
@@ -369,6 +443,31 @@ export class Tranche {
     }
     this.#settlementAttempt++;
     this.#pending = null;
+  }
+
+  claimCaptureRetry(claim: CaptureRetryClaim): void {
+    this.requireActive();
+    this.requireState(['CAPTURE_PENDING']);
+    const pending = this.matchPending(claim);
+    if (
+      !this.#possiblySubmitted ||
+      this.#captureRetryClaim !== null ||
+      claim.operationKey !== pending.key ||
+      typeof claim.claimId !== 'string' ||
+      !claim.claimId.trim() ||
+      typeof claim.providerRequestId !== 'string' ||
+      !claim.providerRequestId.trim() ||
+      typeof claim.reference !== 'string' ||
+      !claim.reference.trim() ||
+      !Number.isSafeInteger(claim.observedAt) ||
+      !Number.isSafeInteger(claim.now) ||
+      claim.observedAt < this.currentHold.heldAt ||
+      claim.observedAt > claim.now ||
+      claim.now - claim.observedAt > CAPTURE_RETRY_PROOF_MAX_AGE_MS ||
+      !captureAllowedAt(this.currentHold.expiresAt, claim.now)
+    )
+      throw new Error('Capture retry requires fresh proof and an unused retry');
+    this.#captureRetryClaim = Object.freeze({ ...claim });
   }
 
   private matchPending(result: Pick<SettlementConfirmation, 'effect' | 'authorizationId'>): PaymentOperation {
@@ -401,6 +500,8 @@ export class Tranche {
 
   private reserve(effect: 'CAPTURE' | 'VOID', target: PaymentOperation['target']): PaymentOperation {
     this.#settlementBlock = null;
+    this.#possiblySubmitted = false;
+    this.#captureRetryClaim = null;
     this.#pending = Object.freeze({
       key: `${this.id}:${this.#attempts.length}:${effect}:${this.#settlementAttempt}`,
       effect,

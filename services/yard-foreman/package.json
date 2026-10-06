@@ -1,0 +1,21 @@
+{
+  "name": "@stood/yard-foreman",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --outDir dist"
+  },
+  "dependencies": {
+    "@langchain/langgraph": "1.4.19",
+    "@langchain/langgraph-checkpoint-postgres": "1.0.5",
+    "@stood/yard-domain": "workspace:*",
+    "pg": "8.23.1",
+    "@stood/yard-contracts": "workspace:*",
+    "@langchain/langgraph-checkpoint": "1.1.5"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}

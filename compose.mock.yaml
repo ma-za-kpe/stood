@@ -71,6 +71,27 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+  web:
+    <<: *node
+    command: [node, tools/site/mock-web-server.mjs]
+    depends_on:
+      yard-api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3002/yard/app/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  browser:
+    image: stood-site-browser
+    init: true
+    shm_size: 256m
+    working_dir: /workspace
+    command: [node, tools/site/mock-room-smoke.mjs]
+    volumes:
+      - ./tools/site/mock-room-smoke.mjs:/workspace/tools/site/mock-room-smoke.mjs:ro
+      - ./artifacts/mock-network:/workspace/artifacts/mock-network
+    networks: [mock]
   crew:
     <<: *node
     command: [node, .mock-dist/services/yard-api/test/fakes/crew-server.js]

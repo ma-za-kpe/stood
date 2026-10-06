@@ -34,17 +34,32 @@ export function platformApi(config: PlatformApiConfig): Hono {
   );
   app.use('*', async (c, next) => {
     const now = config.clock();
-    const signature = /^t=(\d{1,12}),v1=([a-f0-9]{64})$/.exec(c.req.header('Stood-Signature') ?? '');
+    const signature = /^t=(\d{1,12}),v2=([a-f0-9]{64})$/.exec(c.req.header('Stood-Signature') ?? '');
     const token = c.req.header('Authorization') ?? '';
     if (
-      !Number.isFinite(now) ||
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
       !timingSafeEqual(digest(token), digest(`Bearer ${config.key}`)) ||
       !signature ||
       Math.abs(now / 1000 - Number(signature[1])) > 300
     )
       return problem(401, 'unauthorized', 'A valid platform key and signature are required.');
     const body = await c.req.text();
-    const expected = createHmac('sha256', config.secret).update(`${signature[1]}.${body}`).digest();
+    const url = new URL(c.req.url);
+    const expected = createHmac('sha256', config.secret)
+      .update(
+        JSON.stringify([
+          'stood.request@2',
+          signature[1],
+          c.req.method,
+          `/v1${url.pathname}${url.search}`,
+          c.req.header('Idempotency-Key') ?? '',
+          c.req.header('If-Match') ?? '',
+          c.req.header('Content-Type') ?? '',
+          body,
+        ]),
+      )
+      .digest();
     if (!timingSafeEqual(expected, Buffer.from(signature[2]!, 'hex')))
       return problem(401, 'unauthorized', 'A valid platform key and signature are required.');
     await next();

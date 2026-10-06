@@ -7,6 +7,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { executePayment } from '../../application/execute-payment.js';
 import { reconcile } from '../../application/reconcile.js';
+import { retryCapture } from '../../application/retry-capture.js';
 import { RULE_SET_VERSION } from '../../domain/decision.js';
 import { createTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../../domain/tranche-record.js';
 import { PostgresPaymentOperations } from './payment-operations.js';
@@ -390,4 +391,147 @@ describe('Atomic tranche persistence', () => {
     await expect(store.apply('create', 0, 'illegal', cmd('dispute'))).rejects.toThrow();
     expect((await store.load('create')).version).toBe(0);
   });
+});
+
+it('claims one retry across competing real-Postgres workers and retains consumption after restart', async () => {
+  const id = 'bounded_retry_race';
+  await pending(id);
+  await executePayment(
+    store,
+    {
+      execute: async () => {
+        throw new Error('not sent');
+      },
+    },
+    id,
+    'first',
+    () => at,
+  );
+  const before = await store.load(id);
+  const proof = {
+    complete: true,
+    outcome: 'NOT_CAPTURED',
+    noCapture: true,
+    noRenewal: true,
+    capturable: true,
+    operationKey: before.pending!.operation.key,
+    authorizationId: 'auth_fixture',
+    providerRequestId: before.pending!.providerRequestId,
+    reference: 'matched_lookup',
+    observedAt: at,
+    expiresAt: expiry,
+    amount: { minor: 1000, currency: 'GBP' },
+  };
+  const restartedPool = new pg.Pool(options);
+  try {
+    const restarted = new PostgresTranches(drizzle(restartedPool, { schema }));
+    let calls = 0;
+    const executor = {
+      execute: async () => {
+        calls++;
+        throw new Error('lost reply');
+      },
+    };
+    let reads = 0,
+      release!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const reader = {
+      read: async () => {
+        if (++reads === 2) release();
+        await barrier;
+        return proof;
+      },
+    };
+    await Promise.all([
+      retryCapture(store, reader, executor, id, 'same-worker', () => at),
+      retryCapture(restarted, reader, executor, id, 'same-worker', () => at),
+    ]);
+    expect(calls).toBe(1);
+    const after = await restarted.load(id);
+    expect(after.pending?.providerRequestId).toBe(before.pending?.providerRequestId);
+    expect(restoreTrancheRecord(after.record).captureRetryClaim).toMatchObject({ reference: 'matched_lookup' });
+    expect(await retryCapture(restarted, { read: async () => proof }, executor, id, 'restart', () => at)).toBe('WAIT');
+    expect(calls).toBe(1);
+    const history = await new PostgresPaymentOperations(drizzle(restartedPool, { schema })).history(id);
+    expect(history.map((e) => e.status)).toEqual(['RESERVED', 'AMBIGUOUS', 'AMBIGUOUS']);
+  } finally {
+    await restartedPool.end();
+  }
+});
+it('does not call PayPal if the process loses the response after committing retry consumption', async () => {
+  const id = 'bounded_retry_crash';
+  await pending(id);
+  await executePayment(store, { execute: async () => null }, id, 'first', () => at);
+  const before = await store.load(id);
+  const proof = {
+    complete: true,
+    outcome: 'NOT_CAPTURED',
+    noCapture: true,
+    noRenewal: true,
+    capturable: true,
+    operationKey: before.pending!.operation.key,
+    authorizationId: 'auth_fixture',
+    providerRequestId: before.pending!.providerRequestId,
+    reference: 'matched_lookup',
+    observedAt: at,
+    expiresAt: expiry,
+    amount: { minor: 1000, currency: 'GBP' },
+  };
+  let calls = 0;
+  const executor = {
+    execute: async () => {
+      calls++;
+      return null;
+    },
+  };
+  const crashing = {
+    create: store.create.bind(store),
+    load: store.load.bind(store),
+    apply: async (...args: Parameters<typeof store.apply>) => {
+      await store.apply(...args);
+      throw new Error('process stopped');
+    },
+  };
+  await expect(retryCapture(crashing, { read: async () => proof }, executor, id, 'crash', () => at)).rejects.toThrow(
+    'process stopped',
+  );
+  expect(calls).toBe(0);
+  expect(await retryCapture(store, { read: async () => proof }, executor, id, 'restart', () => at)).toBe('WAIT');
+  expect(calls).toBe(0);
+  expect(restoreTrancheRecord((await store.load(id)).record).captureRetryClaim).not.toBeNull();
+});
+
+it('does not submit twice when two invocations reuse the same initial worker identity', async () => {
+  const id = 'initial_same_worker';
+  await pending(id);
+  let reads = 0,
+    release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const racing = {
+    create: store.create.bind(store),
+    apply: store.apply.bind(store),
+    load: async (id: string) => {
+      const value = await store.load(id);
+      if (++reads === 2) release();
+      await barrier;
+      return value;
+    },
+  };
+  let calls = 0;
+  const executor = {
+    execute: async () => {
+      calls++;
+      return null;
+    },
+  };
+  await Promise.all([
+    executePayment(racing, executor, id, 'same-worker', () => at),
+    executePayment(racing, executor, id, 'same-worker', () => at),
+  ]);
+  expect(calls).toBe(1);
+  expect((await store.load(id)).pending?.status).toBe('AMBIGUOUS');
 });

@@ -8,6 +8,8 @@ const OUT = '_site';
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(`${OUT}/assets`, { recursive: true });
 cpSync('site', OUT, { recursive: true });
+if (!existsSync('apps/yard-web/dist/index.html')) throw new Error('Build @stood/yard-web before assembling the site');
+cpSync('apps/yard-web/dist', `${OUT}/yard/app`, { recursive: true });
 cpSync('docs/brand', `${OUT}/assets/brand`, { recursive: true });
 writeFileSync(`${OUT}/.nojekyll`, '');
 

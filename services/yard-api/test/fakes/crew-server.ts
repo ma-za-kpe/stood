@@ -22,7 +22,8 @@ const clock = async () => {
 await clock();
 const github = new FakeRepositories(() => at, [{ id: 'installation', owner: 'buyer' }]);
 const repository = await github.create('installation', 'project', { 'tests/contract.ts': 'signed tests' });
-const offers = new Map<string, CrewOffer & { projectId: string }>();
+type PublicOffer = CrewOffer & { projectId: string; workOrderId: string; version: number };
+const offers = new Map<string, PublicOffer>();
 const yard = async (path: string, method = 'GET', body?: unknown, key = 'request', version = 1) => {
   const raw = body === undefined ? '' : JSON.stringify(body),
     t = String(Math.floor((await clock()) / 1000));
@@ -31,8 +32,24 @@ const yard = async (path: string, method = 'GET', body?: unknown, key = 'request
     ...(raw ? { body: raw } : {}),
     headers: {
       'Yard-Key-Id': 'sim-builder-key',
-      'Yard-Signature': `t=${t},v1=${createHmac('sha256', 'sim-builder-secret').update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+      'Yard-Signature': `t=${t},v2=${createHmac('sha256', 'sim-builder-secret')
+        .update(
+          JSON.stringify([
+            'yard.request@2',
+            t,
+            'sim-builder-key',
+            method,
+            path,
+            key,
+            String(version),
+            'application/json',
+            '',
+            raw,
+          ]),
+        )
+        .digest('hex')}`,
       'Idempotency-Key': key,
+      'Content-Type': 'application/json',
       'If-Match': String(version),
     },
     signal: AbortSignal.timeout(5000),
@@ -43,32 +60,71 @@ const yard = async (path: string, method = 'GET', body?: unknown, key = 'request
 const path = (id: string) => {
   const offer = offers.get(id);
   assert(offer);
-  return `/yard/v1/blueprints/${offer.projectId}/work-orders/${id}`;
+  return `/yard/v1/blueprints/${offer.projectId}/work-orders/${offer.workOrderId}`;
+};
+const openOffers = async () => {
+  const all: PublicOffer[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const response = (await yard(`/yard/v1/board${cursor ? `?after=${encodeURIComponent(cursor)}` : ''}`)) as {
+      orders: PublicOffer[];
+      nextCursor: string | null;
+    };
+    all.push(...response.orders);
+    cursor = response.nextCursor;
+    if (cursor) {
+      if (seen.has(cursor)) throw new Error('Board cursor repeated');
+      seen.add(cursor);
+    }
+  } while (cursor);
+  return all;
 };
 const board: CrewBoard = {
   discover: async (ids) => {
-    const response = (await yard('/yard/v1/board')) as { orders: (CrewOffer & { projectId: string })[] };
-    for (const o of response.orders) offers.set(o.id, { ...o, stack: 'node' });
-    return [...offers.values()].filter((o) => !ids || ids.includes(o.id));
+    const response = await openOffers();
+    for (const o of response) offers.set(o.id, { ...o, stack: 'node' });
+    return response.map((o) => offers.get(o.id)!).filter((o) => !ids || ids.includes(o.id));
   },
   claim: async (id, builder) => {
     assert.equal(builder.builderId, 'sim-crew');
     assert.equal(builder.operatorRootId, 'sim-crew-operator');
     const offer = offers.get(id);
     assert(offer);
-    const boardView = (await yard('/yard/v1/board')) as { orders: { id: string; version: number }[] };
-    const version = boardView.orders.find((o) => o.id === id)?.version;
+    const boardView = await openOffers();
+    const version = boardView.find((o) => o.id === id)?.version;
     assert(version);
     await yard(`${path(id)}/claim`, 'POST', {}, `${id}:claim`, version);
     const view = (await yard(path(id))) as { currentClaim: { id: string; leasedUntil: number } };
-    const token = await github.issue('installation', offer.repository, 'BUILD', `wo/${id}`);
-    return { id: view.currentClaim.id, expiresAt: view.currentClaim.leasedUntil, token: token.value };
+    const project = (await yard(`/yard/v1/blueprints/${offer.projectId}`)) as {
+      data: { blueprint: { repository: string; baseCommit: string } };
+    };
+    const scoped = {
+      ...offer,
+      repository: project.data.blueprint.repository,
+      baseCommit: project.data.blueprint.baseCommit,
+    };
+    offers.set(id, scoped);
+    const token = await github.issue('installation', scoped.repository, 'BUILD', `wo/${id}`);
+    return {
+      id: view.currentClaim.id,
+      expiresAt: view.currentClaim.leasedUntil,
+      token: token.value,
+      repository: scoped.repository,
+      baseCommit: scoped.baseCommit,
+    };
   },
   log: async (id, lease, _event) => {
     const view = (await yard(path(id))) as { state: string; projectVersion: number; currentClaim: { id: string } };
     assert.equal(view.currentClaim.id, lease);
     if (view.state === 'CLAIMED' && _event.kind === 'commit')
       await yard(`${path(id)}/build`, 'POST', {}, `${id}:build`, view.projectVersion);
+    await yard(
+      `${path(id)}/log`,
+      'POST',
+      { lines: [{ kind: _event.kind, message: _event.message, ...(_event.data ? { data: _event.data } : {}) }] },
+      `${lease}:log:${_event.seq}`,
+    );
   },
   submit: async (id, lease, commit, key) => {
     const view = (await yard(path(id))) as { projectVersion: number; currentClaim: { id: string } };
@@ -97,6 +153,14 @@ app.get('/health', (c) => c.json({ status: 'ok', simulated: true, paymentAuthori
 app.use('/__mock/*', async (c, next) => {
   if (c.req.header('Authorization') !== 'Bearer sim-control-key') return c.json({ code: 'unauthorized' }, 401);
   return next();
+});
+app.get('/__mock/repository/head', async (c) => {
+  await clock();
+  if (c.req.query('buyer') !== 'buyer' || c.req.query('repository') !== repository.repository)
+    return c.json({ code: 'forbidden' }, 403);
+  const token = await github.issue('installation', repository.repository, 'READ');
+  const head = await github.head(token.value, repository.repository, 'main');
+  return c.json({ repository: repository.repository, baseCommit: head, simulated: true });
 });
 app.get('/__mock/repository', (c) => c.json({ ...repository, simulated: true }));
 app.post('/__mock/poll', async (c) => {

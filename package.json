@@ -9,10 +9,10 @@
   "scripts": {
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "pnpm --filter @stood/yard-domain build && tsc --noEmit && turbo run typecheck",
+    "typecheck": "pnpm --filter @stood/yard-domain build && pnpm --filter @stood/yard-contracts build && tsc --noEmit && turbo run typecheck",
     "build": "turbo run build",
     "lint": "biome check .",
-    "boundary": "depcruise --config .dependency-cruiser.cjs services packages",
+    "boundary": "depcruise --config .dependency-cruiser.cjs services packages apps",
     "validate": "pnpm lint && pnpm typecheck && pnpm boundary && pnpm test:coverage && pnpm build",
     "test:db": "vitest run --config vitest.db.config.ts --coverage",
     "test:mock:stood": "vitest run --config vitest.db.config.ts services/api/test/mock-flow.db.test.ts",

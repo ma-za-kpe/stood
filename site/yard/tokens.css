@@ -1,0 +1,47 @@
+:root {
+  --y-navy: #071a33;
+  --y-navy-2: #0c2547;
+  --y-grid: #16355f;
+  --y-blueprint: #3fd0ff;
+  --y-hivis: #ffb000;
+  --y-weld: #7cf5c4;
+  --y-rebar: #ff6b3d;
+  --y-steel: #8fa3bf;
+  --y-chalk: #f4f8fc;
+  --y-paper: #eef4fa;
+  --y-blueprint-ink: #0b5c8a;
+  --y-hivis-ink: #7a4a00;
+  --y-steel-ink: #4a5b73;
+  --y-rebar-ink: #a8361a;
+  --navy: var(--y-navy);
+  --surface: var(--y-navy-2);
+  --grid: var(--y-grid);
+  --cyan: var(--y-blueprint);
+  --amber: var(--y-hivis);
+  --green: var(--y-weld);
+  --orange: var(--y-rebar);
+  --steel: var(--y-steel);
+  --chalk: var(--y-chalk);
+  --bg: var(--y-navy);
+  --text: var(--y-chalk);
+  --text-muted: var(--y-steel);
+  --accent: var(--y-blueprint);
+  --focus: var(--y-blueprint);
+  --done: var(--y-weld);
+  --blocker: var(--y-rebar);
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  color-scheme: dark;
+}
+[data-theme="paper"] {
+  --bg: var(--y-paper);
+  --surface: #ffffff;
+  --text: var(--y-navy);
+  --text-muted: var(--y-steel-ink);
+  --accent: var(--y-blueprint-ink);
+  --focus: var(--y-blueprint-ink);
+  --done: #1c7a55;
+  --blocker: var(--y-rebar-ink);
+  color-scheme: light;
+}

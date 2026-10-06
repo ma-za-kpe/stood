@@ -1,3 +1,4 @@
+import { captureAllowedAt } from '../../domain/hold-policy.js';
 import { advanceTrancheRecord, restoreTrancheRecord } from '../../domain/tranche-record.js';
 import type { PaymentExecutor, PaymentResult } from '../../ports/payment-executor.js';
 import type { StoredOperation } from '../../ports/payment-operation-store.js';
@@ -43,6 +44,7 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
   constructor(
     private readonly transport: PayPalTransport,
     private readonly store: Pick<TrancheStore, 'load'>,
+    private readonly clock?: () => Promise<number>,
   ) {}
   async execute(snapshot: StoredTranche): Promise<PaymentResult | null> {
     const input = inputFor(snapshot);
@@ -236,8 +238,32 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
       }
       if (authorization.status === 'EXPIRED' || authorization.status === 'VOIDED')
         return { ...proof, outcome: authorization.status };
-      // Absence of a capture/renewal while still authorised cannot prove a timed-out
-      // request never happened. Retain it for later lookup or operator escalation.
+      // This proves the complete observed history has no capture. It does not
+      // prove an older request was never sent; only a same-ID bounded retry may
+      // use it. Pending captures/renewals and partial histories return unknown.
+      if (
+        pending.operation.effect === 'CAPTURE' &&
+        authorization.status === 'CREATED' &&
+        this.clock &&
+        typeof authorization.expiration_time === 'string'
+      ) {
+        const observedAt = await this.clock(),
+          expiresAt = Date.parse(authorization.expiration_time);
+        if (
+          Number.isSafeInteger(observedAt) &&
+          observedAt >= tranche.currentHold.heldAt &&
+          expiresAt === tranche.currentHold.expiresAt &&
+          captureAllowedAt(expiresAt, observedAt)
+        )
+          return {
+            ...proof,
+            outcome: 'NOT_CAPTURED',
+            capturable: true,
+            observedAt,
+            expiresAt,
+            amount: tranche.amount.toJSON(),
+          };
+      }
       return unknown;
     } catch {
       return unknown;

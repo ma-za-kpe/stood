@@ -168,7 +168,19 @@ yard.secrets (id, blueprint_id, provider, name, environment TEST|DEV, ciphertext
 
 ## 6. Validation and guardrails
 
-- Zod schemas shared between `yard-web` and `yard-api` (`packages/yard-domain`).
+- Zod schemas shared between `yard-web` and `yard-api` (`packages/yard-contracts`), separate from the dependency-free domain.
 - Live-key patterns refused with a clear message. The list is kept in one file and tested.
 - The intake text goes through the prompt-injection test set ([Y15](Y15-roadmap-and-tasks.md)) before the Foreman reads it. The Foreman sees the form as **data**.
 - If the buyer pastes a secret into a free-text field, a client- and server-side scanner (gitleaks rules) blocks the save: "That looks like a key. Put it in step 9 instead."
+
+## Current implementation evidence
+
+The local intake API saves private drafts in separate tables, using server-owned buyer identities and the shared clock. Each autosave atomically commits its version, exact retry receipt and an `intake.saved` event containing only step/version metadata. Version conflicts require a reload; a failed event write rolls the whole save back. Signed owner-only reads and event streams support recovery. Services are choices, without credential fields.
+
+The shared schemas reject unknown fields and bound text, lists, links and money. A bounded scanner blocks recognised test/live tokens and private-key formats before draft persistence or Foreman calls, including revision feedback. It is protection against accidental pasting, not proof of provider scope or a guarantee that arbitrary secrets are recognisable. The full wizard/planner connection and qualified signing are still being built. Credential intake is disabled until the separate encrypted-vault and provider-qualification tasks land.
+
+The saved-version planning endpoint now carries all eight intake sections into the Foreman's immutable context. The server resolves the selected repository's commit; a buyer does not supply a trusted commit hash. A retry of the same saved version returns its original plan rather than re-resolving a moving repository. Model output cannot extend the chosen deadline or budget. Review acceptance remains `READY_FOR_BASELINE`: it is neither signing nor payment authorisation. The connected browser wizard and clarification are still in progress; the local repository and model providers are simulated.
+
+The local app now connects eight private steps to autosave, a plain-language summary and the scripted Foreman review/revision flow. On the mock site, choose **Buyer → Describe a project → Start a private intake**. Keep the saved intake link to resume after reload. A changed draft in another tab requires **Reload saved version**; a lost autosave reply keeps its exact request key, body and version when retried. Budget conversion uses integer arithmetic, and the initial deadline comes from the shared simulated clock rather than the browser's real date. The simulation date is shown.
+
+The form currently uses labelled text/list/service inputs; feature-specific question controls and the Foreman's clarification loop remain unfinished. A Foreman choice cannot invent a buyer's budget, repository, sign-off identity or consent. Review acceptance only reaches the baseline gate; tests have not been qualified and no mandate or payment is created. The browser and server scanner block recognised pasted keys; arbitrary secrets and provider scope still need the separate qualification work. Step 9 remains disabled.

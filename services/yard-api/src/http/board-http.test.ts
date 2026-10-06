@@ -19,20 +19,65 @@ it('binds signatures to method/path/body, owns identities on the server and deni
   });
   const path = '/yard/v1/board';
   const t = String(now / 1000);
-  const sig = createHmac('sha256', 'buyer-secret').update(`${t}.GET.${path}.`).digest('hex');
-  const headers = { 'Yard-Key-Id': 'buyer-key', 'Yard-Signature': `t=${t},v1=${sig}` };
+  const sig = createHmac('sha256', 'buyer-secret')
+    .update(JSON.stringify(['yard.request@2', t, 'buyer-key', 'GET', path, '', '', '', '', '']))
+    .digest('hex');
+  const headers = { 'Yard-Key-Id': 'buyer-key', 'Yard-Signature': `t=${t},v2=${sig}` };
   expect((await app.request(path)).status).toBe(401);
   expect((await app.request(path, { headers })).status).toBe(200);
+  for (const [target, changed] of [
+    [`${path}?after=foreign`, {}],
+    [path, { 'Idempotency-Key': 'another-command' }],
+    [path, { 'If-Match': '77' }],
+    [path, { 'Last-Event-ID': '99' }],
+    [path, { 'Content-Type': 'application/json' }],
+  ] as const)
+    expect((await app.request(target, { headers: { ...headers, ...changed } })).status).toBe(401);
   expect((await app.request('/yard/v1/blueprints/private', { headers })).status).toBe(401);
   expect(
-    (await app.request(path, { headers: { ...headers, 'Yard-Signature': `t=${Number(t) - 301},v1=${sig}` } })).status,
+    (await app.request(path, { headers: { ...headers, 'Yard-Signature': `t=${Number(t) - 301},v2=${sig}` } })).status,
   ).toBe(401);
   expect((await app.request(path, { headers: { ...headers, 'Yard-Key-Id': 'unknown' } })).status).toBe(401);
+  expect(
+    (
+      await app.request(path, {
+        headers: {
+          ...headers,
+          'Yard-Signature': `t=${t},v1=${createHmac('sha256', 'buyer-secret').update(`${t}.GET.${path}.`).digest('hex')}`,
+        },
+      })
+    ).status,
+  ).toBe(401);
   expect((await (await app.request('/health')).json()).capabilities).toMatchObject({
     board: true,
     events: true,
     payments: false,
   });
+});
+it('binds the operator key ID even when a configuration accidentally shares a secret', async () => {
+  const path = '/yard/v1/board',
+    t = String(now / 1000),
+    secret = 'fixture-shared-secret';
+  const app = createYardApp({
+    environment: 'ci',
+    board: {
+      board: new Board(new MemoryEvents()),
+      clock: async () => now,
+      operators: ['buyer', 'other'].map((id) => ({
+        key: `${id}-key`,
+        secret,
+        actor: { id, root: `${id}-root`, kind: 'BUYER' as const },
+      })),
+    },
+  });
+  const headers = {
+    'Yard-Key-Id': 'buyer-key',
+    'Yard-Signature': `t=${t},v2=${createHmac('sha256', secret)
+      .update(JSON.stringify(['yard.request@2', t, 'buyer-key', 'GET', path, '', '', '', '', '']))
+      .digest('hex')}`,
+  };
+  expect((await app.request(path, { headers })).status).toBe(200);
+  expect((await app.request(path, { headers: { ...headers, 'Yard-Key-Id': 'other-key' } })).status).toBe(401);
 });
 
 it('runs signed Board commands, keeps submissions checking and requires matching signed Stood proof', async () => {
@@ -60,7 +105,13 @@ it('runs signed Board commands, keeps submissions checking and requires matching
       packages: {
         submit: async (input) => {
           submissions.push(input);
-          return 'package';
+          return {
+            id: 'package',
+            trancheId: input.trancheId,
+            repository: input.repository,
+            baseCommit: input.baseCommit,
+            commit: input.commit,
+          };
         },
       },
       stood: { mode: 'sim', secret: 'sim-stood-webhook-secret', read: async () => proof },
@@ -81,8 +132,24 @@ it('runs signed Board commands, keeps submissions checking and requires matching
       ...(raw ? { body: raw } : {}),
       headers: {
         'Yard-Key-Id': `${who}-key`,
-        'Yard-Signature': `t=${t},v1=${createHmac('sha256', `${who}-secret`).update(`${t}.${method}.${path}.${raw}`).digest('hex')}`,
+        'Yard-Signature': `t=${t},v2=${createHmac('sha256', `${who}-secret`)
+          .update(
+            JSON.stringify([
+              'yard.request@2',
+              t,
+              `${who}-key`,
+              method,
+              path,
+              key,
+              String(version),
+              'application/json',
+              '',
+              raw,
+            ]),
+          )
+          .digest('hex')}`,
         'Idempotency-Key': key,
+        'Content-Type': 'application/json',
         'If-Match': String(version),
       },
     });
@@ -152,7 +219,7 @@ it('runs signed Board commands, keeps submissions checking and requires matching
     409,
   );
   expect((await request(`${base}/submit`, 'POST', { commit: 'd'.repeat(40) }, 6, 'different', 'builder')).status).toBe(
-    403,
+    409,
   );
   expect(submissions).toHaveLength(1);
   const before = await (await request(base)).json();
@@ -186,9 +253,9 @@ it('runs signed Board commands, keeps submissions checking and requires matching
   expect((await (await request(base)).json()).state).toBe('PAID');
   expect((await (await request('/yard/v1/board')).json()).orders).toHaveLength(0);
   expect((await request(`${base}/submit`, 'POST', { commit: 'e'.repeat(40) }, 7, 'changed', 'builder')).status).toBe(
-    403,
+    409,
   );
-  await expect(board.settlement('p', 'one', { ...proof, eventId: 'different' }, 7)).rejects.toThrow('INVALID');
+  await expect(board.settlement('p', 'one', { ...proof, eventId: 'different' }, 8)).rejects.toThrow('INVALID');
   await expect(
     board.create({ ...input, id: '__proto__' } as never, { id: 'buyer', root: 'buyer-root', kind: 'BUYER' }, 'bad'),
   ).rejects.toThrow('INVALID');

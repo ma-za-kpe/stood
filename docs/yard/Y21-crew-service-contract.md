@@ -59,6 +59,12 @@ Kinds: `plan`, `edit`, `test_run`, `commit`, `submit`, `punch_list_received`, `c
 - No secrets, no file contents longer than 20 lines, no model chain-of-thought.
 - Yard scans every line (gitleaks rules) before storing it, and drops it if it matches.
 
+### Current local log implementation
+
+The network Crew simulator now sends its progress through the same signed Board log endpoint as other builders. Its own proposed timestamps/sequences are not authoritative: Yard supplies the shared-clock time and next log sequence. The API also rechecks the exact active claim/root under the claim's transaction lock, limits each builder to one new batch per second and preserves exact retry receipts.
+
+The local log scanner uses [Gitleaks 8.30.1](https://github.com/gitleaks/gitleaks/tree/v8.30.1), copied from a digest-pinned image. It scans stdin with default rules and bypass comments disabled; it reads no repository configuration and creates no report file. Scanner stderr/stdout never reach application logs, and an unavailable or timed-out scan refuses storage. The bounded recognised-key check runs first. These checks cannot detect every arbitrary secret or semantic private thought; the contract still prohibits sending either. Hosted authentication and runtime packaging remain separate qualification work.
+
 ## 5. What the Crew never receives
 
 - Database access to Yard or Stood.

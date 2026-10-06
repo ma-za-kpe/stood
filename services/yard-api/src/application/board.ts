@@ -15,7 +15,22 @@ export type SettlementProof = Readonly<{
 type Action =
   | { kind: 'claim'; id: string; actor: Operator; now: number }
   | { kind: 'build'; claim: string; now: number }
-  | { kind: 'submit'; claim: string; commit: string; packageId: string; now: number };
+  | { kind: 'submit'; claim: string; commit: string; packageId: string; now: number }
+  | { kind: 'expire'; now: number }
+  | { kind: 'release'; claim: string; now: number }
+  | { kind: 'repost'; now: number };
+export type SubmissionIntent = Readonly<{
+  key: string;
+  actor: Operator;
+  claimId: string;
+  expectedVersion: number;
+  reservedVersion: number;
+  request: Readonly<{ trancheId: string; repository: string; baseCommit: string; commit: string; key: string }>;
+  requestedAt: number;
+  status: 'RESERVED' | 'CONFIRMED';
+  packageId: string | null;
+  completedVersion: number | null;
+}>;
 type Order = {
   id: string;
   milestone: string;
@@ -23,9 +38,21 @@ type Order = {
   postedAt: number;
   actions: Action[];
   payment: SettlementProof | null;
+  submissionIntent?: SubmissionIntent;
 };
 type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order> };
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, v]) => [key, canonical(v)]),
+    );
+  return value;
+}
+const same = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 function data(value: unknown): Data {
   const d = value as Data;
   if (
@@ -48,6 +75,13 @@ function data(value: unknown): Data {
   }
   return structuredClone(d);
 }
+function leaseChange(change: () => void): void {
+  try {
+    change();
+  } catch (error) {
+    throw new YardError(error instanceof RangeError ? 'INVALID' : 'CONFLICT');
+  }
+}
 function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
   if (!Object.hasOwn(d.orders, id)) throw new YardError('NOT_FOUND');
   const order = d.orders[id]!;
@@ -64,11 +98,26 @@ function workOrder(d: Data, id: string): { order: Order; work: WorkOrder } {
         work.submit(a.claim, a.commit, a.packageId, a.now);
         work.checking(a.packageId, a.now);
         break;
+      case 'expire':
+        work.expire(a.now);
+        break;
+      case 'release':
+        work.release(a.claim, a.now);
+        break;
+      case 'repost':
+        work.repost(a.now);
+        break;
       default:
         throw new YardError('INVALID');
     }
   }
   return { order, work };
+}
+function beforeDeadline(d: Data, milestoneId: string, now: number): void {
+  if (!Number.isSafeInteger(now) || now < d.blueprint.createdAt) throw new YardError('INVALID');
+  const milestone = d.blueprint.milestones.find((m) => m.id === milestoneId);
+  if (!milestone) throw new YardError('INVALID');
+  if (now >= milestone.deadline) throw new YardError('CONFLICT');
 }
 export class Board {
   constructor(readonly events: YardEvents) {}
@@ -97,19 +146,51 @@ export class Board {
       throw new YardError('FORBIDDEN');
     return snapshot;
   }
-  async discover() {
-    return (await this.events.list()).flatMap((s) => {
+  logScope(snapshot: YardSnapshot, wo: string, actor: Operator, now: number, write: boolean): void {
+    if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
+    const d = data(snapshot.data),
+      { work, order } = workOrder(d, wo),
+      claim = work.snapshot.currentClaim;
+    if (!write && actor.kind === 'BUYER' && snapshot.owner === actor.id && d.buyerRoot === actor.root) return;
+    if (actor.kind !== 'BUILDER' || !claim || claim.builderId !== actor.id || claim.operatorRootId !== actor.root)
+      throw new YardError('FORBIDDEN');
+    if (write) {
+      beforeDeadline(d, order.milestone, now);
+      if (
+        now < claim.claimedAt ||
+        now >= claim.leasedUntil ||
+        order.payment ||
+        order.submissionIntent?.status === 'RESERVED' ||
+        !['CLAIMED', 'BUILDING'].includes(work.snapshot.state)
+      )
+        throw new YardError('CONFLICT');
+    }
+  }
+  async discover(now: number) {
+    return (await this.discoverPage('', now)).orders;
+  }
+  async discoverPage(after: string = '', now: number) {
+    if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
+    if (after && !/^[A-Za-z0-9_-]{1,100}$/.test(after)) throw new YardError('INVALID');
+    const projects = await this.events.list(after);
+    const page = projects.slice(0, 100);
+    const orders = page.flatMap((s) => {
       const d = data(s.data);
       return Object.keys(d.orders).flatMap((id) => {
         const { work, order } = workOrder(d, id);
         const milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
-        if (order.payment || work.snapshot.state !== 'POSTED') return [];
+        if (
+          order.payment ||
+          work.snapshot.state !== 'POSTED' ||
+          now < d.blueprint.createdAt ||
+          now >= milestone.deadline
+        )
+          return [];
         return [
           {
             projectId: s.id,
-            id,
-            repository: d.blueprint.repository,
-            baseCommit: d.blueprint.baseCommit,
+            id: fingerprint({ projectId: s.id, workOrderId: id }),
+            workOrderId: id,
             name: milestone.name,
             priceMinor: milestone.budgetMinor,
             currency: d.blueprint.currency,
@@ -120,6 +201,7 @@ export class Board {
         ];
       });
     });
+    return { orders, nextCursor: projects.length > 100 ? page.at(-1)!.id : null };
   }
   private async mutate(
     id: string,
@@ -153,6 +235,7 @@ export class Board {
         !/^[A-Za-z0-9_-]{1,200}$/.test(trancheId)
       )
         throw new YardError('INVALID');
+      beforeDeadline(d, milestone, now);
       const work = new WorkOrder(milestone, actor.root, now);
       d.orders[milestone] = { id: work.snapshot.id, milestone, trancheId, postedAt: now, actions: [], payment: null };
       return { wo: milestone, state: 'POSTED', simulated: true };
@@ -163,6 +246,7 @@ export class Board {
       if (actor.kind !== 'BUILDER') throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);
       if (order.payment) throw new YardError('CONFLICT');
+      beforeDeadline(d, order.milestone, now);
       const claimId = fingerprint({ id, wo, actor: actor.id, key });
       const claim = work.claim(
         { id: claimId, builderId: actor.id, operatorId: actor.id, operatorRootId: actor.root },
@@ -177,9 +261,42 @@ export class Board {
       const { work, order } = workOrder(d, wo);
       const claim = work.snapshot.currentClaim;
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
+      beforeDeadline(d, order.milestone, now);
       work.build(claim.id, now);
       order.actions.push({ kind: 'build', claim: claim.id, now });
       return { wo, state: 'BUILDING', simulated: true };
+    });
+  }
+  expireLease(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    return this.mutate(id, actor, version, key, { expire: wo }, 'wo.lease_expired', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
+      const { work, order } = workOrder(d, wo);
+      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      leaseChange(() => work.expire(now));
+      order.actions.push({ kind: 'expire', now });
+      return { wo, state: 'LEASE_EXPIRED', simulated: true };
+    });
+  }
+  releaseClaim(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    return this.mutate(id, actor, version, key, { release: wo }, 'wo.released_claim', (d) => {
+      const { work, order } = workOrder(d, wo),
+        claim = work.snapshot.currentClaim;
+      if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id) throw new YardError('FORBIDDEN');
+      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      leaseChange(() => work.release(claim.id, now));
+      order.actions.push({ kind: 'release', claim: claim.id, now });
+      return { wo, state: 'ABANDONED', simulated: true };
+    });
+  }
+  repost(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    return this.mutate(id, actor, version, key, { repost: wo }, 'wo.reposted', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
+      const { work, order } = workOrder(d, wo);
+      if (order.payment || order.submissionIntent?.status === 'RESERVED') throw new YardError('CONFLICT');
+      beforeDeadline(d, order.milestone, now);
+      leaseChange(() => work.repost(now));
+      order.actions.push({ kind: 'repost', now });
+      return { wo, state: 'POSTED', simulated: true };
     });
   }
   submit(
@@ -196,6 +313,7 @@ export class Board {
       const { work, order } = workOrder(d, wo);
       const claim = work.snapshot.currentClaim;
       if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id || order.payment) throw new YardError('FORBIDDEN');
+      beforeDeadline(d, order.milestone, now);
       work.submit(claim.id, commit, packageId, now);
       work.checking(packageId, now);
       order.actions.push({ kind: 'submit', claim: claim.id, commit, packageId, now });
@@ -207,11 +325,153 @@ export class Board {
     const { work, order } = workOrder(data(snapshot.data), wo);
     return {
       ...work.snapshot,
-      state: order.payment ? 'PAID' : work.snapshot.state,
+      state: order.payment
+        ? 'PAID'
+        : order.submissionIntent?.status === 'RESERVED'
+          ? 'SUBMITTING'
+          : work.snapshot.state,
       payment: order.payment,
       projectVersion: snapshot.version,
       simulated: true,
     };
+  }
+  async room(id: string, actor: Operator) {
+    const snapshot = await this.read(id, actor),
+      d = data(snapshot.data);
+    return {
+      id: snapshot.id,
+      version: snapshot.version,
+      summary: d.blueprint.summary,
+      currency: d.blueprint.currency,
+      simulated: true,
+      orders: Object.keys(d.orders).map((wo) => {
+        const { work, order } = workOrder(d, wo),
+          milestone = d.blueprint.milestones.find((m) => m.id === order.milestone)!;
+        return {
+          id: wo,
+          name: milestone.name,
+          budgetMinor: milestone.budgetMinor,
+          trancheId: order.trancheId,
+          state: order.payment
+            ? 'PAID'
+            : order.submissionIntent?.status === 'RESERVED'
+              ? 'SUBMITTING'
+              : work.snapshot.state,
+          payment: order.payment,
+          submission: work.snapshot.submission,
+          leasedUntil: work.snapshot.currentClaim?.leasedUntil ?? null,
+        };
+      }),
+    };
+  }
+  async pendingSubmissions(after = '') {
+    const projects = await this.events.list(after),
+      page = projects.slice(0, 100);
+    const submissions = page.flatMap((project) =>
+      Object.entries(data(project.data).orders).flatMap(([wo, order]) =>
+        order.submissionIntent?.status === 'RESERVED'
+          ? [{ projectId: project.id, wo, intent: structuredClone(order.submissionIntent) }]
+          : [],
+      ),
+    );
+    return { submissions, nextCursor: projects.length > 100 ? page.at(-1)!.id : null };
+  }
+  async prepareSubmission(
+    id: string,
+    wo: string,
+    commit: string,
+    actor: Operator,
+    version: number,
+    key: string,
+    now: number,
+  ): Promise<SubmissionIntent> {
+    const current = await this.read(id, actor);
+    const existing = workOrder(data(current.data), wo).order.submissionIntent;
+    if (existing) {
+      if (
+        existing.key !== key ||
+        existing.request.commit !== commit ||
+        existing.expectedVersion !== version ||
+        existing.actor.id !== actor.id ||
+        existing.actor.root !== actor.root ||
+        existing.actor.kind !== actor.kind
+      )
+        throw new YardError('CONFLICT');
+      return structuredClone(existing);
+    }
+    const snapshot = await this.mutate(
+      id,
+      actor,
+      version,
+      `submission-reserve:${key}`,
+      { wo, commit, actor, version, key },
+      'submission.reserved',
+      (d) => {
+        const { work, order } = workOrder(d, wo);
+        const claim = work.snapshot.currentClaim;
+        if (actor.kind !== 'BUILDER' || claim?.builderId !== actor.id || order.payment || order.submissionIntent)
+          throw new YardError('FORBIDDEN');
+        beforeDeadline(d, order.milestone, now);
+        work.submit(claim.id, commit, 'reservation-only', now); // validate lease and commit before any HTTP
+        order.submissionIntent = {
+          key,
+          actor: structuredClone(actor),
+          claimId: claim.id,
+          expectedVersion: version,
+          reservedVersion: version + 1,
+          request: {
+            trancheId: order.trancheId,
+            repository: d.blueprint.repository,
+            baseCommit: d.blueprint.baseCommit,
+            commit,
+            key: `yard:${fingerprint({ id, wo, actor, claim: claim.id, commit, key })}`,
+          },
+          requestedAt: now,
+          status: 'RESERVED',
+          packageId: null,
+          completedVersion: null,
+        };
+        return { wo, state: 'SUBMITTING', simulated: true };
+      },
+    );
+    return structuredClone(workOrder(data(snapshot.data), wo).order.submissionIntent!);
+  }
+  completeSubmission(id: string, wo: string, intent: SubmissionIntent, packageId: string) {
+    return this.mutate(
+      id,
+      intent.actor,
+      intent.reservedVersion,
+      `submission-complete:${intent.key}`,
+      {
+        wo,
+        requestKey: intent.request.key,
+        claimId: intent.claimId,
+        originalVersion: intent.expectedVersion,
+        packageId,
+      },
+      'wo.submitted',
+      (d) => {
+        const { work, order } = workOrder(d, wo);
+        if (!same(order.submissionIntent, intent) || work.snapshot.currentClaim?.id !== intent.claimId || order.payment)
+          throw new YardError('CONFLICT');
+        work.submit(intent.claimId, intent.request.commit, packageId, intent.requestedAt);
+        work.checking(packageId, intent.requestedAt);
+        order.actions.push({
+          kind: 'submit',
+          claim: intent.claimId,
+          commit: intent.request.commit,
+          packageId,
+          now: intent.requestedAt,
+        });
+        order.submissionIntent = {
+          ...intent,
+          status: 'CONFIRMED',
+          packageId,
+          completedVersion: intent.reservedVersion + 1,
+        };
+        return { wo, state: 'CHECKING', packageId, simulated: true };
+      },
+    );
   }
   async submissionTerms(
     id: string,
@@ -263,7 +523,7 @@ export class Board {
       return {
         data: d,
         type: 'stood.released',
-        payload: { wo, state: 'PAID', reference: proof.reference, simulated: true },
+        payload: { wo, state: 'PAID', reference: proof.reference, payment: structuredClone(proof), simulated: true },
       };
     });
   }

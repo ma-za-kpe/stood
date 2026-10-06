@@ -122,7 +122,7 @@ Hosted provider replay, approval browser automation, receipts and Postman worksp
 
 ### First run (local tool implemented, T-0135)
 
-Run `scripts/dev setup` from an interactive terminal. Docker builds the API and prompts for `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `STOOD_API_KEY`, `STOOD_HMAC_SECRET` and `STOOD_WEBHOOK_SECRET`. Every entry is hidden. Supply your existing local platform configuration; this tool does not issue hosted platform keys.
+Run `scripts/dev setup` from an interactive terminal. Docker builds the API and prompts only for `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and `PAYPAL_WEBHOOK_ID`; all provider input is hidden. Stood generates its own three independent platform secrets, saves them privately and displays newly generated values once in your terminal. Existing platform secrets are preserved. `scripts/dev setup --rotate-platform` explicitly replaces them; restart callers with the new values. This does not issue hosted platform keys or enable payments.
 
 Create the PayPal credentials in your [sandbox app](https://developer.paypal.com/dashboard/applications/sandbox); see [PayPal authentication](https://developer.paypal.com/api/rest/authentication/). Obtain the webhook id from that app's [webhook configuration](https://developer.paypal.com/api/rest/webhooks/). The tool validates the client id/secret using sandbox OAuth, discards the access token and writes only the six keys into git-ignored `.env`, with private file permissions. Other configuration is preserved. Invalid input or failed OAuth validation leaves existing configuration untouched. Values containing whitespace, quotes, backslashes or interpolation characters are rejected; keys are never altered silently. Symlinks and hard links are refused. The webhook id and platform keys are collected, but their provider ownership is not checked by this local tool.
 
@@ -132,7 +132,9 @@ Hosted onboarding, webhook URL registration, copy-once platform key issuance and
 
 ### Local signed draft API (implemented subset)
 
-Start Postgres with `scripts/dev up`, replay migrations with `scripts/dev db:migrate`, then start the API. Configure the local Stood platform key and HMAC secret privately; PayPal credentials are not needed for draft creation. Hosted key issuance is still planned. Every draft request and read requires `Authorization: Bearer <STOOD_API_KEY>` and `Stood-Signature: t=<unix-seconds>,v1=<hex HMAC-SHA256(STOOD_HMAC_SECRET, timestamp + "." + raw-body)>`. For GET, sign an empty body. The server rejects timestamps more than five minutes away. Draft POST also requires JSON and `Idempotency-Key`; the maximum request body is 64 KiB.
+Start Postgres with `scripts/dev up`, replay migrations with `scripts/dev db:migrate`, then start the API. Configure the local Stood platform key and HMAC secret privately; PayPal credentials are not needed for draft creation. Hosted key issuance is still planned. Every draft request and read requires `Authorization: Bearer <STOOD_API_KEY>` and `Stood-Signature: t=<unix-seconds>,v2=<hex HMAC-SHA256(STOOD_HMAC_SECRET, canonical-request)>`. Request signatures use v2; old body-only request signatures are rejected. Webhook signatures below remain v1 and use their separate secret.
+
+`canonical-request` is the UTF-8 encoding of `JSON.stringify(["stood.request@2", timestamp, method, target, idempotencyKey, ifMatch, contentType, rawBody])`. Every element is a string. The timestamp matches the header; method is uppercase; target is the external URL pathname plus its query, including `/v1`. Header values are the values actually sent, with an empty string for an absent header. GET uses an empty raw body. Do not reformat the body or sort query parameters after signing. The server rejects timestamps more than five minutes away. Draft POST also requires JSON and `Idempotency-Key`; the maximum request body is 64 KiB. The server-only SDK produces v2 automatically. Replaying an unchanged signed request stays subject to durable idempotency; changing the method, target, key or version header invalidates the signature.
 
 `POST /v1/allowances` accepts this implemented draft shape:
 
@@ -403,7 +405,7 @@ Authorization/approval and assessments are explicitly test-only fixture commands
 
 `scripts/dev mock` also runs the first Yard flow over the isolated Docker network: locally frozen fixture terms, a real persisted Board post, an ordinary simulated Crew claim, a commit pushed to the GitHub fake, and a package submitted through Yard’s server-side Stood SDK. A passing assessment leaves Yard in CHECKING. Only a signed Stood notification with matching read proof projects the confirmed simulated capture as PAID; forged notifications and duplicates are checked. No payment is executed.
 
-Funding and assessment are explicit test-only fixture controls, not authenticated production funding or runner evidence. Crew receives only its Board identity and scoped fake GitHub token; it has no Stood payment credentials or database access. Cross-service package submission retries use a stable key, and recorded Board commands replay without another SDK call. A crash between package submission and Board persistence can leave an unreferenced package; a durable submission outbox remains follow-up work before this integration is enabled outside the isolated mock stack.
+Funding and assessment are explicit test-only fixture controls, not authenticated production funding or runner evidence. Crew receives only its Board identity and scoped fake GitHub token; it has no Stood payment credentials or database access. Cross-service package submission retries use a stable key, and recorded Board commands replay without another SDK call. Package submission now reserves a durable outbox intent before the cross-service call. Recovery returns the same request/receipt and confirms it atomically with the Board event; altered retries conflict. This remains a synthetic isolated integration until funding and authentic evidence qualification are complete.
 
 ### Yard page and browser checks
 
@@ -412,3 +414,57 @@ The static Yard preview lives in `site/yard/`, connects to Stood’s page, and u
 Run `scripts/dev site` to build and serve Stood at <http://localhost:8082/> and Yard at <http://localhost:8082/yard/>. Ports 3000/3001 remain API-only; their `/` route returns 404. Re-run the command after page changes to rebuild the preview.
 
 Run `scripts/check-site` to build the static site and check it in a dedicated Docker Chromium browser on Node 24. It checks desktop/mobile layout, keyboard fixture selection, both-way navigation, missing assets, reduced motion and simulation disclosure. Screenshots go to `artifacts/site/`. The separate `site-browser` CI job runs the same command; it is a page smoke test, not a full accessibility audit or the remaining Yard application E2E suite.
+
+Local setup distinguishes rejected sandbox credentials, sandbox unavailability/timeouts and invalid provider responses. These failures save nothing and never print provider response bodies, OAuth tokens or entered credentials.
+
+Setup writes a private temporary .env file, syncs it and replaces the destination atomically. It refuses linked files or configuration changed by another writer during setup. An interruption before replacement preserves the previous configuration.
+
+## Run the connected demo without keys
+
+```sh
+scripts/dev demo
+```
+
+Docker builds and starts the real local services with simulators, seeds the checked scenarios and runs desktop/mobile browser checks. When the checks pass, the isolated demo stays running:
+
+- Stood: <http://localhost:3002/>
+- Yard: <http://localhost:3002/yard/>
+- Connected room: <http://localhost:3002/yard/app/?project=yard-project>
+
+Choose **Buyer** in the room. The project and capture reference come from the mock services; the providers and evidence are simulated. No real payment is executed and no provider keys are required. Only the web port binds to `127.0.0.1`; the database, Crew and provider controls remain inside the isolated Docker network.
+
+```sh
+scripts/dev demo:down
+```
+
+Stopping deletes this demo's disposable volumes. It leaves the ordinary development stack alone. Stop before reseeding. `scripts/dev mock` uses a randomly named disposable stack and always removes it after testing; it remains the required CI check.
+
+The full pre-credentials batch is still in progress. Do not add keys to the demo or switch it to live. Provider qualification and hosted authentication are separate from this synthetic composition. The credential handoff will name each provider's required scopes and the tests that need real sandbox keys. See TASKS.md, issue #41, for unfinished work.
+
+The shared mock scenarios now include a missed capture recovered by one same-ID retry after a matched fresh status lookup, plus a captured payment whose reply was lost and is reconciled without another submission. Both assert exactly one simulated capture and matching payment history. A consumed retry is not reset by restarting a service. This adds local recovery evidence; real financial HTTP remains off until funding/evidence integration and sandbox qualification are complete.
+
+### Foreman in the isolated mock network
+
+The mock composition now runs the real LangGraph planner with a scripted PlannerModel and Yard's restricted Postgres runtime role. Signed server requests create/read drafts under `/yard/v1/plans`, review under `/plans/{id}/review`, request a revised draft under `/plans/{id}/revisions`, and recover failed model work under `/plans/{id}/recover`. Review/revision requests use the current review version in If-Match; exact repeated creation preserves the original server time. Operator signatures remain on the server.
+
+Only the owning buyer can read or change a draft. ACCEPT yields READY_FOR_BASELINE and a DRAFT blueprint; it posts no work, signs no mandate and executes no payment. The result identifies its simulated provenance and states that no AI provider was called. The shared network scenario exercises creation, rejection, revision, stale-version protection and baseline wait. Clarification, the buyer intake screen and qualified baseline execution remain under construction in the pre-key batch.
+
+### Private intake drafts in the mock Yard service
+
+The configured mock Yard API now supports signed POST `/yard/v1/intakes` with `{id, step, draft}` and If-Match `0`, PUT `/yard/v1/intakes/{id}` with `{step, draft}` and the current positive If-Match, and owner-only GET `/yard/v1/intakes/{id}`. Every save also needs an Idempotency-Key. Sign the exact target, version, key and body using the Yard request v2 contract in [Y12](yard/Y12-data-model-and-api.md#implemented-local-intake-autosave). `step` is 0–7; buyer identity and timestamps come from the server.
+
+Drafts accept service choices before keys. They reject unknown credential fields and recognised pasted test/live tokens. The numbered `/intakes/{id}/events` stream reports step/version metadata without answers. A stale save conflicts instead of overwriting another tab; an exact lost-response retry returns its original record. Intake, audit event and retry receipt commit atomically. `/health` exposes `capabilities.intake`; `credentials` and `payments` remain false.
+
+The connected wizard is still being built. These routes do not sign terms, create a mandate, upload credentials or execute a payment. The credential scanner is a bounded accidental-paste guard, not provider/environment qualification. The ordinary unconfigured Yard service still returns not_implemented for these workflows.
+
+### Try the private Yard intake (simulated)
+
+After `scripts/dev demo`, open `http://localhost:3002/yard/app/`, choose **Buyer**, then **Describe a project**. Start an intake, fill the eight choice steps and review the summary. **Let the Foreman decide** fills planning preferences; you still supply the idea, budget, repository, human sign-off and consent. Services are names only. Do not paste keys.
+
+The scripted Foreman proposes a blueprint for review and revision. **Edit blueprint** changes the unsigned summary, milestone names, prices, deadlines and test content. Merge compatible neighbouring milestones or split a milestone with at least two tests; keep 3–6 milestones and the exact approved total. Saving creates a fresh review version. If the reply is lost, retry the same edit or reload the saved draft before making another change. Accepting a draft stops at **baseline checks required**, with no signing or payment. Keep the saved intake link to resume. If another tab changes the draft, reload its saved version before continuing. Simulation dates come from the shared demo clock. Credential intake and live providers remain disabled; this is not live AI or payment evidence.
+
+### Local Yard build log
+
+In the connected mock project room, choose **Show site log** on a milestone to read Crew progress. **Pause scrolling** keeps your place; **Follow latest** resumes following new rows. The log is private to the owning buyer or that work order's current claimed builder. Progress text is display only and cannot mark work paid.
+
+The configured mock services use real restricted Postgres storage and the pinned Gitleaks scanner for these rows. Payment, Crew and repository outcomes remain simulated. The local retention worker uses the shared simulated clock and replaces message rows older than 90 days with counts; hosted job deployment is still planned. Ordinary unconfigured Yard startup reports `siteLog: false` and refuses the log workflow.

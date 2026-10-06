@@ -167,4 +167,28 @@ Pending commands time out after 20s into "Didn't hear back. Checking…" and the
 
 The restricted Yard runtime can now append project state, an exact command receipt and the next numbered event in one Postgres transaction. Events cannot be updated or deleted. Concurrent stale writes and failed event insertion are tested against a disposable database. The authenticated SSE adapter supports `Last-Event-ID`, rejects future/malformed cursors and requests a snapshot after a gap or more than 500 missed events.
 
-This first transport polls the durable log once per second across instances, with a 15-second heartbeat and disconnect cleanup. LISTEN/NOTIFY fan-out, role-filtered public Board streams and site-log retention remain planned. The adapter is enabled only when an authenticated event port is configured; the unconfigured shell still reports events unavailable. This is local integration evidence, not hosted operation.
+The transport uses shared PostgreSQL LISTEN/NOTIFY wake hints, a 15-second fallback and disconnect cleanup, as described below. Role-filtered public Board streams remain planned. The local site log and its retention are described below. The adapter is enabled only when an authenticated event port is configured; the unconfigured shell still reports events unavailable. This is local integration evidence, not hosted operation.
+
+In mock mode, Yard event timestamps are supplied by the same server-side controlled clock used by Stood and PayPal. Outside mock composition, events default to database `clock_timestamp()`. Clients cannot supply event timestamps.
+
+Each Yard runtime shares one PostgreSQL LISTEN connection across viewers. Committed writes emit project-id-only wake hints. Each project shares a 15-second fallback wake timer so notification loss cannot strand a stream. Streams always re-read numbered durable events, never trust a notification payload; the last viewer releases its subscription.
+
+## Current connected mock evidence
+
+The React shell at `/yard/app/` fetches a scoped `/yard/v1/blueprints/{id}/room` projection and resumes the durable event stream from that version. It shares the immutable ordinary build-transition table with Yard's domain. Stood capture projections additionally require exact matching payment proof; unknown events or missing sequences reload the snapshot rather than inventing a transition.
+
+The isolated Docker mock stack adds a server-side browser session proxy using fixed synthetic operator credentials. These credentials never enter the browser bundle. This test composition is excluded from production and is not hosted authentication. The room labels simulated payments before showing results. Missing authentication or unavailable APIs produce an explicit empty/error state.
+
+The stream retains comment heartbeats and also sends a `heartbeat` event so JavaScript can measure transport silence. A monotonic 35-second watchdog reconnects; it never supplies time to payment decisions. One shared database notification listener and a shared 15-second fallback per project replace per-viewer polling. Notification payloads contain the project identifier only. Public role-filtered streams and the remaining project-room states are still planned. Local site-log transport and retention are implemented below.
+
+Room and Board caches now include a session generation. Choosing another simulated operator first closes the previous stream, cancels private queries and removes cached private data; the new generation becomes ready only after the server confirms the requested synthetic role. Room and Board fetches consume the query cancellation signal while retaining their 20-second timeout. Old stream updates and Board callbacks cannot populate or select a room in the new generation. A Docker browser regression delays a buyer-only room response until after switching to an unclaimed builder, proving that the old request is aborted and its private room does not render. This protects the mock shell; hosted session authentication is still required.
+
+### Current stream-access guard
+
+An authenticated opening does not grant indefinite replay. The local feed rechecks its configured authority before reading, after reading and before each event. Lost access or an unavailable check closes the subscription with a value-free `authorization.required` event; private events are withheld. The browser gateway reconnects with a fresh signed request. A direct API client must re-sign its reconnect rather than reuse an expired signature. Cursor history remains authoritative; reconnecting does not invent updates or payment states. Unit tests cover access changing at each replay boundary and backend-error redaction.
+
+### Local site-log stream
+
+The connected mock composition now shares one Postgres notification connection across project, intake and work-order log viewers. A log wake hint contains only its scoped identifiers and never its message. Logs replay their own consecutive sequence, reload after gaps or retention, and recheck access at every stream boundary. The UI keeps at most 200 rows, offers Pause scrolling / Follow latest, and gives keyboard users a scrollable region. Build lines are not an aria-live region. Switching operators cancels log reads, closes streams and removes private log caches alongside project/intake caches. Payment projection remains independent.
+
+A configured local worker uses the same controlled clock as Yard and Stood for ninety-day cleanup. Archived summaries contain only a count and counts by allowed kind; messages and test/commit details are deleted from retained rows. The database keeps sequence and hash-only command receipts. Real-Postgres tests qualify transaction/restart/retention behaviour; Docker browser checks exercise both themes, mobile overflow and the rendered log. Production session/role qualification and hosted job deployment remain separate tasks.
