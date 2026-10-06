@@ -628,3 +628,37 @@ button:disabled {
   block-size: 20px;
   accent-color: var(--accent);
 }
+
+/* Step 9 keys: write-only fields; metadata list only. */
+.keys {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card, 10px);
+  padding: var(--s-5, 24px);
+  background: var(--surface);
+}
+.keys form {
+  display: grid;
+  gap: var(--s-3, 12px);
+}
+.keys label {
+  display: grid;
+  gap: var(--s-1, 4px);
+}
+.keys fieldset label {
+  display: inline-flex;
+  gap: var(--s-2, 8px);
+  margin-right: var(--s-4, 16px);
+  min-height: 44px;
+  align-items: center;
+}
+.key-list {
+  list-style: none;
+  padding: 0;
+}
+.key-list li {
+  display: flex;
+  gap: var(--s-2, 8px);
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 44px;
+}

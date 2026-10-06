@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import { SECRET_PROVIDERS } from '@stood/yard-contracts';
 import {
   type KeyWrapper,
   type SecretEnvironment,
@@ -8,29 +9,8 @@ import {
   type SecretRows,
 } from '../ports/secrets.js';
 
-// Y19 §3: providers whose TEST/DEV credentials Yard may hold for previews. GitHub and Render are
-// reached through their own app/workspace, never through pasted buyer keys.
-export const SECRET_PROVIDERS = Object.freeze([
-  'supabase',
-  'firebase',
-  'gcp',
-  'aws',
-  'azure',
-  'paypal',
-  'stripe',
-  'paystack',
-  'flutterwave',
-  'resend',
-  'postmark',
-  'sendgrid',
-  'twilio',
-  'africastalking',
-  'termii',
-  'openai',
-  'anthropic',
-  'mapbox',
-  'sentry',
-]);
+export { SECRET_PROVIDERS } from '@stood/yard-contracts';
+
 // Self-identifying live credentials. Patterns cannot prove a key is test-only; they only refuse obvious live ones.
 const LIVE = [/\b[spr]k_live_/i, /\bFLWSECK-(?!TEST)/, /\bFLWPUBK-(?!TEST)/, /\bsk-live-/i];
 const text = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;

@@ -5,6 +5,7 @@ import pg from 'pg';
 import { migrateYardEvents } from '../../../yard-api/src/adapters/db-postgres/events.js';
 import { migrateYardIntakes } from '../../../yard-api/src/adapters/db-postgres/intakes.js';
 import { provisionYard } from '../../../yard-api/src/adapters/db-postgres/schema.js';
+import { migrateYardSecrets } from '../../../yard-api/src/adapters/db-postgres/secrets.js';
 import { migrateYardSiteLogs } from '../../../yard-api/src/adapters/db-postgres/site-log.js';
 import { PostgresSaver } from '../../../yard-foreman/test/fakes/checkpoint.js';
 
@@ -25,6 +26,7 @@ try {
   await migrateYardEvents(pool, 'yard_owner');
   await migrateYardIntakes(pool, 'yard_owner');
   await migrateYardSiteLogs(pool, 'yard_owner');
+  await migrateYardSecrets(pool, 'yard_owner');
   await pool.query('GRANT CREATE ON DATABASE stood_mock TO yard_owner');
   const plannerMigration = new pg.Pool({
     connectionString: pool.options.connectionString,

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { serve } from '@hono/node-server';
 import pg from 'pg';
 import { StoodClient } from '../../../packages/stood-sdk/src/client.js';
@@ -5,13 +6,16 @@ import { PostgresForemanCoordinator } from '../../yard-foreman/src/adapters/db-p
 import { Foreman } from '../../yard-foreman/src/foreman.js';
 import { PostgresSaver } from '../../yard-foreman/test/fakes/checkpoint.js';
 import { ScriptedPlannerModel } from '../../yard-foreman/test/fakes/model.js';
+import { LocalKeyWrapper } from '../src/adapters/crypto/local-key-wrapper.js';
 import { PostgresYardEvents } from '../src/adapters/db-postgres/events.js';
 import { PostgresIntakes } from '../src/adapters/db-postgres/intakes.js';
+import { PostgresSecretRows } from '../src/adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from '../src/adapters/db-postgres/site-log.js';
 import { GitleaksScanner } from '../src/adapters/log-scanner/gitleaks.js';
 import type { SettlementProof } from '../src/application/board.js';
 import { Board } from '../src/application/board.js';
 import { IntakePlanner } from '../src/application/intake-planner.js';
+import { SecretVault } from '../src/application/secret-vault.js';
 import { SiteLog } from '../src/application/site-log.js';
 import { createYardApp } from '../src/http/app.js';
 import { startLogRetention } from '../src/jobs/site-log-retention.js';
@@ -49,6 +53,11 @@ const app = createYardApp({
   environment: 'ci',
   board: {
     board,
+    // Disposable mock data: a random key-encryption key per boot, never a real secret.
+    secrets: new SecretVault(
+      new PostgresSecretRows(pool),
+      new LocalKeyWrapper({ k1: randomBytes(32).toString('base64') }, 'k1'),
+    ),
     siteLog: new SiteLog(logs, board, scanner),
     clock,
     intakes,
