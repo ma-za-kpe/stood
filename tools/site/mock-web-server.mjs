@@ -3,10 +3,11 @@ import { staticServer } from './serve.mjs';
 
 if (process.env.NETWORK_MOCK !== 'true' || process.env.APP_ENV !== 'ci') throw new Error('Mock web refused');
 const files = staticServer('_site');
+const prefixedFiles = staticServer('_site', '/__pages');
 createServer({ maxHeaderSize: 8192 }, (req, res) => {
   if (req.url?.startsWith('/__pages/')) {
     req.url = req.url.slice('/__pages'.length);
-    files.emit('request', req, res);
+    prefixedFiles.emit('request', req, res);
     return;
   }
   if (!req.url?.startsWith('/app/api/')) {

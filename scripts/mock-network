@@ -37,6 +37,7 @@ finish() {
 trap finish EXIT INT TERM
 compose build runner
 compose run --rm runner pnpm install --frozen-lockfile
+compose run --rm runner node --test tools/site/serve.test.mjs
 compose run --rm runner scripts/build-mock
 compose run --rm runner sh -c 'npm ci --prefix tools/site && node tools/site/build.mjs'
 docker build -f tools/site/Dockerfile.test -t stood-site-browser .

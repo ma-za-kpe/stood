@@ -165,7 +165,9 @@ try {
   }
   const nested = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const nestedPage = await nested.newPage();
-  await nestedPage.goto('http://web:3002/__pages/yard/app/');
+  await nestedPage.goto('http://web:3002/__pages/yard/app?project=yard-project');
+  assert.equal(new URL(nestedPage.url()).pathname, '/__pages/yard/app/');
+  assert.equal(new URL(nestedPage.url()).search, '?project=yard-project');
   await nestedPage.getByAltText('Yard', { exact: true }).waitFor();
   assert(await nestedPage.getByAltText('Yard', { exact: true }).evaluate((img) => img.naturalWidth > 0));
   await nestedPage.getByRole('link', { name: 'Yard story', exact: true }).click();
@@ -173,7 +175,8 @@ try {
   await nested.close();
   const intakeContext = await browser.newContext({ viewport: { width: 1100, height: 900 }, reducedMotion: 'reduce' });
   const intakePage = await intakeContext.newPage();
-  await intakePage.goto('http://web:3002/yard/app/');
+  await intakePage.goto('http://web:3002/yard/app');
+  assert.equal(new URL(intakePage.url()).pathname, '/yard/app/');
   await intakePage.getByRole('button', { name: 'Buyer', exact: true }).click();
   await intakePage.getByRole('button', { name: 'Describe a project', exact: true }).click();
   await intakePage.getByRole('button', { name: 'Start a private intake', exact: true }).click();
