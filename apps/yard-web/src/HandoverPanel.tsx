@@ -2,6 +2,7 @@ import { HANDOVER_CHECKLIST } from '@stood/yard-contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { closeBlocker } from './handover.js';
+import { browserRequestKey } from './claim-keys.js';
 import { api } from './http.js';
 import type { ProjectRoom } from './project-state.js';
 
@@ -14,7 +15,8 @@ const reasons = {
 export function HandoverPanel({ room, buyer }: { room: ProjectRoom; buyer: boolean }) {
   const client = useQueryClient();
   const [checked, setChecked] = useState<Set<string>>(new Set());
-  const key = useRef(`handover-${crypto.randomUUID()}`);
+  // getRandomValues, unlike randomUUID, also works on the plain-HTTP Docker test origin.
+  const key = useRef(`handover-${browserRequestKey()}`);
   const close = useMutation({
     mutationFn: () =>
       api(`/blueprints/${encodeURIComponent(room.id)}/handover`, {
