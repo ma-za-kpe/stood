@@ -168,7 +168,13 @@ yard.secrets (id, blueprint_id, provider, name, environment TEST|DEV, ciphertext
 
 ## 6. Validation and guardrails
 
-- Zod schemas shared between `yard-web` and `yard-api` (`packages/yard-domain`).
+- Zod schemas shared between `yard-web` and `yard-api` (`packages/yard-contracts`), separate from the dependency-free domain.
 - Live-key patterns refused with a clear message. The list is kept in one file and tested.
 - The intake text goes through the prompt-injection test set ([Y15](Y15-roadmap-and-tasks.md)) before the Foreman reads it. The Foreman sees the form as **data**.
 - If the buyer pastes a secret into a free-text field, a client- and server-side scanner (gitleaks rules) blocks the save: "That looks like a key. Put it in step 9 instead."
+
+## Current implementation evidence
+
+The local intake API saves private drafts in separate tables, using server-owned buyer identities and the shared clock. Each autosave atomically commits its version, exact retry receipt and an `intake.saved` event containing only step/version metadata. Version conflicts require a reload; a failed event write rolls the whole save back. Signed owner-only reads and event streams support recovery. Services are choices, without credential fields.
+
+The shared schemas reject unknown fields and bound text, lists, links and money. A bounded scanner blocks recognised test/live tokens and private-key formats before draft persistence or Foreman calls, including revision feedback. It is protection against accidental pasting, not proof of provider scope or a guarantee that arbitrary secrets are recognisable. The full wizard/planner connection and qualified signing are still being built. Credential intake is disabled until the separate encrypted-vault and provider-qualification tasks land.

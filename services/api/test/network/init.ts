@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { migrateYardEvents } from '../../../yard-api/src/adapters/db-postgres/events.js';
+import { migrateYardIntakes } from '../../../yard-api/src/adapters/db-postgres/intakes.js';
 import { provisionYard } from '../../../yard-api/src/adapters/db-postgres/schema.js';
 import { PostgresSaver } from '../../../yard-foreman/test/fakes/checkpoint.js';
 
@@ -21,6 +22,7 @@ try {
     c.release();
   }
   await migrateYardEvents(pool, 'yard_owner');
+  await migrateYardIntakes(pool, 'yard_owner');
   await pool.query('GRANT CREATE ON DATABASE stood_mock TO yard_owner');
   const plannerMigration = new pg.Pool({
     connectionString: pool.options.connectionString,

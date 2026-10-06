@@ -6,6 +6,7 @@ import { Foreman } from '../../yard-foreman/src/foreman.js';
 import { PostgresSaver } from '../../yard-foreman/test/fakes/checkpoint.js';
 import { ScriptedPlannerModel } from '../../yard-foreman/test/fakes/model.js';
 import { PostgresYardEvents } from '../src/adapters/db-postgres/events.js';
+import { PostgresIntakes } from '../src/adapters/db-postgres/intakes.js';
 import type { SettlementProof } from '../src/application/board.js';
 import { Board } from '../src/application/board.js';
 import { createYardApp } from '../src/http/app.js';
@@ -30,6 +31,7 @@ const app = createYardApp({
   board: {
     board: new Board(new PostgresYardEvents(pool, clock)),
     clock,
+    intakes: new PostgresIntakes(pool),
     foreman: new Foreman(
       new ScriptedPlannerModel('ci'),
       new PostgresSaver(pool, undefined, { schema: 'yard' }),

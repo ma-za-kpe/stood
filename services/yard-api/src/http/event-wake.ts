@@ -13,7 +13,7 @@ export class EventWake {
     }
   >();
   private opening = new Map<string, Promise<void>>();
-  constructor(private readonly store: YardEvents) {}
+  constructor(private readonly store: Pick<YardEvents, 'subscribe'>) {}
   async attach(id: string) {
     if (!this.projects.has(id)) {
       if (!this.opening.has(id))

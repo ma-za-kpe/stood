@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Annotation, type BaseCheckpointSaver, Command, END, interrupt, START, StateGraph } from '@langchain/langgraph';
+import { uuid6 } from '@langchain/langgraph-checkpoint';
+import { assertPublicInput } from '@stood/yard-contracts';
 import { Blueprint, type Plan, type PlannerErrorCode, type PlannerIntake } from '@stood/yard-domain';
 
 export type { Plan, PlannerIntake } from '@stood/yard-domain';
@@ -9,6 +11,19 @@ export class PlannerError extends Error {
   constructor(readonly code: PlannerErrorCode) {
     super(code);
   }
+}
+// Checkpoint IDs are logical ordering keys, never financial timestamps.
+export function checkpointTimeFloor(id: string): number {
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-6[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id))
+    throw new PlannerError('INVALID');
+  const hex = id.replaceAll('-', '');
+  return Number((BigInt(`0x${hex.slice(0, 12)}${hex.slice(13, 16)}`) - 122192928000000000n) / 10000n) + 1;
+}
+function rememberCheckpoint(config: { configurable?: Record<string, unknown> }): void {
+  const id = config.configurable?.checkpoint_id;
+  if (id === undefined) return;
+  if (typeof id !== 'string') throw new PlannerError('INVALID');
+  uuid6(0, checkpointTimeFloor(id));
 }
 export type Revision = Readonly<{ version: number; feedback: string }>;
 export interface PlannerModel {
@@ -32,6 +47,11 @@ function list(v: unknown, min: number, max: number): unknown[] {
   return v;
 }
 function intakeChecked(value: PlannerIntake): PlannerIntake {
+  try {
+    assertPublicInput(value);
+  } catch {
+    throw new PlannerError('INVALID');
+  }
   object(value, [
     'id',
     'buyerOperatorId',
@@ -168,6 +188,7 @@ export class Foreman {
       config = this.config(intake.id);
     return this.coordinator.run(intake.id, async () => {
       const state = await this.graph.getState(config);
+      rememberCheckpoint(state.config);
       if (Object.keys(state.values).length) {
         const prior = state.values.intake as PlannerIntake;
         if (
@@ -187,6 +208,7 @@ export class Foreman {
   }
   async read(id: string): Promise<Plan> {
     const state = await this.graph.getState(this.config(id));
+    rememberCheckpoint(state.config);
     const plan = state.values.plan as Plan | undefined;
     if (!plan) throw new PlannerError('NOT_FOUND');
     return structuredClone(plan);
@@ -195,6 +217,7 @@ export class Foreman {
     const config = this.config(id);
     return this.coordinator.run(id, async () => {
       const state = await this.graph.getState(config);
+      rememberCheckpoint(state.config);
       const intake = state.values.intake as PlannerIntake | undefined;
       if (!intake) throw new PlannerError('NOT_FOUND');
       if (buyer !== intake.buyerOperatorId) throw new PlannerError('FORBIDDEN');
@@ -216,6 +239,11 @@ export class Foreman {
   async revise(id: string, buyer: string, version: number, feedback: string): Promise<Plan> {
     const config = this.config(id);
     if (!text(feedback)) throw new PlannerError('INVALID');
+    try {
+      assertPublicInput(feedback);
+    } catch {
+      throw new PlannerError('INVALID');
+    }
     return this.coordinator.run(id, async () => {
       const state = await this.graph.getState(config),
         plan = await this.read(id);

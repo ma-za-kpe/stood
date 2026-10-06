@@ -79,3 +79,18 @@ The optional simulated Stood notification receiver verifies HMAC, obtains a matc
 Board discovery uses project keyset pages: `GET /yard/v1/board?after=<nextCursor>`. Always follow a non-null `nextCursor`, even when a page has no open work. Public cards omit repository, base commit and buyer identity; an authenticated claimed builder retrieves these through the scoped project read.
 
 Package submission first records a claim-bound outbox intent and emits submission.reserved. The work order shows SUBMITTING until an exact Stood package receipt is attached. A lost reply is recovered using the persisted package idempotency key; confirmed intents never call the provider again. Recovery scans all project pages. This delivers metadata only and cannot mark a milestone paid. Financial proof remains separate.
+
+### Implemented local intake autosave
+
+When an intake store is explicitly configured, these signed routes operate on private draft records in `yard.intakes`, separate from the Board's projects:
+
+| Method | Route | Body / version |
+|---|---|---|
+| POST | `/yard/v1/intakes` | `{id, step, draft}`; If-Match `0` |
+| PUT | `/yard/v1/intakes/{id}` | `{step, draft}`; current positive If-Match |
+| GET | `/yard/v1/intakes/{id}` | Owner-only record; private, no-store |
+| GET | `/yard/v1/intakes/{id}/events` | Owner-only numbered `intake.saved` metadata |
+
+Saves require an Idempotency-Key and request v2 signature. `step` is zero-based (0–7). The server supplies owner and time; neither belongs in the body. The response is `{id, owner, version, step, draft, createdAt, updatedAt}`, with epoch milliseconds from the shared clock. Retry the exact request/key after a lost response; a changed body conflicts. A stale version requires reloading. Draft, retry receipt and audit event commit together. Events contain only `{step, version}`, never the answers. The current record has a deferred foreign key to its audit version, and database guards reject mismatched owner/step/time or extra event payload fields.
+
+Unknown fields and recognised credential formats are refused with a bounded 422 response. Service choices contain no credential slots. The health capability reports `intake` separately from `credentials`; credentials and real payments remain disabled. Hosted authentication, retention/export, the full wizard and qualified signing remain separate work.

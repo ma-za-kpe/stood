@@ -1,6 +1,8 @@
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { MemorySaver } from '@langchain/langgraph';
 import { expect, it, vi } from 'vitest';
-import { Foreman, type PlannerIntake, type PlannerModel } from './foreman.js';
+import { checkpointTimeFloor, Foreman, type PlannerIntake, type PlannerModel } from './foreman.js';
 
 const intake: PlannerIntake = {
   id: 'plan',
@@ -29,6 +31,59 @@ const draft = () => ({
       },
     ],
   })),
+});
+it('refuses recognised pasted credentials before checkpointing or calling the model', async () => {
+  const model = { draft: vi.fn(async () => draft()) };
+  const checkpoint = new MemorySaver();
+  const foreman = new Foreman(model, checkpoint);
+  const pasted = ['sk', 'live', ''].join('_') + 'synthetic-not-a-real-key';
+  await expect(foreman.draft({ ...intake, description: `Connect with ${pasted}` })).rejects.toThrow('INVALID');
+  expect(model.draft).not.toHaveBeenCalled();
+  expect(await checkpoint.getTuple({ configurable: { thread_id: intake.id } })).toBeUndefined();
+});
+it('refuses credentials in revision feedback without changing the saved review', async () => {
+  const model = { draft: vi.fn(async () => draft()) };
+  const foreman = new Foreman(model, new MemorySaver());
+  await foreman.draft(intake);
+  const before = await foreman.resume(intake.id, intake.buyerOperatorId, 1, 'REVISE');
+  await expect(
+    foreman.revise(intake.id, intake.buyerOperatorId, 1, 'client_secret = synthetic-secret-value'),
+  ).rejects.toThrow('INVALID');
+  expect(await foreman.read(intake.id)).toEqual(before);
+  expect(model.draft).toHaveBeenCalledTimes(1);
+});
+it('restores the newest revision even if the host wall clock moves backwards', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1791158400000);
+  try {
+    const checkpoint = new MemorySaver();
+    const foreman = new Foreman({ draft: async () => draft() }, checkpoint);
+    await foreman.draft({ ...intake, id: 'clock-rollback' });
+    await foreman.resume('clock-rollback', 'buyer', 1, 'REVISE');
+    clock.mockReturnValue(1791158399900);
+    expect((await foreman.revise('clock-rollback', 'buyer', 1, 'Refine scope')).version).toBe(2);
+    expect((await new Foreman({ draft: async () => draft() }, checkpoint).read('clock-rollback')).version).toBe(2);
+  } finally {
+    clock.mockRestore();
+  }
+});
+it('keeps fresh-process checkpoint IDs after the persisted checkpoint time floor', () => {
+  const require = createRequire(createRequire(import.meta.url).resolve('@langchain/langgraph'));
+  const path = require.resolve('@langchain/langgraph-checkpoint');
+  const { uuid6 } = require('@langchain/langgraph-checkpoint') as { uuid6(step: number): string };
+  const parent = uuid6(0),
+    floor = checkpointTimeFloor(parent);
+  const child = execFileSync(
+    process.execPath,
+    [
+      '-e',
+      'const {uuid6}=require(process.argv[1]);Date.now=()=>1;process.stdout.write(uuid6(0,Number(process.argv[2])));',
+      path,
+      String(floor),
+    ],
+    { encoding: 'utf8', timeout: 5000 },
+  );
+  expect(child > parent).toBe(true);
+  expect(() => checkpointTimeFloor('not-a-checkpoint')).toThrow('INVALID');
 });
 it('drafts through the graph, persists a buyer-review interrupt and never approves itself', async () => {
   const model = { draft: vi.fn(async (_input: Parameters<PlannerModel['draft']>[0]) => draft()) };

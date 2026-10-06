@@ -15,6 +15,7 @@ export function createYardApp(
       capabilities: {
         board: !!config.board,
         foreman: !!config.board?.foreman,
+        intake: !!config.board?.intakes,
         credentials: false,
         events: !!config.eventFeed || !!config.board,
         payments: false,

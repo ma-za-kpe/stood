@@ -13,6 +13,7 @@ export default defineConfig({
         'services/yard-foreman/src/**/*.ts',
         'services/simulators/src/**/*.ts',
         'packages/yard-domain/src/**/*.ts',
+        'packages/yard-contracts/src/**/*.ts',
         'packages/stood-sdk/src/**/*.ts',
       ],
       exclude: ['**/*.test.ts', '**/server.ts', '**/setup-cli.ts', '**/reconcile-cli.ts', '**/adapters/db-postgres/**'],

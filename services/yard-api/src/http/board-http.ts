@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { IntakeError } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -6,14 +7,17 @@ import type { Board, Operator, SettlementProof } from '../application/board.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
+import type { IntakeStore } from '../ports/intakes.js';
 import { eventFeed } from './event-feed.js';
 import { foremanHttp } from './foreman-http.js';
+import { intakeHttp } from './intake-http.js';
 export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
   operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
   packages?: PackageGateway;
   foreman?: ForemanPlans;
+  intakes?: IntakeStore;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<Omit<SettlementProof, 'eventId'>> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
@@ -78,6 +82,7 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     return next();
   });
   app.onError((error, c) => {
+    if (error instanceof IntakeError) return c.json({ code: error.code }, 422);
     if (error instanceof YardError)
       return c.json(
         { code: error.code },
@@ -88,6 +93,22 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     return c.json({ code: 'yard_unavailable' }, 503);
   });
   if (config.foreman) foremanHttp(app, { foreman: config.foreman, request });
+  if (config.intakes) {
+    const store = config.intakes;
+    intakeHttp(app, {
+      store,
+      request,
+      authorize: async (headers, id, target) => {
+        const actor = identify(headers, 'GET', target, '', await config.clock());
+        if (!actor || actor.kind !== 'BUYER') return false;
+        try {
+          return (await store.load(id)).owner === actor.id;
+        } catch {
+          return false;
+        }
+      },
+    });
+  }
   const command = (c: Context) => {
     const key = c.req.header('Idempotency-Key') ?? '',
       version = Number(c.req.header('If-Match'));

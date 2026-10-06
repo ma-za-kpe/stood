@@ -5,6 +5,11 @@ settings:
   excludeLinksFromLockfile: false
   injectWorkspacePackages: true
 
+patchedDependencies:
+  '@langchain/langgraph-checkpoint@1.1.5':
+    hash: 440ecc8493f7d12c41bf4c56324a2dde8905ffd50d078443ab58808f9484fb09
+    path: patches/langgraph-checkpoint-1.1.5.patch
+
 importers:
 
   .:
@@ -39,6 +44,9 @@ importers:
 
   apps/yard-web:
     dependencies:
+      '@stood/yard-contracts':
+        specifier: workspace:*
+        version: link:../../packages/yard-contracts
       '@stood/yard-domain':
         specifier: workspace:*
         version: link:../../packages/yard-domain
@@ -78,6 +86,12 @@ importers:
 
   packages/stood-sdk: {}
 
+  packages/yard-contracts:
+    dependencies:
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+
   packages/yard-domain: {}
 
   services/api:
@@ -116,6 +130,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.3
         version: 2.1.3(hono@4.13.12)
+      '@stood/yard-contracts':
+        specifier: workspace:*
+        version: link:../../packages/yard-contracts
       '@stood/yard-domain':
         specifier: workspace:*
         version: link:../../packages/yard-domain
@@ -138,9 +155,15 @@ importers:
       '@langchain/langgraph':
         specifier: 1.4.19
         version: 1.4.19(@langchain/core@1.2.14)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
+      '@langchain/langgraph-checkpoint':
+        specifier: 1.1.5
+        version: 1.1.5(patch_hash=440ecc8493f7d12c41bf4c56324a2dde8905ffd50d078443ab58808f9484fb09)(@langchain/core@1.2.14)
       '@langchain/langgraph-checkpoint-postgres':
         specifier: 1.0.5
-        version: 1.0.5(@langchain/core@1.2.14)(@langchain/langgraph-checkpoint@1.1.5(@langchain/core@1.2.14))
+        version: 1.0.5(@langchain/core@1.2.14)(@langchain/langgraph-checkpoint@1.1.5(patch_hash=440ecc8493f7d12c41bf4c56324a2dde8905ffd50d078443ab58808f9484fb09)(@langchain/core@1.2.14))
+      '@stood/yard-contracts':
+        specifier: workspace:*
+        version: link:../../packages/yard-contracts
       '@stood/yard-domain':
         specifier: workspace:*
         version: link:../../packages/yard-domain
@@ -2289,15 +2312,15 @@ snapshots:
       - openai
       - ws
 
-  '@langchain/langgraph-checkpoint-postgres@1.0.5(@langchain/core@1.2.14)(@langchain/langgraph-checkpoint@1.1.5(@langchain/core@1.2.14))':
+  '@langchain/langgraph-checkpoint-postgres@1.0.5(@langchain/core@1.2.14)(@langchain/langgraph-checkpoint@1.1.5(patch_hash=440ecc8493f7d12c41bf4c56324a2dde8905ffd50d078443ab58808f9484fb09)(@langchain/core@1.2.14))':
     dependencies:
       '@langchain/core': 1.2.14
-      '@langchain/langgraph-checkpoint': 1.1.5(@langchain/core@1.2.14)
+      '@langchain/langgraph-checkpoint': 1.1.5(patch_hash=440ecc8493f7d12c41bf4c56324a2dde8905ffd50d078443ab58808f9484fb09)(@langchain/core@1.2.14)
       pg: 8.23.1
     transitivePeerDependencies:
       - pg-native
 
-  '@langchain/langgraph-checkpoint@1.1.5(@langchain/core@1.2.14)':
+  '@langchain/langgraph-checkpoint@1.1.5(patch_hash=440ecc8493f7d12c41bf4c56324a2dde8905ffd50d078443ab58808f9484fb09)(@langchain/core@1.2.14)':
     dependencies:
       '@langchain/core': 1.2.14
 
@@ -2315,7 +2338,7 @@ snapshots:
   '@langchain/langgraph@1.4.19(@langchain/core@1.2.14)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)':
     dependencies:
       '@langchain/core': 1.2.14
-      '@langchain/langgraph-checkpoint': 1.1.5(@langchain/core@1.2.14)
+      '@langchain/langgraph-checkpoint': 1.1.5(patch_hash=440ecc8493f7d12c41bf4c56324a2dde8905ffd50d078443ab58808f9484fb09)(@langchain/core@1.2.14)
       '@langchain/langgraph-sdk': 1.12.1(@langchain/core@1.2.14)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@langchain/protocol': 0.0.19
       '@standard-schema/spec': 1.1.0

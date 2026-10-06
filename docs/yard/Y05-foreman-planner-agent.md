@@ -61,3 +61,7 @@ The first graph in `services/yard-foreman` drafts through the PlannerModel port 
 Failed graph tasks resume from their persisted checkpoint rather than replacing intake, following [LangGraph persistence](https://docs.langchain.com/oss/javascript/langgraph/persistence). Exact repeated creation returns the stored plan; changed intake conflicts. Recovery does not rerun an accepted plan or a buyer-review interrupt.
 
 Draft HTTP creation uses a stable project id and compares every request-controlled field. A later server clock on an exact retry returns the saved draft with its original createdAt; it never rewrites intake. Malformed model output is an unavailable planner result, not a buyer input error. The graph's typed errors allow the API to map failures without matching exception text. Ordinary Yard startup does not install a planner or silently fall back to the mock.
+
+### Checkpoint ordering evidence
+
+Foreman recovery now seeds a monotonic logical checkpoint ID floor from the persisted UUIDv6 ID before continuing. A narrow, version-pinned dependency patch also prevents host-clock rollback from moving IDs backwards within a process. Memory, real-Postgres and separate-process regressions protect the newest review version. This ordering is independent of the configured financial clock; reads do not replay model work. See [ADR-0022](../adr/0022-monotonic-foreman-checkpoint-order.md) for scope and removal criteria.

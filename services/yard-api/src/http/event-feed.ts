@@ -3,12 +3,13 @@ import { streamSSE } from 'hono/streaming';
 import type { YardEvents } from '../ports/events.js';
 import { EventWake } from './event-wake.js';
 export type EventFeed = Readonly<{
-  store: YardEvents;
+  store: Pick<YardEvents, 'read' | 'subscribe'> & { load(id: string): Promise<{ version: number }> };
+  route?: '/yard/v1/blueprints/:id/events' | '/yard/v1/intakes/:id/events';
   authorize(headers: Headers, projectId: string, target: string): Promise<boolean>;
 }>;
 export function eventFeed(app: Hono, feed: EventFeed): void {
   const wake = new EventWake(feed.store);
-  app.get('/yard/v1/blueprints/:id/events', async (c) => {
+  app.get(feed.route ?? '/yard/v1/blueprints/:id/events', async (c) => {
     const id = c.req.param('id');
     const url = new URL(c.req.url);
     if (!(await feed.authorize(c.req.raw.headers, id, `${url.pathname}${url.search}`)))
