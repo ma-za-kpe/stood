@@ -381,6 +381,81 @@ export class Board {
         throw new YardError('CONFLICT');
     }
   }
+  // T-0213: notices derived from project events after a cursor, plus lease-ending reminders.
+  // Recipients are actor ids; amounts go only to the payer and payee of that milestone.
+  async notices(id: string, after: number, now: number) {
+    const snapshot = await this.events.load(id),
+      d = data(snapshot.data);
+    const out: { key: string; actor: string; subject: string; text: string }[] = [];
+    const name = (wo: string) => {
+      const order = d.orders[wo];
+      return order ? (terms(d, order.milestone)?.name ?? wo) : wo;
+    };
+    const claimant = (wo: string) =>
+      Object.hasOwn(d.orders, wo) ? workOrder(d, wo).work.snapshot.currentClaim?.builderId : undefined;
+    const money = (minor: number) =>
+      new Intl.NumberFormat('en', { style: 'currency', currency: d.blueprint.currency }).format(minor / 100);
+    const events = await this.events.read(id, after);
+    for (const e of events) {
+      const p = (e.payload ?? {}) as Record<string, unknown>;
+      const wo = typeof p.wo === 'string' ? p.wo : '';
+      if (e.type === 'stood.refused' && wo) {
+        const items = (Array.isArray(p.punchList) ? p.punchList : []) as { field: string; reason: string }[];
+        const builder = claimant(wo);
+        if (builder)
+          out.push({
+            key: `${id}:${e.seq}:builder`,
+            actor: builder,
+            subject: `Not yet: punch list for "${name(wo)}"`,
+            text: [
+              `Not yet. ${items.length} named ${items.length === 1 ? 'check' : 'checks'} failed:`,
+              ...items.map((i) => `- ${i.field}: ${i.reason}`),
+              'Nothing was paid.',
+              p.state === 'REWORK'
+                ? 'Fix it and resubmit on the same lease.'
+                : 'No attempts are left on this milestone.',
+            ].join('\n'),
+          });
+      } else if (e.type === 'stood.released' && wo) {
+        const amount = money(Number((p.payment as { minor?: number } | undefined)?.minor ?? 0));
+        const text = `${amount} released for "${name(wo)}". Stood checked it. Simulated: no real money moved.`;
+        out.push({
+          key: `${id}:${e.seq}:buyer`,
+          actor: snapshot.owner,
+          subject: `Milestone paid: "${name(wo)}"`,
+          text,
+        });
+        const builder = claimant(wo);
+        if (builder)
+          out.push({ key: `${id}:${e.seq}:builder`, actor: builder, subject: `Milestone paid: "${name(wo)}"`, text });
+      } else if (e.type === 'blueprint.closed')
+        out.push({
+          key: `${id}:${e.seq}:buyer`,
+          actor: snapshot.owner,
+          subject: 'Project closed',
+          text: 'Closed. The keys are yours. Stored test keys are deleted within seven days.',
+        });
+    }
+    for (const wo of Object.keys(d.orders)) {
+      const { work, order } = workOrder(d, wo),
+        claim = work.snapshot.currentClaim;
+      if (
+        claim &&
+        !order.payment &&
+        !order.closed &&
+        ['CLAIMED', 'BUILDING', 'REWORK'].includes(work.snapshot.state) &&
+        now >= claim.leasedUntil - 6 * 3600000 &&
+        now < claim.leasedUntil
+      )
+        out.push({
+          key: `${id}:${wo}:${claim.id}:lease-ending`,
+          actor: claim.builderId,
+          subject: `Lease ending soon: "${name(wo)}"`,
+          text: `Your lease on "${name(wo)}" ends ${new Date(claim.leasedUntil).toISOString().slice(0, 16).replace('T', ' ')} UTC. Submit or clock out before then.`,
+        });
+    }
+    return { notices: out, lastSeq: events.at(-1)?.seq ?? after };
+  }
   // Y13: reputation counts only Stood-paid milestones for buyers outside the builder's operator tree.
   async reputation(root: string) {
     const result = { root, counted: 0, selfDealing: 0, refusals: 0 };
