@@ -258,8 +258,33 @@ const BUILDER_EVENTS = new Set([
   'stood.released',
   'stood.refused',
 ]);
+// Y13: one operator root cannot squat the Board. Checked before claiming; replays are unaffected.
+export const MAX_ACTIVE_CLAIMS = 2;
 export class Board {
-  constructor(readonly events: YardEvents) {}
+  constructor(
+    readonly events: YardEvents,
+    private readonly limits: Readonly<{ maxActiveClaims: number }> = { maxActiveClaims: MAX_ACTIVE_CLAIMS },
+  ) {}
+  // Active, unexpired leases held by an operator root across every project (paged).
+  async activeClaims(root: string, now: number, except?: Readonly<{ id: string; wo: string }>): Promise<number> {
+    let count = 0;
+    let after = '';
+    do {
+      const projects = await this.events.list(after);
+      const page = projects.slice(0, 100);
+      for (const p of page) {
+        const d = data(p.data);
+        for (const wo of Object.keys(d.orders)) {
+          if (except && p.id === except.id && wo === except.wo) continue;
+          const { work, order } = workOrder(d, wo);
+          const claim = work.snapshot.currentClaim;
+          if (claim?.operatorRootId === root && now < claim.leasedUntil && !order.payment && !order.closed) count++;
+        }
+      }
+      after = projects.length > 100 ? (page.at(-1)?.id ?? '') : '';
+    } while (after);
+    return count;
+  }
   async create(input: BlueprintInput, actor: Operator, key: string): Promise<YardSnapshot> {
     if (actor.kind !== 'BUYER' || input.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
     if (
@@ -623,7 +648,17 @@ export class Board {
       return { wo: milestone, state: 'POSTED', simulated: true };
     });
   }
-  claim(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+  async claim(id: string, wo: string, actor: Operator, version: number, key: string, now: number) {
+    const current = await this.events.load(id);
+    const existing = Object.hasOwn(data(current.data).orders, wo)
+      ? workOrder(data(current.data), wo).work.snapshot.currentClaim
+      : null;
+    // A replay of this builder's own claim is not a new claim; anything else counts against the cap.
+    if (
+      existing?.builderId !== actor.id &&
+      (await this.activeClaims(actor.root, now, { id, wo })) >= this.limits.maxActiveClaims
+    )
+      throw new YardError('CONFLICT');
     return this.mutate(id, actor, version, key, { claim: wo }, 'wo.claimed', (d) => {
       if (actor.kind !== 'BUILDER') throw new YardError('FORBIDDEN');
       const { work, order } = workOrder(d, wo);

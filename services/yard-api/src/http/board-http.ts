@@ -21,7 +21,15 @@ import { siteLogHttp } from './site-log-http.js';
 export type BoardConfig = Readonly<{
   board: Board;
   clock(): Promise<number>;
-  operators: readonly Readonly<{ key: string; secret: string; actor: Operator }>[];
+  // A key may be retired at notAfter (rotation overlaps old and new keys). payeeRef is a PayPal email or
+  // payer id only: payouts reach the operator's own PayPal account; Yard holds no PayPal credentials.
+  operators: readonly Readonly<{
+    key: string;
+    secret: string;
+    actor: Operator;
+    notAfter?: number;
+    payeeRef?: string;
+  }>[];
   packages?: PackageGateway;
   siteLog?: SiteLog;
   foreman?: ForemanPlans;
@@ -48,12 +56,19 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     !config.operators.length ||
     new Set(config.operators.map((o) => o.key)).size !== config.operators.length ||
     config.operators.some(
-      (o) => ![o.key, o.secret, o.actor.id, o.actor.root].every((v) => typeof v === 'string' && v.trim().length > 0),
+      (o) =>
+        ![o.key, o.secret, o.actor.id, o.actor.root].every((v) => typeof v === 'string' && v.trim().length > 0) ||
+        (o.notAfter !== undefined && (!Number.isSafeInteger(o.notAfter) || o.notAfter < 0)) ||
+        (o.payeeRef !== undefined &&
+          !/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,24}$/.test(o.payeeRef) &&
+          !/^[A-Z0-9]{13}$/.test(o.payeeRef)),
     )
   )
     throw new YardError('INVALID');
   const identify = (headers: Headers, method: string, path: string, body: string, now: number): Operator | null => {
-    const credential = config.operators.find((o) => o.key === headers.get('Yard-Key-Id'));
+    const credential = config.operators.find(
+      (o) => o.key === headers.get('Yard-Key-Id') && (o.notAfter === undefined || now < o.notAfter),
+    );
     const match = /^t=(\d{1,12}),v2=([a-f0-9]{64})$/.exec(headers.get('Yard-Signature') ?? '');
     if (!credential || !match || !Number.isSafeInteger(now) || now < 0 || Math.abs(now / 1000 - Number(match[1])) > 300)
       return null;

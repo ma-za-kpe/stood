@@ -5,7 +5,8 @@ export const leaseAt = 1791158400000;
 export const leaseBuyer = { id: 'buyer', root: 'buyer-root', kind: 'BUYER' as const };
 export const leaseBuilder = { id: 'builder', root: 'builder-root', kind: 'BUILDER' as const };
 export async function claimedFixture(store: YardEvents = new MemoryEvents(), id = 'lease-project') {
-  const board = new Board(store);
+  // Fixture projects share one builder across many projects; the claim cap has its own tests.
+  const board = new Board(store, { maxActiveClaims: 1000 });
   const input = {
     id,
     buyerOperatorId: leaseBuyer.id,
