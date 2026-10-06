@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Blueprint, type BlueprintInput, type FreezeProof, WorkOrder } from '@stood/yard-domain';
-import { YardError, type YardEvents, type YardSnapshot } from '../ports/events.js';
+import { YardError, type YardEvent, type YardEvents, type YardSnapshot } from '../ports/events.js';
 export type Operator = Readonly<{ id: string; root: string; kind: 'BUYER' | 'BUILDER' }>;
 export type SettlementProof = Readonly<{
   eventId: string;
@@ -189,6 +189,16 @@ function feedback(order: Order) {
     })),
   };
 }
+const BUILDER_EVENTS = new Set([
+  'wo.claimed',
+  'wo.building',
+  'submission.reserved',
+  'wo.submitted',
+  'wo.lease_expired',
+  'wo.released_claim',
+  'stood.released',
+  'stood.refused',
+]);
 export class Board {
   constructor(readonly events: YardEvents) {}
   async create(input: BlueprintInput, actor: Operator, key: string): Promise<YardSnapshot> {
@@ -215,6 +225,53 @@ export class Board {
     )
       throw new YardError('FORBIDDEN');
     return snapshot;
+  }
+  // Metadata only (name, provider, environment, version). The viewer filter keeps it buyer-only.
+  async secretEvent(
+    id: string,
+    actor: Operator,
+    key: string,
+    type: 'secret.added' | 'secret.revoked',
+    payload: Readonly<{ name: string; provider?: string; environment?: string; version?: number }>,
+  ) {
+    for (let attempt = 0; ; attempt++) {
+      const snapshot = await this.events.load(id);
+      try {
+        return await this.events.mutate(
+          id,
+          snapshot.version,
+          actor.id,
+          `${type}:${key}`,
+          fingerprint(payload),
+          (raw) => ({
+            data: data(raw),
+            type,
+            payload: { ...payload, simulated: true },
+          }),
+        );
+      } catch (error) {
+        if (attempt > 0 || !(error instanceof YardError) || error.code !== 'STALE_VERSION') throw error;
+      }
+    }
+  }
+  // Y18 §5: the owning buyer sees every project event; a builder sees only build events for work it holds now.
+  async viewer(id: string, actor: Operator): Promise<{ see(event: YardEvent): boolean }> {
+    const snapshot = await this.read(id, actor),
+      d = data(snapshot.data);
+    if (actor.kind === 'BUYER' && snapshot.owner === actor.id && d.buyerRoot === actor.root) return { see: () => true };
+    const held = new Set(
+      Object.keys(d.orders).filter((wo) => {
+        const claim = workOrder(d, wo).work.snapshot.currentClaim;
+        return actor.kind === 'BUILDER' && claim?.builderId === actor.id && claim.operatorRootId === actor.root;
+      }),
+    );
+    if (!held.size) throw new YardError('FORBIDDEN');
+    return {
+      see: (event) => {
+        const wo = (event.payload as { wo?: unknown } | null)?.wo;
+        return BUILDER_EVENTS.has(event.type) && typeof wo === 'string' && held.has(wo);
+      },
+    };
   }
   logScope(snapshot: YardSnapshot, wo: string, actor: Operator, now: number, write: boolean): void {
     if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
@@ -443,6 +500,8 @@ export class Board {
       id: snapshot.id,
       version: snapshot.version,
       handover: d.handover ?? null,
+      signed: d.blueprint.status === 'FROZEN',
+      milestoneCount: d.blueprint.milestones.length,
       summary: d.blueprint.summary,
       currency: d.blueprint.currency,
       simulated: true,

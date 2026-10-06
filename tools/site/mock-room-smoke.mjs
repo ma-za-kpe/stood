@@ -150,6 +150,30 @@ try {
     await accessible(page, `${name} paper room`);
     await page.screenshot({ path: `artifacts/mock-network/yard-room-${name}.png`, fullPage: true });
     if (name === 'desktop') {
+      // Handover stays blocked while a milestone is unpaid; Yard's own items are shown as done.
+      await page.getByRole('heading', { name: 'Your turn. Take the keys.', exact: true }).waitFor();
+      assert(await page.getByRole('button', { name: 'Close the project', exact: true }).isDisabled());
+      await page.getByText('Every milestone must be paid by Stood', { exact: false }).waitFor();
+      // Step 9: a test key is stored write-only; a live key is refused.
+      const keys = page.getByRole('region', { name: 'Test keys', exact: true });
+      await keys.getByLabel('Name', { exact: true }).fill('SUPABASE_URL');
+      await keys.getByLabel('Value', { exact: true }).fill('https://synthetic-dev-project.supabase.co');
+      await keys.getByRole('button', { name: 'Store test key', exact: true }).click();
+      await keys.getByText('Stored encrypted.', { exact: false }).waitFor();
+      await keys.getByRole('list', { name: 'Stored test keys' }).getByText('SUPABASE_URL').waitFor();
+      assert.equal(await keys.getByLabel('Value', { exact: true }).inputValue(), '');
+      assert(!(await page.content()).includes('synthetic-dev-project'), 'a stored value never reaches the page');
+      await keys.getByLabel('Name', { exact: true }).fill('STRIPE_KEY');
+      await keys.getByLabel('Provider', { exact: true }).selectOption('stripe');
+      await keys.getByLabel('Value', { exact: true }).fill(`sk_live_${'a'.repeat(24)}`);
+      await keys.getByRole('button', { name: 'Store test key', exact: true }).click();
+      await keys.getByText('Refused. Only test or dev keys', { exact: false }).waitFor();
+      await accessible(page, 'keys and handover panels');
+      // A refused-then-reworked milestone keeps its refusal history after payment.
+      await page.getByRole('textbox', { name: 'Project ID', exact: true }).fill('yard-rework-project');
+      await page.getByRole('button', { name: 'Open project →', exact: true }).click();
+      await page.getByText('Paid on attempt 2, after 1 Stood refusal.', { exact: true }).waitFor();
+      await accessible(page, 'reworked and paid room');
       await page.getByRole('textbox', { name: 'Project ID', exact: true }).fill('yard-lease');
       await page.getByRole('button', { name: 'Open project →', exact: true }).click();
       await page.getByRole('heading', { name: 'Lease lifecycle simulation', exact: true }).waitFor();

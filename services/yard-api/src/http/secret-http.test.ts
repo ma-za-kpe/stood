@@ -9,7 +9,8 @@ import { createYardApp } from './app.js';
 
 const now = 1791158400000;
 function harness() {
-  const board = new Board(new MemoryEvents());
+  const events = new MemoryEvents();
+  const board = new Board(events);
   const rows = new MemorySecretRows();
   const vault = new SecretVault(rows, new LocalKeyWrapper({ k1: randomBytes(32).toString('base64') }, 'k1'));
   const app = createYardApp({
@@ -105,7 +106,7 @@ function harness() {
       1,
       'freeze',
     );
-  return { rows, request, create, sign };
+  return { rows, events, request, create, sign };
 }
 const secret = { provider: 'supabase', environment: 'TEST', value: 'https://dev-project.supabase.co' };
 const path = '/yard/v1/blueprints/p/secrets';
@@ -171,4 +172,25 @@ it('revokes a key for the owner only and crypto-shreds it', async () => {
   expect((await h.request(`${path}/SUPABASE_URL/revoke`, 'POST', {}, 2, 'rv-2')).status).toBe(404);
   expect((await (await h.request(path)).json()).secrets).toEqual([]);
   expect(h.rows.dump().every((r) => r.ciphertext === '' && r.wrappedKey === '')).toBe(true);
+});
+
+it('records buyer-only secret metadata events with no value or fingerprint (T-0195, T-0194)', async () => {
+  const h = harness();
+  await h.create();
+  await h.sign();
+  await h.request(`${path}/SUPABASE_URL`, 'PUT', secret, 2, 'put-1');
+  await h.request(`${path}/SUPABASE_URL`, 'PUT', secret, 2, 'put-1');
+  await h.request(`${path}/SUPABASE_URL/revoke`, 'POST', {}, 2, 'rv');
+  const log = await h.events.read('p', 0);
+  const secrets = log.filter((e) => e.type.startsWith('secret.'));
+  expect(secrets.map((e) => e.type)).toEqual(['secret.added', 'secret.revoked']);
+  expect(secrets[0]?.payload).toEqual({
+    name: 'SUPABASE_URL',
+    provider: 'supabase',
+    environment: 'TEST',
+    version: 1,
+    simulated: true,
+  });
+  expect(JSON.stringify(secrets)).not.toContain('dev-project');
+  expect(JSON.stringify(secrets)).not.toMatch(/fingerprint/);
 });

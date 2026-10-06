@@ -1,6 +1,6 @@
 import type { Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import type { YardEvents } from '../ports/events.js';
+import type { YardEvent, YardEvents } from '../ports/events.js';
 import { EventWake } from './event-wake.js';
 export type EventFeed = Readonly<{
   store: Pick<YardEvents, 'read' | 'subscribe'> & {
@@ -11,8 +11,10 @@ export type EventFeed = Readonly<{
     | '/yard/v1/intakes/:id/events'
     | '/yard/v1/blueprints/:id/work-orders/:wo/log/events';
   resource?(c: Context): string;
-  authorize(headers: Headers, projectId: string, target: string): Promise<boolean>;
+  // true: the viewer sees every event. A viewer object filters each event; hidden ones become placeholders.
+  authorize(headers: Headers, projectId: string, target: string): Promise<boolean | EventViewer>;
 }>;
+export type EventViewer = Readonly<{ see(event: YardEvent): boolean }>;
 export function eventFeed(app: Hono, feed: EventFeed): void {
   const wake = new EventWake(feed.store);
   app.get(feed.route ?? '/yard/v1/blueprints/:id/events', async (c) => {
@@ -20,7 +22,8 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
     const url = new URL(c.req.url);
     const headers = new Headers(c.req.raw.headers),
       target = `${url.pathname}${url.search}`;
-    if (!(await feed.authorize(headers, id, target))) return c.json({ code: 'unauthorized' }, 401);
+    let viewer = await feed.authorize(headers, id, target);
+    if (!viewer) return c.json({ code: 'unauthorized' }, 401);
     const raw = c.req.header('Last-Event-ID') ?? c.req.query('since') ?? '0';
     if (!/^\d{1,10}$/.test(raw)) return c.json({ code: 'invalid_cursor' }, 400);
     let cursor = Number(raw);
@@ -36,14 +39,13 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
         subscription.close();
       });
       const access = async () => {
-        let allowed = false;
         try {
-          allowed = await feed.authorize(headers, id, target);
+          viewer = await feed.authorize(headers, id, target);
         } catch {
-          allowed = false;
+          viewer = false;
         }
-        if (!allowed) await stream.writeSSE({ event: 'authorization.required', data: '{}' });
-        return allowed;
+        if (!viewer) await stream.writeSSE({ event: 'authorization.required', data: '{}' });
+        return !!viewer;
       };
       try {
         while (!stopped && !stream.aborted) {
@@ -73,7 +75,14 @@ export function eventFeed(app: Hono, feed: EventFeed): void {
               await stream.writeSSE({ event: 'snapshot.required', data: '{}' });
               break;
             }
-            await stream.writeSSE({ id: String(event.seq), event: event.type, data: JSON.stringify(event) });
+            // A hidden event keeps only its position, so every viewer's replay stays gap-free.
+            if (viewer !== true && viewer && !viewer.see(event))
+              await stream.writeSSE({
+                id: String(event.seq),
+                event: 'yard.private',
+                data: JSON.stringify({ seq: event.seq }),
+              });
+            else await stream.writeSSE({ id: String(event.seq), event: event.type, data: JSON.stringify(event) });
             cursor = event.seq;
           }
           if (stopped || stream.aborted) break;

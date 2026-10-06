@@ -159,3 +159,13 @@ it('accepts rework and closed refusals in snapshots only with a punch list and n
   ])
     expect(() => roomChecked(bad)).toThrow();
 });
+it('advances past private placeholders and secret metadata without reloading, but still detects gaps (T-0194)', () => {
+  for (const type of ['yard.private', 'secret.added', 'secret.revoked']) {
+    const next = applyEvent(room, { seq: 7, type, actor: '', payload: {} });
+    if (next === 'GAP') throw new Error('expected room');
+    expect(next.version).toBe(7);
+    expect(next.orders).toEqual(room.orders);
+    expect(applyEvent(room, { seq: 9, type, actor: '', payload: {} })).toBe('GAP');
+    expect(applyEvent(room, { seq: 6, type, actor: '', payload: {} })).toBe(room);
+  }
+});

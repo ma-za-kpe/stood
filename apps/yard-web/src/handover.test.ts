@@ -24,7 +24,7 @@ const order = (state: string) => ({
   submission: state === 'PAID' ? { packageId: 'p', commit: 'a'.repeat(40) } : null,
   leasedUntil: null,
 });
-const room = (states: string[], handover: unknown = null) =>
+const room = (states: string[], handover: unknown = null, milestoneCount?: number) =>
   roomChecked({
     id: 'p',
     version: 9,
@@ -32,6 +32,7 @@ const room = (states: string[], handover: unknown = null) =>
     currency: 'USD',
     simulated: true,
     handover,
+    ...(milestoneCount === undefined ? {} : { milestoneCount }),
     orders: states.map((s, i) => ({ ...order(s), id: `o${i}` })),
   });
 it('blocks closing until every milestone is paid and every buyer item is ticked (T-0207)', () => {
@@ -40,6 +41,10 @@ it('blocks closing until every milestone is paid and every buyer item is ticked 
   expect(closeBlocker(room([]), all)).toBe('UNPAID');
   expect(closeBlocker(room(['PAID', 'PAID']), new Set(BUYER_HANDOVER_ITEMS.slice(1)))).toBe('UNCHECKED');
   expect(closeBlocker(room(['PAID', 'PAID']), all)).toBeNull();
+  // An unposted milestone is unpaid: one paid order of a two-milestone blueprint cannot close.
+  expect(closeBlocker(room(['PAID'], null, 2), all)).toBe('UNPAID');
+  expect(closeBlocker(room(['PAID', 'PAID'], null, 2), all)).toBeNull();
+  expect(() => room(['PAID', 'PAID'], null, 1)).toThrow();
   const closed = room(['PAID'], { status: 'CLOSED', closedAt: 1, confirmed: [...BUYER_HANDOVER_ITEMS].sort() });
   expect(closeBlocker(closed, all)).toBe('CLOSED');
 });

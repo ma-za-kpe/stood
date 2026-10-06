@@ -7,7 +7,13 @@ export function closeBlocker(
   checked: ReadonlySet<string>,
 ): 'CLOSED' | 'UNPAID' | 'UNCHECKED' | null {
   if (room.handover) return 'CLOSED';
-  if (!room.orders.length || room.orders.some((o) => o.state !== 'PAID')) return 'UNPAID';
+  // A milestone that was never posted is unpaid too.
+  if (
+    !room.orders.length ||
+    room.orders.length < (room.milestoneCount ?? 0) ||
+    room.orders.some((o) => o.state !== 'PAID')
+  )
+    return 'UNPAID';
   if (BUYER_HANDOVER_ITEMS.some((id) => !checked.has(id))) return 'UNCHECKED';
   return null;
 }

@@ -12,6 +12,7 @@ import { connectionMachine, staleConnection } from './connection.js';
 import { HandoverPanel } from './HandoverPanel.js';
 import { api } from './http.js';
 import { IntakePanel } from './IntakePanel.js';
+import { KeysPanel } from './KeysPanel.js';
 import { applyEvent, type ProjectRoom, type RoomEvent, roomChecked } from './project-state.js';
 import { SiteLogPanel } from './SiteLogPanel.js';
 
@@ -68,7 +69,10 @@ function useRoomStream(id: string, version: number, ready: boolean, generation: 
     const listener = (raw: Event) => {
       touch();
       try {
-        const event = JSON.parse((raw as MessageEvent<string>).data) as RoomEvent;
+        const message = raw as MessageEvent<string>;
+        const parsed = JSON.parse(message.data) as Partial<RoomEvent>;
+        // A private placeholder carries only its position; its SSE name is the type.
+        const event = { actor: '', payload: {}, ...parsed, type: message.type } as RoomEvent;
         const current = client.getQueryData<ProjectRoom>(queryKey);
         if (!current) return reload();
         const next = applyEvent(current, event);
@@ -89,7 +93,12 @@ function useRoomStream(id: string, version: number, ready: boolean, generation: 
       'stood.released',
       'stood.refused',
       'wo.lease_expired',
+      'wo.released_claim',
       'wo.reposted',
+      'blueprint.closed',
+      'secret.added',
+      'secret.revoked',
+      'yard.private',
     ])
       source.addEventListener(type, listener);
     return () => {
@@ -310,6 +319,12 @@ export function App() {
                                 Simulated capture confirmed. {money(o.budgetMinor, room.data.currency)} recorded as
                                 paid.
                               </p>
+                              {!!o.refusals?.length && (
+                                <p className="fine">
+                                  Paid on attempt {o.attempt ?? o.refusals.length + 1}, after {o.refusals.length} Stood{' '}
+                                  {o.refusals.length === 1 ? 'refusal' : 'refusals'}.
+                                </p>
+                              )}
                             </div>
                           ) : o.state === 'REWORK' || o.state === 'REFUSED' ? (
                             <div className="stood-verdict refused">
@@ -362,6 +377,13 @@ export function App() {
                       </article>
                     ))}
                   </section>
+                  {role === 'buyer' && (
+                    <KeysPanel
+                      projectId={room.data.id}
+                      version={room.data.version}
+                      signed={room.data.signed !== false}
+                    />
+                  )}
                   <HandoverPanel room={room.data} buyer={role === 'buyer'} />
                   <aside className="truth-panel">
                     <p className="eyebrow">Yard builds. Stood pays.</p>

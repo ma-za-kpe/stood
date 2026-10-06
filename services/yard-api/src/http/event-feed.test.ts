@@ -171,3 +171,41 @@ it('refreshes an open log when retention advances without a new event', async ()
     await reader.cancel();
   }
 });
+
+it('sends a sequence-only placeholder for events the viewer may not see, keeping replay gap-free (T-0194)', async () => {
+  const events = [
+    { seq: 1, type: 'wo.claimed', actor: 'builder', payload: { wo: 'one' }, at: '2026-10-05T00:00:00Z' },
+    { seq: 2, type: 'secret.added', actor: 'buyer', payload: { name: 'SUPABASE_URL' }, at: '2026-10-05T00:00:01Z' },
+    { seq: 3, type: 'wo.building', actor: 'builder', payload: { wo: 'one' }, at: '2026-10-05T00:00:02Z' },
+  ];
+  const app = createYardApp({
+    environment: 'ci',
+    eventFeed: {
+      store: {
+        load: async () => ({ id: 'p', owner: 'buyer', version: 3, data: {} }),
+        read: async (_id: string, after: number) => events.filter((e) => e.seq > after),
+        subscribe: async () => ({ close() {} }),
+      } as unknown as YardEvents,
+      authorize: async () => ({ see: (e) => e.type !== 'secret.added' }),
+    },
+  });
+  const abort = new AbortController();
+  const response = await app.request('/yard/v1/blueprints/p/events', { signal: abort.signal });
+  const reader = response.body!.getReader();
+  let text = '';
+  while (!text.includes('id: 3')) text += new TextDecoder().decode((await reader.read()).value);
+  abort.abort();
+  await reader.cancel();
+  const blocks = text
+    .split('\n\n')
+    .map((b) => Object.fromEntries(b.split('\n').map((l) => [l.slice(0, l.indexOf(':')), l.slice(l.indexOf(':') + 2)])))
+    .filter((b) => b.id);
+  expect(blocks.map((b) => [b.id, b.event])).toEqual([
+    ['1', 'wo.claimed'],
+    ['2', 'yard.private'],
+    ['3', 'wo.building'],
+  ]);
+  expect(blocks[1]?.data).toBe('{"seq":2}');
+  expect(text).not.toContain('SUPABASE_URL');
+  expect(text).not.toContain('secret.added');
+});
