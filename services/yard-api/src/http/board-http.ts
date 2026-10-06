@@ -282,6 +282,14 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       body(c, []);
       return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
     });
+  app.get('/yard/v1/operators/:root/reputation', async (c) =>
+    c.json({ ...(await config.board.reputation(c.req.param('root'))), simulated: true }),
+  );
+  app.post('/yard/v1/blueprints/:id/work-orders/:wo/usage', async (c) => {
+    const { key, version, actor, now } = command(c);
+    body(c, []);
+    return c.json(ack(await config.board.confirmUsage(c.req.param('id'), actor, version, key, now, c.req.param('wo'))));
+  });
   app.post('/yard/v1/blueprints/:id/changes', async (c) => {
     const { key, version, actor, now } = command(c),
       input = body(c, ['changes']);

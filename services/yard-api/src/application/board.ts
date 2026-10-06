@@ -71,6 +71,7 @@ type Order = {
   refusals?: Refusal[];
   closed?: 'REFUSED';
   holds?: { attempt: number; expiresAt: number; eventId: string }[];
+  usage?: { confirmedAt: number };
 };
 export type MandateRequest = Readonly<{
   payee_ref: string;
@@ -377,6 +378,43 @@ export class Board {
       )
         throw new YardError('CONFLICT');
     }
+  }
+  // Y13: reputation counts only Stood-paid milestones for buyers outside the builder's operator tree.
+  async reputation(root: string) {
+    const result = { root, counted: 0, selfDealing: 0, refusals: 0 };
+    let after = '';
+    do {
+      const projects = await this.events.list(after);
+      const page = projects.slice(0, 100);
+      for (const p of page) {
+        const d = data(p.data);
+        for (const wo of Object.keys(d.orders)) {
+          const { work, order } = workOrder(d, wo);
+          const claim = work.snapshot.currentClaim;
+          if (!claim || claim.operatorRootId !== root) continue;
+          result.refusals += order.refusals?.length ?? 0;
+          if (order.payment) {
+            if (claim.outsideOperator) result.counted++;
+            else result.selfDealing++;
+          }
+        }
+      }
+      after = projects.length > 100 ? (page.at(-1)?.id ?? '') : '';
+    } while (after);
+    return result;
+  }
+  // The buyer, an outside authority, confirms use of the delivered product for the final milestone.
+  confirmUsage(id: string, actor: Operator, version: number, key: string, now: number, wo: string) {
+    return this.mutate(id, actor, version, key, { usage: wo }, 'usage.confirmed', (d) => {
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      const { order } = workOrder(d, wo);
+      if (terms(d, order.milestone)?.profileId !== 'code.final@1' || !Number.isSafeInteger(now))
+        throw new YardError('INVALID');
+      if (order.usage || order.closed) throw new YardError('CONFLICT');
+      order.usage = { confirmedAt: now };
+      return { wo, confirmedAt: now, simulated: true };
+    });
   }
   // T-0212: a change order proposes new terms for unposted milestones; the signed snapshot never changes.
   proposeChange(
@@ -753,6 +791,7 @@ export class Board {
       ...feedback(order),
       attempt: work.snapshot.attempt,
       hold: currentHold(order, work) ? { expiresAt: currentHold(order, work)?.expiresAt } : null,
+      usage: order.usage ?? null,
       currentClaim: order.closed ? null : work.snapshot.currentClaim,
       state: status(order, work),
       payment: order.payment,
