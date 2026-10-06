@@ -303,6 +303,12 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
         key,
         now,
       });
+      await config.board.secretEvent(id, actor, key, 'secret.added', {
+        name: meta.name,
+        provider: meta.provider,
+        environment: meta.environment,
+        version: meta.version,
+      });
       return c.json({ ...meta, simulated: true }, 201);
     });
     app.post('/yard/v1/blueprints/:id/secrets/:name/revoke', async (c) => {
@@ -310,7 +316,9 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
         id = c.req.param('id');
       body(c, []);
       await config.board.secretScope(id, actor);
+      const { key } = command(c);
       await vault.revoke(id, actor.id, name(c), now);
+      await config.board.secretEvent(id, actor, key, 'secret.revoked', { name: name(c) });
       return c.json({ revoked: true, simulated: true });
     });
   }

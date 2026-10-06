@@ -226,6 +226,34 @@ export class Board {
       throw new YardError('FORBIDDEN');
     return snapshot;
   }
+  // Metadata only (name, provider, environment, version). The viewer filter keeps it buyer-only.
+  async secretEvent(
+    id: string,
+    actor: Operator,
+    key: string,
+    type: 'secret.added' | 'secret.revoked',
+    payload: Readonly<{ name: string; provider?: string; environment?: string; version?: number }>,
+  ) {
+    for (let attempt = 0; ; attempt++) {
+      const snapshot = await this.events.load(id);
+      try {
+        return await this.events.mutate(
+          id,
+          snapshot.version,
+          actor.id,
+          `${type}:${key}`,
+          fingerprint(payload),
+          (raw) => ({
+            data: data(raw),
+            type,
+            payload: { ...payload, simulated: true },
+          }),
+        );
+      } catch (error) {
+        if (attempt > 0 || !(error instanceof YardError) || error.code !== 'STALE_VERSION') throw error;
+      }
+    }
+  }
   // Y18 §5: the owning buyer sees every project event; a builder sees only build events for work it holds now.
   async viewer(id: string, actor: Operator): Promise<{ see(event: YardEvent): boolean }> {
     const snapshot = await this.read(id, actor),
