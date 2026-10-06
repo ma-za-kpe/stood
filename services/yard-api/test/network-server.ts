@@ -74,6 +74,20 @@ const app = createYardApp({
         return proof;
       },
     }),
+    // T-0184: the frozen blueprint becomes a real Stood allowance draft through the public API.
+    mandates: {
+      createDraft: async (input, key) => {
+        const now = await clock();
+        const client = new StoodClient({
+          baseUrl: 'https://stood.mock.invalid',
+          key: 'mock-key',
+          secret: 'mock-secret',
+          clock: () => now,
+          transport: (request) => fetch(new Request(`http://api:3000${new URL(request.url).pathname}`, request)),
+        });
+        return client.createDraft(input, key);
+      },
+    },
     packages: {
       submit: async (input) => {
         const now = await clock();

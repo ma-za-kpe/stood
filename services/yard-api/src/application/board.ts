@@ -72,8 +72,34 @@ type Order = {
   closed?: 'REFUSED';
   holds?: { attempt: number; expiresAt: number; eventId: string }[];
 };
+export type MandateRequest = Readonly<{
+  payee_ref: string;
+  cap: Readonly<{ minor: number; currency: string }>;
+  milestones: readonly Readonly<{
+    name: string;
+    amount: Readonly<{ minor: number; currency: string }>;
+    profile: string;
+    params: Readonly<{ testBundleHash: string; manifestHash: string; testIds: readonly string[] }>;
+  }>[];
+  window_days: number;
+  max_resubmits: number;
+}>;
+export type MandateIntent = Readonly<{
+  key: string;
+  request: MandateRequest;
+  reservedVersion: number;
+  status: 'RESERVED' | 'CREATED';
+  allowanceId: string | null;
+  tranches: Readonly<Record<string, string>> | null;
+}>;
 type Handover = { status: 'CLOSED'; closedAt: number; confirmed: readonly string[] };
-type Data = { blueprint: Blueprint['snapshot']; buyerRoot: string; orders: Record<string, Order>; handover?: Handover };
+type Data = {
+  blueprint: Blueprint['snapshot'];
+  buyerRoot: string;
+  orders: Record<string, Order>;
+  handover?: Handover;
+  mandate?: MandateIntent;
+};
 const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -307,6 +333,97 @@ export class Board {
         throw new YardError('CONFLICT');
     }
   }
+  // T-0184: reserve the exact allowance request derived from the frozen terms before any Stood call.
+  async prepareMandate(id: string, actor: Operator, version: number, key: string, now: number): Promise<MandateIntent> {
+    const current = await this.events.load(id);
+    const existing = data(current.data).mandate;
+    if (existing) {
+      if (existing.key !== `yard-mandate:${fingerprint({ id, actor, key })}`) throw new YardError('CONFLICT');
+      return structuredClone(existing);
+    }
+    const snapshot = await this.mutate(
+      id,
+      actor,
+      version,
+      `mandate-reserve:${key}`,
+      { key },
+      'stood.allowance_reserved',
+      (d) => {
+        if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+          throw new YardError('FORBIDDEN');
+        if (d.blueprint.status !== 'FROZEN' || d.mandate || !Number.isSafeInteger(now) || now < d.blueprint.createdAt)
+          throw new YardError('CONFLICT');
+        const latest = Math.max(...d.blueprint.milestones.map((m) => m.deadline));
+        const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
+        const request: MandateRequest = {
+          payee_ref: `yard:${id}`,
+          cap: { minor: d.blueprint.capMinor, currency: d.blueprint.currency },
+          milestones: d.blueprint.milestones.map((m) => ({
+            name: m.name,
+            amount: { minor: m.budgetMinor, currency: d.blueprint.currency },
+            profile: m.profileId,
+            params: { testBundleHash: m.testBundleHash, manifestHash: m.manifestHash, testIds: [...m.testIds] },
+          })),
+          window_days: days,
+          max_resubmits: 1,
+        };
+        d.mandate = {
+          key: `yard-mandate:${fingerprint({ id, actor, key })}`,
+          request,
+          reservedVersion: version + 1,
+          status: 'RESERVED',
+          allowanceId: null,
+          tranches: null,
+        };
+        return { state: 'RESERVED', simulated: true };
+      },
+    );
+    return structuredClone(data(snapshot.data).mandate as MandateIntent);
+  }
+  completeMandate(
+    id: string,
+    intent: MandateIntent,
+    draft: Readonly<{ id: string; tranches: readonly Readonly<{ id: string; name: string }>[] }>,
+  ) {
+    return this.events.mutate(
+      id,
+      intent.reservedVersion,
+      'stood',
+      `mandate-complete:${intent.key}`,
+      fingerprint({ draft }),
+      (raw) => {
+        const d = data(raw);
+        if (
+          !same(d.mandate, intent) ||
+          typeof draft.id !== 'string' ||
+          !draft.id.trim() ||
+          draft.tranches.length !== intent.request.milestones.length ||
+          draft.tranches.some((t, i) => !t.id?.trim() || t.name !== intent.request.milestones[i]?.name)
+        )
+          throw new YardError('INVALID');
+        const tranches = Object.fromEntries(
+          d.blueprint.milestones.map((m, i) => [m.id, draft.tranches[i]?.id as string]),
+        );
+        d.mandate = { ...intent, status: 'CREATED', allowanceId: draft.id, tranches };
+        return {
+          data: d,
+          type: 'stood.allowance_created',
+          payload: { allowanceId: draft.id, milestones: Object.keys(tranches), simulated: true },
+        };
+      },
+    );
+  }
+  async pendingMandates(after = '') {
+    const projects = await this.events.list(after),
+      page = projects.slice(0, 100);
+    return {
+      mandates: page.flatMap((p) => {
+        const m = data(p.data).mandate;
+        return m?.status === 'RESERVED' ? [{ projectId: p.id, intent: structuredClone(m) }] : [];
+      }),
+      nextCursor: projects.length > 100 ? (page.at(-1)?.id ?? null) : null,
+    };
+  }
   // Y20 §5: the buyer confirms their rotation items once every milestone is paid. This closes the
   // project; it never changes or waits for a Stood money decision.
   closeHandover(id: string, actor: Operator, version: number, key: string, now: number, confirmed: readonly string[]) {
@@ -392,8 +509,20 @@ export class Board {
       return { id, simulated: true, authority: 'local-terms-only' };
     });
   }
-  post(id: string, milestone: string, trancheId: string, actor: Operator, version: number, key: string, now: number) {
-    return this.mutate(id, actor, version, key, { post: milestone, trancheId }, 'wo.posted', (d) => {
+  post(
+    id: string,
+    milestone: string,
+    requested: string | undefined,
+    actor: Operator,
+    version: number,
+    key: string,
+    now: number,
+  ) {
+    return this.mutate(id, actor, version, key, { post: milestone, trancheId: requested ?? null }, 'wo.posted', (d) => {
+      // Once Stood has created the allowance, its tranche is the only one this milestone can use.
+      const mapped = d.mandate?.status === 'CREATED' ? d.mandate.tranches?.[milestone] : undefined;
+      if (mapped && requested !== undefined && requested !== mapped) throw new YardError('INVALID');
+      const trancheId = mapped ?? requested ?? '';
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
       if (
         d.blueprint.status !== 'FROZEN' ||
@@ -517,6 +646,7 @@ export class Board {
       id: snapshot.id,
       version: snapshot.version,
       handover: d.handover ?? null,
+      mandate: d.mandate?.allowanceId ? { allowanceId: d.mandate.allowanceId, status: 'DRAFT' } : null,
       signed: d.blueprint.status === 'FROZEN',
       milestoneCount: d.blueprint.milestones.length,
       summary: d.blueprint.summary,

@@ -5,6 +5,7 @@ import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Board, HoldProof, Operator, RefusalProof, SettlementProof, StoodProof } from '../application/board.js';
 import type { IntakePlanner } from '../application/intake-planner.js';
+import { type DraftGateway, MandateBridge } from '../application/mandate-bridge.js';
 import type { SecretVault } from '../application/secret-vault.js';
 import type { SiteLog } from '../application/site-log.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
@@ -27,6 +28,7 @@ export type BoardConfig = Readonly<{
   intakes?: IntakeStore;
   intakePlanner?: Pick<IntakePlanner, 'create'>;
   secrets?: SecretVault;
+  mandates?: DraftGateway;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<StoodProof> }>;
 }>;
 function signature(value: string | null, body: string, secret: string, now: number): boolean {
@@ -207,9 +209,20 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
   app.post('/yard/v1/blueprints/:id/work-orders', async (c) => {
     const { key, version, actor, now } = command(c),
       input = body(c, ['milestone', 'trancheId']);
-    if (typeof input.milestone !== 'string' || typeof input.trancheId !== 'string') throw new YardError('INVALID');
+    if (typeof input.milestone !== 'string' || (input.trancheId !== undefined && typeof input.trancheId !== 'string'))
+      throw new YardError('INVALID');
     return c.json(
-      ack(await config.board.post(c.req.param('id'), input.milestone, input.trancheId, actor, version, key, now)),
+      ack(
+        await config.board.post(
+          c.req.param('id'),
+          input.milestone,
+          input.trancheId as string | undefined,
+          actor,
+          version,
+          key,
+          now,
+        ),
+      ),
     );
   });
   app.get('/yard/v1/blueprints/:id/work-orders/:wo', async (c) =>
@@ -254,6 +267,19 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       body(c, []);
       return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
     });
+  app.post('/yard/v1/blueprints/:id/mandate', async (c) => {
+    if (!config.mandates) throw new YardError('CONFLICT');
+    const { key, version, actor, now } = command(c);
+    body(c, []);
+    const result = await new MandateBridge(config.board, config.mandates).create(
+      c.req.param('id'),
+      actor,
+      version,
+      key,
+      now,
+    );
+    return c.json({ ...result, status: 'DRAFT', simulated: true });
+  });
   app.post('/yard/v1/blueprints/:id/handover', async (c) => {
     const { key, version, actor, now } = command(c),
       id = c.req.param('id');
