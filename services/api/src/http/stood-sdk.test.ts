@@ -144,8 +144,12 @@ describe('Public SDK against the actual local Stood HTTP router (T-0179)', () =>
       secret: 'secret',
       clock: () => at,
       timeoutMs: 5,
+      // A slow machine can pass the 5 ms deadline before the fake runs; fetch rejects an already-aborted signal too.
       transport: (request) =>
-        new Promise((_resolve, reject) => request.signal.addEventListener('abort', () => reject(new Error('aborted')))),
+        new Promise((_resolve, reject) => {
+          if (request.signal.aborted) reject(new Error('aborted'));
+          request.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
     });
     await expect(timed.getDraft('alw')).rejects.toMatchObject({ code: 'TIMEOUT' });
   });
