@@ -43,10 +43,16 @@ const reads: Record<string, readonly string[]> = {
   ],
 };
 
-it('declares Stood services in Frankfurt on free plans with health checks and release-only deploys (T-0214)', () => {
+it('declares Stood services in Frankfurt (free web, Starter worker) with health checks and release-only deploys (T-0214)', () => {
   expect(blueprint.services.map((s) => s.name).sort()).toEqual(Object.keys(reads).sort());
   for (const s of blueprint.services) {
-    expect(s).toMatchObject({ runtime: 'docker', region: 'frankfurt', plan: 'free', dockerfilePath: './Dockerfile' });
+    // Render has no free background workers; the owner chose Starter for the reconciler (2026-10-07).
+    expect(s).toMatchObject({
+      runtime: 'docker',
+      region: 'frankfurt',
+      plan: s.type === 'worker' ? 'starter' : 'free',
+      dockerfilePath: './Dockerfile',
+    });
     expect(s.autoDeploy).toBe(false);
     if (s.type === 'web') expect(s.healthCheckPath).toBe('/health');
   }
