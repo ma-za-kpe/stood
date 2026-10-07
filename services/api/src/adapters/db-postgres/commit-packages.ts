@@ -21,6 +21,13 @@ const result = (row: typeof packages.$inferSelect): StoredCommitPackage =>
     metadata: Object.freeze({ ...row.metadata }),
     createdAt: row.createdAt,
   });
+// T-0137: what a queued package waits for now, derived from the tranche's durable state on every read.
+// The intake receipt stays immutable; a worker restart recomputes the same answer.
+export function currentWait(state: string, holds: number): StoredCommitPackage['waitingFor'] {
+  if (state === 'REAUTHORIZE_PENDING') return 'RENEWAL';
+  if (holds > 0 && ['HELD', 'DECIDING', 'WAITING'].includes(state)) return 'RUNNER';
+  return 'HOLD';
+}
 export class PostgresCommitPackages implements CommitPackageStore {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
   async submit(
@@ -76,6 +83,13 @@ export class PostgresCommitPackages implements CommitPackageStore {
       .select()
       .from(packages)
       .where(and(eq(packages.platformId, platformId), eq(packages.trancheId, trancheId), eq(packages.id, id)));
-    return row ? result(row) : null;
+    if (!row) return null;
+    const [stream] = await this.db
+      .select({ record: streams.record })
+      .from(streams)
+      .where(eq(streams.trancheId, trancheId));
+    if (!stream?.record) return result(row);
+    const tranche = restoreTrancheRecord(stream.record);
+    return Object.freeze({ ...result(row), waitingFor: currentWait(tranche.state, tranche.attempts.length) });
   }
 }

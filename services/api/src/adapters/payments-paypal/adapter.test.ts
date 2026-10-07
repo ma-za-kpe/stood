@@ -258,3 +258,30 @@ describe('PayPal operation adapter with synthetic REST bodies', () => {
     });
   });
 });
+
+it('derives a retry proof only from an entirely matched empty capture history and a still-created authorisation', async () => {
+  const f = fixture();
+  f.authorization.status = 'CREATED';
+  f.unit.payments.captures = [];
+  const authorization = { ...f.authorization, expiration_time: new Date(expiry).toISOString() };
+  f.call.mockImplementation(async (action) => ({
+    status: 200,
+    body: action === 'GET_ORDER' ? f.order : authorization,
+  }));
+  const adapter = new PayPalAdapter({ call: f.call }, { load: async () => f.snapshot }, async () => at);
+  expect(await adapter.read(f.snapshot.pending!)).toMatchObject({
+    complete: true,
+    outcome: 'NOT_CAPTURED',
+    noCapture: true,
+    noRenewal: true,
+    capturable: true,
+    observedAt: at,
+    expiresAt: expiry,
+    amount: { minor: 1000, currency: 'GBP' },
+  });
+  authorization.status = 'PENDING';
+  expect(await adapter.read(f.snapshot.pending!)).toEqual({ complete: false });
+  authorization.status = 'CREATED';
+  authorization.expiration_time = 'invalid';
+  expect(await adapter.read(f.snapshot.pending!)).toEqual({ complete: false });
+});

@@ -11,17 +11,22 @@ import { StoodClient } from '../../../packages/stood-sdk/src/client.js';
 import { FaultController } from '../../simulators/src/faults.js';
 import { ControlledClockClient } from '../src/adapters/controlled-clock/client.js';
 import { PostgresCommitPackages } from '../src/adapters/db-postgres/commit-packages.js';
+import { confirmedCaptures } from '../src/adapters/db-postgres/ledger-captures.js';
 import { PostgresPlatformApi } from '../src/adapters/db-postgres/platform-api.js';
 import * as schema from '../src/adapters/db-postgres/schema.js';
 import { PostgresTranches } from '../src/adapters/db-postgres/tranches.js';
 import { PayPalAdapter } from '../src/adapters/payments-paypal/adapter.js';
+import { HttpTransactionSearch } from '../src/adapters/payments-paypal/transactions.js';
 import { executePayment } from '../src/application/execute-payment.js';
 import { reconcile } from '../src/application/reconcile.js';
+import { auditCaptures } from '../src/application/reconciliation-audit.js';
+import { retryCapture } from '../src/application/retry-capture.js';
 import { type CheckResult, decide, getProfile } from '../src/domain/decision.js';
 import { restoreTrancheRecord, type TrancheCommand } from '../src/domain/tranche-record.js';
 import { createApp } from '../src/http/app.js';
 import { simulatorServer } from './contracts/paypal-simulator.js';
 import {
+  attemptAssessment,
   runScenario,
   type ScenarioEvidence,
   type ScenarioStep,
@@ -48,20 +53,24 @@ afterAll(async () => {
 });
 
 it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HTTP)', async (scenario) => {
-  const faults =
-    scenario.id === 'capture-lost-response'
-      ? new FaultController([
-          { method: 'POST', path: '/v2/payments/authorizations/SIM-AUTH-3/capture', kind: 'LOST_RESPONSE' },
-        ])
-      : undefined;
+  const faults = ['capture-lost-response', 'capture-missed-send'].includes(scenario.id)
+    ? new FaultController([
+        {
+          method: 'POST',
+          path: '/v2/payments/authorizations/SIM-AUTH-3/capture',
+          kind: scenario.id === 'capture-missed-send' ? 'HTTP_500' : 'LOST_RESPONSE',
+        },
+      ])
+    : undefined;
   const h = await simulatorServer(faults);
   const calls = vi.spyOn(h.transport, 'call');
   const clock = new ControlledClockClient('ci', h.baseUrl);
   let store = new PostgresTranches(db);
-  let adapter = new PayPalAdapter(h.transport, store);
+  let adapter = new PayPalAdapter(h.transport, store, () => clock.read());
   let restarted: pg.Pool | undefined;
   let trancheId = '';
   let authorizationId = '';
+  let attempt = 1;
   let at = await clock.read();
   const seen = new Set<string>();
   const app = createApp({
@@ -116,7 +125,9 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
     const response = await fetch(`${origin}/v1/tranches/${trancheId}`, {
       headers: {
         Authorization: 'Bearer mock-key',
-        'Stood-Signature': `t=${t},v1=${createHmac('sha256', 'mock-secret').update(`${t}.`).digest('hex')}`,
+        'Stood-Signature': `t=${t},v2=${createHmac('sha256', 'mock-secret')
+          .update(JSON.stringify(['stood.request@2', t, 'GET', `/v1/tranches/${trancheId}`, '', '', '', '']))
+          .digest('hex')}`,
       },
     });
     expect(response.status).toBe(200);
@@ -160,11 +171,11 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
               {
                 repository: 'buyer/project',
                 base_commit: 'a'.repeat(40),
-                commit_sha: 'b'.repeat(40),
+                commit_sha: (attempt === 1 ? 'b' : 'e').repeat(40),
                 report_ref: `reports/${scenario.id}.json`,
                 report_sha256: 'c'.repeat(64),
               },
-              `${scenario.id}:package`,
+              attempt === 1 ? `${scenario.id}:package` : `${scenario.id}:package:${attempt}`,
             );
             expect(await client.getPackage(trancheId, pkg.id)).toEqual(pkg);
             return;
@@ -185,9 +196,14 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           case 'EXPIRE':
             await apply({ method: 'expire', args: [at] });
             return;
+          case 'REDISPATCH':
+            await apply({ method: 'redispatch', args: [] });
+            attempt++;
+            return;
           case 'ASSESS_FIXTURE': {
+            const assessment = attemptAssessment(scenario, attempt);
             const checks = getProfile(scenario.profile).checks.map<CheckResult>(({ code, source }) => {
-              if (code === 'test_integrity' && scenario.assessment === 'INTEGRITY_FAIL')
+              if (code === 'test_integrity' && assessment === 'INTEGRITY_FAIL')
                 return {
                   code,
                   source: 'RULE',
@@ -195,9 +211,9 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
                   reason: 'signed_tests_changed',
                   namedField: 'signed_tests_changed',
                 };
-              if (code === 'mutation_score' && scenario.assessment === 'WEAK_TESTS')
+              if (code === 'mutation_score' && assessment === 'WEAK_TESTS')
                 return { code, source: 'RULE', status: 'FAIL', reason: 'weak_tests', namedField: 'weak_tests' };
-              if (code === 'usage_release' && scenario.assessment === 'USAGE_PENDING')
+              if (code === 'usage_release' && assessment === 'USAGE_PENDING')
                 return { code, source: 'RULE', status: 'UNCERTAIN', reason: 'usage_pending' };
               if (source === 'MODEL')
                 return { code, source, confidence: 1, status: 'PASS', reason: 'synthetic_fixture' };
@@ -206,13 +222,17 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
             await apply({ method: 'startDeciding', args: [] });
             await apply({
               method: 'beginSettlement',
-              args: [decide(scenario.profile, checks), `${scenario.id}:decision`, at],
+              args: [
+                decide(scenario.profile, checks),
+                attempt === 1 ? `${scenario.id}:decision` : `${scenario.id}:decision:${attempt}`,
+                at,
+              ],
             });
             return;
           }
           case 'EXECUTE': {
             const result = await executePayment(store, adapter, trancheId, 'capture-worker', () => at);
-            if (scenario.id === 'capture-lost-response') {
+            if (['capture-lost-response', 'capture-missed-send'].includes(scenario.id)) {
               expect(result).toBe('WAIT');
               expect((await store.load(trancheId)).pending?.status).toBe('AMBIGUOUS');
               expect(await executePayment(store, adapter, trancheId, 'no-blind-retry', () => at)).toBe('WAIT');
@@ -224,10 +244,15 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
             const before = (await store.load(trancheId)).pending?.providerRequestId;
             restarted = new pg.Pool({ connectionString, options: '-c statement_timeout=5000' });
             store = new PostgresTranches(drizzle(restarted, { schema }));
-            adapter = new PayPalAdapter(h.transport, store);
+            adapter = new PayPalAdapter(h.transport, store, () => clock.read());
             expect((await store.load(trancheId)).pending?.providerRequestId).toBe(before);
             return;
           }
+          case 'RETRY_CAPTURE':
+            expect(await retryCapture(store, adapter, adapter, trancheId, 'retry-worker', () => at)).toBe(
+              scenario.id === 'capture-missed-send' ? 'RESOLVED' : 'DONE',
+            );
+            return;
           case 'RECONCILE':
             await reconcile(store, adapter, trancheId, at);
             return;
@@ -255,8 +280,14 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           .from(schema.paymentOperations)
           .where(eq(schema.paymentOperations.trancheId, trancheId));
         const settlements = operations.filter((o) => o.operation.effect !== 'REAUTHORIZE');
-        expect(settlements.length).toBeLessThanOrEqual(1);
-        const ledger = settlements[0];
+        let ledger = settlements[0];
+        if (scenario.reworkAssessment) {
+          // The refused attempt is voided and confirmed before the fresh hold; only the final attempt captures.
+          expect(settlements).toHaveLength(2);
+          expect(settlements.filter((o) => o.operation.effect === 'VOID' && o.status === 'CONFIRMED')).toHaveLength(1);
+          expect(settlements.filter((o) => o.operation.effect === 'CAPTURE')).toHaveLength(1);
+          ledger = settlements.find((o) => o.operation.effect === 'CAPTURE');
+        } else expect(settlements.length).toBeLessThanOrEqual(1);
         const history = await db
           .select()
           .from(schema.paymentOperationEvents)
@@ -285,7 +316,15 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
           purchase_units: { payments: { captures: { id: string; invoice_id: string }[] } }[];
         };
         const captures = order.purchase_units[0]?.payments.captures ?? [];
-        expect(calls.mock.calls.filter(([action]) => action === 'CAPTURE')).toHaveLength(scenario.expected.captures);
+        // T-0155: the provider's captures and Stood's confirmed ledger agree exactly.
+        const search = new HttpTransactionSearch({ baseUrl: h.baseUrl, token: async () => 'sim-access-token' });
+        const provider = (await search.captures(0, at + 366 * 86400000)).filter((p) =>
+          captures.some((c) => c.id === p.id),
+        );
+        expect(auditCaptures(await confirmedCaptures(db, trancheId), provider)).toEqual([]);
+        const captureCalls = calls.mock.calls.filter(([action]) => action === 'CAPTURE');
+        expect(captureCalls).toHaveLength(scenario.expected.captures + (scenario.id === 'capture-missed-send' ? 1 : 0));
+        expect(new Set(captureCalls.map(([, input]) => input.requestId)).size).toBeLessThanOrEqual(1);
         if (captures[0]) expect(captures[0].invoice_id).toBe(ledger?.key);
         return {
           domainState: projected.state,

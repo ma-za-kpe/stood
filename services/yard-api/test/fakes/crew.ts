@@ -63,6 +63,7 @@ export function fakeCrew(config: { clock(): number; board: CrewBoard; repositori
       at: new Date(now()).toISOString(),
       kind,
       message,
+      ...(kind === 'commit' && job.commit ? { data: { sha: job.commit } } : {}),
       simulated: true,
     });
   };
@@ -121,6 +122,8 @@ export function fakeCrew(config: { clock(): number; board: CrewBoard; repositori
             operatorId: 'sim-crew-operator',
             operatorRootId: 'sim-crew-operator',
           });
+          if (job.lease.repository && job.lease.baseCommit)
+            job.offer = { ...job.offer, repository: job.lease.repository, baseCommit: job.lease.baseCommit };
           job.state = 'building';
           await log(job, 'plan', 'Simulated build started.');
           continue;

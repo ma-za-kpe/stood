@@ -1,4 +1,41 @@
-import { ApiError, Client, Environment, OrdersController, PaymentsController } from '@paypal/paypal-server-sdk';
+import {
+  ApiError,
+  CheckoutPaymentIntent,
+  Client,
+  Environment,
+  OrdersController,
+  PaymentsController,
+  VaultController,
+  VaultTokenRequestType,
+} from '@paypal/paypal-server-sdk';
+export type PayPalVaultCall = 'CREATE_SETUP' | 'GET_SETUP' | 'CREATE_TOKEN' | 'GET_TOKEN';
+export type PayPalVaultInput = Readonly<{
+  mode: 'sim' | 'live';
+  requestId: string;
+  customerRef: string;
+  setupId: string | null;
+  tokenId: string | null;
+  customerId: string | null;
+}>;
+export interface PayPalVaultTransport {
+  vault(action: PayPalVaultCall, input: PayPalVaultInput): Promise<Readonly<{ status: number | null; body: unknown }>>;
+}
+export type PayPalFundingCall = 'CREATE_ORDER' | 'AUTHORIZE_ORDER' | 'GET_FUNDING_ORDER';
+export type PayPalFundingInput = Readonly<{
+  mode: 'sim' | 'live';
+  orderId: string | null;
+  requestId: string;
+  operationKey: string;
+  trancheId: string;
+  payeeRef: string;
+  amount: Readonly<{ currencyCode: string; value: string }>;
+}>;
+export interface PayPalFundingTransport {
+  fund(
+    action: PayPalFundingCall,
+    input: PayPalFundingInput,
+  ): Promise<Readonly<{ status: number | null; body: unknown }>>;
+}
 export type PayPalCall = 'CAPTURE' | 'VOID' | 'REAUTHORIZE' | 'GET_AUTHORIZATION' | 'GET_ORDER';
 export type PayPalInput = Readonly<{
   authorizationId: string;
@@ -12,6 +49,9 @@ export interface PayPalTransport {
 export class ServerSdkTransport implements PayPalTransport {
   private readonly payments: PaymentsController;
   private readonly orders: OrdersController;
+  private readonly vaultController: VaultController;
+  private readonly callbacks: Readonly<{ returnUrl: string; cancelUrl: string }> | null;
+  private readonly mode: 'sim' | 'live';
   constructor(
     config: Readonly<{
       appEnv: string;
@@ -20,9 +60,13 @@ export class ServerSdkTransport implements PayPalTransport {
       clientSecret: string;
       mode?: string;
       timeoutMs?: number;
+      vaultReturnUrl?: string;
+      vaultCancelUrl?: string;
     }>,
   ) {
     const simulated = config.mode === 'sim';
+    this.mode = simulated ? 'sim' : 'live';
+    this.callbacks = vaultCallbacks(config.vaultReturnUrl, config.vaultCancelUrl, simulated);
     let simulatorUrl: URL | null = null;
     if (simulated) {
       try {
@@ -68,6 +112,74 @@ export class ServerSdkTransport implements PayPalTransport {
     });
     this.payments = new PaymentsController(client);
     this.orders = new OrdersController(client);
+    this.vaultController = new VaultController(client);
+  }
+  async vault(action: PayPalVaultCall, input: PayPalVaultInput) {
+    if (input.mode !== this.mode || (action === 'CREATE_SETUP' && !this.callbacks)) return { status: null, body: null };
+    try {
+      const response =
+        action === 'CREATE_SETUP'
+          ? await this.vaultController.createSetupToken({
+              paypalRequestId: input.requestId,
+              body: {
+                customer: { merchantCustomerId: input.customerRef },
+                paymentSource: { paypal: { permitMultiplePaymentTokens: true, experienceContext: this.callbacks! } },
+              },
+            })
+          : action === 'CREATE_TOKEN'
+            ? await this.vaultController.createPaymentToken({
+                paypalRequestId: input.requestId,
+                body: {
+                  customer: { id: input.customerId!, merchantCustomerId: input.customerRef },
+                  paymentSource: { token: { id: input.setupId!, type: VaultTokenRequestType.SetupToken } },
+                },
+              })
+            : action === 'GET_SETUP'
+              ? await this.vaultController.getSetupToken(input.setupId!)
+              : await this.vaultController.getPaymentToken(input.tokenId!);
+      return { status: response.statusCode, body: parseBody(response.body) };
+    } catch (error) {
+      return {
+        status: error instanceof ApiError ? error.statusCode : null,
+        body: error instanceof ApiError ? parseBody(error.body) : null,
+      };
+    }
+  }
+  async fund(action: PayPalFundingCall, input: PayPalFundingInput) {
+    if (input.mode !== this.mode) return { status: null, body: null };
+    try {
+      const response =
+        action === 'CREATE_ORDER'
+          ? await this.orders.createOrder({
+              paypalRequestId: input.requestId,
+              prefer: 'return=representation',
+              body: {
+                intent: CheckoutPaymentIntent.Authorize,
+                purchaseUnits: [
+                  {
+                    referenceId: input.operationKey,
+                    customId: input.trancheId,
+                    payee: { merchantId: input.payeeRef },
+                    amount: input.amount,
+                  },
+                ],
+              },
+            })
+          : action === 'AUTHORIZE_ORDER'
+            ? await this.orders.authorizeOrder({
+                id: input.orderId!,
+                paypalRequestId: input.requestId,
+                prefer: 'return=representation',
+                body: {},
+              })
+            : await this.orders.getOrder({ id: input.orderId! });
+      return { status: response.statusCode, body: parseBody(response.body) };
+    } catch (error) {
+      return {
+        status: error instanceof ApiError ? error.statusCode : null,
+        body: error instanceof ApiError ? parseBody(error.body) : null,
+      };
+    }
   }
   async call(action: PayPalCall, input: PayPalInput) {
     try {
@@ -96,6 +208,29 @@ export class ServerSdkTransport implements PayPalTransport {
         body: error instanceof ApiError ? parseBody(error.body) : null,
       };
     }
+  }
+}
+function vaultCallbacks(returnUrl?: string, cancelUrl?: string, simulated = false) {
+  if (returnUrl === undefined && cancelUrl === undefined) return null;
+  try {
+    const urls = [returnUrl, cancelUrl].map((value) => {
+      if (!value || value.length > 4000) throw new Error();
+      const url = new URL(value);
+      if (
+        url.username ||
+        url.password ||
+        url.hash ||
+        (simulated
+          ? url.protocol !== 'http:' || !['127.0.0.1', '[::1]', 'api'].includes(url.hostname)
+          : url.protocol !== 'https:')
+      )
+        throw new Error();
+      return url;
+    });
+    if (urls[0]!.origin !== urls[1]!.origin) throw new Error();
+    return { returnUrl: returnUrl!, cancelUrl: cancelUrl! };
+  } catch {
+    throw new Error('Vault callbacks not configured');
   }
 }
 type SimulatorHttpRequest = {

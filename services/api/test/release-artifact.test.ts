@@ -19,6 +19,7 @@ it('deploys the real API release with its entrypoint and no test/fake/simulator 
     expect(entries.sort()).toEqual(['dist', 'drizzle', 'package.json', 'pnpm-lock.yaml']);
     expect(existsSync(join(release, 'drizzle/0000_payment_operations.sql'))).toBe(true);
     const runtimeFiles = readdirSync(join(release, 'dist'), { recursive: true }).map(String);
+    expect(readFileSync(join(release, 'dist/adapters/runner/signed-report.js'), 'utf8')).not.toContain('fakeReport');
     expect(runtimeFiles.some((path) => /(^|\/)(test|tests|fakes|simulators)(\/|$)|\.test\./.test(path))).toBe(false);
     const manifest = JSON.parse(readFileSync(join(release, 'package.json'), 'utf8'));
     expect(manifest.dependencies['@stood/provider-simulators']).toBeUndefined();

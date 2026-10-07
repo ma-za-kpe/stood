@@ -1,9 +1,18 @@
+import { randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { lstat, open, rename, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PAYMENT_KEYS, type PaymentKeys } from '../../application/payment-readiness.js';
 
+export const PLATFORM_KEYS = ['STOOD_API_KEY', 'STOOD_HMAC_SECRET', 'STOOD_WEBHOOK_SECRET'] as const;
+export class SetupFailure extends Error {
+  constructor(readonly code: 'SANDBOX_KEYS_REJECTED' | 'SANDBOX_UNAVAILABLE' | 'SANDBOX_INVALID_RESPONSE') {
+    super(`Sandbox key validation failed: ${code}`);
+  }
+}
 type SetupIO = Readonly<{
+  existingPlatform?: PaymentKeys;
+  rotatePlatform?: boolean;
   prompt(name: string): Promise<string>;
   print(message: string): void;
   save(keys: PaymentKeys): Promise<void>;
@@ -20,9 +29,11 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
   io.print('Sandbox app keys: https://developer.paypal.com/dashboard/applications/sandbox');
   io.print('OAuth: https://developer.paypal.com/api/rest/authentication/');
   io.print('Webhook id: https://developer.paypal.com/api/rest/webhooks/');
-  io.print('Platform keys: your local platform configuration; hosted issuance and rotation are planned.');
+  io.print(
+    'Stood platform secrets are generated locally; existing secrets are preserved unless --rotate-platform is selected.',
+  );
   const keys: Partial<Record<(typeof PAYMENT_KEYS)[number], string>> = {};
-  for (const name of PAYMENT_KEYS) {
+  for (const name of PAYMENT_KEYS.filter((name) => !PLATFORM_KEYS.includes(name as (typeof PLATFORM_KEYS)[number]))) {
     const value = await io.prompt(name);
     if (!valid(value)) throw new Error('Invalid key input');
     keys[name] = value;
@@ -38,7 +49,14 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
       },
       body: 'grant_type=client_credentials',
     });
-    const token: unknown = await response.json();
+    if (response.status === 401 || response.status === 403) throw new SetupFailure('SANDBOX_KEYS_REJECTED');
+    if (response.status >= 500 || response.status === 429) throw new SetupFailure('SANDBOX_UNAVAILABLE');
+    let token: unknown;
+    try {
+      token = await response.json();
+    } catch {
+      throw new SetupFailure('SANDBOX_INVALID_RESPONSE');
+    }
     if (
       !response.ok ||
       !token ||
@@ -52,34 +70,120 @@ export async function setup(io: SetupIO, baseUrl: string = sandbox): Promise<voi
       !Number.isFinite(token.expires_in) ||
       token.expires_in <= 0
     )
-      throw new Error('Invalid OAuth response');
-  } catch {
-    throw new Error('Sandbox key validation failed');
+      throw new SetupFailure('SANDBOX_INVALID_RESPONSE');
+  } catch (error) {
+    if (error instanceof SetupFailure) throw error;
+    throw new SetupFailure('SANDBOX_UNAVAILABLE');
+  }
+  const generated: (typeof PLATFORM_KEYS)[number][] = [];
+  for (const name of PLATFORM_KEYS) {
+    const existing = io.existingPlatform?.[name];
+    if (existing !== undefined && !valid(existing)) throw new Error('Invalid existing platform key');
+    keys[name] = existing && !io.rotatePlatform ? existing : randomBytes(32).toString('hex');
+    if (keys[name] !== existing) generated.push(name);
   }
   await io.save(keys);
+  for (const name of generated) io.print(`${name} (shown once): ${keys[name]}`);
   io.print('Sandbox credentials checked. Keys saved to .env. Payments remain off until adapter qualification.');
 }
 
-export async function persistEnv(directory: string, keys: PaymentKeys): Promise<void> {
+export async function persistEnv(
+  directory: string,
+  keys: PaymentKeys,
+  beforeReplace?: (temporary: string) => Promise<void>,
+): Promise<void> {
   if (PAYMENT_KEYS.some((name) => !valid(keys[name]))) throw new Error('Invalid key input');
-  const file = await open(
-    resolve(directory, '.env'),
-    constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW,
+  const destination = resolve(directory, '.env');
+  let previous = '';
+  let identity: Awaited<ReturnType<typeof lstat>> | null = null;
+  try {
+    const file = await open(destination, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const info = await file.stat();
+      if (!info.isFile() || info.nlink !== 1) throw new Error('Expected private regular .env');
+      identity = info;
+      previous = await file.readFile('utf8');
+    } finally {
+      await file.close();
+    }
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'ENOENT') throw error;
+  }
+  const lines = previous
+    .split(/\r?\n/)
+    .filter((line) => !PAYMENT_KEYS.some((name) => new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`).test(line)));
+  while (lines.at(-1) === '') lines.pop();
+  const next = [...lines, ...PAYMENT_KEYS.map((name) => `${name}=${JSON.stringify(keys[name])}`), ''].join('\n');
+  const temporary = resolve(directory, `.env.${randomBytes(16).toString('hex')}.tmp`);
+  const staged = await open(
+    temporary,
+    constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW,
     0o600,
   );
   try {
+    try {
+      await staged.writeFile(next, 'utf8');
+      await staged.sync();
+    } finally {
+      await staged.close();
+    }
+    await beforeReplace?.(temporary);
+    let current: Awaited<ReturnType<typeof lstat>> | null = null;
+    try {
+      current = await lstat(destination);
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'ENOENT') throw error;
+    }
+    if (
+      identity
+        ? !current ||
+          !current.isFile() ||
+          current.nlink !== 1 ||
+          current.ino !== identity.ino ||
+          current.mtimeMs !== identity.mtimeMs ||
+          current.size !== identity.size
+        : current !== null
+    )
+      throw new Error('Configuration changed during setup');
+    await rename(temporary, destination);
+    const parent = await open(resolve(directory), constants.O_RDONLY | constants.O_DIRECTORY);
+    try {
+      await parent.sync();
+    } finally {
+      await parent.close();
+    }
+  } finally {
+    await unlink(temporary).catch((error) => {
+      if ((error as { code?: string }).code !== 'ENOENT') throw error;
+    });
+  }
+}
+
+export async function readPlatformKeys(directory: string): Promise<PaymentKeys> {
+  let file: Awaited<ReturnType<typeof open>>;
+  try {
+    file = await open(resolve(directory, '.env'), constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') return {};
+    throw error;
+  }
+  try {
     const info = await file.stat();
     if (!info.isFile() || info.nlink !== 1) throw new Error('Expected private regular .env');
-    const previous = await file.readFile('utf8');
-    const lines = previous
-      .split(/\r?\n/)
-      .filter((line) => !PAYMENT_KEYS.some((name) => new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`).test(line)));
-    while (lines.at(-1) === '') lines.pop();
-    const next = [...lines, ...PAYMENT_KEYS.map((name) => `${name}=${JSON.stringify(keys[name])}`), ''].join('\n');
-    await file.chmod(0o600);
-    await file.truncate(0);
-    await file.write(next, 0, 'utf8');
-    await file.sync();
+    const keys: Partial<Record<(typeof PLATFORM_KEYS)[number], string>> = {};
+    for (const line of (await file.readFile('utf8')).split(/\r?\n/)) {
+      for (const name of PLATFORM_KEYS) {
+        const match = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*?)\\s*$`).exec(line);
+        if (match) {
+          if (keys[name] !== undefined) throw new Error('Duplicate platform key');
+          const raw = match[1] ?? '';
+          const value: unknown = raw.startsWith('"') ? JSON.parse(raw) : raw;
+          if (!valid(value)) throw new Error('Invalid existing platform key');
+          keys[name] = value;
+        }
+      }
+    }
+    return keys;
   } finally {
     await file.close();
   }

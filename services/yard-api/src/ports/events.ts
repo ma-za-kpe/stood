@@ -7,9 +7,12 @@ export class YardError extends Error {
   }
 }
 export interface YardEvents {
+  subscribe?(id: string, wake: () => void): Promise<() => void>;
   create(id: string, owner: string, data: unknown, key: string): Promise<YardSnapshot>;
   load(id: string): Promise<YardSnapshot>;
-  list(): Promise<readonly YardSnapshot[]>;
+  list(after?: string): Promise<readonly YardSnapshot[]>;
+  // Full-text search over public milestone names only (never summaries, repositories or identities).
+  search?(query: string, after?: string): Promise<readonly YardSnapshot[]>;
   read(id: string, after: number): Promise<readonly YardEvent[]>;
   mutate(
     id: string,

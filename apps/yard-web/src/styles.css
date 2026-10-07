@@ -1,0 +1,693 @@
+@import "../../../site/yard/tokens.css";
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: var(--body);
+  background: var(--y-navy);
+}
+button,
+input {
+  font: inherit;
+}
+button,
+a {
+  touch-action: manipulation;
+}
+.app {
+  min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--text);
+  background-image:
+    linear-gradient(#16355f33 1px, transparent 1px), linear-gradient(90deg, #16355f33 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+a {
+  color: var(--accent);
+}
+button {
+  border: 1px solid var(--y-hivis);
+  background: var(--y-hivis);
+  color: var(--y-navy);
+  padding: 10px 18px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+}
+button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+.skip {
+  position: absolute;
+  top: 0;
+  left: 16px;
+  transform: translateY(-150%);
+  padding: 12px;
+  background: var(--surface);
+  z-index: 10;
+}
+.skip:focus {
+  transform: none;
+}
+.masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 24px max(24px, calc((100vw - 1320px) / 2));
+  border-bottom: 1px solid var(--y-steel);
+  background: var(--y-navy);
+}
+.masthead nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.masthead nav a {
+  color: var(--y-chalk);
+  text-decoration: none;
+}
+.simulation {
+  padding: 14px max(24px, calc((100vw - 1320px) / 2));
+  color: var(--y-chalk);
+  background: #0c2547;
+  border-bottom: 3px solid var(--y-hivis);
+  font-size: 14px;
+}
+.signal {
+  display: inline-block;
+  margin-right: 16px;
+  color: var(--y-hivis);
+  font-family: var(--mono);
+  font-weight: 700;
+}
+main {
+  max-width: 1368px;
+  padding: 64px 24px;
+  margin: auto;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 800;
+  text-transform: uppercase;
+  margin: 0;
+  line-height: 1;
+}
+h1 {
+  font-size: clamp(44px, 6vw, 84px);
+  letter-spacing: -0.03em;
+}
+h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+h2 {
+  font-size: clamp(30px, 4vw, 48px);
+}
+h3 {
+  font-size: 28px;
+}
+p {
+  line-height: 1.6;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+}
+.lede {
+  max-width: 620px;
+  font-size: 18px;
+}
+.room-intro {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 40px;
+  align-items: end;
+}
+.operator-card,
+.truth-panel {
+  background: var(--surface);
+  padding: 24px;
+  border: 1px solid var(--y-steel);
+}
+fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+legend {
+  font-family: var(--mono);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+fieldset button + button {
+  margin-left: 8px;
+}
+.fine {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.room-picker {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 40px 0;
+}
+.room-picker input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--y-steel);
+  padding: 12px;
+  min-width: 0;
+}
+.room-picker label {
+  font-family: var(--mono);
+  font-size: 14px;
+}
+.error {
+  color: var(--blocker);
+}
+.empty {
+  padding: 64px 24px;
+  border: 1px dashed var(--y-steel);
+  text-align: center;
+}
+.grid-mark {
+  color: var(--accent);
+  font: 800 70px var(--display);
+}
+.project-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 48px 0 32px;
+}
+.connection {
+  padding: 10px 14px;
+  border: 1px solid var(--y-steel);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: 12px var(--mono);
+}
+.connection.live {
+  color: var(--done);
+}
+.project-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 32px;
+  align-items: start;
+}
+.milestones {
+  display: grid;
+  gap: 18px;
+}
+.milestone {
+  background: var(--surface);
+  border: 1px solid var(--y-steel);
+  border-left: 4px solid var(--y-hivis);
+  display: flex;
+  padding: 24px;
+  gap: 24px;
+}
+.milestone.completed {
+  border-left-color: var(--done);
+}
+.milestone-number {
+  font: 800 44px var(--display);
+  color: var(--text-muted);
+}
+.milestone-content {
+  min-width: 0;
+}
+.budget {
+  font: 20px var(--mono);
+}
+.state-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--y-steel);
+  font: 12px var(--mono);
+  display: inline-block;
+}
+.stamp {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.stood-verdict p {
+  font-size: 14px;
+}
+.commit {
+  font: 12px var(--mono);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.truth-panel hr {
+  border: none;
+  border-top: 1px solid var(--y-steel);
+  margin: 24px 0;
+}
+.truth-panel dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  font-size: 14px;
+}
+.truth-panel dd {
+  margin: 0;
+  text-align: right;
+}
+footer {
+  max-width: 1320px;
+  margin: auto;
+  padding: 24px;
+  border-top: 1px solid var(--y-steel);
+  color: var(--text-muted);
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+@media (max-width: 760px) {
+  main {
+    padding-top: 36px;
+  }
+  .room-intro,
+  .project-layout {
+    grid-template-columns: 1fr;
+  }
+  .masthead {
+    padding: 20px 24px;
+    align-items: flex-start;
+  }
+  .masthead img {
+    width: 100px;
+    height: auto;
+  }
+  .masthead nav {
+    gap: 12px;
+    font-size: 14px;
+    justify-content: flex-end;
+  }
+  .masthead button {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .project-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .milestone {
+    padding: 18px;
+    gap: 16px;
+  }
+  .room-picker input {
+    width: 100%;
+  }
+  .room-picker button {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+.board-panel > label {
+  display: block;
+  font-family: var(--mono);
+  margin: 2rem 0 0.6rem;
+}
+.board-panel > input {
+  max-width: 32rem;
+  width: 100%;
+}
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+.work-card {
+  background: var(--surface);
+  border: 1px solid var(--grid);
+  border-top: 4px solid var(--amber);
+  padding: 1.5rem;
+}
+.work-card h3 {
+  font: 800 2rem / 1.05 var(--display);
+  text-transform: uppercase;
+  margin: 0.8rem 0;
+}
+.work-card button {
+  width: 100%;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.board-panel .signal {
+  color: var(--y-navy);
+  background: var(--y-hivis);
+  padding: 8px 12px;
+}
+.board-panel > input {
+  font: 16px var(--body);
+  padding: 12px 14px;
+  min-height: 44px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--text-muted);
+}
+.intake-panel {
+  padding: clamp(24px, 4vw, 48px);
+  background: var(--surface);
+  border: 1px solid var(--y-steel);
+  border-top: 6px solid var(--accent);
+  margin-top: 32px;
+  min-width: 0;
+}
+.intake-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+  margin: 32px 0;
+}
+.intake-rail li {
+  padding: 12px;
+  border-bottom: 3px solid var(--y-steel);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.intake-rail li[aria-current] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.intake-field {
+  margin: 24px 0;
+  max-width: 800px;
+}
+.intake-field label {
+  font-weight: 700;
+  font-size: 18px;
+}
+.intake-field input,
+.intake-field select,
+.intake-field textarea,
+.intake-start input {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--y-steel);
+  font: inherit;
+}
+.intake-field textarea {
+  resize: vertical;
+}
+.intake-field select:focus-visible,
+.intake-field textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+.intake-panel fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.intake-actions,
+.intake-start {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 24px 0;
+}
+.intake-start input {
+  max-width: 420px;
+}
+.intake-panel dl > div {
+  margin: 12px 0;
+}
+.intake-panel dt {
+  font-weight: 700;
+}
+.intake-panel dd {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.intake-milestone {
+  padding: 24px;
+  border: 1px solid var(--y-steel);
+  margin: 24px 0;
+}
+.intake-panel pre {
+  overflow: auto;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .intake-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .intake-panel {
+    padding: 24px 16px;
+  }
+  .intake-actions button {
+    width: 100%;
+  }
+}
+.site-log {
+  margin-top: 24px;
+}
+.log-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.log-heading h4 {
+  font: 700 18px var(--mono);
+}
+.log-viewport {
+  max-height: 20rem;
+  overflow: auto;
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg);
+  border: 1px solid var(--y-steel);
+}
+.log-viewport:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+.log-viewport ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.log-viewport li {
+  border-bottom: 1px solid var(--y-steel);
+  padding: 16px 0;
+}
+.log-viewport p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.log-meta {
+  font: 12px var(--mono);
+  color: var(--text-muted);
+}
+
+.blueprint-editor {
+  padding: 1.25rem;
+  border: 1px solid var(--y-steel);
+}
+.blueprint-timeline {
+  display: grid;
+  gap: 1rem;
+  padding-left: 1.5rem;
+}
+.blueprint-timeline fieldset {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid currentColor;
+}
+.blueprint-editor label {
+  display: block;
+  margin-top: 0.75rem;
+}
+.blueprint-editor input,
+.blueprint-editor textarea {
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--y-steel);
+  padding: 0.75rem;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+.blueprint-editor textarea {
+  min-height: 6rem;
+}
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Punch list: Stood's named failed checks. Build feedback, never a payment state. */
+.punch-list {
+  margin-top: var(--s-3, 12px);
+  border-left: 2px solid var(--blocker);
+  padding-left: var(--s-3, 12px);
+}
+.punch-list h4 {
+  margin: 0 0 var(--s-2, 8px);
+}
+.punch-list ul {
+  margin: 0;
+  padding-left: 1.1em;
+}
+.punch-list li {
+  margin: 0.25em 0;
+}
+.punch-list code {
+  font-family: var(--mono);
+  color: var(--blocker);
+}
+.state-chip.punch {
+  background: var(--y-rebar);
+  color: var(--y-navy);
+  border-color: var(--y-rebar);
+}
+
+/* Handover: the rotation checklist. Yard items are pre-ticked and locked. */
+.handover {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card, 10px);
+  padding: var(--s-5, 24px);
+  background: var(--surface);
+}
+.handover .checklist {
+  list-style: none;
+  padding: 0;
+  margin: var(--s-3, 12px) 0;
+}
+.handover .checklist li {
+  margin: var(--s-2, 8px) 0;
+}
+.handover .checklist label {
+  display: flex;
+  gap: var(--s-2, 8px);
+  align-items: flex-start;
+  min-height: 44px;
+}
+.handover input[type="checkbox"] {
+  inline-size: 20px;
+  block-size: 20px;
+  accent-color: var(--accent);
+}
+
+/* Step 9 keys: write-only fields; metadata list only. */
+.keys {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card, 10px);
+  padding: var(--s-5, 24px);
+  background: var(--surface);
+}
+.keys form {
+  display: grid;
+  gap: var(--s-3, 12px);
+}
+.keys label {
+  display: grid;
+  gap: var(--s-1, 4px);
+}
+.keys fieldset label {
+  display: inline-flex;
+  gap: var(--s-2, 8px);
+  margin-right: var(--s-4, 16px);
+  min-height: 44px;
+  align-items: center;
+}
+.key-list {
+  list-style: none;
+  padding: 0;
+}
+.key-list li {
+  display: flex;
+  gap: var(--s-2, 8px);
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 44px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+fieldset.board-grid {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+.cost-breakdown dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--y-steel);
+}
+.cost-breakdown dd {
+  margin: 0;
+  text-align: right;
+}

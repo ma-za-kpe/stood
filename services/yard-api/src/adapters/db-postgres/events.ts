@@ -21,7 +21,29 @@ export async function migrateYardEvents(pool: pg.Pool, owner: string): Promise<v
       BEGIN RAISE EXCEPTION 'Yard events are append-only'; END $$;
       DROP TRIGGER IF EXISTS immutable_event ON yard.events;
       CREATE TRIGGER immutable_event BEFORE UPDATE OR DELETE ON yard.events FOR EACH ROW EXECUTE FUNCTION yard.immutable_event();
-      INSERT INTO yard.schema_migrations(version) VALUES(1) ON CONFLICT DO NOTHING;`);
+      INSERT INTO yard.schema_migrations(version) VALUES(1) ON CONFLICT DO NOTHING;
+      CREATE INDEX IF NOT EXISTS projects_cursor_byte_order ON yard.projects (id COLLATE "C");
+      INSERT INTO yard.schema_migrations(version) VALUES(2) ON CONFLICT DO NOTHING;`);
+    await c.query('COMMIT');
+  } catch (error) {
+    await c.query('ROLLBACK');
+    throw error;
+  } finally {
+    c.release();
+  }
+}
+const searchable = "to_tsvector('simple', jsonb_path_query_array(data, '$.blueprint.milestones[*].name')::text)";
+// Operator-run migration 6: a GIN index for public milestone-name search.
+export async function migrateYardSearch(pool: pg.Pool, owner: string): Promise<void> {
+  if (!/^[a-z][a-z0-9_]{0,62}$/.test(owner)) throw new RangeError('Invalid Yard owner');
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(`SET LOCAL ROLE ${owner}`);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended('yard-search-migration',0))");
+    if (!(await c.query('SELECT 1 FROM yard.schema_migrations WHERE version=6')).rowCount)
+      await c.query(`CREATE INDEX projects_milestone_search ON yard.projects USING GIN (${searchable});
+        INSERT INTO yard.schema_migrations(version) VALUES(6);`);
     await c.query('COMMIT');
   } catch (error) {
     await c.query('ROLLBACK');
@@ -37,24 +59,109 @@ const snapshot = (r: Record<string, unknown>): YardSnapshot => ({
   data: r.data,
 });
 export class PostgresYardEvents implements YardEvents {
-  constructor(private readonly pool: pg.Pool) {}
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly clock?: () => Promise<number>,
+  ) {}
+  private listeners = new Map<string, Set<() => void>>();
+  private listening: Promise<pg.PoolClient> | null = null;
+  private listener: pg.PoolClient | null = null;
+  private listenerRelease: (() => void) | null = null;
+  get subscriptionCount(): number {
+    return [...this.listeners.values()].reduce((n, callbacks) => n + callbacks.size, 0);
+  }
+  async subscribe(id: string, wake: () => void): Promise<() => void> {
+    if (!this.listening)
+      this.listening = this.pool.connect().then(async (client) => {
+        const notify = (message: pg.Notification) => {
+          if (message.channel === 'yard_events')
+            for (const callback of this.listeners.get(message.payload ?? '') ?? []) callback();
+        };
+        let released = false;
+        const finish = (destroy: boolean) => {
+          if (released) return;
+          released = true;
+          client.removeAllListeners('notification');
+          client.removeAllListeners('error');
+          client.release(destroy);
+        };
+        this.listener = client;
+        this.listenerRelease = () => {
+          void client.query('UNLISTEN yard_events').then(
+            () => finish(false),
+            () => finish(true),
+          );
+        };
+        client.on('notification', notify);
+        client.on('error', () => {
+          finish(true);
+          if (this.listener === client) {
+            this.listener = null;
+            this.listening = null;
+          }
+          for (const callbacks of this.listeners.values()) for (const callback of callbacks) callback();
+        });
+        try {
+          await client.query('LISTEN yard_events');
+        } catch (error) {
+          finish(true);
+          if (this.listener === client) {
+            this.listener = null;
+            this.listening = null;
+          }
+          throw error;
+        }
+        this.listener = client;
+        return client;
+      });
+    const opening = this.listening;
+    try {
+      await opening;
+    } catch (error) {
+      if (this.listening === opening) this.listening = null;
+      throw error;
+    }
+    const callbacks = this.listeners.get(id) ?? new Set<() => void>();
+    callbacks.add(wake);
+    this.listeners.set(id, callbacks);
+    let closed = false;
+    return () => {
+      if (closed) return;
+      closed = true;
+      callbacks.delete(wake);
+      if (!callbacks.size) this.listeners.delete(id);
+      if (!this.subscriptionCount && this.listener) {
+        const release = this.listenerRelease;
+        this.listener = null;
+        this.listenerRelease = null;
+        this.listening = null;
+        release?.();
+      }
+    };
+  }
+  private async timestamp(): Promise<Date | null> {
+    if (!this.clock) return null;
+    const now = await this.clock();
+    if (!Number.isSafeInteger(now) || now < 0) throw new YardError('INVALID');
+    return new Date(now);
+  }
   async create(id: string, owner: string, data: unknown, key: string): Promise<YardSnapshot> {
     const c = await this.pool.connect();
     const result = { id, owner, version: 1, data };
     try {
       await c.query('BEGIN');
       await c.query('INSERT INTO yard.projects VALUES($1,$2,1,$3)', [id, owner, JSON.stringify(data)]);
-      await c.query("INSERT INTO yard.events(project_id,seq,type,actor,payload) VALUES($1,1,'blueprint.ready',$2,$3)", [
-        id,
-        owner,
-        JSON.stringify({ id }),
-      ]);
+      await c.query(
+        "INSERT INTO yard.events(project_id,seq,type,actor,payload,at) VALUES($1,1,'blueprint.ready',$2,$3,COALESCE($4,clock_timestamp()))",
+        [id, owner, JSON.stringify({ id }), await this.timestamp()],
+      );
       await c.query('INSERT INTO yard.commands VALUES($1,$2,$3,$4)', [
         id,
         key,
         JSON.stringify({ owner, data }),
         JSON.stringify(result),
       ]);
+      await c.query("SELECT pg_notify('yard_events', $1)", [id]);
       await c.query('COMMIT');
       return result;
     } catch (error) {
@@ -78,8 +185,21 @@ export class PostgresYardEvents implements YardEvents {
     if (!rows[0]) throw new YardError('NOT_FOUND');
     return snapshot(rows[0]);
   }
-  async list(): Promise<readonly YardSnapshot[]> {
-    return (await this.pool.query('SELECT * FROM yard.projects ORDER BY id LIMIT 100')).rows.map(snapshot);
+  async list(after = ''): Promise<readonly YardSnapshot[]> {
+    return (
+      await this.pool.query(
+        'SELECT * FROM yard.projects WHERE id COLLATE "C">$1 COLLATE "C" ORDER BY id COLLATE "C" LIMIT 101',
+        [after],
+      )
+    ).rows.map(snapshot);
+  }
+  async search(query: string, after = ''): Promise<readonly YardSnapshot[]> {
+    return (
+      await this.pool.query(
+        `SELECT * FROM yard.projects WHERE id COLLATE "C">$2 COLLATE "C" AND ${searchable} @@ plainto_tsquery('simple',$1) ORDER BY id COLLATE "C" LIMIT 101`,
+        [query, after],
+      )
+    ).rows.map(snapshot);
   }
   async read(id: string, after: number): Promise<readonly YardEvent[]> {
     if (!Number.isSafeInteger(after) || after < 0) throw new YardError('INVALID');
@@ -120,19 +240,17 @@ export class PostgresYardEvents implements YardEvents {
         result.version,
         JSON.stringify(next.data),
       ]);
-      await c.query('INSERT INTO yard.events(project_id,seq,type,actor,payload) VALUES($1,$2,$3,$4,$5)', [
-        id,
-        result.version,
-        next.type,
-        actor,
-        JSON.stringify(next.payload),
-      ]);
+      await c.query(
+        'INSERT INTO yard.events(project_id,seq,type,actor,payload,at) VALUES($1,$2,$3,$4,$5,COALESCE($6,clock_timestamp()))',
+        [id, result.version, next.type, actor, JSON.stringify(next.payload), await this.timestamp()],
+      );
       await c.query('INSERT INTO yard.commands VALUES($1,$2,$3,$4)', [
         id,
         key,
         `${actor}:${fingerprint}`,
         JSON.stringify(result),
       ]);
+      await c.query("SELECT pg_notify('yard_events', $1)", [id]);
       await c.query('COMMIT');
       return result;
     } catch (error) {

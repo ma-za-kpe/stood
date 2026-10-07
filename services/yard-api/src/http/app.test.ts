@@ -10,12 +10,25 @@ describe('Yard shell, no payment capabilities (T-0175)', () => {
       status: 'ok',
       product: 'yard',
       environment: 'ci',
-      capabilities: { board: false, foreman: false, credentials: false, events: false, payments: false },
+      capabilities: {
+        board: false,
+        foreman: false,
+        intake: false,
+        credentials: false,
+        siteLog: false,
+        events: false,
+        payments: false,
+      },
     });
   });
   it('fails closed for every unimplemented command with no body reflection', async () => {
     const app = createYardApp({ environment: 'local' });
-    for (const path of ['/yard/v1/blueprints', '/yard/v1/work-orders/wo/claim', '/yard/v1/webhooks/stood']) {
+    for (const path of [
+      '/yard/v1/blueprints',
+      '/yard/v1/intakes',
+      '/yard/v1/work-orders/wo/claim',
+      '/yard/v1/webhooks/stood',
+    ]) {
       const response = await app.request(path, { method: 'POST', body: 'private input' });
       expect(response.status).toBe(503);
       expect(await response.text()).not.toContain('private');

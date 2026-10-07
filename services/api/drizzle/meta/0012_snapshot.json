@@ -1,0 +1,944 @@
+{
+  "id": "e8da5cb0-81a9-4cc4-bd8d-6896f69af4cf",
+  "prevId": "9816c2a8-fae9-44c8-87bb-6724a378b216",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.api_allowances": {
+      "name": "api_allowances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "platform_id": {
+          "name": "platform_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "allowance_platform_identity": {
+          "name": "allowance_platform_identity",
+          "nullsNotDistinct": false,
+          "columns": ["id", "platform_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "allowance_draft_valid": {
+          "name": "allowance_draft_valid",
+          "value": "length(trim(\"api_allowances\".\"platform_id\")) > 0 AND COALESCE(\"api_allowances\".\"body\"->>'id' = \"api_allowances\".\"id\" AND \"api_allowances\".\"body\"->>'status' = 'DRAFT', false)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.api_requests": {
+      "name": "api_requests",
+      "schema": "",
+      "columns": {
+        "platform_id": {
+          "name": "platform_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response": {
+          "name": "response",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "api_requests_platform_id_key_pk": {
+          "name": "api_requests_platform_id_key_pk",
+          "columns": ["platform_id", "key"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "api_request_valid": {
+          "name": "api_request_valid",
+          "value": "length(trim(\"api_requests\".\"platform_id\")) > 0 AND length(trim(\"api_requests\".\"key\")) BETWEEN 1 AND 200 AND \"api_requests\".\"fingerprint\" ~ '^[a-f0-9]{64}$' AND jsonb_typeof(\"api_requests\".\"response\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.api_tranche_owners": {
+      "name": "api_tranche_owners",
+      "schema": "",
+      "columns": {
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "allowance_id": {
+          "name": "allowance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_id": {
+          "name": "platform_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "api_tranche_owners_tranche_id_payment_streams_tranche_id_fk": {
+          "name": "api_tranche_owners_tranche_id_payment_streams_tranche_id_fk",
+          "tableFrom": "api_tranche_owners",
+          "tableTo": "payment_streams",
+          "columnsFrom": ["tranche_id"],
+          "columnsTo": ["tranche_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "api_tranche_owners_allowance_id_platform_id_api_allowances_id_platform_id_fk": {
+          "name": "api_tranche_owners_allowance_id_platform_id_api_allowances_id_platform_id_fk",
+          "tableFrom": "api_tranche_owners",
+          "tableTo": "api_allowances",
+          "columnsFrom": ["allowance_id", "platform_id"],
+          "columnsTo": ["id", "platform_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "owner_platform_identity": {
+          "name": "owner_platform_identity",
+          "nullsNotDistinct": false,
+          "columns": ["tranche_id", "platform_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.commit_packages": {
+      "name": "commit_packages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "platform_id": {
+          "name": "platform_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "waiting_for": {
+          "name": "waiting_for",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "commit_packages_tranche_id_platform_id_api_tranche_owners_tranche_id_platform_id_fk": {
+          "name": "commit_packages_tranche_id_platform_id_api_tranche_owners_tranche_id_platform_id_fk",
+          "tableFrom": "commit_packages",
+          "tableTo": "api_tranche_owners",
+          "columnsFrom": ["tranche_id", "platform_id"],
+          "columnsTo": ["tranche_id", "platform_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "commit_package_request": {
+          "name": "commit_package_request",
+          "nullsNotDistinct": false,
+          "columns": ["platform_id", "tranche_id", "key"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "commit_package_valid": {
+          "name": "commit_package_valid",
+          "value": "length(trim(\"commit_packages\".\"key\")) BETWEEN 1 AND 200 AND \"commit_packages\".\"fingerprint\" ~ '^[a-f0-9]{64}$' AND jsonb_typeof(\"commit_packages\".\"metadata\") = 'object' AND \"commit_packages\".\"waiting_for\" IN ('HOLD','RENEWAL','RUNNER')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.funding_events": {
+      "name": "funding_events",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "funding_events_key_funding_operations_key_fk": {
+          "name": "funding_events_key_funding_operations_key_fk",
+          "tableFrom": "funding_events",
+          "tableTo": "funding_operations",
+          "columnsFrom": ["key"],
+          "columnsTo": ["key"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "funding_events_key_version_pk": {
+          "name": "funding_events_key_version_pk",
+          "columns": ["key", "version"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "funding_event_version_valid": {
+          "name": "funding_event_version_valid",
+          "value": "\"funding_events\".\"version\" >= 0"
+        },
+        "funding_event_status_valid": {
+          "name": "funding_event_status_valid",
+          "value": "\"funding_events\".\"status\" IN ('RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED')"
+        },
+        "funding_event_resolution_valid": {
+          "name": "funding_event_resolution_valid",
+          "value": "\"funding_events\".\"status\" NOT IN ('HELD', 'FAILED', 'EXPIRED') OR (\"funding_events\".\"reference\" IS NOT NULL AND length(trim(\"funding_events\".\"reference\")) > 0)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.funding_operations": {
+      "name": "funding_operations",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "instruction": {
+          "name": "instruction",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "create_request_id": {
+          "name": "create_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "authorize_request_id": {
+          "name": "authorize_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approval_url": {
+          "name": "approval_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold": {
+          "name": "hold",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {
+        "one_unresolved_funding": {
+          "name": "one_unresolved_funding",
+          "columns": [
+            {
+              "expression": "tranche_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"funding_operations\".\"status\" NOT IN ('HELD', 'FAILED', 'EXPIRED')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "funding_operations_tranche_id_payment_streams_tranche_id_fk": {
+          "name": "funding_operations_tranche_id_payment_streams_tranche_id_fk",
+          "tableFrom": "funding_operations",
+          "tableTo": "payment_streams",
+          "columnsFrom": ["tranche_id"],
+          "columnsTo": ["tranche_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "funding_operations_create_request_id_unique": {
+          "name": "funding_operations_create_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["create_request_id"]
+        },
+        "funding_operations_authorize_request_id_unique": {
+          "name": "funding_operations_authorize_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["authorize_request_id"]
+        },
+        "funding_operations_order_id_unique": {
+          "name": "funding_operations_order_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["order_id"]
+        },
+        "funding_tranche_key": {
+          "name": "funding_tranche_key",
+          "nullsNotDistinct": false,
+          "columns": ["tranche_id", "key"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "funding_status_valid": {
+          "name": "funding_status_valid",
+          "value": "\"funding_operations\".\"status\" IN ('RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED')"
+        },
+        "funding_version_valid": {
+          "name": "funding_version_valid",
+          "value": "\"funding_operations\".\"version\" >= 0"
+        },
+        "funding_request_ids_distinct": {
+          "name": "funding_request_ids_distinct",
+          "value": "\"funding_operations\".\"create_request_id\" <> \"funding_operations\".\"authorize_request_id\""
+        },
+        "funding_identity_valid": {
+          "name": "funding_identity_valid",
+          "value": "COALESCE(length(trim(\"funding_operations\".\"key\")) BETWEEN 1 AND 200 AND \"funding_operations\".\"instruction\"->>'key' = \"funding_operations\".\"key\" AND \"funding_operations\".\"instruction\"->>'trancheId' = \"funding_operations\".\"tranche_id\" AND \"funding_operations\".\"instruction\"->>'mode' IN ('sim', 'live'), false)"
+        },
+        "funding_order_required": {
+          "name": "funding_order_required",
+          "value": "\"funding_operations\".\"status\" NOT IN ('AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'EXPIRED') OR (\"funding_operations\".\"order_id\" IS NOT NULL AND length(trim(\"funding_operations\".\"order_id\")) > 0 AND \"funding_operations\".\"approval_url\" IS NOT NULL)"
+        },
+        "funding_resolution_valid": {
+          "name": "funding_resolution_valid",
+          "value": "(\"funding_operations\".\"status\" NOT IN ('HELD', 'EXPIRED') OR COALESCE(jsonb_typeof(\"funding_operations\".\"hold\") = 'object' AND \"funding_operations\".\"hold\"->>'orderId' = \"funding_operations\".\"order_id\" AND \"funding_operations\".\"hold\"->>'reference' = \"funding_operations\".\"reference\", false)) AND (\"funding_operations\".\"status\" NOT IN ('HELD', 'FAILED', 'EXPIRED') OR (\"funding_operations\".\"reference\" IS NOT NULL AND length(trim(\"funding_operations\".\"reference\")) > 0)) AND (\"funding_operations\".\"status\" IN ('HELD', 'EXPIRED') OR \"funding_operations\".\"hold\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_alerts": {
+      "name": "payment_alerts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation_key": {
+          "name": "operation_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payment_alerts_tranche_id_payment_streams_tranche_id_fk": {
+          "name": "payment_alerts_tranche_id_payment_streams_tranche_id_fk",
+          "tableFrom": "payment_alerts",
+          "tableTo": "payment_streams",
+          "columnsFrom": ["tranche_id"],
+          "columnsTo": ["tranche_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "alert_owner_valid": {
+          "name": "alert_owner_valid",
+          "value": "length(trim(\"payment_alerts\".\"owner\")) > 0"
+        },
+        "alert_status_valid": {
+          "name": "alert_status_valid",
+          "value": "\"payment_alerts\".\"status\" IN ('OPEN', 'RESOLVED')"
+        },
+        "alert_code_valid": {
+          "name": "alert_code_valid",
+          "value": "\"payment_alerts\".\"code\" IN ('PROVIDER_UNKNOWN', 'UNRESOLVED_3H', 'SAFE_CANCEL_REQUESTED', 'WORKER_FAILURE')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_operation_events": {
+      "name": "payment_operation_events",
+      "schema": "",
+      "columns": {
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payment_operation_events_tranche_id_payment_streams_tranche_id_fk": {
+          "name": "payment_operation_events_tranche_id_payment_streams_tranche_id_fk",
+          "tableFrom": "payment_operation_events",
+          "tableTo": "payment_streams",
+          "columnsFrom": ["tranche_id"],
+          "columnsTo": ["tranche_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payment_operation_events_tranche_id_key_payment_operations_tranche_id_key_fk": {
+          "name": "payment_operation_events_tranche_id_key_payment_operations_tranche_id_key_fk",
+          "tableFrom": "payment_operation_events",
+          "tableTo": "payment_operations",
+          "columnsFrom": ["tranche_id", "key"],
+          "columnsTo": ["tranche_id", "key"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "payment_operation_events_tranche_id_version_pk": {
+          "name": "payment_operation_events_tranche_id_version_pk",
+          "columns": ["tranche_id", "version"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "event_status_valid": {
+          "name": "event_status_valid",
+          "value": "\"payment_operation_events\".\"status\" IN ('RESERVED', 'AMBIGUOUS', 'CONFIRMED', 'FAILED')"
+        },
+        "event_version_valid": {
+          "name": "event_version_valid",
+          "value": "\"payment_operation_events\".\"version\" > 0"
+        },
+        "resolved_event_has_reference": {
+          "name": "resolved_event_has_reference",
+          "value": "\"payment_operation_events\".\"status\" NOT IN ('CONFIRMED', 'FAILED') OR length(trim(\"payment_operation_events\".\"reference\")) > 0 AND \"payment_operation_events\".\"reference\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_operations": {
+      "name": "payment_operations",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation": {
+          "name": "operation",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_request_id": {
+          "name": "provider_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reserved_from_version": {
+          "name": "reserved_from_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        }
+      },
+      "indexes": {
+        "one_unresolved_payment": {
+          "name": "one_unresolved_payment",
+          "columns": [
+            {
+              "expression": "tranche_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"payment_operations\".\"status\" IN ('RESERVED', 'AMBIGUOUS')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_operations_tranche_id_payment_streams_tranche_id_fk": {
+          "name": "payment_operations_tranche_id_payment_streams_tranche_id_fk",
+          "tableFrom": "payment_operations",
+          "tableTo": "payment_streams",
+          "columnsFrom": ["tranche_id"],
+          "columnsTo": ["tranche_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payment_operations_provider_request_id_unique": {
+          "name": "payment_operations_provider_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["provider_request_id"]
+        },
+        "payment_operation_tranche_key": {
+          "name": "payment_operation_tranche_key",
+          "nullsNotDistinct": false,
+          "columns": ["tranche_id", "key"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "operation_identity_valid": {
+          "name": "operation_identity_valid",
+          "value": "COALESCE(length(trim(\"payment_operations\".\"key\")) > 0 AND jsonb_typeof(\"payment_operations\".\"operation\") = 'object' AND jsonb_typeof(\"payment_operations\".\"operation\"->'key') = 'string' AND \"payment_operations\".\"operation\"->>'key' = \"payment_operations\".\"key\" AND jsonb_typeof(\"payment_operations\".\"operation\"->'authorizationId') = 'string' AND length(trim(\"payment_operations\".\"operation\"->>'authorizationId')) > 0 AND \"payment_operations\".\"operation\"->>'effect' IN ('CAPTURE', 'VOID', 'REAUTHORIZE'), false)"
+        },
+        "operation_effect_valid": {
+          "name": "operation_effect_valid",
+          "value": "COALESCE((\"payment_operations\".\"operation\"->>'effect' = 'CAPTURE' AND \"payment_operations\".\"operation\"->>'target' = 'RELEASED') OR (\"payment_operations\".\"operation\"->>'effect' = 'VOID' AND \"payment_operations\".\"operation\"->>'target' IN ('RELEASED', 'REFUSED', 'EXPIRED', 'CANCELLED')) OR (\"payment_operations\".\"operation\"->>'effect' = 'REAUTHORIZE' AND \"payment_operations\".\"operation\"->>'previousState' IN ('HELD', 'DECIDING', 'WAITING') AND jsonb_typeof(\"payment_operations\".\"operation\"->'requestedAt') = 'number'), false)"
+        },
+        "operation_status_valid": {
+          "name": "operation_status_valid",
+          "value": "\"payment_operations\".\"status\" IN ('RESERVED', 'AMBIGUOUS', 'CONFIRMED', 'FAILED')"
+        },
+        "operation_version_valid": {
+          "name": "operation_version_valid",
+          "value": "\"payment_operations\".\"reserved_from_version\" >= 0 AND \"payment_operations\".\"version\" > \"payment_operations\".\"reserved_from_version\""
+        },
+        "resolved_operation_has_reference": {
+          "name": "resolved_operation_has_reference",
+          "value": "\"payment_operations\".\"status\" NOT IN ('CONFIRMED', 'FAILED') OR length(trim(\"payment_operations\".\"reference\")) > 0 AND \"payment_operations\".\"reference\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_streams": {
+      "name": "payment_streams",
+      "schema": "",
+      "columns": {
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "record": {
+          "name": "record",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "initial_record": {
+          "name": "initial_record",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "stream_version_valid": {
+          "name": "stream_version_valid",
+          "value": "\"payment_streams\".\"version\" >= 0"
+        },
+        "stream_id_valid": {
+          "name": "stream_id_valid",
+          "value": "length(trim(\"payment_streams\".\"tranche_id\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.reconciliation_jobs": {
+      "name": "reconciliation_jobs",
+      "schema": "",
+      "columns": {
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "next_run_at": {
+          "name": "next_run_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leased_until": {
+          "name": "leased_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "reconciliation_jobs_tranche_id_payment_streams_tranche_id_fk": {
+          "name": "reconciliation_jobs_tranche_id_payment_streams_tranche_id_fk",
+          "tableFrom": "reconciliation_jobs",
+          "tableTo": "payment_streams",
+          "columnsFrom": ["tranche_id"],
+          "columnsTo": ["tranche_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tranche_commands": {
+      "name": "tranche_commands",
+      "schema": "",
+      "columns": {
+        "tranche_id": {
+          "name": "tranche_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command": {
+          "name": "command",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record": {
+          "name": "record",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tranche_commands_tranche_id_payment_streams_tranche_id_fk": {
+          "name": "tranche_commands_tranche_id_payment_streams_tranche_id_fk",
+          "tableFrom": "tranche_commands",
+          "tableTo": "payment_streams",
+          "columnsFrom": ["tranche_id"],
+          "columnsTo": ["tranche_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tranche_commands_tranche_id_version_pk": {
+          "name": "tranche_commands_tranche_id_version_pk",
+          "columns": ["tranche_id", "version"]
+        }
+      },
+      "uniqueConstraints": {
+        "tranche_command_identity": {
+          "name": "tranche_command_identity",
+          "nullsNotDistinct": false,
+          "columns": ["tranche_id", "command_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "tranche_command_valid": {
+          "name": "tranche_command_valid",
+          "value": "\"tranche_commands\".\"version\" > 0 AND length(trim(\"tranche_commands\".\"command_id\")) > 0 AND jsonb_typeof(\"tranche_commands\".\"command\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

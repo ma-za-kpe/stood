@@ -5,6 +5,7 @@ import type { ReconciliationQueue } from '../ports/reconciliation-queue.js';
 import type { TrancheStore } from '../ports/tranche-store.js';
 import { executePayment } from './execute-payment.js';
 import { reconcile } from './reconcile.js';
+import { retryCapture } from './retry-capture.js';
 
 export async function reconciliationTick(
   store: TrancheStore,
@@ -46,6 +47,7 @@ export async function reconciliationTick(
       if (options.executor) {
         await executePayment(store, options.executor, job.trancheId, job.token, options.clock);
         await reconcile(store, reader, job.trancheId, options.clock());
+        await retryCapture(store, reader, options.executor, job.trancheId, job.token, options.clock);
       }
       const snapshot = await store.load(job.trancheId);
       if (snapshot.pending) {
@@ -54,6 +56,11 @@ export async function reconciliationTick(
         await queue.alert({ ...alert, code: 'PROVIDER_UNKNOWN' });
         if (options.clock() - Date.parse(snapshot.pending.createdAt) >= 3 * 3600000)
           await queue.alert({ ...alert, code: 'UNRESOLVED_3H' });
+        if (
+          snapshot.pending.operation.effect === 'CAPTURE' &&
+          restoreTrancheRecord(snapshot.record).captureRetryClaim !== null
+        )
+          await queue.alert({ ...alert, code: 'CAPTURE_RETRY_CONSUMED' });
       } else {
         await queue.resolve(job.trancheId);
         delay = 3600;

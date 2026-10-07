@@ -11,11 +11,13 @@ export type TrancheDefinition = Readonly<{
 }>;
 const arity = {
   fundingFailed: 0,
+  confirmFunding: 1,
   dispatch: 4,
   startDeciding: 0,
   beginSettlement: 3,
   confirmSettlement: 1,
   settlementFailed: 1,
+  claimCaptureRetry: 1,
   beginReauthorization: 1,
   confirmReauthorization: 1,
   reauthorizationFailed: 1,
@@ -97,6 +99,8 @@ function replay(tranche: Tranche, command: TrancheCommand) {
   switch (command.method) {
     case 'fundingFailed':
       return tranche.fundingFailed(...command.args);
+    case 'confirmFunding':
+      return tranche.confirmFunding(...command.args);
     case 'dispatch':
       return tranche.dispatch(command.args[0], new Nonce(command.args[1]), command.args[2], command.args[3]);
     case 'startDeciding':
@@ -105,6 +109,8 @@ function replay(tranche: Tranche, command: TrancheCommand) {
       return tranche.beginSettlement(...command.args);
     case 'confirmSettlement':
       return tranche.confirmSettlement(...command.args);
+    case 'claimCaptureRetry':
+      return tranche.claimCaptureRetry(...command.args);
     case 'settlementFailed':
       return tranche.settlementFailed(...command.args);
     case 'beginReauthorization':

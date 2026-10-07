@@ -24,8 +24,22 @@ export class MemoryEvents implements YardEvents {
     if (!s) throw new YardError('NOT_FOUND');
     return structuredClone(s);
   }
-  async list() {
-    return [...this.snapshots.values()].map((s) => structuredClone(s));
+  async list(after = '') {
+    return [...this.snapshots.values()]
+      .filter((s) => s.id > after)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, 101)
+      .map((s) => structuredClone(s));
+  }
+  async search(query: string, after = '') {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return (await this.list(after)).filter((s) => {
+      const names = ((s.data as { blueprint?: { milestones?: { name: string }[] } }).blueprint?.milestones ?? [])
+        .map((m) => m.name.toLowerCase())
+        .join(' ')
+        .split(/[^a-z0-9]+/);
+      return words.every((w) => names.includes(w));
+    });
   }
   async read(id: string, after: number) {
     return structuredClone((this.history.get(id) ?? []).filter((e) => e.seq > after));

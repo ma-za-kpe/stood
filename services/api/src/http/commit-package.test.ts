@@ -11,13 +11,30 @@ const input = {
   report_ref: 'reports/package.json',
   report_sha256: 'c'.repeat(64),
 };
-function headers(body = '') {
+function headers(body = '', path = '/v1/tranches/trn/packages', overrides: Record<string, string> = {}) {
   const t = String(now / 1000);
-  return {
+  const result = {
     Authorization: 'Bearer fixture_key',
-    'Stood-Signature': `t=${t},v1=${createHmac('sha256', 'fixture_secret').update(`${t}.${body}`).digest('hex')}`,
     'Content-Type': 'application/json',
     'Idempotency-Key': 'package_key',
+    ...overrides,
+  };
+  return {
+    ...result,
+    'Stood-Signature': `t=${t},v2=${createHmac('sha256', 'fixture_secret')
+      .update(
+        JSON.stringify([
+          'stood.request@2',
+          t,
+          body ? 'POST' : 'GET',
+          path,
+          result['Idempotency-Key'],
+          '',
+          result['Content-Type'],
+          body,
+        ]),
+      )
+      .digest('hex')}`,
   };
 }
 function fixture() {
@@ -90,7 +107,7 @@ describe('Signed metadata-only commit package API (T-0172)', () => {
           await app.request('/v1/tranches/trn/packages', {
             method: 'POST',
             body,
-            headers: { ...headers(body), ...override },
+            headers: headers(body, '/v1/tranches/trn/packages', override),
           })
         ).status,
       ).toBe(422);
@@ -109,9 +126,21 @@ describe('Signed metadata-only commit package API (T-0172)', () => {
         (await app.request('/v1/tranches/trn/packages', { method: 'POST', body, headers: headers(body) })).status,
       ).toBe(status);
     }
-    expect((await app.request('/v1/tranches/trn/packages/pkg_fixture', { headers: headers() })).status).toBe(200);
+    expect(
+      (
+        await app.request('/v1/tranches/trn/packages/pkg_fixture', {
+          headers: headers('', '/v1/tranches/trn/packages/pkg_fixture'),
+        })
+      ).status,
+    ).toBe(200);
     expect(packages.get).toHaveBeenCalledWith('platform_a', 'trn', 'pkg_fixture');
     packages.get.mockResolvedValueOnce(null);
-    expect((await app.request('/v1/tranches/foreign/packages/pkg_fixture', { headers: headers() })).status).toBe(404);
+    expect(
+      (
+        await app.request('/v1/tranches/foreign/packages/pkg_fixture', {
+          headers: headers('', '/v1/tranches/foreign/packages/pkg_fixture'),
+        })
+      ).status,
+    ).toBe(404);
   });
 });

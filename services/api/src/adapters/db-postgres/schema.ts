@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   foreignKey,
   integer,
@@ -14,9 +15,85 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { TrancheCommand } from '../../domain/tranche-record.js';
 import type { CommitPackageInput, StoredCommitPackage } from '../../ports/commit-package-store.js';
+import type { FundingHold, FundingInstruction, FundingStatus } from '../../ports/funding-store.js';
+import type { Mandate } from '../../ports/mandate-store.js';
 import type { OperationIntent, OperationStatus } from '../../ports/payment-operation-store.js';
 import type { StoredDraft } from '../../ports/platform-api-store.js';
 import type { OperationalAlert } from '../../ports/reconciliation-queue.js';
+import type { VaultAttempt } from '../../ports/vault-provider.js';
+
+export const mandateSignatures = pgTable(
+  'mandate_signatures',
+  {
+    key: text().primaryKey(),
+    allowanceId: text('allowance_id')
+      .notNull()
+      .references(() => apiAllowances.id),
+    platformId: text('platform_id').notNull(),
+    termsVersion: integer('terms_version').notNull(),
+    termsHash: text('terms_hash').notNull(),
+    customerRef: text('customer_ref').notNull().unique(),
+    mode: text().$type<'sim' | 'live'>().notNull(),
+    status: text().$type<VaultAttempt['status']>().notNull(),
+    version: integer().notNull(),
+    setupRequestId: uuid('setup_request_id').notNull().unique(),
+    tokenRequestId: uuid('token_request_id').notNull().unique(),
+    setupId: text('setup_id').unique(),
+    customerId: text('customer_id'),
+    payerId: text('payer_id'),
+    tokenId: text('token_id').unique(),
+    approvalUrl: text('approval_url'),
+    acceptedAt: bigint('accepted_at', { mode: 'number' }).notNull(),
+    expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.allowanceId, table.platformId],
+      foreignColumns: [apiAllowances.id, apiAllowances.platformId],
+    }),
+    uniqueIndex('one_active_mandate').on(table.allowanceId).where(sql`${table.status} <> 'REVOKED'`),
+    check(
+      'mandate_identity_valid',
+      sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.termsVersion} = 1 AND ${table.termsHash} ~ '^[a-f0-9]{64}$' AND ${table.customerRef} ~ '^[a-f0-9]{64}$' AND ${table.setupRequestId} <> ${table.tokenRequestId} AND ${table.mode} IN ('sim', 'live')`,
+    ),
+    check(
+      'mandate_time_valid',
+      sql`${table.acceptedAt} >= 0 AND ${table.expiresAt} > ${table.acceptedAt} AND ${table.expiresAt} <= 9007199254740991`,
+    ),
+    check(
+      'mandate_phase_valid',
+      sql`${table.version} >= 0 AND (
+    (${table.status} IN ('RESERVED', 'CREATING') AND ${table.setupId} IS NULL AND ${table.customerId} IS NULL AND ${table.payerId} IS NULL AND ${table.tokenId} IS NULL AND ${table.approvalUrl} IS NULL) OR
+    (${table.status} = 'AWAITING_APPROVAL' AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND ${table.payerId} IS NULL AND ${table.tokenId} IS NULL) OR
+    (${table.status} = 'TOKENIZING' AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND length(trim(${table.payerId})) > 0 AND ${table.tokenId} IS NULL) OR
+    (${table.status} IN ('SIGNED', 'REVOKED') AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND length(trim(${table.payerId})) > 0 AND length(trim(${table.tokenId})) > 0)) IS TRUE`,
+    ),
+  ],
+);
+export const mandateEvents = pgTable(
+  'mandate_events',
+  {
+    key: text()
+      .notNull()
+      .references(() => mandateSignatures.key),
+    version: integer().notNull(),
+    status: text().$type<VaultAttempt['status']>().notNull(),
+    snapshot: jsonb().$type<Mandate>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.key, table.version] }),
+    check(
+      'mandate_event_valid',
+      sql`${table.version} >= 0 AND ${table.status} IN ('RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'TOKENIZING', 'SIGNED', 'REVOKED') AND COALESCE(${table.snapshot}->>'key' = ${table.key} AND (${table.snapshot}->>'version')::integer = ${table.version} AND ${table.snapshot}->>'status' = ${table.status}, false)`,
+    ),
+  ],
+);
 
 export const reconciliationJobs = pgTable('reconciliation_jobs', {
   trancheId: text('tranche_id')
@@ -47,7 +124,7 @@ export const paymentAlerts = pgTable(
     check('alert_status_valid', sql`${table.status} IN ('OPEN', 'RESOLVED')`),
     check(
       'alert_code_valid',
-      sql`${table.code} IN ('PROVIDER_UNKNOWN', 'UNRESOLVED_3H', 'SAFE_CANCEL_REQUESTED', 'WORKER_FAILURE')`,
+      sql`${table.code} IN ('PROVIDER_UNKNOWN', 'UNRESOLVED_3H', 'SAFE_CANCEL_REQUESTED', 'WORKER_FAILURE', 'CAPTURE_RETRY_CONSUMED')`,
     ),
   ],
 );
@@ -227,6 +304,76 @@ export const apiRequests = pgTable(
     check(
       'api_request_valid',
       sql`length(trim(${table.platformId})) > 0 AND length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.fingerprint} ~ '^[a-f0-9]{64}$' AND jsonb_typeof(${table.response}) = 'object'`,
+    ),
+  ],
+);
+
+export const fundingOperations = pgTable(
+  'funding_operations',
+  {
+    key: text().primaryKey(),
+    trancheId: text('tranche_id')
+      .notNull()
+      .references(() => paymentStreams.trancheId),
+    instruction: jsonb().$type<FundingInstruction>().notNull(),
+    version: integer().notNull().default(0),
+    status: text().$type<FundingStatus>().notNull(),
+    createRequestId: uuid('create_request_id').notNull().unique(),
+    authorizeRequestId: uuid('authorize_request_id').notNull().unique(),
+    orderId: text('order_id').unique(),
+    approvalUrl: text('approval_url'),
+    hold: jsonb().$type<FundingHold & Readonly<{ now?: number }>>(),
+    reference: text(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    unique('funding_tranche_key').on(t.trancheId, t.key),
+    uniqueIndex('one_unresolved_funding').on(t.trancheId).where(sql`${t.status} NOT IN ('HELD', 'FAILED', 'EXPIRED')`),
+    check(
+      'funding_status_valid',
+      sql`${t.status} IN ('RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED')`,
+    ),
+    check('funding_version_valid', sql`${t.version} >= 0`),
+    check('funding_request_ids_distinct', sql`${t.createRequestId} <> ${t.authorizeRequestId}`),
+    check(
+      'funding_identity_valid',
+      sql`COALESCE(length(trim(${t.key})) BETWEEN 1 AND 200 AND ${t.instruction}->>'key' = ${t.key} AND ${t.instruction}->>'trancheId' = ${t.trancheId} AND ${t.instruction}->>'mode' IN ('sim', 'live'), false)`,
+    ),
+    check(
+      'funding_order_required',
+      sql`${t.status} NOT IN ('AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'EXPIRED') OR (${t.orderId} IS NOT NULL AND length(trim(${t.orderId})) > 0 AND ${t.approvalUrl} IS NOT NULL)`,
+    ),
+    check(
+      'funding_resolution_valid',
+      sql`(${t.status} NOT IN ('HELD', 'EXPIRED') OR COALESCE(jsonb_typeof(${t.hold}) = 'object' AND ${t.hold}->>'orderId' = ${t.orderId} AND ${t.hold}->>'reference' = ${t.reference}, false)) AND (${t.status} NOT IN ('HELD', 'FAILED', 'EXPIRED') OR (${t.reference} IS NOT NULL AND length(trim(${t.reference})) > 0)) AND (${t.status} IN ('HELD', 'EXPIRED') OR ${t.hold} IS NULL)`,
+    ),
+  ],
+);
+export const fundingEvents = pgTable(
+  'funding_events',
+  {
+    key: text()
+      .notNull()
+      .references(() => fundingOperations.key),
+    version: integer().notNull(),
+    status: text().$type<FundingStatus>().notNull(),
+    reference: text(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.key, t.version] }),
+    check('funding_event_version_valid', sql`${t.version} >= 0`),
+    check(
+      'funding_event_status_valid',
+      sql`${t.status} IN ('RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED')`,
+    ),
+    check(
+      'funding_event_resolution_valid',
+      sql`${t.status} NOT IN ('HELD', 'FAILED', 'EXPIRED') OR (${t.reference} IS NOT NULL AND length(trim(${t.reference})) > 0)`,
     ),
   ],
 );

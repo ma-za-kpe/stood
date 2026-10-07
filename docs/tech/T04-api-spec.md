@@ -33,7 +33,7 @@ The synthetic demo endpoints remain distinct and public when DEMO_MODE is on. Th
 ## Conventions
 
 - Base URL: `https://stood-api.onrender.com/v1` (hackathon). JSON, UTF-8, UTC ISO-8601 timestamps.
-- **Auth (platform → Stood):** `Authorization: Bearer <platform_key>` plus an **HMAC request signature** `Stood-Signature: t=<ts>,v1=<hmac_sha256(secret, ts + "." + body)>`, rejected if skew > 5 min. One key pair per platform and environment.
+- **Auth (platform → Stood):** `Authorization: Bearer <platform_key>` plus `Stood-Signature: t=<ts>,v2=<hex HMAC-SHA256(secret, canonical-request)>`, rejected if skew > 5 min. One key pair per platform and environment. `canonical-request` is the UTF-8 encoding of `JSON.stringify(["stood.request@2", ts, method, target, idempotencyKey, ifMatch, contentType, rawBody])`, all strings. `target` includes `/v1`, the URL pathname and the exact query; method is uppercase, GET body and absent header values are empty strings. Header values match those sent. Body-only request v1 is rejected; see [ADR-0020](../adr/0020-bind-request-signatures-to-command-context.md).
 - **Idempotency:** `Idempotency-Key` is required on every POST. Same key + same body → same response for 24h. Same key + a different body → `409`.
 - **Money:** `{ "minor": 400000, "currency": "GBP" }`.
 - **Errors:** RFC 9457 `application/problem+json` with a `type` from a fixed catalogue (`validation`, `not_found`, `conflict`, `invalid_state`, `idempotency_conflict`, `paypal_unavailable`). **Domain outcomes (refuse / wait) are 200s, not errors.**
@@ -123,7 +123,7 @@ Local code fixtures are synthetic. Hosted provider replay remains planned.
 
 Planned contract; the JSON below is a site-visit scenario example.
 
-`POST <platform webhook url>`, headers `Stood-Event-Id`, `Stood-Signature` (same HMAC scheme), `Stood-Event-Type`. At-least-once, exponential backoff for 24h, then dead-letter visible in the reviewer file.
+`POST <platform webhook url>`, headers `Stood-Event-Id`, `Stood-Signature: t=<ts>,v1=<hex HMAC-SHA256(webhookSecret, ts + "." + rawBody)>`, `Stood-Event-Type`. Webhooks use their separate secret and delivery signature v1, distinct from request v2. At-least-once, exponential backoff for 24h, then dead-letter visible in the reviewer file.
 
 ```json
 { "id": "evt_…", "type": "tranche.refused", "schema_version": "1",
@@ -142,7 +142,7 @@ Financial events explicitly identify the confirmed effect. A CAPTURE release inc
 
 ## Webhooks in (PayPal)
 
-`POST /webhooks/paypal`. Verified with `POST /v1/notifications/verify-webhook-signature` (simulator events can't be verified that way, so they're accepted only when `DEMO_MODE` is on), then deduplicated on event id.
+`POST /webhooks/paypal`. Live verification uses `POST /v1/notifications/verify-webhook-signature`. Simulated notifications require the configured simulator provider mode and its separate verifier; `DEMO_MODE` alone grants no acceptance, and live mode rejects them. Verified events are then deduplicated on event ID. Runtime webhook processing remains separately gated.
 
 Subscribed events:
 

@@ -202,3 +202,7 @@ PNG exports for stores and social are generated at release time (Chrome headless
 - [ ] Secret fields: `autocomplete="off"`, `spellcheck="false"`, never echoed into the DOM after submit.
 - [ ] Hit targets 44px minimum. The Board works by keyboard (arrow keys across columns, Enter opens).
 - [ ] Contrast numbers in §2 re-checked whenever a token changes.
+
+Implementation evidence: `site/yard/tokens.css` is the shared token source for the Yard landing page and `apps/yard-web`. Its automated contrast check recalculates the documented dark ratios and the paper foreground ratios. Font fallbacks work without downloaded fonts.
+
+Connected mock checks now run [axe-core for Playwright](https://github.com/dequelabs/axe-core-npm/blob/develop/packages/playwright/README.md) against dark/paper rooms and the paper Board on desktop/mobile. The checks retain contrast rules and scan the complete rendered page. Automated scans supplement visual and keyboard review; the full planned component kit remains unfinished.

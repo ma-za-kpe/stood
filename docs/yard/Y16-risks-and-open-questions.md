@@ -15,7 +15,7 @@
 
 ## Open questions (product owner)
 
-1. **Is Yard a free tool** (it earns via Stood's platform fee), or does it take a visible fee per blueprint?
+1. **Future platform fee:** the owner chose a free pilot followed by a visible Yard fee ([ADR-0019](../adr/0019-yard-free-pilot-and-visible-fees.md)). What rate, calculation basis, recipient, refund treatment and start date should apply before charging is enabled?
 2. **Default stack(s)** for v1 templates (TypeScript + Hono + Postgres? Next.js?). Fewer stacks give a higher Crew pass rate.
 3. **Do human builders need vetting** (ID / KYC) beyond PayPal, for the hackathon?
 4. **Handover for agent buyers:** which outside signal ships first (real users vs third-party paid calls)?

@@ -85,7 +85,7 @@ export function fakeStood(config: { clock(): number }) {
     c.header('X-Stood-Simulated', 'true');
     if (c.req.path === '/health') return next();
     const now = config.clock();
-    const sig = /^t=(\d{1,12}),v1=([a-f0-9]{64})$/.exec(c.req.header('Stood-Signature') ?? '');
+    const sig = /^t=(\d{1,12}),v2=([a-f0-9]{64})$/.exec(c.req.header('Stood-Signature') ?? '');
     if (
       !Number.isSafeInteger(now) ||
       !sig ||
@@ -94,7 +94,21 @@ export function fakeStood(config: { clock(): number }) {
     )
       return c.json({ code: 'unauthorized' }, 401);
     const raw = await c.req.text();
-    const expected = createHmac('sha256', 'sim-stood-secret').update(`${sig[1]}.${raw}`).digest();
+    const url = new URL(c.req.url);
+    const expected = createHmac('sha256', 'sim-stood-secret')
+      .update(
+        JSON.stringify([
+          'stood.request@2',
+          sig[1],
+          c.req.method,
+          `${url.pathname}${url.search}`,
+          c.req.header('Idempotency-Key') ?? '',
+          c.req.header('If-Match') ?? '',
+          c.req.header('Content-Type') ?? '',
+          raw,
+        ]),
+      )
+      .digest();
     if (!timingSafeEqual(expected, Buffer.from(sig[2] ?? '', 'hex'))) return c.json({ code: 'unauthorized' }, 401);
     return next();
   });

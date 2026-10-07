@@ -274,3 +274,7 @@ We especially want to hear from:
 [MIT](LICENSE) © 2026 ma-za-kpe and Stood contributors.
 
 Third-party tools and services (PayPal, AG Grid / AG Studio, Bryntum and the other partners) are subject to their own licences and terms. Commercial components are installed from their registries and never vendored. "Stood" hasn't yet been checked as a trademark.
+
+### Connected local simulation
+
+Run `scripts/dev demo` to build and check the connected Docker journey, then open <http://localhost:3002/> for Stood or <http://localhost:3002/yard/app/?project=yard-project> for the Yard room. Choose **Buyer**. This uses real local services with simulated providers and synthetic evidence; no real payment is executed. No keys are needed. Stop the disposable demo with `scripts/dev demo:down`. The complete pre-credentials batch and live qualification are still pending.

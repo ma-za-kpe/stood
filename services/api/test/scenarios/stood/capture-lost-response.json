@@ -12,6 +12,7 @@
     "EXECUTE",
     "RESTART",
     "RECONCILE",
+    "RETRY_CAPTURE",
     "VERIFY"
   ],
   "expected": {

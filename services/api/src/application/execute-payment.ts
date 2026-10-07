@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { captureAllowedAt } from '../domain/hold-policy.js';
 import { advanceTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../domain/tranche-record.js';
 import type { PaymentExecutor, PaymentResult } from '../ports/payment-executor.js';
@@ -48,6 +49,7 @@ export async function executePayment(
       await store.apply(id, snapshot.version, `not-submitted:${operation.key}`, failure);
       return 'NOT_SUBMITTED';
     }
+    const attemptId = randomUUID();
     const claim: TrancheCommand =
       operation.effect === 'REAUTHORIZE'
         ? {
@@ -55,7 +57,12 @@ export async function executePayment(
             args: [{ ...identity, effect: 'REAUTHORIZE', key: operation.key, kind: 'AMBIGUOUS' }],
           }
         : { method: 'settlementFailed', args: [{ ...identity, effect: operation.effect, kind: 'AMBIGUOUS' }] };
-    const claimed = await store.apply(id, snapshot.version, `submission:${operation.key}:${claimId}`, claim);
+    const claimed = await store.apply(
+      id,
+      snapshot.version,
+      `submission:${operation.key}:${claimId}:${attemptId}`,
+      claim,
+    );
     const immediate = clock();
     if (
       !Number.isFinite(immediate) ||
@@ -74,7 +81,7 @@ export async function executePayment(
     } catch {
       return 'WAIT';
     }
-    await store.apply(id, claimed.version, `response:${operation.key}:${claimId}`, result);
+    await store.apply(id, claimed.version, `response:${operation.key}:${claimId}:${attemptId}`, result);
     return 'RESOLVED';
   } catch (error) {
     if (error instanceof TrancheStoreError && error.code === 'STALE_VERSION') return 'WAIT';

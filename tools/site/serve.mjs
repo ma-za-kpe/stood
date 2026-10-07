@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { extname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export function staticServer(directory) {
+export function staticServer(directory, publicPrefix = '') {
   const root = resolve(directory);
   const mime = {
     '.html': 'text/html',
@@ -19,9 +19,18 @@ export function staticServer(directory) {
         res.writeHead(405).end();
         return;
       }
-      let file = resolve(root, `.${decodeURIComponent(new URL(req.url, 'http://localhost').pathname)}`);
+      const url = new URL(req.url, 'http://localhost');
+      let file = resolve(root, `.${decodeURIComponent(url.pathname)}`);
       if (!file.startsWith(`${root}/`) && file !== root) throw new Error('Outside site');
-      if (statSync(file).isDirectory()) file = resolve(file, 'index.html');
+      if (statSync(file).isDirectory()) {
+        if (!url.pathname.endsWith('/')) {
+          res
+            .writeHead(308, { Location: `${publicPrefix}${url.pathname}/${url.search}`, 'Cache-Control': 'no-store' })
+            .end();
+          return;
+        }
+        file = resolve(file, 'index.html');
+      }
       const content = readFileSync(file);
       res.writeHead(200, {
         'Content-Type': mime[extname(file)] ?? 'application/octet-stream',

@@ -10,9 +10,15 @@ import { PayPalAdapter } from '../../src/adapters/payments-paypal/adapter.js';
 import type { PayPalTransport } from '../../src/adapters/payments-paypal/sdk.js';
 import { executePayment } from '../../src/application/execute-payment.js';
 import { reconcile } from '../../src/application/reconcile.js';
+import { retryCapture } from '../../src/application/retry-capture.js';
 import { type CheckResult, decide, getProfile } from '../../src/domain/decision.js';
 import { restoreTrancheRecord, type TrancheCommand } from '../../src/domain/tranche-record.js';
-import type { Scenario, ScenarioEvidence, ScenarioStep } from '../scenarios/scenario-contract.js';
+import {
+  attemptAssessment,
+  type Scenario,
+  type ScenarioEvidence,
+  type ScenarioStep,
+} from '../scenarios/scenario-contract.js';
 
 const connection = 'postgres://stood:stood_mock_only@db:5432/stood_mock';
 const paypal = 'http://paypal-sim:8080';
@@ -22,7 +28,9 @@ export class NetworkFlow {
   private adapter: PayPalAdapter;
   private transport: PayPalTransport;
   private captures = 0;
+  private captureRequestIds: string[] = [];
   private index = 0;
+  private attempt = 1;
   trancheId = '';
   packageId = '';
   authorizationId = '';
@@ -34,11 +42,14 @@ export class NetworkFlow {
   ) {
     this.transport = {
       call: async (action, input) => {
-        if (action === 'CAPTURE') this.captures++;
+        if (action === 'CAPTURE') {
+          this.captures++;
+          this.captureRequestIds.push(input.requestId);
+        }
         return transport.call(action, input);
       },
     };
-    this.adapter = new PayPalAdapter(this.transport, this.store);
+    this.adapter = new PayPalAdapter(this.transport, this.store, this.clock);
   }
   private client() {
     return new StoodClient({
@@ -93,7 +104,8 @@ export class NetworkFlow {
         const headers = {
           Authorization: 'Bearer sim-access-token',
           'Content-Type': 'application/json',
-          'PayPal-Request-Id': `${this.scenario.id}:order`,
+          'PayPal-Request-Id':
+            this.attempt === 1 ? `${this.scenario.id}:order` : `${this.scenario.id}:order:${this.attempt}`,
         };
         const response = await fetch(`${paypal}/v2/checkout/orders`, {
           method: 'POST',
@@ -108,7 +120,11 @@ export class NetworkFlow {
         await this.control(`/__sim/approve/${order.id}`);
         const authorization = await fetch(`${paypal}/v2/checkout/orders/${order.id}/authorize`, {
           method: 'POST',
-          headers: { ...headers, 'PayPal-Request-Id': `${this.scenario.id}:authorize` },
+          headers: {
+            ...headers,
+            'PayPal-Request-Id':
+              this.attempt === 1 ? `${this.scenario.id}:authorize` : `${this.scenario.id}:authorize:${this.attempt}`,
+          },
           body: '{}',
         });
         assert(authorization.ok);
@@ -119,6 +135,8 @@ export class NetworkFlow {
         assert(this.authorizationId);
         if (this.scenario.id === 'capture-lost-response')
           await this.control('/__mock/lose-capture', { authorizationId: this.authorizationId });
+        if (this.scenario.id === 'capture-missed-send')
+          await this.control('/__mock/miss-capture', { authorizationId: this.authorizationId });
         break;
       }
       case 'DISPATCH':
@@ -134,11 +152,11 @@ export class NetworkFlow {
           {
             repository: 'buyer/project',
             base_commit: 'a'.repeat(40),
-            commit_sha: 'b'.repeat(40),
+            commit_sha: (this.attempt === 1 ? 'b' : 'e').repeat(40),
             report_ref: `reports/${this.scenario.id}.json`,
             report_sha256: 'c'.repeat(64),
           },
-          `${this.scenario.id}:package`,
+          this.attempt === 1 ? `${this.scenario.id}:package` : `${this.scenario.id}:package:${this.attempt}`,
         );
         this.packageId = pkg.id;
         assert.deepEqual(await this.client().getPackage(this.trancheId, pkg.id), pkg);
@@ -160,9 +178,15 @@ export class NetworkFlow {
       case 'EXPIRE':
         await this.apply({ method: 'expire', args: [this.at] });
         break;
+      case 'REDISPATCH':
+        await this.apply({ method: 'redispatch', args: [] });
+        this.attempt++;
+        this.packageId = '';
+        break;
       case 'ASSESS_FIXTURE': {
+        const assessment = attemptAssessment(this.scenario, this.attempt);
         const checks = getProfile(this.scenario.profile).checks.map<CheckResult>(({ code, source }) => {
-          if (code === 'test_integrity' && this.scenario.assessment === 'INTEGRITY_FAIL')
+          if (code === 'test_integrity' && assessment === 'INTEGRITY_FAIL')
             return {
               code,
               source: 'RULE',
@@ -170,9 +194,9 @@ export class NetworkFlow {
               reason: 'signed_tests_changed',
               namedField: 'signed_tests_changed',
             };
-          if (code === 'mutation_score' && this.scenario.assessment === 'WEAK_TESTS')
+          if (code === 'mutation_score' && assessment === 'WEAK_TESTS')
             return { code, source: 'RULE', status: 'FAIL', reason: 'weak_tests', namedField: 'weak_tests' };
-          if (code === 'usage_release' && this.scenario.assessment === 'USAGE_PENDING')
+          if (code === 'usage_release' && assessment === 'USAGE_PENDING')
             return { code, source: 'RULE', status: 'UNCERTAIN', reason: 'usage_pending' };
           return source === 'MODEL'
             ? { code, source, status: 'PASS', confidence: 1, reason: 'synthetic_fixture' }
@@ -181,13 +205,17 @@ export class NetworkFlow {
         await this.apply({ method: 'startDeciding', args: [] });
         await this.apply({
           method: 'beginSettlement',
-          args: [decide(this.scenario.profile, checks), `${this.scenario.id}:decision`, this.at],
+          args: [
+            decide(this.scenario.profile, checks),
+            this.attempt === 1 ? `${this.scenario.id}:decision` : `${this.scenario.id}:decision:${this.attempt}`,
+            this.at,
+          ],
         });
         break;
       }
       case 'EXECUTE': {
         const result = await executePayment(this.store, this.adapter, this.trancheId, 'network-execute', () => this.at);
-        if (this.scenario.id === 'capture-lost-response') {
+        if (['capture-lost-response', 'capture-missed-send'].includes(this.scenario.id)) {
           assert.equal(result, 'WAIT');
           assert.equal((await this.store.load(this.trancheId)).pending?.status, 'AMBIGUOUS');
           assert.equal(
@@ -203,8 +231,20 @@ export class NetworkFlow {
         await this.pool.end();
         this.pool = new pg.Pool({ connectionString: connection });
         this.store = new PostgresTranches(drizzle(this.pool, { schema }));
-        this.adapter = new PayPalAdapter(this.transport, this.store);
+        this.adapter = new PayPalAdapter(this.transport, this.store, this.clock);
         assert.equal((await this.store.load(this.trancheId)).pending?.providerRequestId, before);
+        break;
+      }
+      case 'RETRY_CAPTURE': {
+        const result = await retryCapture(
+          this.store,
+          this.adapter,
+          this.adapter,
+          this.trancheId,
+          'network-retry',
+          () => this.at,
+        );
+        assert.equal(result, this.scenario.id === 'capture-missed-send' ? 'RESOLVED' : 'DONE');
         break;
       }
       case 'RECONCILE':
@@ -237,7 +277,9 @@ export class NetworkFlow {
     const response = await fetch(`http://api:3000/v1/tranches/${this.trancheId}`, {
       headers: {
         Authorization: 'Bearer mock-key',
-        'Stood-Signature': `t=${t},v1=${createHmac('sha256', 'mock-secret').update(`${t}.`).digest('hex')}`,
+        'Stood-Signature': `t=${t},v2=${createHmac('sha256', 'mock-secret')
+          .update(JSON.stringify(['stood.request@2', t, 'GET', `/v1/tranches/${this.trancheId}`, '', '', '', '']))
+          .digest('hex')}`,
       },
     });
     assert(response.ok);
@@ -251,8 +293,14 @@ export class NetworkFlow {
       .from(schema.paymentOperations)
       .where(eq(schema.paymentOperations.trancheId, this.trancheId));
     const settlements = operations.filter((o) => o.operation.effect !== 'REAUTHORIZE');
-    assert(settlements.length <= 1);
-    const ledger = settlements[0];
+    let ledger = settlements[0];
+    if (this.scenario.reworkAssessment) {
+      // The refused attempt is voided and confirmed before the fresh hold; only the final attempt captures.
+      assert.equal(settlements.length, 2);
+      assert.equal(settlements.filter((o) => o.operation.effect === 'VOID' && o.status === 'CONFIRMED').length, 1);
+      assert.equal(settlements.filter((o) => o.operation.effect === 'CAPTURE').length, 1);
+      ledger = settlements.find((o) => o.operation.effect === 'CAPTURE');
+    } else assert(settlements.length <= 1);
     const events = await db
       .select()
       .from(schema.paymentOperationEvents)
@@ -279,7 +327,8 @@ export class NetworkFlow {
       })
     ).body as { purchase_units: { payments: { captures: { id: string; invoice_id: string }[] } }[] };
     const captures = order.purchase_units[0]?.payments.captures ?? [];
-    assert.equal(this.captures, this.scenario.expected.captures);
+    assert.equal(this.captures, this.scenario.expected.captures + (this.scenario.id === 'capture-missed-send' ? 1 : 0));
+    assert(new Set(this.captureRequestIds).size <= 1);
     if (captures[0]) assert.equal(captures[0].invoice_id, ledger?.key);
     return {
       domainState: projected.state,
@@ -298,13 +347,29 @@ export class NetworkFlow {
   }
   async proof() {
     this.at = await this.clock();
-    // The package remains bound to the tranche through the signed public API.
-    await this.client().getPackage(this.trancheId, this.packageId);
     const value = await this.store.load(this.trancheId),
       tranche = restoreTrancheRecord(value.record);
-    assert.equal(tranche.state, 'RELEASED');
-    assert.equal(tranche.settlement?.effect, 'CAPTURE');
+    if (tranche.state === 'HELD')
+      return { trancheId: this.trancheId, effect: 'HOLD', expiresAt: tranche.currentHold.expiresAt, simulated: true };
+    // The package remains bound to the tranche through the signed public API.
+    await this.client().getPackage(this.trancheId, this.packageId);
     assert(tranche.settlement?.reference);
+    if (tranche.state === 'REFUSED') {
+      assert.equal(tranche.settlement.effect, 'VOID');
+      const decision = tranche.decisions.at(-1)?.decision;
+      assert(decision?.outcome === 'REFUSE' && decision.namedField);
+      return {
+        trancheId: this.trancheId,
+        packageId: this.packageId,
+        reference: tranche.settlement.reference,
+        effect: 'VOID',
+        punchList: [{ field: decision.namedField, reason: decision.reason }],
+        resubmissionsLeft: Math.max(0, tranche.maxResubmits + 1 - tranche.attempts.length),
+        simulated: true,
+      };
+    }
+    assert.equal(tranche.state, 'RELEASED');
+    assert.equal(tranche.settlement.effect, 'CAPTURE');
     return {
       trancheId: this.trancheId,
       packageId: this.packageId,

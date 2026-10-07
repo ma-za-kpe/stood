@@ -1,0 +1,8 @@
+# Local, synthetic-only preview. Internal services have no host port.
+services:
+  web:
+    networks: [mock, viewer]
+    ports:
+      - "127.0.0.1:3002:3002"
+networks:
+  viewer: {}

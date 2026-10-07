@@ -39,3 +39,59 @@ it('serialises writes with consecutive events and exact retries, and rolls back 
   await expect(fixture.limited.query("UPDATE yard.events SET type='changed'")).rejects.toThrow();
   await expect(fixture.limited.query('DELETE FROM yard.events')).rejects.toThrow();
 });
+
+it('timestamps durable events from the shared server-controlled mock clock', async () => {
+  let now = 1791158400000;
+  const controlled = new PostgresYardEvents(fixture.limited, async () => now);
+  await controlled.create('timed', 'buyer', {}, 'create');
+  now += 86400000;
+  await controlled.mutate('timed', 1, 'buyer', 'next', 'next', () => ({ data: {}, type: 'next', payload: {} }));
+  expect((await controlled.read('timed', 0)).map((e) => e.at)).toEqual([
+    '2026-10-05T00:00:00.000Z',
+    '2026-10-06T00:00:00.000Z',
+  ]);
+});
+
+it('shares one database listener and wakes only matching committed projects', async () => {
+  const woken: string[] = [];
+  const a = await store.subscribe('notify', () => woken.push('a'));
+  const b = await store.subscribe('notify', () => woken.push('b'));
+  const other = await store.subscribe('other-notify', () => woken.push('other'));
+  await store.create('notify', 'buyer', {}, 'create');
+  await expect.poll(() => woken).toEqual(['a', 'b']);
+  await expect(
+    store.mutate('notify', 1, 'buyer', 'bad', 'bad', () => ({ data: {}, type: '', payload: {} })),
+  ).rejects.toThrow();
+  expect(woken).toHaveLength(2);
+  a();
+  b();
+  other();
+  expect(store.subscriptionCount).toBe(0);
+});
+it('cleans the replacement listener when its last original viewer disconnects', async () => {
+  let resolveLost = () => {};
+  const lost = new Promise<void>((resolve) => {
+    resolveLost = resolve;
+  });
+  const first = await store.subscribe('reconnect', resolveLost);
+  const backend = await fixture.pool.query(
+    "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN yard_events' AND state='idle'",
+  );
+  expect(backend.rows).toHaveLength(1);
+  await fixture.pool.query('SELECT pg_terminate_backend($1)', [backend.rows[0].pid]);
+  await lost;
+  const second = await store.subscribe('reconnect', () => {});
+  second();
+  first();
+  expect(store.subscriptionCount).toBe(0);
+  await expect
+    .poll(
+      async () =>
+        (
+          await fixture.pool.query(
+            "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN yard_events' AND state='idle'",
+          )
+        ).rows.length,
+    )
+    .toBe(0);
+});

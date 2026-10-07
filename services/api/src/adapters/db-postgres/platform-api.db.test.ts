@@ -91,10 +91,21 @@ describe('Atomic platform drafts and durable idempotency', () => {
       demoMode: false,
       api: { store, platformId: 'http_platform', key: 'fixture_key', secret, clock: () => now },
     });
-    const headers = (body: string) => ({
+    const headers = (body: string, path = '/v1/allowances') => ({
       Authorization: 'Bearer fixture_key',
-      'Stood-Signature': `t=${now / 1000},v1=${createHmac('sha256', secret)
-        .update(`${now / 1000}.${body}`)
+      'Stood-Signature': `t=${now / 1000},v2=${createHmac('sha256', secret)
+        .update(
+          JSON.stringify([
+            'stood.request@2',
+            String(now / 1000),
+            body ? 'POST' : 'GET',
+            path,
+            'http_key',
+            '',
+            'application/json',
+            body,
+          ]),
+        )
         .digest('hex')}`,
       'Content-Type': 'application/json',
       'Idempotency-Key': 'http_key',
@@ -106,7 +117,9 @@ describe('Atomic platform drafts and durable idempotency', () => {
     const text = await first.text();
     expect(await repeated.text()).toBe(text);
     const draft = JSON.parse(text);
-    const read = await app.request(`/v1/tranches/${draft.tranches[0].id}`, { headers: headers('') });
+    const read = await app.request(`/v1/tranches/${draft.tranches[0].id}`, {
+      headers: headers('', `/v1/tranches/${draft.tranches[0].id}`),
+    });
     expect(await read.json()).toMatchObject({ state: 'PENDING', pending: null, settlement: null });
     const changed = JSON.stringify({ ...input, payee_ref: 'another' });
     expect(
