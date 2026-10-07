@@ -705,3 +705,7 @@ T-0217 evidence: every intake field is classified (a test fails on an unclassifi
 Not done in this batch: the remainder of T-0156 (signed allowance versions, upload sessions, OpenAPI, rate limits), T-0159 trusted runner ingestion beyond the existing fake contract, and T-0164 (isolated runner and its sandbox ADR). These need either the runner technology decision or live qualification and stay open.
 
 Gate note: the Yard LISTEN reconnect test (`events.db.test.ts`) failed once under the full parallel gate and passed alone and on retry; it is timing-sensitive and should be hardened.
+
+## PayPal AI Toolkit (product owner request, 2026-10-07)
+
+- `[ ]` T-0246 Use the PayPal AI Toolkit as documented in [T16](docs/tech/T16-paypal-ai-toolkit.md). Run `/paypal:doctor` before qualification. After every sandbox qualification scenario, use MCP `get_order` and `list_transactions` as an independent second witness against Stood's records and the T-0155 audit. Use `/paypal:explain-error` for each unexpected error. Record sanitised evidence with the T-0224 exchanges. The MCP server never changes money state for Stood's orders. Needs the sandbox app (T-0121).
