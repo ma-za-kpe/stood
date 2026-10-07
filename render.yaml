@@ -43,7 +43,8 @@ services:
     name: stood-reconciler
     runtime: docker
     region: frankfurt
-    plan: free
+    # Render has no free plan for background workers. Owner chose Starter (2026-10-07).
+    plan: starter
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: dist/reconcile-cli.js
