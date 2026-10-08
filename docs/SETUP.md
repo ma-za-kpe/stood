@@ -64,7 +64,7 @@ PayPal's checkout error pages carry a base64 `code=` parameter: `PAYEE_ACCOUNT_L
 1. Create the project in **AWS Europe Central 1 (Frankfurt)**. The first project was created in us-east-2 (Ohio). Every query from Frankfurt would have crossed the Atlantic, and Render cannot move an existing service's region ("changing region not supported"), so we made a new Neon project instead.
 2. **Connect → connection pooling off**, and copy the direct URL into `DATABASE_URL`. The pooled host contains `-pooler` and does not support `LISTEN`.
 3. Check: `psql "$DATABASE_URL" -c "listen probe; select 1"` succeeds.
-4. **Apply the schema**: `docker compose run --rm -e DATABASE_URL app pnpm db:migrate`. This created 14 tables. The deployed server does **not** run migrations when it starts, so every new migration must be applied this way before its release, until a pre-deploy migration step exists.
+4. **Apply the schema**: from release T-0253 on, `stood-reconciler`'s Render pre-deploy command (`/nodejs/bin/node dist/migrate-cli.js`) applies pending migrations before each release goes live, and a failed migration stops the deploy. Deploy the reconciler first, then `stood-api`. For a brand-new database before the first deploy, or to run it by hand: `docker compose run --rm -e DATABASE_URL app pnpm db:migrate` (the same `drizzle.__drizzle_migrations` record, so both ways agree).
 
 We skipped Neon's quick-start (Neon CLI, MCP server, Neon Functions, buckets and Auth): Stood needs only the connection string.
 

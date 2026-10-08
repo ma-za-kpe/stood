@@ -48,6 +48,8 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: /nodejs/bin/node dist/reconcile-cli.js
+    # T-0253: apply migrations before this release goes live (paid instances only); a failure stops the deploy.
+    preDeployCommand: /nodejs/bin/node dist/migrate-cli.js
     autoDeploy: false
     envVars:
       - key: APP_ENV
