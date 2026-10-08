@@ -232,6 +232,9 @@ export class ServerSdkTransport implements PayPalTransport, ProviderTransactions
       }
       for (const detail of result.transactionDetails ?? []) {
         const t = detail.transactionInfo;
+        // Only payment receipts (event codes T00xx, e.g. T0006 for Orders captures) are captures. Balance
+        // corrections such as a new sandbox account's T1900 credit, transfers and fees are not (seen live).
+        if (t?.transactionEventCode && !t.transactionEventCode.startsWith('T00')) continue;
         const value = t?.transactionAmount?.value;
         if (!t?.transactionId || !value || !/^\d+\.\d{2}$/.test(value) || !t.transactionAmount?.currencyCode)
           throw new Error('Unexpected transaction shape');

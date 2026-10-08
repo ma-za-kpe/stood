@@ -23,7 +23,9 @@ it('reads every capture across pages through the Server SDK, and refuses windows
     }
     const from = Date.parse('2026-10-04T00:00:00Z');
     const captures = await sdk.captures(from, from + 2 * 86400000);
+    // A new sandbox account starts with a T1900 balance entry; it is not a capture (seen live 2026-10-08).
     expect(captures).toHaveLength(3);
+    expect(captures.map((c) => c.id)).not.toContain('SIM-OPENING-BALANCE');
     expect(captures.map((c) => c.invoiceId).sort()).toEqual(['op-1', 'op-2', 'op-3']);
     expect(captures[0]).toMatchObject({ minor: 1000, currency: 'USD', status: 'COMPLETED', at: expect.any(Number) });
     // PayPal searches at most 31 days at a time; a longer or inverted window is refused before any call.
