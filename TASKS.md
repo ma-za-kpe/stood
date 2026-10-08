@@ -709,3 +709,8 @@ Gate note: the Yard LISTEN reconnect test (`events.db.test.ts`) failed once unde
 ## PayPal AI Toolkit (product owner request, 2026-10-07)
 
 - `[ ]` T-0246 Use the PayPal AI Toolkit as documented in [T16](docs/tech/T16-paypal-ai-toolkit.md). Run `/paypal:doctor` before qualification. After every sandbox qualification scenario, use MCP `get_order` and `list_transactions` as an independent second witness against Stood's records and the T-0155 audit. Use `/paypal:explain-error` for each unexpected error. Record sanitised evidence with the T-0224 exchanges. The MCP server never changes money state for Stood's orders. Needs the sandbox app (T-0121).
+
+## Hosted sandbox setup (issue #50, 2026-10-07 to 2026-10-08)
+
+T-0121 / T-0029 / T-0214 evidence: the owner created the PayPal sandbox app (Merchant, US accounts) and its client-credentials check returns HTTP 200 with authorize/capture, Vault, Transaction Search and dispute scopes. Neon Postgres runs in eu-central-1 with the direct URL; the 14-table schema was applied with `pnpm db:migrate` (the server does not migrate at start, which T10 wrongly said). The Render Blueprint created `stood-api` (free) and `stood-reconciler` (Starter, paid: no free workers); their variables were set through the Render API. Getting the image to build on Render needed #60 (one pnpm store, an SDK test abort race, the Starter plan) and #64 (30 s per-test limit inside the image build). #62 repaired the history after a squash-merged promotion. The full record, including every problem and fix, is [`docs/SETUP.md`](docs/SETUP.md). Open: the first green deploy and `/health` evidence, the PayPal webhook (T-0033), a pre-deploy migration step, and narrowing the sandbox app's features.
+

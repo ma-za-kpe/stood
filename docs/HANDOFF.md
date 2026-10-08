@@ -1,5 +1,7 @@
 # Credential handoff: key inventory and deferred tests
 
+**Hosted sandbox (2026-10-08):** the PayPal sandbox app, Neon (Frankfurt) and both Render services exist. What was set up, where each value lives and how to repeat it are in [`SETUP.md`](SETUP.md).
+
 **Status (2026-10-06):** everything below runs today against simulators and fakes, and the mock network suite is green. Nothing here has been qualified against a live provider. This page lists:
 
 1. every credential the product will need, with its minimum scope
@@ -41,7 +43,7 @@
 
 | Account | Needed for | Notes |
 |---|---|---|
-| Render | Deploying the Blueprint, preview services | Free plan, Frankfurt. Secrets are prompted at Blueprint creation |
+| Render | Deploying the Blueprint, preview services | Frankfurt. `stood-api` free; `stood-reconciler` Starter (paid, no free workers). Secrets set through the Render API ([SETUP](SETUP.md#5-render)) |
 | Neon | Postgres | Free tier does not expire |
 | Kernel | Driving the sandbox buyer approval in a cloud browser | Sandbox buyer accounts only |
 | APIMatic, Postman, AG Studio, Bryntum | Partner integrations | Check licence and trial terms before adopting |
