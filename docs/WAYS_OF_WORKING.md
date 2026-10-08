@@ -42,6 +42,8 @@ If code and docs disagree, **stop and reconcile**. Update the doc in the same PR
 
 [`TASKS.md`](../TASKS.md) is the persistent, append-only execution list.
 
+After each completed batch, create a public GitHub issue with a Discord-ready PayPal progress update, links to the shipped evidence and exact screenshot instructions. Never include access codes, tokens, private identities or unearned live claims. Public copy describes current deployed capabilities; local simulations retain their evidence labels.
+
 Work is grouped into **batch issues** (for example #74 C1 PayPal sandbox qualification … #79 Crew). Each batch ships as one pull request of at least five tasks that references its issue (`Refs #74`), and the issue's checklist is ticked with links when the pull request merges.
 
 - Add a bounded task **before** starting a material slice.
@@ -250,7 +252,7 @@ Still planned: `pnpm audit` as a gate, an OpenAPI breaking-change diff (after T-
 ### Deployment
 
 - The hosted sandbox runs on Render (`stood-api` web service, `stood-reconciler` worker) with Neon Postgres in Frankfurt. [`docs/SETUP.md`](SETUP.md) is the record of what runs where and how to repeat it.
-- Deploys are **automatic and gated**: Render deploys `main` once its GitHub checks pass (`autoDeployTrigger: checksPass`, T-0256), at no cost in Actions minutes. The Docker image build runs the full product gate, and the reconciler's pre-deploy step applies migrations, so a failing test or migration stops the release.
+- Deploys are **automatic and gated**: Render deploys `main` once its GitHub checks pass (`autoDeployTrigger: checksPass`, T-0256), at no cost in Actions minutes. GitHub CI runs the full product gate before deployment, and the reconciler's pre-deploy step applies migrations, so a failing test or migration stops the release.
 - **Migrations are applied before the release**: `stood-reconciler`'s Render pre-deploy command runs `dist/migrate-cli.js`, and a failure stops the deploy (T-0253). Deploy the reconciler first, then `stood-api`. Migrations are additive (expand first, contract in a later release), so the running API stays compatible. The server itself never migrates at start.
 - After every deploy, check `/health` and the reconciler's logs, and record the result in `TASKS.md`.
 
@@ -284,6 +286,7 @@ Current ADRs:
 - [0022](adr/0022-monotonic-foreman-checkpoint-order.md): monotonic Foreman checkpoint order
 - [0023](adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md): a pinned, hermetic local gate, with the product check at pre-push
 - [0024](adr/0024-ci-gate-reviews-agent-code-in-the-sandbox.md): in the sandbox, the CI gate reviews agent-written code
+- [0025](adr/0025-owner-issued-yard-browser-sessions.md): owner-issued browser sessions for the hosted Yard pilot
 
 ---
 
