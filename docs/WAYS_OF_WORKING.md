@@ -1,7 +1,7 @@
 # Ways of Working
 
-**Status:** current operating policy for Stood (design phase → build).
-**Date:** 2026-10-03.
+**Status:** current operating policy for Stood and Yard (build phase; hosted PayPal **sandbox** since 2026-10-08).
+**Date:** 2026-10-03, revised 2026-10-08.
 **Inherited from:** the speedo project's ways of working (ledger discipline, fail-closed defaults, evidence before claims, pre-commit gates, ADRs, safe handoffs), adapted to a payments product built in the open.
 
 Stood decides whether someone's money moves. A false "done", a silent hold, a leaked key or a duplicated capture can cost a real person real money. So we work conservatively on **correctness**, and quickly on everything else.
@@ -34,11 +34,15 @@ Stood decides whether someone's money moves. A false "done", a silent hold, a le
 
 If code and docs disagree, **stop and reconcile**. Update the doc in the same PR as the behaviour change, or open a task for it.
 
+**Docs stay current in the same PR.** Any change to hosting, keys, accounts, environment variables or setup steps updates [`README.md`](../README.md) (public links and installation guide), [`docs/SETUP.md`](SETUP.md) (what runs where; secrets by **name** only), [`docs/HANDOFF.md`](HANDOFF.md), [`.env.example`](../.env.example) and `TASKS.md` in the same pull request. This repository is built in public: a stale doc is a defect.
+
 ---
 
 ## 3. Work from the ledger
 
 [`TASKS.md`](../TASKS.md) is the persistent, append-only execution list.
+
+Work is grouped into **batch issues** (for example #74 C1 PayPal sandbox qualification … #79 Crew). Each batch ships as one pull request of at least five tasks that references its issue (`Refs #74`), and the issue's checklist is ticked with links when the pull request merges.
 
 - Add a bounded task **before** starting a material slice.
 - Status markers: `[ ]` queued · `[~]` active · `[x]` done (with evidence) · `[-]` dropped (with reason) · `[!]` blocked (with the smallest safe next step).
@@ -80,7 +84,7 @@ If code and docs disagree, **stop and reconcile**. Update the doc in the same PR
   | End-to-end | s–min | Hosted demo, Kernel-driven approval | A handful (the judge path) |
 
 - **Coverage floor:** 85% branch coverage overall. **100% branch coverage for the decision rules and the Money / tranche state machine.** Coverage is a floor, not a goal. Tests must assert behaviour, not lines.
-- **Mutation testing** on the decision module before a release. Surviving mutants in money logic block the release.
+- **Mutation testing** on the decision module before a release, with surviving mutants in money logic blocking the release. **Planned, not yet running**: it is added before the 1.0.0 submission release.
 - Tests never use real credentials, real accounts or real personal data. Sandbox only, through isolated test config.
 - No `sleep` in tests. Inject a `Clock`.
 
@@ -148,7 +152,7 @@ develop    ●──●──●──●──●──────●──●
 |---|---|---|---|
 | `develop` | **Default branch** | — | All work targets it |
 | `feature/<issue>-<slug>` (also `fix/ docs/ chore/ ci/ build/ refactor/ test/ perf/ revert/`) | `develop` → `develop` | **Squash** | ≤ 3 days. Validated by the `branch-name` hook |
-| Promotion PR `develop → main` | `develop` → `main` | **Merge commit** | Title `chore: promote develop to main`. Triggers release-please and a Pages deploy |
+| Promotion PR `develop → main` | `develop` → `main` | **Merge commit, never squash** | Title `chore: promote develop to main`. Triggers release-please and a Pages deploy. A squash here breaks the shared history (it happened in #57 and needed the repair in #62) |
 | Release PR (release-please bot) | → `main` | Squash | Bumps the version and CHANGELOG, tags `vX.Y.Z`. Plays GitFlow's `release/*` role |
 | `hotfix/<slug>` | `main` → `main` | Squash | Then the automatic back-merge |
 | Back-merge PR `main → develop` | `main` → `develop` | **Merge commit** | Opened automatically by `back-merge.yml` |
@@ -163,7 +167,7 @@ Rulesets on `main` and `develop`:
 - no force-push or deletion
 - `develop` allows squash (features) and merge commits (back-merges only)
 
-Bot PRs don't trigger CI (a `GITHUB_TOKEN` limitation), so the admin merges them by bypass and notes it.
+Bot PRs don't trigger CI (a `GITHUB_TOKEN` limitation), so the admin merges them by bypass and notes it. Don't close and reopen a bot pull request to trigger checks; record the bypass in `TASKS.md` instead.
 
 ### Commits
 
@@ -232,15 +236,23 @@ Still planned: `pnpm audit` as a gate, an OpenAPI breaking-change diff (after T-
 - [release-please](https://github.com/googleapis/release-please) watches `main`. From the Conventional Commits it keeps a **release PR** open with the next version and a generated `CHANGELOG.md`.
 - **Merging the release PR** tags `vX.Y.Z`, publishes a GitHub Release, and the `landing-page` workflow republishes <https://ma-za-kpe.github.io/stood/> including the **changelog page** rendered from `CHANGELOG.md`. Nothing else deploys automatically from a tag. Deployment to Render is a separate, deliberate step.
 - **Versioning:** SemVer, starting at `0.1.0`. Before 1.0, `feat` bumps the minor version and `fix` bumps the patch.
-- **Planned milestones:**
-  - `0.1.0`: docs and brand foundation.
-  - `0.2.0`: the refuse path end to end in sandbox.
-  - `0.3.0`: all three outcomes.
-  - `0.4.0`: reviewer file and partners.
+- **Milestones:**
+  - `0.1.0`: docs and brand foundation (released).
+  - `0.2.0`–`0.3.x`: the refuse path, then all three outcomes, on simulators (released).
+  - `0.4.x`: pre-credential completion and the hosted sandbox (released 2026-10-08).
+  - `0.5.0`: PayPal sandbox qualification (batch C1, #74).
+  - `0.6.0`–`0.9.x`: deployment hardening, Yard live adapters, the complete Stood API, partner screens (#75–#78).
   - `1.0.0`: hackathon submission (`v-hackathon-submission` tag as well).
 - **Never hand-edit `CHANGELOG.md`.** To fix a release note, use a follow-up commit or edit the GitHub Release text.
 
 ---
+
+### Deployment
+
+- The hosted sandbox runs on Render (`stood-api` web service, `stood-reconciler` worker) with Neon Postgres in Frankfurt. [`docs/SETUP.md`](SETUP.md) is the record of what runs where and how to repeat it.
+- Deploys are **deliberate**: services have `autoDeploy: false`; a deploy is triggered after the change reaches `main`. The Docker image build runs the full product gate, so a failing test blocks the image.
+- **Migrations are applied before the release** (`pnpm db:migrate` against the target database). The server does not migrate at start.
+- After every deploy, check `/health` and the reconciler's logs, and record the result in `TASKS.md`.
 
 ## 10. Architecture Decision Records
 
@@ -249,12 +261,29 @@ Material decisions get an ADR in [`docs/adr/`](adr/) using the [template](adr/00
 Current ADRs:
 
 - [0001](adr/0001-record-architecture-decisions.md): record decisions as ADRs
-- [0002](adr/0002-trunk-based-with-release-please.md): trunk-based flow with release-please
+- [0002](adr/0002-trunk-based-with-release-please.md): trunk-based flow with release-please (superseded by 0006)
 - [0003](adr/0003-rules-move-money.md): rules move money; hexagonal money boundary
 - [0004](adr/0004-authorise-on-dispatch-capture-on-proof.md): authorise on dispatch, capture on proof
 - [0005](adr/0005-design-system-v2-volt.md): design system v2, "Volt"
-- [0006](adr/0006-open-source-branching-strategy.md): open-source branching and release strategy
+- [0006](adr/0006-open-source-branching-strategy.md): open-source GitFlow, adapted for release-please
 - [0007](adr/0007-domain-agnostic-evidence-profiles.md): Stood is domain-agnostic, with evidence profiles
+- [0008](adr/0008-local-s3-substitute.md): SeaweedFS for local S3 development
+- [0009](adr/0009-assessment-and-payment-confirmation.md): separate assessment, payment effect and confirmation
+- [0010](adr/0010-durable-payment-operation-ledger.md): persist payment operation identity before submission
+- [0011](adr/0011-tranche-recovery-record.md): recover tranches from accepted domain transitions
+- [0012](adr/0012-safe-recovery-across-rule-changes.md): preserve old holds in restricted recovery
+- [0013](adr/0013-atomic-tranche-and-operation-storage.md): couple tranche transitions and payment operations
+- [0014](adr/0014-platform-drafts-and-idempotency.md): atomic platform drafts and durable request replay
+- [0015](adr/0015-agent-to-agent-code-milestones.md): reposition on agent-to-agent code milestones
+- [0016](adr/0016-yard-monorepo-caller-boundaries.md): Yard shares tooling, never payment authority
+- [0017](adr/0017-external-crew-service.md): the real Crew is an external service
+- [0018](adr/0018-provider-modes-and-simulation.md): explicit provider modes and simulation boundaries
+- [0019](adr/0019-yard-free-pilot-and-visible-fees.md): Yard starts with a free pilot, then a visible fee
+- [0020](adr/0020-bind-request-signatures-to-command-context.md): bind request signatures to the command context
+- [0021](adr/0021-yard-command-signatures-and-event-cursors.md): Yard command signatures and event cursors
+- [0022](adr/0022-monotonic-foreman-checkpoint-order.md): monotonic Foreman checkpoint order
+- [0023](adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md): a pinned, hermetic local gate, with the product check at pre-push
+- [0024](adr/0024-ci-gate-reviews-agent-code-in-the-sandbox.md): in the sandbox, the CI gate reviews agent-written code
 
 ---
 
@@ -273,7 +302,7 @@ Current ADRs:
 
 - Split independent work into bounded workstreams, each with **one owner, one deliverable, and exact file ownership.** Two workers never edit the same file. One integrator merges and runs the full gate.
 - AI coding agents follow this document too. They're grounded with the partner MCPs ([S14](stood/S14-open-source-plan.md)), they write tests first, they never touch `main`, and their claims are checked like anyone else's.
-- Money-path code written by an agent gets human review before merge.
+- **Review of agent-written code:** while Stood runs only on the PayPal sandbox, a pull request merges when every required CI check passes, money-path code included ([ADR-0024](adr/0024-ci-gate-reviews-agent-code-in-the-sandbox.md), owner decision 2026-10-08). Human review of money-path code becomes required again before any live PayPal app or real money, or when a second maintainer joins.
 
 ---
 
@@ -288,7 +317,8 @@ A slice is **done** when all of these are true:
 - [ ] Ubiquitous language is respected. The glossary is updated if a new word appeared.
 - [ ] The spec doc and `TASKS.md` are updated, with the **evidence tier stated**.
 - [ ] No secrets or personal data, and the money-boundary check passes.
-- [ ] The PR title is a Conventional Commit and the PR is squash-merged.
+- [ ] The PR title is a Conventional Commit and the PR is squash-merged into `develop` (promotions to `main` use a merge commit).
+- [ ] README, SETUP, HANDOFF and `.env.example` are current if hosting, keys, accounts or setup changed (§2).
 - [ ] Any user-facing copy matches [S06](stood/S06-voice-and-states.md) and passes the greyscale / accessibility checks in [S15](stood/S15-design-system.md).
 
 ---
