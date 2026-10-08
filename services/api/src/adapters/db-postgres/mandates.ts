@@ -102,6 +102,21 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       .where(eq(schema.mandateEvents.key, key))
       .orderBy(asc(schema.mandateEvents.version));
   }
+  // T-0154: the saved PayPal token for a signed mandate, read only when the PayPal adapter is about to call.
+  async tokenFor(instruction: FundingInstruction): Promise<string | null> {
+    const [row] = await this.db
+      .select({ tokenId: schema.mandateSignatures.tokenId })
+      .from(schema.mandateSignatures)
+      .where(
+        and(
+          eq(schema.mandateSignatures.allowanceId, instruction.allowanceId),
+          eq(schema.mandateSignatures.platformId, instruction.platformId),
+          eq(schema.mandateSignatures.mode, instruction.mode),
+          eq(schema.mandateSignatures.status, 'SIGNED'),
+        ),
+      );
+    return row?.tokenId ?? null;
+  }
   async canFund(instruction: FundingInstruction, now: number): Promise<boolean> {
     if (!Number.isSafeInteger(now) || now < 0) return false;
     const input = structuredClone(instruction);

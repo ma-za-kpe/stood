@@ -81,8 +81,10 @@ scripts/dev sandbox-run vault-refuse    # a later hold from the saved token, the
 1. **Create a setup token** (`POST /v3/vault/setup-tokens`, `payment_source.paypal` with return and cancel URLs on one https origin).
 2. **The buyer approves** at its `approve` link.
 3. **Read the setup token back** until `APPROVED`; it carries PayPal's `customer.id`.
-4. **Create the payment token** (`POST /v3/vault/payment-tokens` from the setup token and the customer id). Treat its id as a secret: it is a standing permission to charge the buyer. Stood keeps it in `.env` only and never records it.
+4. **Create the payment token** (`POST /v3/vault/payment-tokens` from the setup token and the customer id). Treat its id as a secret: it is a standing permission to charge the buyer. The run tool keeps it in `.env` only and never records it; the product keeps it in the signed mandate, out of funding records and logs.
 5. **Later holds:** create the order with `payment_source.paypal.vault_id` = the token and `intent: AUTHORIZE`. No approval link is needed, and **the sandbox authorizes at once**: the create call answers `COMPLETED` with the authorization already in `purchase_units[0].payments.authorizations`. Skip the separate authorize call and go straight to capture or void.
+
+**How Stood does step 5 (T-0154).** When a buyer has a signed saved-PayPal mandate, a tranche's funding is marked `SAVED_PAYPAL` when it is reserved. The funding record never holds the token: the PayPal adapter looks it up from the mandate only at the moment it calls PayPal. A `COMPLETED` create is read as the hold itself, so funding goes straight from `CREATING` to `HELD` (or `FAILED` on `INSTRUMENT_DECLINED`). If the create reply is lost, Stood reads the order instead of creating another one. Everyone else still goes through buyer approval, and the database refuses the shortcut for them (migration 0020).
 
 **Lesson 10: setup tokens need `usage_type: MERCHANT`.** Without it, PayPal creates the setup token with status `CREATED` and **no approval link**, so no buyer can ever approve it. With it, the status is `PAYER_ACTION_REQUIRED` and there is an `approve` link. We found this when our first real setup run returned no link; the fix was one field.
 

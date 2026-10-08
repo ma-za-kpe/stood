@@ -344,7 +344,8 @@ export const fundingOperations = pgTable(
     ),
     check(
       'funding_order_required',
-      sql`${t.status} NOT IN ('AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'EXPIRED') OR (${t.orderId} IS NOT NULL AND length(trim(${t.orderId})) > 0 AND ${t.approvalUrl} IS NOT NULL)`,
+      // T-0154: a saved PayPal account is authorized at create, so it has an order but no approval link.
+      sql`${t.status} NOT IN ('AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'EXPIRED') OR (${t.orderId} IS NOT NULL AND length(trim(${t.orderId})) > 0 AND (${t.approvalUrl} IS NOT NULL OR (${t.status} = 'HELD' AND ${t.instruction}->>'source' = 'SAVED_PAYPAL')))`,
     ),
     check(
       'funding_resolution_valid',

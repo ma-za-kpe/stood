@@ -30,6 +30,7 @@ function canonical(v: unknown): unknown {
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 const snapshot = (row: Row): FundingOperation => structuredClone(row);
+const savedAccount = (row: Row) => row.instruction.source === 'SAVED_PAYPAL';
 function approvalChecked(value: string, mode: FundingReservation['mode'], orderId: string): void {
   try {
     const url = new URL(value);
@@ -129,6 +130,18 @@ export class PostgresFunding implements FundingStore {
           and(eq(schema.apiAllowances.id, owner.allowanceId), eq(schema.apiAllowances.platformId, input.platformId)),
         );
       if (!allowance) throw new FundingStoreError('NOT_FOUND');
+      // T-0154: a signed saved-PayPal mandate means PayPal authorizes at create, with no buyer present.
+      const [mandate] = await tx
+        .select({ key: schema.mandateSignatures.key })
+        .from(schema.mandateSignatures)
+        .where(
+          and(
+            eq(schema.mandateSignatures.allowanceId, allowance.id),
+            eq(schema.mandateSignatures.platformId, input.platformId),
+            eq(schema.mandateSignatures.mode, input.mode),
+            eq(schema.mandateSignatures.status, 'SIGNED'),
+          ),
+        );
       const [row] = await tx
         .insert(schema.fundingOperations)
         .values({
@@ -139,6 +152,7 @@ export class PostgresFunding implements FundingStore {
             amount: tranche.amount.toJSON(),
             payeeRef: allowance.body.payee_ref,
             allowanceId: allowance.id,
+            ...(mandate ? { source: 'SAVED_PAYPAL' as const } : {}),
           },
           version: 0,
           status: 'RESERVED',
@@ -223,8 +237,10 @@ export class PostgresFunding implements FundingStore {
         if (row.status !== status || !same(previous, hold)) throw new FundingStoreError('IDENTITY_CONFLICT');
         return snapshot(row);
       }
-      if (row.status !== 'AUTHORIZING') throw new FundingStoreError('CONFLICT');
-      if (row.orderId !== hold.orderId) throw new FundingStoreError('IDENTITY_CONFLICT');
+      // A saved account's order is created already authorized, so its hold lands straight from CREATING.
+      const atCreate = row.status === 'CREATING' && savedAccount(row) && status === 'HELD';
+      if (row.status !== 'AUTHORIZING' && !atCreate) throw new FundingStoreError('CONFLICT');
+      if (!atCreate && row.orderId !== hold.orderId) throw new FundingStoreError('IDENTITY_CONFLICT');
       await new PostgresTranches(this.db).applyInTransaction(
         tx,
         row.trancheId,
@@ -257,6 +273,7 @@ export class PostgresFunding implements FundingStore {
       );
       return this.update(tx, row, {
         status,
+        ...(atCreate ? { orderId: hold.orderId } : {}),
         hold: now === undefined ? hold : { ...hold, now },
         reference: hold.reference,
       });
@@ -269,7 +286,8 @@ export class PostgresFunding implements FundingStore {
         if (row.reference !== reference) throw new FundingStoreError('IDENTITY_CONFLICT');
         return snapshot(row);
       }
-      if (row.status !== 'AUTHORIZING') throw new FundingStoreError('CONFLICT');
+      if (row.status !== 'AUTHORIZING' && !(row.status === 'CREATING' && savedAccount(row)))
+        throw new FundingStoreError('CONFLICT');
       await new PostgresTranches(this.db).applyInTransaction(
         tx,
         row.trancheId,

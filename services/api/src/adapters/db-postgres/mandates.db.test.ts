@@ -290,3 +290,71 @@ it('restores a lost actual-SDK token reply across database connections using mat
     await h.close();
   }
 });
+
+// T-0154: funding under a signed saved-PayPal mandate needs no buyer approval. The instruction records only that
+// the account is saved; the token stays in the mandate and is handed to the PayPal adapter at call time.
+it('funds under a signed mandate straight from CREATING, and keeps the token out of the funding record', async () => {
+  const signed = async () => {
+    const value = await tokenizing();
+    const r = receipt(value.input.key);
+    await store.confirm(value.input.key, {
+      setupId: r.setupId,
+      customerId: r.customerId,
+      payerId: 'PAYER',
+      tokenId: `TOKEN-${value.input.key}`,
+    });
+    return value;
+  };
+  const funding = new PostgresFunding(db);
+  const reserve = (draft: Awaited<ReturnType<typeof setup>>['draft']) =>
+    funding.reserve({
+      key: randomUUID(),
+      trancheId: draft.tranches[0]!.id,
+      platformId: 'buyer',
+      expectedVersion: 0,
+      nonce: 'K7Q',
+      mode: 'sim',
+    });
+  const hold = (orderId: string) => ({
+    orderId,
+    authorizationId: `AUTH-${orderId}`,
+    heldAt: now,
+    expiresAt: now + 29 * 86400000,
+    reference: `${orderId}:AUTH-${orderId}`,
+  });
+  const held = await signed();
+  const reserved = await reserve(held.draft);
+  expect(reserved.instruction.source).toBe('SAVED_PAYPAL');
+  expect(JSON.stringify(reserved)).not.toContain('TOKEN-');
+  expect(await store.tokenFor(reserved.instruction)).toBe(`TOKEN-${held.input.key}`);
+  expect(await store.tokenFor({ ...reserved.instruction, mode: 'live' })).toBeNull();
+  expect(await store.tokenFor({ ...reserved.instruction, platformId: 'other' })).toBeNull();
+  const creating = await funding.beginCreate(reserved.key, reserved.version);
+  const confirmed = await funding.confirm(reserved.key, hold('ORDER-SAVED'));
+  expect(confirmed).toMatchObject({ status: 'HELD', orderId: 'ORDER-SAVED', approvalUrl: null });
+  expect(confirmed.version).toBe(creating.version + 1);
+  expect(await funding.confirm(reserved.key, hold('ORDER-SAVED'))).toEqual(confirmed);
+  await store.revoke('buyer', held.input.key);
+  expect(await store.tokenFor(reserved.instruction)).toBeNull();
+
+  const declined = await signed();
+  const refused = await reserve(declined.draft);
+  await funding.beginCreate(refused.key, refused.version);
+  expect(await funding.fail(refused.key, 'debug-declined')).toMatchObject({
+    status: 'FAILED',
+    reference: 'debug-declined',
+  });
+
+  // Without a signed mandate nothing skips approval, in the store or the database.
+  const plain = await setup();
+  const unsigned = await reserve(plain.draft);
+  expect(unsigned.instruction.source).toBeUndefined();
+  await funding.beginCreate(unsigned.key, unsigned.version);
+  await expect(funding.confirm(unsigned.key, hold('ORDER-PLAIN'))).rejects.toThrow('CONFLICT');
+  await expect(funding.fail(unsigned.key, 'debug')).rejects.toThrow('CONFLICT');
+  await expect(
+    pool.query("UPDATE funding_operations SET status = 'AWAITING_APPROVAL', order_id = 'X' WHERE key = $1", [
+      unsigned.key,
+    ]),
+  ).rejects.toThrow();
+});

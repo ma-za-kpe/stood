@@ -1,4 +1,4 @@
-import type { FundingProvider } from '../../ports/funding-provider.js';
+import type { FundingProvider, SavedPaymentTokens } from '../../ports/funding-provider.js';
 import type { FundingOperation } from '../../ports/funding-store.js';
 import type { PayPalFundingCall, PayPalFundingInput, PayPalFundingTransport } from './sdk.js';
 
@@ -38,6 +38,7 @@ function input(
   operation: FundingOperation,
   action: PayPalFundingCall,
   orderId = operation.orderId,
+  vaultId: string | null = null,
 ): PayPalFundingInput {
   const amount = operation.instruction.amount,
     minor = BigInt(amount.minor);
@@ -49,13 +50,24 @@ function input(
     trancheId: operation.trancheId,
     payeeRef: operation.instruction.payeeRef,
     amount: { currencyCode: amount.currency, value: `${minor / 100n}.${String(minor % 100n).padStart(2, '0')}` },
+    ...(vaultId ? { vaultId } : {}),
   };
 }
 export class PayPalFundingAdapter implements FundingProvider {
-  constructor(private readonly transport: PayPalFundingTransport) {}
-  create(operation: FundingOperation) {
-    if (operation.status !== 'CREATING' || operation.orderId) return Promise.resolve(unknown);
-    return this.call('CREATE_ORDER', operation);
+  constructor(
+    private readonly transport: PayPalFundingTransport,
+    private readonly tokens?: SavedPaymentTokens,
+  ) {}
+  async create(operation: FundingOperation) {
+    if (operation.status !== 'CREATING' || operation.orderId) return unknown;
+    if (operation.instruction.source !== 'SAVED_PAYPAL') return this.call('CREATE_ORDER', operation);
+    // T-0154: no signed mandate token, no call. The token goes to PayPal and nowhere else.
+    try {
+      const token = await this.tokens?.tokenFor(structuredClone(operation.instruction));
+      return text(token) ? this.call('CREATE_ORDER', operation, operation.orderId, token) : unknown;
+    } catch {
+      return unknown;
+    }
   }
   authorize(operation: FundingOperation) {
     if (operation.status !== 'AUTHORIZING' || !operation.orderId) return Promise.resolve(unknown);
@@ -75,9 +87,13 @@ export class PayPalFundingAdapter implements FundingProvider {
     action: PayPalFundingCall,
     operation: FundingOperation,
     orderId = operation.orderId,
+    vaultId: string | null = null,
   ): Promise<unknown> {
+    // With a saved account PayPal authorizes at create, so create answers like authorize does.
+    const saved = operation.instruction.source === 'SAVED_PAYPAL';
+    const authorizes = action === 'AUTHORIZE_ORDER' || (saved && action === 'CREATE_ORDER');
     try {
-      const request = input(operation, action, orderId),
+      const request = input(operation, action, orderId, vaultId),
         response = await this.transport.fund(action, request);
       const body = object(response.body);
       const identity = {
@@ -88,7 +104,7 @@ export class PayPalFundingAdapter implements FundingProvider {
         authorizeRequestId: operation.authorizeRequestId,
       };
       if (
-        action === 'AUTHORIZE_ORDER' &&
+        authorizes &&
         response.status === 422 &&
         body?.name === 'UNPROCESSABLE_ENTITY' &&
         text(body.message) &&
@@ -124,6 +140,7 @@ export class PayPalFundingAdapter implements FundingProvider {
         return unknown;
       if (body.status === 'CREATED' || body.status === 'APPROVED') {
         if (
+          saved ||
           action === 'AUTHORIZE_ORDER' ||
           (payments &&
             (!Array.isArray(payments.authorizations) ||
@@ -137,7 +154,7 @@ export class PayPalFundingAdapter implements FundingProvider {
         return { ...identity, outcome: body.status, orderId: body.id, approvalUrl: url };
       }
       if (
-        action === 'CREATE_ORDER' ||
+        (action === 'CREATE_ORDER' && !saved) ||
         body.status !== 'COMPLETED' ||
         !Array.isArray(payments?.authorizations) ||
         payments.authorizations.length !== 1 ||
