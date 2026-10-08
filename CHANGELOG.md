@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/ma-za-kpe/stood/compare/v0.4.0...v0.4.1) (2026-10-08)
+
+
+### Fixes
+
+* **sdk:** end every request at the SDK's own deadline ([#70](https://github.com/ma-za-kpe/stood/issues/70)) ([a7fce68](https://github.com/ma-za-kpe/stood/commit/a7fce6854026637042c1b120a43a3d167bae291e))
+
 ## [0.4.0](https://github.com/ma-za-kpe/stood/compare/v0.3.0...v0.4.0) (2026-10-08)
 
 
