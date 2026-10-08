@@ -10,11 +10,20 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 |---|---|---|---|---|
 | `stood-api` | Render web service (Docker, `Dockerfile` target `api`) | Free | Frankfurt | `https://stood-api.onrender.com`, health at `/health`. Sleeps after about 15 minutes idle |
 | `stood-reconciler` | Render background worker (same image, `dist/reconcile-cli.js`) | **Starter (paid, about $7/month)** | Frankfurt | Render has no free background workers. The owner chose to pay rather than fold it into `stood-api` |
+| `stood-yard-api` | Render web service (Docker, `services/yard-api/Dockerfile`) | **Starter (paid, about $7/month)** | Frankfurt | `https://stood-yard-api.onrender.com/health`. Always on for lease-expiry and log-retention jobs. Owner's choice (2026-10-08). The Yard web page is not hosted yet: it needs real browser sessions first |
 | Postgres | Neon | Free | AWS eu-central-1 (Frankfurt) | **Direct (unpooled) URL**, because Stood uses `LISTEN` |
 | PayPal | Developer Dashboard, sandbox app `stood-merchant-app` (type **Merchant**) | Sandbox | — | Owned by a US sandbox business account; a US personal account is the test buyer. Step-by-step: [the PayPal sandbox guide](guides/paypal-sandbox-authorize-capture-void.md) |
 | Blueprint | Render Blueprint from `render.yaml` on `main` | — | — | Syncs automatically when `main` changes. Services deploy `main` automatically once its GitHub checks pass (T-0256) |
 
-Yard is not deployed yet. Its credentialed composition root is batch C2 in issue #50.
+### Yard on Render (T-0214, T-0220)
+
+Yard shares Stood's Neon database through **its own roles**: `yard_owner` (no login; owns the `yard` schema) and `yard_runtime` (login; can read and write only Yard's tables, never Stood's). Run once:
+
+```bash
+scripts/dev yard-setup   # creates both roles, applies Yard's schema, writes the Yard settings into .env (never printed)
+```
+
+It writes `YARD_DATABASE_URL` (the restricted runtime URL), `YARD_MIGRATION_DATABASE_URL` (the owner URL, used only by the pre-deploy step), `YARD_SECRET_KEYS` and `YARD_OPERATORS` (the signed API clients). Copy all four to the `stood-yard-api` service on Render. Each release, Render's pre-deploy runs `db-cli.js migrate` before the new version goes live. `/health` says what is on: the Board, site log and events now; intake and the Foreman wait for the hosted planner, and payments wait for the Stood connection. Anything missing is a named line in the service log, never a crash.
 
 ## 2. Where the secrets live
 

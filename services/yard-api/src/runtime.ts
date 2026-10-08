@@ -30,7 +30,8 @@ export function yardRuntime(env: Env) {
     notes.push('Board off: YARD_DATABASE_URL must use sslmode=verify-full.');
   if (!env.YARD_OPERATORS?.trim()) notes.push('Board off: YARD_OPERATORS is missing.');
   else if (!operators) notes.push('Board off: YARD_OPERATORS is not a valid operator list.');
-  if (!keys) notes.push('Board off: YARD_SECRET_KEYS is not a valid key list.');
+  if (!env.YARD_SECRET_KEYS?.trim()) notes.push('Board off: YARD_SECRET_KEYS is missing.');
+  else if (!keys) notes.push('Board off: YARD_SECRET_KEYS is not a valid key list.');
   notes.push('Intake and Foreman off: the hosted planner is not connected yet.');
   notes.push('Payments off: Yard is not connected to Stood yet.');
   if (notes.some((n) => n.startsWith('Board off')) || !operators || !keys)

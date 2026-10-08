@@ -1,7 +1,8 @@
 # Render Blueprint for the hosted demo (T-0214). Sandbox only: no live PayPal host, no committed secrets.
 # Every secret is sync: false, so Render asks the owner for it in their own account. Render deploys main
 # automatically once its GitHub checks pass (no Actions minutes); the reconciler's pre-deploy step applies
-# migrations first. Yard is not deployed yet: its production composition root needs the credential handoff.
+# migrations first. Yard runs as one Starter web service (owner's choice, 2026-10-08) with its own restricted
+# database role; its pre-deploy step applies Yard's schema.
 services:
   - type: web
     name: stood-api
@@ -69,4 +70,30 @@ services:
       - key: PAYPAL_CLIENT_SECRET
         sync: false
       - key: RECONCILIATION_OWNER
+        sync: false
+  - type: web
+    name: stood-yard-api
+    runtime: docker
+    region: frankfurt
+    # Always on for lease expiry and log retention jobs; Starter chosen by the owner (2026-10-08).
+    plan: starter
+    dockerfilePath: ./services/yard-api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    # T-0214: Yard's schema, as its owner role, before each release goes live.
+    preDeployCommand: /nodejs/bin/node dist/db-cli.js migrate
+    branch: main
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: YARD_ENV
+        value: demo
+      - key: PORT
+        value: "3001"
+      - key: YARD_DATABASE_URL
+        sync: false
+      - key: YARD_MIGRATION_DATABASE_URL
+        sync: false
+      - key: YARD_OPERATORS
+        sync: false
+      - key: YARD_SECRET_KEYS
         sync: false

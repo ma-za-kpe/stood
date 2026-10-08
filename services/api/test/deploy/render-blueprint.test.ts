@@ -20,7 +20,7 @@ type Service = {
   envVars: EnvVar[];
 };
 const blueprint = parse(readFileSync('render.yaml', 'utf8')) as { services: Service[] };
-const secretName = /SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|CLIENT_ID|WEBHOOK_ID|OWNER/;
+const secretName = /SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|CLIENT_ID|WEBHOOK_ID|OWNER|OPERATORS/;
 const ownerChoice = ['PROVIDER_PAYPAL'];
 const live = /sk_live|rk_live|api-m\.paypal\.com|FLWSECK-(?!TEST)/i;
 // Every variable each entry point reads must be declared, so the owner is prompted for all of them.
@@ -44,17 +44,28 @@ const reads: Record<string, readonly string[]> = {
     'PAYPAL_CLIENT_ID',
     'PAYPAL_CLIENT_SECRET',
   ],
+  // T-0214: yard-api reads its own restricted database URL; the owner-capable URL is used only by pre-deploy.
+  'stood-yard-api': [
+    'YARD_ENV',
+    'PORT',
+    'YARD_DATABASE_URL',
+    'YARD_MIGRATION_DATABASE_URL',
+    'YARD_OPERATORS',
+    'YARD_SECRET_KEYS',
+  ],
 };
+const stood = (s: Service) => s.name.startsWith('stood-') && s.name !== 'stood-yard-api';
 
 it('declares Stood services in Frankfurt (free web, Starter worker) with health checks and release-only deploys (T-0214)', () => {
   expect(blueprint.services.map((s) => s.name).sort()).toEqual(Object.keys(reads).sort());
   for (const s of blueprint.services) {
     // Render has no free background workers; the owner chose Starter for the reconciler (2026-10-07).
+    // The owner chose Starter for the reconciler (2026-10-07) and for Yard (2026-10-08, always on for its jobs).
     expect(s).toMatchObject({
       runtime: 'docker',
       region: 'frankfurt',
-      plan: s.type === 'worker' ? 'starter' : 'free',
-      dockerfilePath: './Dockerfile',
+      plan: s.type === 'worker' || !stood(s) ? 'starter' : 'free',
+      dockerfilePath: stood(s) ? './Dockerfile' : './services/yard-api/Dockerfile',
     });
     // Render deploys from main only after GitHub checks pass: no Actions minutes, no untested release.
     expect(s).toMatchObject({ branch: 'main', autoDeployTrigger: 'checksPass' });
@@ -67,6 +78,10 @@ it('declares Stood services in Frankfurt (free web, Starter worker) with health 
     dockerCommand: '/nodejs/bin/node dist/reconcile-cli.js',
     // T-0253: migrations run before each release goes live; a failure stops the deploy.
     preDeployCommand: '/nodejs/bin/node dist/migrate-cli.js',
+  });
+  expect(blueprint.services.find((s) => s.name === 'stood-yard-api')).toMatchObject({
+    type: 'web',
+    preDeployCommand: '/nodejs/bin/node dist/db-cli.js migrate',
   });
 });
 
@@ -84,6 +99,12 @@ it('prompts the owner for every secret in their own Render account and commits n
         expect(typeof e.value, `${s.name} ${e.key}`).toBe('string');
       }
       expect(JSON.stringify(e)).not.toMatch(live);
+    }
+    if (!stood(s)) {
+      // Yard holds no PayPal credentials at all.
+      expect(keys.filter((k) => k.includes('PAYPAL'))).toEqual([]);
+      expect(s.envVars.find((e) => e.key === 'YARD_ENV')?.value).toBe('demo');
+      continue;
     }
     expect(s.envVars.find((e) => e.key === 'PAYPAL_BASE_URL')?.value).toBe('https://api-m.sandbox.paypal.com');
     expect(s.envVars.find((e) => e.key === 'APP_ENV')?.value).toBe('demo');
