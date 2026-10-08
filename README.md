@@ -42,11 +42,12 @@
 | Website | <https://ma-za-kpe.github.io/stood/> | Live |
 | Yard (companion site) | <https://ma-za-kpe.github.io/stood/yard/> | Live |
 | Changelog | <https://ma-za-kpe.github.io/stood/changelog.html> | Live |
-| Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Deploying ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
+| Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**; payments stay off until the PayPal webhook is added ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |
 | Work in progress | [#49 pre-credentials](https://github.com/ma-za-kpe/stood/issues/49) · [#50 credentials and deployment](https://github.com/ma-za-kpe/stood/issues/50) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | |
 | Hackathon | <https://paypalaihackathon.devpost.com/> | |
+| Yard GitHub App | <https://github.com/apps/yard-builder> | Sandbox: for one test repository only ([setup](docs/SETUP.md#7-yard-github-app)) |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
 ## The problem

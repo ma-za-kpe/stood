@@ -33,7 +33,7 @@
 | Credential | Where it comes from | Minimum scope | Where it goes |
 |---|---|---|---|
 | Yard key-encryption key(s) | Generate 32 random bytes, base64, per environment; give each an id (`k1`, `k2`, …) | Wraps per-secret data keys in the test-key vault ([Y19](yard/Y19-intake-form.md) §4) | Yard runtime environment only. Rotate by adding `k2`, switching current, running `rewrap`, then retiring `k1`. A KMS key replaces this in live (deferred) |
-| GitHub App (app id, private key, webhook secret) | Create a GitHub App owned by the operator | Repository contents read/write and pull requests read/write on **selected repositories only**; metadata read. No organisation or admin permissions | Yard runtime environment |
+| GitHub App (app id, private key, webhook secret) | Created 2026-10-08: [`yard-builder`](https://github.com/apps/yard-builder), owned by `ma-za-kpe` ([SETUP §7](SETUP.md#7-yard-github-app)) | Repository contents read/write and pull requests read/write on **selected repositories only**; metadata read. No organisation or admin permissions | Yard runtime environment |
 | Planner model key (`GROK_PLANNER_API_KEY`) | xAI (Grok), chosen 2026-10-08 | A project-scoped key with a hard **spend limit**; no organisation admin | Yard Foreman runtime only. Never in the build sandbox, prompts or logs |
 | Crew endpoint key id + HMAC secret | The separate Crew project ([Y21](yard/Y21-crew-service-contract.md)) | Signs dispatch nudges only; grants no Board or payment access | Yard runtime environment |
 | Operator keys (buyer, builders) | Issued by Yard per operator | Signed Board commands for that operator only | Each operator's own client |
