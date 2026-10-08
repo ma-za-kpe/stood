@@ -30,6 +30,7 @@ jobs:
           corepack enable
           pnpm install --frozen-lockfile
           pnpm --filter @stood/yard-domain build
+          pnpm --filter @stood/yard-contracts build
           pnpm --filter @stood/yard-web build
           npm ci --prefix tools/site --ignore-scripts
           node tools/site/build.mjs

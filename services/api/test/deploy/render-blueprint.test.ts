@@ -58,7 +58,8 @@ it('declares Stood services in Frankfurt (free web, Starter worker) with health 
   }
   expect(blueprint.services.find((s) => s.name === 'stood-reconciler')).toMatchObject({
     type: 'worker',
-    dockerCommand: 'dist/reconcile-cli.js',
+    // Render's dockerCommand replaces the image ENTRYPOINT (distroless /nodejs/bin/node), so name the runtime.
+    dockerCommand: '/nodejs/bin/node dist/reconcile-cli.js',
   });
 });
 
