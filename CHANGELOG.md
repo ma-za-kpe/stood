@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/ma-za-kpe/stood/compare/v0.7.0...v0.8.0) (2026-10-08)
+
+
+### Features
+
+* Yard on Render, signing and funding through the API, earned live status ([#100](https://github.com/ma-za-kpe/stood/issues/100)) ([69098d9](https://github.com/ma-za-kpe/stood/commit/69098d91f3de0a24266a5f67381ffef0a26883ce))
+
 ## [0.7.0](https://github.com/ma-za-kpe/stood/compare/v0.6.0...v0.7.0) (2026-10-08)
 
 
