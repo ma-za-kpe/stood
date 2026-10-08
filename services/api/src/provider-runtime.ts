@@ -21,6 +21,15 @@ export async function providerRuntime(env: Readonly<Record<string, string | unde
       baseUrl,
       clientId: mode === 'sim' ? 'sim-client' : (keys.PAYPAL_CLIENT_ID ?? ''),
       clientSecret: mode === 'sim' ? 'sim-secret' : (keys.PAYPAL_CLIENT_SECRET ?? ''),
+      // T-0260: where PayPal sends the buyer after saving their account (one https origin in the sandbox).
+      vaultReturnUrl:
+        mode === 'sim'
+          ? 'http://api:3000/paypal/return'
+          : (keys.PAYPAL_VAULT_RETURN_URL ?? 'https://ma-za-kpe.github.io/stood/?vault=saved'),
+      vaultCancelUrl:
+        mode === 'sim'
+          ? 'http://api:3000/paypal/cancel'
+          : (keys.PAYPAL_VAULT_CANCEL_URL ?? 'https://ma-za-kpe.github.io/stood/?vault=cancelled'),
     });
     return {
       adapter: transport,

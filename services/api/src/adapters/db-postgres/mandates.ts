@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, asc, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { canonicalMandate, mandateTermsHash } from '../../application/mandate-terms.js';
 import type { FundingAuthority } from '../../ports/funding-provider.js';
@@ -263,6 +263,16 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       await this.event(tx, updated as Row);
       return this.reveal(updated as Row);
     });
+  }
+  // T-0260: mandates the worker still has to move, oldest first.
+  async unresolved(): Promise<string[]> {
+    const rows = await this.db
+      .select({ key: schema.mandateSignatures.key })
+      .from(schema.mandateSignatures)
+      .where(inArray(schema.mandateSignatures.status, ['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'TOKENIZING']))
+      .orderBy(asc(schema.mandateSignatures.createdAt))
+      .limit(100);
+    return rows.map((r) => r.key);
   }
   // T-0227: re-seal every token not under the newest key. Same token, same fingerprint, one history event each.
   async rotateTokens(): Promise<number> {

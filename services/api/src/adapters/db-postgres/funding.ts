@@ -169,6 +169,16 @@ export class PostgresFunding implements FundingStore {
     if (!row) throw new FundingStoreError('NOT_FOUND');
     return snapshot(row);
   }
+  // T-0260: funding the worker still has to move, oldest first.
+  async unresolved(): Promise<string[]> {
+    const rows = await this.db
+      .select({ key: schema.fundingOperations.key })
+      .from(schema.fundingOperations)
+      .where(inArray(schema.fundingOperations.status, [...unresolved]))
+      .orderBy(asc(schema.fundingOperations.createdAt))
+      .limit(100);
+    return rows.map((r) => r.key);
+  }
   async events(key: string) {
     return this.db
       .select()

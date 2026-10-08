@@ -40,3 +40,14 @@ describe('Yard shell, no payment capabilities (T-0175)', () => {
     expect(() => createYardApp({ environment: 'production' })).toThrow();
   });
 });
+
+// T-0262: the public site reads Yard's health to show the live status; nothing else crosses origins.
+it('lets only the project site read Yard health across origins', async () => {
+  const app = createYardApp({ environment: 'ci' });
+  const site = await app.request('/health', { headers: { Origin: 'https://ma-za-kpe.github.io' } });
+  expect(site.headers.get('access-control-allow-origin')).toBe('https://ma-za-kpe.github.io');
+  const other = await app.request('/health', { headers: { Origin: 'https://evil.example' } });
+  expect(other.headers.get('access-control-allow-origin')).toBeNull();
+  const board = await app.request('/yard/v1/board', { headers: { Origin: 'https://ma-za-kpe.github.io' } });
+  expect(board.headers.get('access-control-allow-origin')).toBeNull();
+});

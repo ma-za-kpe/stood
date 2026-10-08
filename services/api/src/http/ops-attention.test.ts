@@ -42,3 +42,20 @@ it('says whether a person is needed, with counts only, and is honest when it can
   expect(failed.status).toBe(503);
   expect(await failed.text()).not.toContain('secret');
 });
+
+// T-0262: the public site (GitHub Pages) reads health and attention to show the live status; nothing else may.
+it('lets only the project site read health and attention across origins, for GET only', async () => {
+  const app = createApp({
+    ...base,
+    attention: { read: async () => ({ openFindings: 0, openAlerts: 0, oldestOpenedAt: null }) },
+  });
+  for (const path of ['/health', '/ops/attention']) {
+    const site = await app.request(path, { headers: { Origin: 'https://ma-za-kpe.github.io' } });
+    expect(site.headers.get('access-control-allow-origin')).toBe('https://ma-za-kpe.github.io');
+    expect(site.headers.get('access-control-allow-credentials')).toBeNull();
+    const other = await app.request(path, { headers: { Origin: 'https://evil.example' } });
+    expect(other.headers.get('access-control-allow-origin')).toBeNull();
+  }
+  const write = await app.request('/v1/allowances', { headers: { Origin: 'https://ma-za-kpe.github.io' } });
+  expect(write.headers.get('access-control-allow-origin')).toBeNull();
+});

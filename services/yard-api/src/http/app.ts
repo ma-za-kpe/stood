@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { type BoardConfig, boardHttp } from './board-http.js';
 import { type EventFeed, eventFeed } from './event-feed.js';
 export function createYardApp(
@@ -7,6 +8,8 @@ export function createYardApp(
   if (!['local', 'ci', 'demo'].includes(config.environment))
     throw new RangeError('Yard is not configured for hosted operation');
   const app = new Hono();
+  // T-0262: only the project site may read health across origins (GET, no credentials).
+  app.use('/health', cors({ origin: (o) => (o === 'https://ma-za-kpe.github.io' ? o : null), allowMethods: ['GET'] }));
   app.get('/health', (c) =>
     c.json({
       status: 'ok',

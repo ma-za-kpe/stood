@@ -451,3 +451,10 @@ it('atomically resolves proven initial funding expiry without a settlement reser
   expect(await store.expire(input.key, hold, hold.expiresAt + 1)).toEqual(resolved);
   expect((await store.events(input.key)).at(-1)?.status).toBe('EXPIRED');
 });
+
+it('lists only funding the worker still has to move (T-0260)', async () => {
+  const input = await authorizing();
+  expect(await store.unresolved()).toContain(input.key);
+  await store.confirm(input.key, proof(input.key));
+  expect(await store.unresolved()).not.toContain(input.key);
+});

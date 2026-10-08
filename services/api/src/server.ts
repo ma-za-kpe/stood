@@ -3,10 +3,13 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { PostgresCommitPackages } from './adapters/db-postgres/commit-packages.js';
 import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js';
+import { PostgresFunding } from './adapters/db-postgres/funding.js';
+import { PostgresMandates } from './adapters/db-postgres/mandates.js';
 import { PostgresOperationsAttention } from './adapters/db-postgres/operations-attention.js';
 import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import { PostgresProviderEvents } from './adapters/db-postgres/provider-events.js';
 import * as schema from './adapters/db-postgres/schema.js';
+import { TokenCipher } from './adapters/db-postgres/token-cipher.js';
 import { PAYMENT_KEYS } from './application/payment-readiness.js';
 import { createApp } from './http/app.js';
 import { providerRuntime } from './provider-runtime.js';
@@ -28,6 +31,21 @@ const providerEvents = pool
       clock: Date.now,
     })
   : undefined;
+// T-0260: signing and funding routes need sealed-token keys and a PayPal mode; otherwise they answer 503.
+let signing: { mode: 'sim' | 'live'; mandates: PostgresMandates; funding: PostgresFunding } | undefined;
+const paypalMode = process.env.PROVIDER_PAYPAL;
+if (pool && signedApi && (paypalMode === 'sim' || paypalMode === 'live')) {
+  try {
+    const db = drizzle(pool, { schema });
+    signing = {
+      mode: paypalMode,
+      mandates: new PostgresMandates(db, new TokenCipher(process.env.VAULT_TOKEN_KEYS ?? '')),
+      funding: new PostgresFunding(db),
+    };
+  } catch {
+    process.stderr.write('Signing and funding off: VAULT_TOKEN_KEYS is missing or invalid. See docs/SETUP.md.\n');
+  }
+}
 const app = createApp({
   ...(providerEvents ? { providerEvents } : {}),
   ...(pool ? { attention: new PostgresOperationsAttention(drizzle(pool, { schema })) } : {}),
@@ -40,6 +58,7 @@ const app = createApp({
           key: process.env.STOOD_API_KEY ?? '',
           secret: process.env.STOOD_HMAC_SECRET ?? '',
           clock: Date.now,
+          ...(signing ? { signing } : {}),
         },
       }
     : {}),

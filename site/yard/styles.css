@@ -941,3 +941,16 @@ footer p {
     transition: none !important;
   }
 }
+
+/* T-0262: live status from the hosted sandbox's health checks */
+.system-status {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+.system-status[data-state="live"]::before {
+  content: "● ";
+  color: #3ccf7a;
+}
+.system-status[data-state="mock"]::before {
+  content: "○ ";
+}
