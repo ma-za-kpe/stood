@@ -69,7 +69,8 @@ it('places and captures a later hold from a saved payment token without buyer ap
       requestId: 'order-2',
       vaultId: 'NO-SUCH-TOKEN',
     });
-    expect(unknown.status).toBe(422);
+    // The real sandbox refuses an unknown vault_id with 403 PERMISSION_DENIED (probe 2026-10-08).
+    expect(unknown.status).toBe(403);
   } finally {
     await h.close();
   }

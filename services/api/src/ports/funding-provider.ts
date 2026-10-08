@@ -10,3 +10,7 @@ export interface FundingProvider {
   authorize(operation: FundingOperation): Promise<unknown>;
   read(operation: FundingOperation, candidateOrderId?: string): Promise<unknown>;
 }
+// T-0154: the saved PayPal payment token for a signed mandate, looked up only at call time, never stored with funding.
+export interface SavedPaymentTokens {
+  tokenFor(instruction: FundingInstruction): Promise<string | null>;
+}

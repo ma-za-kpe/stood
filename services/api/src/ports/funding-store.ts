@@ -19,6 +19,8 @@ export type FundingInstruction = FundingReservation &
     allowanceId: string;
     payeeRef: string;
     amount: Readonly<{ minor: number; currency: string }>;
+    // T-0154: set when the buyer signed a saved-PayPal mandate. The token itself is never stored here.
+    source?: 'SAVED_PAYPAL';
   }>;
 export type FundingHold = Readonly<{
   orderId: string;

@@ -18,9 +18,15 @@ export type AuditFinding = Readonly<{
 }>;
 // T-0155: every provider capture must match exactly one confirmed ledger capture, and vice versa.
 // Findings are for a person to resolve; the audit never moves or reverses money.
+// T-0259: invoice ids of captures made by the sandbox run tool (scripts/dev sandbox-run, the nightly job). Stood's own
+// operation keys always contain ':', so they can never match.
+const OPERATOR_RUN = /^sandbox-(release|refuse|vault-release|vault-refuse)-[0-9T-]+Z-settle$/;
+export const isOperatorRun = (invoiceId: string | null) => !!invoiceId && OPERATOR_RUN.test(invoiceId);
 export function auditCaptures(ledger: readonly LedgerCapture[], provider: readonly ProviderCapture[]): AuditFinding[] {
   const findings: AuditFinding[] = [];
-  const completed = provider.filter((p) => p.status === 'COMPLETED' || p.status === 'PENDING');
+  const completed = provider.filter(
+    (p) => (p.status === 'COMPLETED' || p.status === 'PENDING') && !isOperatorRun(p.invoiceId),
+  );
   const byInvoice = new Map<string, ProviderCapture[]>();
   for (const p of completed) {
     const list = byInvoice.get(p.invoiceId ?? '') ?? [];

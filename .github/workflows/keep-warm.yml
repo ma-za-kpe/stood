@@ -14,10 +14,32 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    permissions: {}
+    permissions:
+      # T-0155: one issue is open while a reconciliation finding or payment alert needs a person.
+      issues: write
     steps:
       - name: Ping the sandbox API health check
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 https://stood-api.onrender.com/health)
           echo "stood-api /health -> $code"
           [ "$code" = 200 ] || echo "::warning::stood-api /health answered $code"
+      - name: Open or close the attention issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Counts only; no ids or amounts leave the API. Unknown is reported, never guessed.
+          body=$(curl -s --max-time 60 https://stood-api.onrender.com/ops/attention) || body=''
+          needs=$(printf '%s' "$body" | jq -r 'if type == "object" and has("needsPerson") then .needsPerson else "unknown" end' 2>/dev/null || true)
+          needs=${needs:-unknown}
+          open=$(gh issue list -R "$REPO" --label ops-attention --state open --json number -q '.[0].number // empty')
+          echo "needsPerson=$needs open_issue=${open:-none}"
+          if [ "$needs" = true ] && [ -z "$open" ]; then
+            gh label create ops-attention -R "$REPO" --color B60205 --description "A reconciliation finding or payment alert needs a person" --force
+            text=$(printf '%s' "$body" | jq -r '"The live sandbox has \(.openFindings) open reconciliation finding(s) and \(.openAlerts) open payment alert(s), the oldest opened \(.oldestOpenedAt) (UTC).\n\nList them with `scripts/dev findings list`, then resolve each with `scripts/dev findings resolve <id> --by <name> --note \"<reason>\"` (docs/SETUP.md, Reconciliation findings). This issue closes itself within about ten minutes of nothing being open."')
+            gh issue create -R "$REPO" --label ops-attention --title "Reconciliation needs a person" --body "$text"
+          elif [ "$needs" = false ] && [ -n "$open" ]; then
+            gh issue close "$open" -R "$REPO" --comment "Nothing needs a person now (checked by keep-warm)."
+          elif [ "$needs" = unknown ]; then
+            echo "::warning::stood-api /ops/attention did not answer; attention unknown"
+          fi

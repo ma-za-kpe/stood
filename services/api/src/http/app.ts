@@ -8,6 +8,7 @@ import { Money } from '../domain/money.js';
 import { Nonce } from '../domain/nonce.js';
 import { recipientAssessment, trancheSentences } from '../domain/recipient-sentences.js';
 import { Tranche } from '../domain/tranche.js';
+import type { OperationsAttention } from '../ports/operations-attention.js';
 import { type PlatformApiConfig, platformApi } from './platform-api.js';
 
 export type AppConfig = Readonly<{
@@ -24,6 +25,7 @@ export type AppConfig = Readonly<{
     verify(body: string, headers: Headers): Promise<boolean>;
     enqueue(event: Readonly<{ id: string; event_type: string; resource: unknown; simulated?: true }>): Promise<void>;
   }>;
+  attention?: OperationsAttention;
 }>;
 
 type Scenario = Readonly<{ profileId: string; changed?: CheckResult }>;
@@ -184,6 +186,17 @@ export function createApp(config: AppConfig) {
       return c.json({ accepted: true }, 202);
     } catch {
       return c.json({ code: 'event_unavailable' }, 503);
+    }
+  });
+  // T-0155: public, counts only. keep-warm opens a GitHub issue while a person is needed and closes it after.
+  app.get('/ops/attention', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!config.attention) return c.json({ code: 'attention_not_configured' }, 503);
+    try {
+      const a = await config.attention.read();
+      return c.json({ needsPerson: a.openFindings + a.openAlerts > 0, ...a });
+    } catch {
+      return c.json({ code: 'attention_unavailable' }, 503);
     }
   });
   app.get('/health', (c) =>

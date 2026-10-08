@@ -280,7 +280,7 @@ describe('PayPal HTTP simulator protocol', () => {
       ).status,
     ).toBe(401);
   });
-  it('requires approval, preserves idempotency and rejects changed requests', async () => {
+  it('requires approval and answers a reused request id with the original result, as PayPal does', async () => {
     const sim = createPayPalSimulator({ environment: 'ci', clock: () => 0 });
     const body = JSON.stringify({
       intent: 'AUTHORIZE',
@@ -289,10 +289,14 @@ describe('PayPal HTTP simulator protocol', () => {
     const request = () => sim.app.request('/v2/checkout/orders', { method: 'POST', headers, body });
     const order = await (await request()).json();
     expect(await (await request()).json()).toEqual(order);
-    expect(
-      (await sim.app.request('/v2/checkout/orders', { method: 'POST', headers, body: body.replace('10.00', '11.00') }))
-        .status,
-    ).toBe(422);
+    // The real sandbox ignores a changed body on a reused request id and returns the original (probe 2026-10-08).
+    const changed = await sim.app.request('/v2/checkout/orders', {
+      method: 'POST',
+      headers,
+      body: body.replace('10.00', '11.00'),
+    });
+    expect(changed.status).toBe(200);
+    expect(await changed.json()).toEqual(order);
     const authorize = () =>
       sim.app.request(`/v2/checkout/orders/${order.id}/authorize`, {
         method: 'POST',
@@ -334,5 +338,70 @@ describe('PayPal HTTP simulator protocol', () => {
       (await sim.app.request(`/v3/vault/payment-tokens/${payment.id}`, { method: 'DELETE', headers })).status,
     ).toBe(204);
     expect((await sim.app.request(`/v3/vault/payment-tokens/${payment.id}`, { headers })).status).toBe(404);
+  });
+  // T-0222: answers recorded from the real sandbox in fidelity/paypal-sandbox-errors-2026-10-08.json.
+  it('answers like the real sandbox: error codes, error body and saved-token refusals', async () => {
+    const sim = createPayPalSimulator({ environment: 'ci', clock: () => 0 });
+    let key = 0;
+    const post = (path: string, body: unknown) =>
+      sim.app.request(path, {
+        method: 'POST',
+        headers: { ...headers, 'PayPal-Request-Id': `fidelity-${++key}`, Prefer: 'return=representation' },
+        body: JSON.stringify(body),
+      });
+    const issue = async (response: Response) => {
+      const body = await response.json();
+      expect(body).toMatchObject({ debug_id: expect.any(String), message: expect.any(String) });
+      expect(body.details[0].description).toEqual(expect.any(String));
+      expect(body.links).toEqual([expect.objectContaining({ rel: 'information_link' })]);
+      return [response.status, body.name, body.details[0].issue];
+    };
+    const money = { currency_code: 'USD', value: '10.00' };
+    const order = await (
+      await post('/v2/checkout/orders', { intent: 'AUTHORIZE', purchase_units: [{ custom_id: 'f', amount: money }] })
+    ).json();
+    sim.approve(order.id);
+    const authorized = await (await post(`/v2/checkout/orders/${order.id}/authorize`, {})).json();
+    const auth = authorized.purchase_units[0].payments.authorizations[0].id;
+    expect(await issue(await post(`/v2/payments/authorizations/${auth}/reauthorize`, {}))).toEqual([
+      422,
+      'UNPROCESSABLE_ENTITY',
+      'REAUTHORIZATION_TOO_SOON',
+    ]);
+    const more = { amount: { ...money, value: '20.00' }, final_capture: true, invoice_id: 'op' };
+    expect(await issue(await post(`/v2/payments/authorizations/${auth}/capture`, more))).toEqual([
+      422,
+      'UNPROCESSABLE_ENTITY',
+      'MAX_CAPTURE_AMOUNT_EXCEEDED',
+    ]);
+    expect((await post(`/v2/payments/authorizations/${auth}/void`, {})).status).toBe(200);
+    expect(await issue(await post(`/v2/payments/authorizations/${auth}/void`, {}))).toEqual([
+      422,
+      'UNPROCESSABLE_ENTITY',
+      'PREVIOUSLY_VOIDED',
+    ]);
+    expect(
+      await issue(await post(`/v2/payments/authorizations/${auth}/capture`, { final_capture: true, invoice_id: 'op' })),
+    ).toEqual([422, 'UNPROCESSABLE_ENTITY', 'AUTHORIZATION_VOIDED']);
+    expect(await issue(await post(`/v2/payments/authorizations/${auth}/reauthorize`, {}))).toEqual([
+      422,
+      'UNPROCESSABLE_ENTITY',
+      'REAUTHORIZATION_TOO_SOON',
+    ]);
+    expect(await issue(await post('/v2/payments/authorizations/NO-SUCH/capture', { final_capture: true }))).toEqual([
+      404,
+      'RESOURCE_NOT_FOUND',
+      'INVALID_RESOURCE_ID',
+    ]);
+    const unknownToken = {
+      intent: 'AUTHORIZE',
+      purchase_units: [{ custom_id: 'f', amount: money }],
+      payment_source: { paypal: { vault_id: 'NO-SUCH-TOKEN' } },
+    };
+    expect(await issue(await post('/v2/checkout/orders', unknownToken))).toEqual([
+      403,
+      'NOT_AUTHORIZED',
+      'PERMISSION_DENIED',
+    ]);
   });
 });

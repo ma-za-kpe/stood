@@ -26,6 +26,7 @@ export default defineConfig({
         '**/sandbox-run-cli.ts',
         '**/migrate-cli.ts',
         '**/findings-cli.ts',
+        '**/vault-keys-cli.ts',
         '**/adapters/db-postgres/**',
       ],
       reporter: ['text', 'json-summary'],
