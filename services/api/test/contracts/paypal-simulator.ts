@@ -3,7 +3,9 @@ import type { FaultController } from '../../../simulators/src/faults.js';
 import { createPayPalSimulator } from '../../../simulators/src/paypal.js';
 import { ServerSdkTransport } from '../../src/adapters/payments-paypal/sdk.js';
 import type { PayPalHarness } from './paypal-transport.js';
-export async function simulatorHarness(faults?: FaultController): Promise<PayPalHarness & { baseUrl: string }> {
+export async function simulatorHarness(
+  faults?: FaultController,
+): Promise<PayPalHarness & { baseUrl: string; transport: ServerSdkTransport }> {
   const h = await simulatorServer(faults);
   try {
     return { ...h, input: await h.seed('fixture-tranche') };

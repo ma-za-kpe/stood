@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   integer,
@@ -375,5 +376,23 @@ export const fundingEvents = pgTable(
       'funding_event_resolution_valid',
       sql`${t.status} NOT IN ('HELD', 'FAILED', 'EXPIRED') OR (${t.reference} IS NOT NULL AND length(trim(${t.reference})) > 0)`,
     ),
+  ],
+);
+// Verified PayPal webhook deliveries, stored once each (T-0033). Hints only: settlement needs provider proof.
+export const providerEvents = pgTable(
+  'provider_events',
+  {
+    eventId: text('event_id').primaryKey(),
+    eventType: text('event_type').notNull(),
+    resource: jsonb().notNull(),
+    simulated: boolean().notNull().default(false),
+    receivedAt: timestamp('received_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    check('provider_event_id_valid', sql`length(${t.eventId}) BETWEEN 1 AND 200`),
+    check('provider_event_type_valid', sql`length(${t.eventType}) BETWEEN 1 AND 200`),
+    check('provider_event_resource_valid', sql`jsonb_typeof(${t.resource}) = 'object'`),
   ],
 );

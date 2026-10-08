@@ -10,7 +10,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 | **Orders v2**, `intent=AUTHORIZE` with the vaulted `payment_source` | The hold per tranche on dispatch | FR-10 |
 | **Authorizations**: capture / void / reauthorize | Release / refuse / timers | FR-12, 38 |
 | Order metadata: `custom_id` (tranche id); capture `invoice_id` (operation key), description | The decision bound to PayPal's record | FR-38 |
-| **Webhooks** + verify-webhook-signature | State confirmation | FR-61 |
+| **Webhooks** + verify-webhook-signature | State confirmation (hints; proof is read by the reconciler). Inbound verification and idempotent storage implemented (T-0033) | FR-61 |
 | **Disputes API** | The dispute packet and evidence | FR-52 |
 | **Transaction Search** (`/v1/reporting/transactions`) | Reconciliation in the reviewer file | FR-54 |
 | **Agent Toolkit MCP** (read tools) | Reviewer agent reads disputes and transactions | FR-53 |
