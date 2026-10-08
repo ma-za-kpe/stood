@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/ma-za-kpe/stood/compare/v0.4.1...v0.5.0) (2026-10-08)
+
+
+### Features
+
+* **payments:** first real PayPal sandbox release and refuse, verified webhooks ([#83](https://github.com/ma-za-kpe/stood/issues/83)) ([f346acd](https://github.com/ma-za-kpe/stood/commit/f346acdebaf73b917749d05633e6ae6513a32d4b))
+* **payments:** hold without the buyer via PayPal Vault, nightly sandbox run, secret guard ([#87](https://github.com/ma-za-kpe/stood/issues/87)) ([f1fbb74](https://github.com/ma-za-kpe/stood/commit/f1fbb74e23888a6081f3baa5c9424790b81cc4de))
+* **payments:** hourly reconciliation audit, proven idempotency, migrations and TLS on release ([#89](https://github.com/ma-za-kpe/stood/issues/89)) ([7ab68d4](https://github.com/ma-za-kpe/stood/commit/7ab68d4130ad4905d328cb9c794c8a3b6f20e6d4))
+
 ## [0.4.1](https://github.com/ma-za-kpe/stood/compare/v0.4.0...v0.4.1) (2026-10-08)
 
 
