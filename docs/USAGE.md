@@ -5,7 +5,7 @@
 
 | | |
 |---|---|
-| **Status** | ⚠️ **Sandbox implementation in progress.** Local signed DRAFT creation/reads and metadata-only commit-package intake, synthetic demos and status polling are implemented; financial API workflows below are planned. This manual describes the API being built for the PayPal AI Hackathon 2026. Every example uses the **PayPal sandbox**. Check the [changelog](https://ma-za-kpe.github.io/stood/changelog.html) for what has shipped |
+| **Status** | **Live PayPal sandbox; no real money.** Hosted signing, funding, verified webhooks and reconciliation are connected. Some endpoint examples below describe the remaining target API; use the implemented signing/funding routes in [T04](tech/T04-api-spec.md). This manual describes the API being built for the PayPal AI Hackathon 2026. Every example uses the **PayPal sandbox**. Check the [changelog](https://ma-za-kpe.github.io/stood/changelog.html) for what has shipped |
 | **Licence** | MIT |
 | **Hosted demo** | `https://stood-api.onrender.com/v1` (sandbox, free tier: the first request after idle can take about 1 min) |
 | **SDK (planned)** | `npm i @stood/sdk` (TypeScript, APIMatic-generated). Kotlin and Python later |
@@ -16,7 +16,7 @@
 
 ## What Stood does, in 20 seconds
 
-**Current demos are simulated. No payment is executed.** Provider keys do not change synthetic fixture results into real results. The isolated PayPal HTTP simulator can run without keys; see [the simulator guide](../services/simulators/README.md). Full provider switching and the complete Yard demo remain T-0230/T-0233. Actual PayPal connections remain sandbox-only and require qualification.
+**The hosted platform connects to the real PayPal sandbox.** `/health` reports readiness; no real money moves. The illustrative demos and isolated local network use synthetic evidence and execute no real payment. Provider keys do not change synthetic fixture results into real results. The isolated PayPal HTTP simulator can run without keys; see [the simulator guide](../services/simulators/README.md). Full provider switching and the complete Yard demo remain T-0230/T-0233. Actual PayPal connections remain sandbox-only and require qualification.
 
 Your buyer or buying agent pays an operator for a code milestone against frozen signed acceptance tests and a budget mandate. Stood sits between "the stage is done" and "the money moves":
 
@@ -390,7 +390,7 @@ This stores references only: no report upload/fetch, repository execution, asses
 
 ## Local Yard API shell (T-0175)
 
-Run `docker compose --profile yard up -d --wait yard-api`. Its localhost-only port 3001 exposes `GET /health`, reporting every product capability as false. Planned `/yard/v1/*` workflows return 503 without processing input. This is a separate runtime receiving no Stood/PayPal credentials; the Board, Foreman, events, credential intake and Yard website remain unimplemented.
+Run `docker compose --profile yard up -d --wait yard-api`. Its localhost-only port 3001 exposes `GET /health`, reporting the capabilities actually configured. Planned `/yard/v1/*` workflows return 503 without processing input. This is a separate runtime receiving no Stood/PayPal credentials; the hosted Board, events and site log are now connected; the Foreman and Yard-to-Stood payments still require their live adapters.
 
 ## Server-side Stood SDK foundation (T-0179)
 
@@ -404,7 +404,7 @@ The reconciliation worker now requires an explicit `PROVIDER_PAYPAL` selection a
 
 `scripts/dev mock` now builds and starts a separate Docker project for Stood, the restricted Postgres-backed Yard Board and the PayPal simulator, then drives the shared Stood scenario files over HTTP. It uses fixed synthetic credentials, publishes no host ports and deletes only its own containers and disposable database/dependency volumes on exit. It never reads your DATABASE_URL or forwards your PayPal keys. Failed runs save synthetic service logs under `artifacts/mock-network/`.
 
-Authorization/approval and assessments are explicitly test-only fixture commands, not shipped financial API routes or authentic runner reports. Those controls compile into `.mock-dist` for this stack and cannot enter the production API package. `scripts/dev mock:integration` retains the faster seven-case integration suite. The `mock-network` CI job runs on every PR with a ten-minute timeout; it must pass before merge. Yard/Crew and browser scenarios are added separately, and qualified live funding remains blocked.
+Authorization/approval and assessments are explicitly test-only fixture commands, not shipped financial API routes or authentic runner reports. Those controls compile into `.mock-dist` for this stack and cannot enter the production API package. `scripts/dev mock:integration` retains the faster seven-case integration suite. The `mock-network` CI job runs on every PR with a ten-minute timeout; it must pass before merge. Yard/Crew and browser scenarios are added separately, and this isolated composition executes no real payments; hosted Stood signing and funding are qualified separately.
 
 ### First connected Yard fixture
 
@@ -414,9 +414,9 @@ Funding and assessment are explicit test-only fixture controls, not authenticate
 
 ### Yard page and browser checks
 
-The static Yard preview lives in `site/yard/`, connects to Stood’s page, and uses the outlined Yard kit. The page’s scenario controls change illustrations only; they do not call the Board or payment APIs. It says that no payment is executed before the first sample verdict. Planner, hosting, handover and live integration claims remain labelled as planned.
+The static Yard preview lives in `site/yard/`, connects to Stood’s page, and uses the outlined Yard kit. The page’s scenario controls change illustrations only; they do not call the Board or payment APIs. It says that no payment is executed before the first sample verdict. The page links to hosted Yard sign-in and reports live health. The Foreman and Yard payment adapter remain the next batch.
 
-Run `scripts/dev site` to build and serve Stood at <http://localhost:8082/> and Yard at <http://localhost:8082/yard/>. Ports 3000/3001 remain API-only; their `/` route returns 404. Re-run the command after page changes to rebuild the preview.
+Run `scripts/dev site` to build and serve Stood at <http://localhost:8082/> and Yard at <http://localhost:8082/yard/>. The hosted Yard service serves its app at `/app/`; the static local site remains a separate preview. Re-run the command after page changes to rebuild the preview.
 
 Run `scripts/check-site` to build the static site and check it in a dedicated Docker Chromium browser on Node 24. It checks desktop/mobile layout, keyboard fixture selection, both-way navigation, missing assets, reduced motion and simulation disclosure. Screenshots go to `artifacts/site/`. The separate `site-browser` CI job runs the same command; it is a page smoke test, not a full accessibility audit or the remaining Yard application E2E suite.
 
@@ -444,15 +444,15 @@ scripts/dev demo:down
 
 Stopping deletes this demo's disposable volumes. It leaves the ordinary development stack alone. Stop before reseeding. `scripts/dev mock` uses a randomly named disposable stack and always removes it after testing; it remains the required CI check.
 
-The full pre-credentials batch is still in progress. Do not add keys to the demo or switch it to live. Provider qualification and hosted authentication are separate from this synthetic composition. The credential handoff will name each provider's required scopes and the tests that need real sandbox keys. See TASKS.md, issue #41, for unfinished work.
+This disposable test composition remains isolated from hosted credentials. For the live PayPal sandbox and hosted Yard sign-in, use the links above and the private settings described in SETUP.md. Keep the local test stack isolated when exercising recovery scenarios.
 
-The shared mock scenarios now include a missed capture recovered by one same-ID retry after a matched fresh status lookup, plus a captured payment whose reply was lost and is reconciled without another submission. Both assert exactly one simulated capture and matching payment history. A consumed retry is not reset by restarting a service. This adds local recovery evidence; real financial HTTP remains off until funding/evidence integration and sandbox qualification are complete.
+The shared mock scenarios now include a missed capture recovered by one same-ID retry after a matched fresh status lookup, plus a captured payment whose reply was lost and is reconciled without another submission. Both assert exactly one simulated capture and matching payment history. A consumed retry is not reset by restarting a service. This adds local recovery evidence. Hosted signing and funding have separate PayPal sandbox qualification; no real money moves.
 
 ### Foreman in the isolated mock network
 
 The mock composition now runs the real LangGraph planner with a scripted PlannerModel and Yard's restricted Postgres runtime role. Signed server requests create/read drafts under `/yard/v1/plans`, review under `/plans/{id}/review`, request a revised draft under `/plans/{id}/revisions`, and recover failed model work under `/plans/{id}/recover`. Review/revision requests use the current review version in If-Match; exact repeated creation preserves the original server time. Operator signatures remain on the server.
 
-Only the owning buyer can read or change a draft. ACCEPT yields READY_FOR_BASELINE and a DRAFT blueprint; it posts no work, signs no mandate and executes no payment. The result identifies its simulated provenance and states that no AI provider was called. The shared network scenario exercises creation, rejection, revision, stale-version protection and baseline wait. Clarification, the buyer intake screen and qualified baseline execution remain under construction in the pre-key batch.
+Only the owning buyer can read or change a draft. ACCEPT yields READY_FOR_BASELINE and a DRAFT blueprint; it posts no work, signs no mandate and executes no payment. The result identifies its simulated provenance and states that no AI provider was called. The shared network scenario exercises creation, rejection, revision, stale-version protection and baseline wait. Hosted private intake is available; connecting the live Foreman and baseline execution is next.
 
 ### Private intake drafts in the mock Yard service
 
@@ -472,4 +472,20 @@ The scripted Foreman proposes a blueprint for review and revision. **Edit bluepr
 
 In the connected mock project room, choose **Show site log** on a milestone to read Crew progress. **Pause scrolling** keeps your place; **Follow latest** resumes following new rows. The log is private to the owning buyer or that work order's current claimed builder. Progress text is display only and cannot mark work paid.
 
-The configured mock services use real restricted Postgres storage and the pinned Gitleaks scanner for these rows. Payment, Crew and repository outcomes remain simulated. The local retention worker uses the shared simulated clock and replaces message rows older than 90 days with counts; hosted job deployment is still planned. Ordinary unconfigured Yard startup reports `siteLog: false` and refuses the log workflow.
+The configured mock services use real restricted Postgres storage and the pinned Gitleaks scanner for these rows. Payment, Crew and repository outcomes remain simulated. The local retention worker uses the shared simulated clock and replaces message rows older than 90 days with counts; hosted Yard has its own Board, events and site log; retention worker scheduling remains a separate task. Ordinary unconfigured Yard startup reports `siteLog: false` and refuses the log workflow.
+
+## Hosted Yard: sign in and import an idea
+
+Open <https://stood-yard-api.onrender.com/app/>. Enter the operator access code privately supplied by the owner. The service determines whether you are a buyer or builder; visitors cannot select a role to gain access. Choose **The Board** to read current work, or as a buyer choose **Describe a project** to start a private brief.
+
+To reuse Startup Tribunal research:
+
+1. Choose **Browse free research ideas**, or open <https://startuptribunal.com/catalog>. Each discovery card preserves the tribunal's rejection caveat and links to the full blueprint. Approved research is available through Startup Tribunal's own catalog.
+2. On an accessible report choose **Copy JSON**, then paste it into **Startup Tribunal JSON** in Yard. No provider key or account connection is required.
+3. Choose **Review imported idea**. Read the problem, users, features, constraints, source decision and numeric quality signals. For a multi-idea report, explicitly choose one idea. Source scores are research, not Yard approval or payment evidence.
+4. Choose **Use this idea in a private intake**. The buyer owns the saved brief. Complete the missing budget, deadline, proof flow, repository, human sign-off and consent; no research field can authorise these decisions. Long reports show an explicit shortened-excerpt warning.
+5. Keep the saved intake link. Reload and choose **Resume saved intake** to recover it. Sign out before sharing a device. Sessions expire after eight hours and on a service restart. The hosted Foreman is not connected yet; saving research creates no mandate, work order or payment.
+
+The page refuses malformed JSON, inputs over 128 KiB UTF-8, excessive nesting, recognised credentials, private storage pointers and viewer identifiers. Unknown report fields are retained only as in-memory research data and ignored by intake mapping. Links in pasted research are never fetched.
+
+For a production-image browser check against disposable Postgres and synthetic operator codes, run `scripts/check-hosted-yard`. It uses the existing Chromium/axe tooling and saves screenshots to `artifacts/hosted-yard/`.

@@ -120,7 +120,7 @@ try {
       await page
         .getByRole('note')
         .innerText()
-        .then((t) => t.includes('No real payment is executed')),
+        .then((t) => t.includes('No payment is executed')),
     );
     await page.getByRole('status').filter({ hasText: 'Connected' }).waitFor();
     await page.getByRole('button', { name: 'Show site log', exact: true }).click();
@@ -401,9 +401,7 @@ try {
     'Other tab changed the scope',
   );
   await intakePage.getByRole('button', { name: 'Builder', exact: true }).click();
-  await intakePage
-    .getByText('Choose the simulated buyer to start or resume a private intake.', { exact: true })
-    .waitFor();
+  await intakePage.getByText('Sign in as a buyer to start or resume a private intake.', { exact: true }).waitFor();
   assert.equal(
     await intakePage.getByLabel('Your GitHub repository', { exact: true }).count(),
     0,

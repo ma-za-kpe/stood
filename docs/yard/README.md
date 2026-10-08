@@ -3,7 +3,7 @@
 > **Yard builds. Stood pays.**
 > Describe the product. The Foreman draws the blueprint. You sign it once. The Crew builds it, in your repo, one milestone at a time, and every milestone is paid only when Stood says the work stands.
 
-**Status:** design phase with tested foundations: local API shell, pure blueprint/lease domains, restricted-schema provisioning and a server-side DRAFT/QUEUED SDK. The product workflows are still planned. **Builder agents (the Crew) come last.** First come the Foreman (planning), the Board (job posting) and human builders.
+**Status:** hosted sandbox phase. Yard serves its page, owner-issued browser sign-in, Board, events, site log and private intake. StartupTribunal research can be reviewed and imported into an intake. Stood’s signing and funding API is connected to PayPal sandbox; Yard’s Foreman and payment adapter are next. **Builder agents (the Crew) come last.**
 **Relationship to Stood:** same repository, **separate product, separate character**. Yard is a *caller* of Stood, exactly like [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite). It gets no private shortcuts into the money path ([Y02](Y02-product-boundary.md)).
 
 | # | Doc | Covers |

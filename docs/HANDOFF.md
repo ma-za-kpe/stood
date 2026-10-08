@@ -2,7 +2,9 @@
 
 **Hosted sandbox (2026-10-08):** the PayPal sandbox app, Neon (Frankfurt) and both Render services exist. What was set up, where each value lives and how to repeat it are in [`SETUP.md`](SETUP.md).
 
-**Status (2026-10-06):** everything below runs today against simulators and fakes, and the mock network suite is green. Nothing here has been qualified against a live provider. This page lists:
+**Status (2026-10-08):** Stood is deployed and qualified on the real PayPal sandbox; saved-account signing, funding, verified webhooks and hourly reconciliation are connected. Yard's Board, events and site log are hosted; private sign-in and intake ship in the C2 web/import batch. Local simulated tests remain separate evidence. The tables below retain the credential inventory and original qualification checklist; completed evidence is in TASKS.md and SETUP.md.
+
+This page lists:
 
 1. every credential the product will need, with its minimum scope
 2. where each credential goes
@@ -36,6 +38,7 @@
 | GitHub App (app id, private key, webhook secret) | Created 2026-10-08: [`yard-builder`](https://github.com/apps/yard-builder), owned by `ma-za-kpe` ([SETUP §7](SETUP.md#7-yard-github-app)) | Repository contents read/write and pull requests read/write on **selected repositories only**; metadata read. No organisation or admin permissions | Yard runtime environment |
 | Planner model key (`GROK_PLANNER_API_KEY`) | xAI (Grok), chosen 2026-10-08 | A project-scoped key with a hard **spend limit**; no organisation admin | Yard Foreman runtime only. Never in the build sandbox, prompts or logs |
 | Crew endpoint key id + HMAC secret | The separate Crew project ([Y21](yard/Y21-crew-service-contract.md)) | Signs dispatch nudges only; grants no Board or payment access | Yard runtime environment |
+| Operator access codes | Generated with `scripts/dev yard-access-codes`, private file `~/.config/stood/yard-access-codes` (0600) | One operator identity; eight-hour browser session, restart signs out | `accessCode` in Render `YARD_OPERATORS`; shared privately by the owner, never in issues or screenshots |
 | Operator keys (buyer, builders) | Issued by Yard per operator | Signed Board commands for that operator only | Each operator's own client |
 | Buyer **test** keys (Supabase, Firebase, AWS, …) | The buyer, at step 9, after signing | TEST/DEV projects only; live keys are refused | Entered by the buyer in the app; stored encrypted, write-only, deleted 7 days after handover |
 
