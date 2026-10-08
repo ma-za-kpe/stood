@@ -74,3 +74,49 @@ it('places and captures a later hold from a saved payment token without buyer ap
     await h.close();
   }
 });
+
+// Found on the real sandbox (2026-10-08): without usage_type MERCHANT, PayPal creates a setup token that can
+// never be approved (status CREATED, no approve link). With it: PAYER_ACTION_REQUIRED and an approve link.
+it('only offers buyer approval for a PayPal setup token with usage_type MERCHANT, which the SDK adapter sends', async () => {
+  const h = await simulatorServer();
+  try {
+    const create = async (paypal: Record<string, unknown>, key: string) =>
+      (await (
+        await fetch(`${h.baseUrl}/v3/vault/setup-tokens`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer sim-access-token',
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': key,
+          },
+          body: JSON.stringify({ payment_source: { paypal } }),
+        })
+      ).json()) as { status: string; links: { rel: string }[] };
+    const without = await create({ permit_multiple_payment_tokens: true }, 'no-usage');
+    expect(without.status).toBe('CREATED');
+    expect(without.links.map((l) => l.rel)).not.toContain('approve');
+    const merchant = await create({ permit_multiple_payment_tokens: true, usage_type: 'MERCHANT' }, 'merchant');
+    expect(merchant.status).toBe('PAYER_ACTION_REQUIRED');
+    expect(merchant.links.map((l) => l.rel)).toContain('approve');
+    const sdk = new ServerSdkTransport({
+      appEnv: 'ci',
+      mode: 'sim',
+      baseUrl: h.baseUrl,
+      clientId: 'sim-client',
+      clientSecret: 'sim-secret',
+      vaultReturnUrl: 'http://api:3000/paypal/return',
+      vaultCancelUrl: 'http://api:3000/paypal/cancel',
+    });
+    const viaAdapter = await sdk.vault('CREATE_SETUP', {
+      mode: 'sim',
+      requestId: 'adapter-setup',
+      customerRef: 'c'.repeat(64),
+      setupId: null,
+      tokenId: null,
+      customerId: null,
+    });
+    expect(viaAdapter.body).toMatchObject({ status: 'PAYER_ACTION_REQUIRED' });
+  } finally {
+    await h.close();
+  }
+});

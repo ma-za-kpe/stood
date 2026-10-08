@@ -16,7 +16,7 @@ describe('PayPal HTTP simulator protocol', () => {
         headers,
         body: JSON.stringify({
           customer: { merchant_customer_id: 'signed-terms-reference' },
-          payment_source: { paypal: {} },
+          payment_source: { paypal: { usage_type: 'MERCHANT' } },
         }),
       })
     ).json();
@@ -47,7 +47,7 @@ describe('PayPal HTTP simulator protocol', () => {
       sim.app.request('/v3/vault/setup-tokens', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ payment_source: { paypal: {} } }),
+        body: JSON.stringify({ payment_source: { paypal: { usage_type: 'MERCHANT' } } }),
       });
     const first = await (await create()).json();
     time = 3 * 3600000 - 1;
@@ -317,10 +317,10 @@ describe('PayPal HTTP simulator protocol', () => {
       await sim.app.request('/v3/vault/setup-tokens', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ payment_source: { paypal: {} } }),
+        body: JSON.stringify({ payment_source: { paypal: { usage_type: 'MERCHANT' } } }),
       })
     ).json();
-    expect(setup.status).toBe('CREATED');
+    expect(setup.status).toBe('PAYER_ACTION_REQUIRED'); // as the real sandbox answers a MERCHANT setup token
     sim.approveSetup(setup.id);
     const response = await sim.app.request('/v3/vault/payment-tokens', {
       method: 'POST',

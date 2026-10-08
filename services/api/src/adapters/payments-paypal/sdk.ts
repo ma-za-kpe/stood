@@ -5,6 +5,7 @@ import {
   Environment,
   OrdersController,
   PaymentsController,
+  PaypalPaymentTokenUsageType,
   TransactionSearchController,
   VaultController,
   VaultTokenRequestType,
@@ -135,7 +136,14 @@ export class ServerSdkTransport implements PayPalTransport, ProviderTransactions
               paypalRequestId: input.requestId,
               body: {
                 customer: { merchantCustomerId: input.customerRef },
-                paymentSource: { paypal: { permitMultiplePaymentTokens: true, experienceContext: this.callbacks! } },
+                // MERCHANT usage is required: without it PayPal creates a setup token the buyer can never approve.
+                paymentSource: {
+                  paypal: {
+                    permitMultiplePaymentTokens: true,
+                    usageType: PaypalPaymentTokenUsageType.Merchant,
+                    experienceContext: this.callbacks!,
+                  },
+                },
               },
             })
           : action === 'CREATE_TOKEN'

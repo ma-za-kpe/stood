@@ -46,6 +46,7 @@ vi.mock('@paypal/paypal-server-sdk', () => ({
     getPaymentToken = fake.getToken;
   },
   VaultTokenRequestType: { SetupToken: 'SETUP_TOKEN' },
+  PaypalPaymentTokenUsageType: { Merchant: 'MERCHANT' },
 }));
 
 import { type PayPalCall, ServerSdkTransport } from './sdk.js';
@@ -85,6 +86,7 @@ it('uses separate persisted Vault request IDs and only server-configured callbac
       paymentSource: {
         paypal: {
           permitMultiplePaymentTokens: true,
+          usageType: 'MERCHANT',
           experienceContext: {
             returnUrl: 'https://app.example.test/paypal/return',
             cancelUrl: 'https://app.example.test/paypal/cancel',

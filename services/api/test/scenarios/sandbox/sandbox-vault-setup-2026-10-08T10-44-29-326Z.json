@@ -1,0 +1,20 @@
+{
+  "scenario": "vault-setup",
+  "mode": "live",
+  "runId": "sandbox-vault-setup-2026-10-08T10-44-29-326Z",
+  "outcome": "SETUP_NOT_CREATED",
+  "steps": [
+    {
+      "step": "CREATE_SETUP",
+      "httpStatus": 201,
+      "status": "CREATED",
+      "ids": {
+        "setup": "8MA55078J87458749"
+      },
+      "amount": null,
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-08T10:44:31.020Z"
+}

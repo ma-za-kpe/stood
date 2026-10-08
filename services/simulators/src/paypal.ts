@@ -137,7 +137,8 @@ export function createPayPalSimulator(config: {
   };
   const approveSetup = (setupId: string) => {
     const setup = setups.get(setupId);
-    if (setup?.status !== 'CREATED') throw new Error('Unknown simulator setup');
+    // Only an approvable (MERCHANT-usage) setup token can be approved, as in the real sandbox.
+    if (setup?.status !== 'PAYER_ACTION_REQUIRED') throw new Error('Unknown simulator setup');
     setup.status = 'APPROVED';
     object(object(setup.payment_source).paypal).payer_id = 'SIM-PAYER';
   };
@@ -433,9 +434,11 @@ export function createPayPalSimulator(config: {
         reply = error(422, 'INVALID_PAYMENT_SOURCE');
       else {
         const sid = id('SETUP');
+        // Like the real sandbox: only a MERCHANT-usage PayPal setup token can be approved by the buyer.
+        const approvable = object(object(body.payment_source).paypal).usage_type === 'MERCHANT';
         const setup = {
           id: sid,
-          status: 'CREATED',
+          status: approvable ? 'PAYER_ACTION_REQUIRED' : 'CREATED',
           customer: {
             id: id('CUSTOMER'),
             ...(customer.merchant_customer_id !== undefined
@@ -443,7 +446,9 @@ export function createPayPalSimulator(config: {
               : {}),
           },
           payment_source: { paypal: {} },
-          links: [{ href: `http://paypal-sim:8080/__sim/setup-approve/${sid}`, rel: 'approve', method: 'POST' }],
+          links: approvable
+            ? [{ href: `http://paypal-sim:8080/__sim/setup-approve/${sid}`, rel: 'approve', method: 'POST' }]
+            : [],
         };
         setups.set(sid, setup);
         reply = { status: 201, body: setup };
