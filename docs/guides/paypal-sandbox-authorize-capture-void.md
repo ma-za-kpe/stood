@@ -68,6 +68,22 @@ scripts/dev sandbox-run refuse    # authorize, then void
 echo 'UEFZTUVOVF9BTFJFQURZX0RPTkU=' | base64 -d   # PAYMENT_ALREADY_DONE
 ```
 
+## 3b. Save the buyer once, then hold without them (Vault)
+
+For later milestones the buyer should not have to approve every hold. PayPal's Vault saves their PayPal as a payment token once; later orders name the token and need no approval.
+
+```bash
+scripts/dev sandbox-run vault-setup     # the buyer approves saving PayPal, once
+scripts/dev sandbox-run vault-release   # a later hold from the saved token, then capture: no approval
+scripts/dev sandbox-run vault-refuse    # a later hold from the saved token, then void
+```
+
+1. **Create a setup token** (`POST /v3/vault/setup-tokens`, `payment_source.paypal` with return and cancel URLs on one https origin).
+2. **The buyer approves** at its `approve` link.
+3. **Read the setup token back** until `APPROVED`; it carries PayPal's `customer.id`.
+4. **Create the payment token** (`POST /v3/vault/payment-tokens` from the setup token and the customer id). Treat its id as a secret: it is a standing permission to charge the buyer. Stood keeps it in `.env` only and never records it.
+5. **Later holds:** create the order with `payment_source.paypal.vault_id` = the token. No approval link is needed; authorize, then capture or void as in step 3.
+
 ## 4. Check what PayPal recorded, independently
 
 Don't trust your own code's view alone. Stood keeps a second, independent reader ([`tools/paypal-witness`](../../tools/paypal-witness/witness.py), Python standard library only, read-only):

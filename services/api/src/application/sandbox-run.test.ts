@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { simulatorServer } from '../../test/contracts/paypal-simulator.js';
 import { ServerSdkTransport } from '../adapters/payments-paypal/sdk.js';
-import { runSandboxScenario } from './sandbox-run.js';
+import { runSandboxScenario, runVaultSetup } from './sandbox-run.js';
 
 // T-0224: one scripted hold → release or refuse run through Stood's own SDK adapter, recorded without personal data.
 describe('Sandbox scenario run (T-0224)', () => {
@@ -123,5 +123,61 @@ describe('recording a PayPal refusal', () => {
       debugId: 'dbg-403',
     });
     expect(recording.outcome).toBe('CREATED');
+  });
+});
+
+describe('Vault sandbox runs (T-0154)', () => {
+  it('saves the buyer once, then holds and settles later with no approval, never recording the token', async () => {
+    const h = await simulatorServer();
+    try {
+      const sdk = new ServerSdkTransport({
+        appEnv: 'ci',
+        mode: 'sim',
+        baseUrl: h.baseUrl,
+        clientId: 'sim-client',
+        clientSecret: 'sim-secret',
+        vaultReturnUrl: 'http://api:3000/paypal/return',
+        vaultCancelUrl: 'http://api:3000/paypal/cancel',
+      });
+      const saved = await runVaultSetup({
+        mode: 'sim',
+        transport: sdk,
+        runId: 'vault-1',
+        approve: async (link) => {
+          await fetch(`${h.baseUrl}/__sim/setup-approve/${link.split('/').pop()}`, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer sim-access-token', 'Content-Type': 'application/json' },
+            body: '{}',
+          });
+        },
+        sleep: async () => {},
+        maxPolls: 3,
+      });
+      expect(saved.recording.outcome).toBe('VAULTED');
+      expect(saved.tokenId).toBeTruthy();
+      expect(JSON.stringify(saved.recording)).not.toContain(saved.tokenId ?? 'missing');
+      for (const [scenario, end] of [
+        ['release', 'CAPTURED'],
+        ['refuse', 'VOIDED'],
+      ] as const) {
+        const approvals: string[] = [];
+        const later = await runSandboxScenario({
+          scenario,
+          mode: 'sim',
+          transport: sdk,
+          payeeRef: 'SIMMERCHANT1',
+          runId: `vault-${scenario}`,
+          vaultId: saved.tokenId ?? '',
+          approve: async (link) => void approvals.push(link),
+          sleep: async () => {},
+          maxPolls: 1,
+        });
+        expect(approvals).toEqual([]);
+        expect(later.outcome).toBe(end);
+        expect(JSON.stringify(later)).not.toContain(saved.tokenId ?? 'missing');
+      }
+    } finally {
+      await h.close();
+    }
   });
 });
