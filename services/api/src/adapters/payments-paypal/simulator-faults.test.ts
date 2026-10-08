@@ -32,7 +32,7 @@ describe('Real SDK simulator fault outcomes', () => {
       expect((await h.transport.call('GET_AUTHORIZATION', h.input)).body).toMatchObject({ status: 'CAPTURED' });
       // Only this explicit caller retry runs; the SDK never retries automatically.
       const replay = await h.transport.call('CAPTURE', h.input);
-      expect(replay.status).toBe(201);
+      expect(replay.status).toBe(200); // a replayed capture: the same capture, answered 200 as on the real sandbox
       expect(replay.body).toMatchObject({ status: 'COMPLETED' });
     } finally {
       await h.close();

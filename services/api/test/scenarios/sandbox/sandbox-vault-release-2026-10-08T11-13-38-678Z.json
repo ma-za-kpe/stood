@@ -1,0 +1,54 @@
+{
+  "scenario": "release",
+  "mode": "live",
+  "runId": "sandbox-vault-release-2026-10-08T11-13-38-678Z",
+  "outcome": "CAPTURED",
+  "steps": [
+    {
+      "step": "CREATE_ORDER",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "order": "94R06034KA109122H",
+        "hold": "87H03488EJ730153E"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "CAPTURE",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "capture": "0P921496TW870890P"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "CAPTURE_REPLAY",
+      "httpStatus": 200,
+      "status": "COMPLETED",
+      "ids": {
+        "capture": "0P921496TW870890P"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_AUTHORIZATION",
+      "httpStatus": 200,
+      "status": "CAPTURED",
+      "ids": {
+        "hold": "87H03488EJ730153E"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-08T11:13:45.394Z"
+}
