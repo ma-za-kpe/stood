@@ -6,7 +6,7 @@ Run tests on an isolated CPU/container host separate from the API; choose the ac
 
 The service lists below are target deployment choices, not hosted deployment evidence. Current local services use SeaweedFS and Mailpit. Signed runner, Yard and A2A/AP2 are planned.
 
-**Target cost: $0/month** on free tiers plus partner credits ([NFR-07](T01-requirements.md#non-functional-requirements)). Region: **Frankfurt (EU Central)**, the closest Render region to both London (payers) and Accra / Lagos (inspectors and platform), and close to [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)'s `africa-south1` Firebase.
+**Target cost: $0/month** on free tiers plus partner credits; as deployed, the only paid item is the Starter reconciler worker (about $7/month) ([NFR-07](T01-requirements.md#non-functional-requirements)). Region: **Frankfurt (EU Central)**, the closest Render region to both London (payers) and Accra / Lagos (inspectors and platform), and close to [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite)'s `africa-south1` Firebase.
 
 ## Topology
 
@@ -50,9 +50,11 @@ There's no production environment during the hackathon. Going live would need a 
 
 ## Services on Render (Blueprint `render.yaml`)
 
+**As deployed (2026-10-08):** `stood-api` (free web service) and `stood-reconciler` (**Starter** background worker, about $7/month, because Render has no free workers), both Docker, Frankfurt, deployed on purpose (`autoDeploy: false`). The server does **not** run migrations at start: migrations are applied with `pnpm db:migrate` before a release. Neon uses the **direct** URL, not the pooled one, because Stood uses `LISTEN`. `stood-web` and Workflows below are still planned. The full record is [`SETUP.md`](../SETUP.md).
+
 | Service | Type | Plan | Build | Start | Health |
 |---|---|---|---|---|---|
-| `stood-api` | Web service (**Docker runtime**, image from [T15](T15-docker-and-local-dev.md)) | Free | `pnpm i --frozen-lockfile && pnpm -F api build` | `node dist/server.js` (runs migrations first) | `GET /health` (DB + R2 + PayPal token check) |
+| `stood-api` | Web service (**Docker runtime**, image from [T15](T15-docker-and-local-dev.md)) | Free | `pnpm i --frozen-lockfile && pnpm -F api build` | `node dist/server.js` (migrations are applied before release, not at start) | `GET /health` (DB + R2 + PayPal token check) |
 | `stood-web` | Static site | Free | `pnpm -F web build` | — (served from `dist`) | — |
 | `stood-workflows` | Workflows (beta) | Free | `pnpm -F workflows build` | Render registers tasks from the repo | Task run status |
 
@@ -62,7 +64,7 @@ Infrastructure as code: `render.yaml` (a Blueprint) is committed. Every service 
 
 | Service | Setup |
 |---|---|
-| **Neon** | One project `stood-demo` (eu-central-1). Branch `main`, plus an ephemeral branch per PR (optional). Pooled connection string in Render env |
+| **Neon** | One project `stood-demo` (eu-central-1). Branch `main`, plus an ephemeral branch per PR (optional). **Direct** (unpooled) connection string in Render env, because Stood uses `LISTEN` |
 | **R2** | Bucket `stood-evidence` (private), lifecycle rule: delete `pkg/*` after 180 days. API token scoped to that bucket. Separate read-only token for the evidence agent |
 | **Workers AI** | Account API token scoped to Workers AI only. Lives with the evidence agent, never in `stood-api` |
 | **Astropods** | `evidence-agent/astropods.yml`, deployed with the Astro CLI from CI on release tags |

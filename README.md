@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://ma-za-kpe.github.io/stood/"><b>Website</b></a> ·
   <a href="docs/USAGE.md"><b>Usage manual</b></a> ·
+  <a href="docs/SETUP.md"><b>Setup</b></a> ·
   <a href="https://ma-za-kpe.github.io/stood/changelog.html"><b>Changelog</b></a> ·
   <a href="docs/README.md"><b>Docs</b></a> ·
   <a href="TASKS.md"><b>Roadmap</b></a>
@@ -33,6 +34,22 @@
 > **Simulated demos. No payment is executed.** Current demo evidence and outcomes are synthetic. An isolated PayPal HTTP simulator exercises the real SDK without keys; real-provider connections require sandbox keys and qualification. Keys alone do not qualify an adapter or turn fixtures into real results.
 >
 > ⚠️ **Status: early implementation.** Docker tooling, tested Stood/Yard domains, a server-side HTTP SDK, durable DRAFT/package intake and a synthetic-fixture API are implemented. Full funding, trusted execution, hosted replay and production product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap) and [simulator guide](services/simulators/README.md).
+
+## Public links
+
+| What | Link | Status |
+|---|---|---|
+| Website | <https://ma-za-kpe.github.io/stood/> | Live |
+| Yard (companion site) | <https://ma-za-kpe.github.io/stood/yard/> | Live |
+| Changelog | <https://ma-za-kpe.github.io/stood/changelog.html> | Live |
+| Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**; payments stay off until the PayPal webhook is added ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
+| Source code | <https://github.com/ma-za-kpe/stood> | MIT |
+| Releases | <https://github.com/ma-za-kpe/stood/releases> | |
+| Work in progress | [#49 pre-credentials](https://github.com/ma-za-kpe/stood/issues/49) · [#50 credentials and deployment](https://github.com/ma-za-kpe/stood/issues/50) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | |
+| Hackathon | <https://paypalaihackathon.devpost.com/> | |
+| Yard GitHub App | <https://github.com/apps/yard-builder> | Installed only on [`yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox) ([setup](docs/SETUP.md#7-yard-github-app)) |
+| Yard test repository | <https://github.com/ma-za-kpe/yard-sandbox> | Throwaway: where Yard's `wo/*` branches and pull requests appear in demos |
+| PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
 ## The problem
 
@@ -180,9 +197,9 @@ Implemented core: `services/api`. Planned additional services: `apps/web`, `serv
 
 | Area | Docs |
 |---|---|
-| **Use it** | [Usage manual](docs/USAGE.md) |
+| **Use it** | [Usage manual](docs/USAGE.md) · [Setup record (hosted sandbox)](docs/SETUP.md) · [Key handoff](docs/HANDOFF.md) |
 | **Product** | [Overview](docs/09-stood.md) · [S01 Problem](docs/stood/S01-problem-statement.md) · [S02 Boundary](docs/stood/S02-product-boundary.md) · [S03 Personas](docs/stood/S03-personas.md) · [S04 Outcomes](docs/stood/S04-job-story-and-outcomes.md) · [S05 Features](docs/stood/S05-feature-list.md) · [S06 Voice](docs/stood/S06-voice-and-states.md) · [S08 Screens](docs/stood/S08-screens.md) · [S11 Evidence integrity](docs/stood/S11-evidence-integrity.md) · [S16 Use cases](docs/stood/S16-use-cases-and-evidence-profiles.md) |
-| **Technical** | [T01 Requirements](docs/tech/T01-requirements.md) · [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) · [T05 Data](docs/tech/T05-data-model.md) · [T06 PayPal](docs/tech/T06-paypal-integration.md) · [T07 Evidence](docs/tech/T07-evidence-pipeline.md) · [T08 EyeOnSite](docs/tech/T08-eyeonsite-integration.md) · [T09 Stack](docs/tech/T09-tech-stack.md) · [T10 Deployment](docs/tech/T10-deployment.md) · [T11 Security](docs/tech/T11-security-privacy.md) · [T12 Testing](docs/tech/T12-testing-and-quality.md) · [T13 Runbooks](docs/tech/T13-observability-and-runbooks.md) · [T14 Milestones](docs/tech/T14-feature-breakdown-and-milestones.md) · [T15 Docker](docs/tech/T15-docker-and-local-dev.md) |
+| **Technical** | [T01 Requirements](docs/tech/T01-requirements.md) · [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) · [T05 Data](docs/tech/T05-data-model.md) · [T06 PayPal](docs/tech/T06-paypal-integration.md) · [T07 Evidence](docs/tech/T07-evidence-pipeline.md) · [T08 EyeOnSite](docs/tech/T08-eyeonsite-integration.md) · [T09 Stack](docs/tech/T09-tech-stack.md) · [T10 Deployment](docs/tech/T10-deployment.md) · [T11 Security](docs/tech/T11-security-privacy.md) · [T12 Testing](docs/tech/T12-testing-and-quality.md) · [T13 Runbooks](docs/tech/T13-observability-and-runbooks.md) · [T14 Milestones](docs/tech/T14-feature-breakdown-and-milestones.md) · [T15 Docker](docs/tech/T15-docker-and-local-dev.md) · [T16 PayPal AI Toolkit](docs/tech/T16-paypal-ai-toolkit.md) |
 | **Design** | [S15 Design system "Volt"](docs/stood/S15-design-system.md) · [Brand assets](docs/brand/) |
 | **Hackathon** | [Rules and prizes](docs/06-paypal-hackathon.md) · [Partner map](docs/stood/S13-sponsor-integration.md) · [Plan](docs/stood/S12-hackathon-plan.md) · [Demo script](docs/stood/S09-demo-script.md) · [Submission checklist](docs/13-submission-checklist.md) |
 | **Decisions** | [Architecture decisions](docs/adr/) · [Audit log](docs/audit-log.md) · [Sources](docs/sources.md) |
@@ -218,16 +235,35 @@ What the gate checks ([WoW §8](docs/WAYS_OF_WORKING.md#8-validation-before-comm
 - banned words in user-facing copy
 - GitFlow branch names, Conventional Commits and DCO
 
-### 2. Run everything in Docker
+### 2. Install and run (Docker only)
+
+You need **git**, **Docker** (Desktop or Engine, with Compose v2) and **pre-commit** (step 1). Nothing else runs on your machine: Node, pnpm and Postgres all run in containers. No keys are needed for local work; the PayPal simulator stands in for PayPal.
 
 ```bash
 git clone https://github.com/ma-za-kpe/stood && cd stood
-docker compose build app
-./scripts/dev install
-docker compose up -d db s3 mail        # Postgres, local S3, Mailpit
-docker compose run --rm app pnpm test  # every command runs in a container
-docker compose up -d api              # synthetic fixtures, no payment execution
+git switch develop                     # the default branch for work
+cp .env.example .env && chmod 600 .env # names only; leave values empty for local work
+docker compose build app               # the dev image (Node 24, pnpm 10)
+./scripts/dev install                  # pnpm install inside the container
+./scripts/dev up                       # Postgres, local S3 (SeaweedFS), Mailpit
+docker compose run --rm app pnpm test  # unit tests; every command runs in a container
+./scripts/dev validate                 # the full gate: lint, types, boundaries, coverage, build, Postgres tests
+docker compose up -d api               # local API with synthetic fixtures, no payment execution
 ```
+
+**See the whole product locally** (Stood, Yard and the simulated network, no keys):
+
+```bash
+./scripts/dev demo                     # http://localhost:3002/ (Stood), /yard/, /yard/app/?project=yard-project
+./scripts/dev demo:down                # stop and remove it
+scripts/mock-network                   # the 15 network scenarios; must exit 0 before you push
+```
+
+**Use the real PayPal sandbox** instead of the simulator: create a sandbox app ([setup record, section 3](docs/SETUP.md#3-paypal-sandbox-app)), then run `./scripts/dev setup`. It asks for the keys, checks them with PayPal and never prints them. Set `PROVIDER_PAYPAL=live` (which still means the sandbox).
+
+**Hosting:** the hosted sandbox (Render + Neon) and every step to repeat it are in [`docs/SETUP.md`](docs/SETUP.md). Key names and scopes are in [`docs/HANDOFF.md`](docs/HANDOFF.md).
+
+Troubleshooting on macOS: if commands fail with `Operation not permitted` or `getcwd`, give your terminal app access to the Documents folder (System Settings → Privacy & Security → Files and Folders), then reopen it.
 
 ### 3. Branch, commit and open a PR (GitFlow)
 

@@ -1,5 +1,7 @@
 # Credential handoff: key inventory and deferred tests
 
+**Hosted sandbox (2026-10-08):** the PayPal sandbox app, Neon (Frankfurt) and both Render services exist. What was set up, where each value lives and how to repeat it are in [`SETUP.md`](SETUP.md).
+
 **Status (2026-10-06):** everything below runs today against simulators and fakes, and the mock network suite is green. Nothing here has been qualified against a live provider. This page lists:
 
 1. every credential the product will need, with its minimum scope
@@ -31,8 +33,8 @@
 | Credential | Where it comes from | Minimum scope | Where it goes |
 |---|---|---|---|
 | Yard key-encryption key(s) | Generate 32 random bytes, base64, per environment; give each an id (`k1`, `k2`, …) | Wraps per-secret data keys in the test-key vault ([Y19](yard/Y19-intake-form.md) §4) | Yard runtime environment only. Rotate by adding `k2`, switching current, running `rewrap`, then retiring `k1`. A KMS key replaces this in live (deferred) |
-| GitHub App (app id, private key, webhook secret) | Create a GitHub App owned by the operator | Repository contents read/write and pull requests read/write on **selected repositories only**; metadata read. No organisation or admin permissions | Yard runtime environment |
-| Planner model key | The chosen model provider | A project-scoped key with a hard **spend limit**; no organisation admin | Yard Foreman runtime only. Never in the build sandbox, prompts or logs |
+| GitHub App (app id, private key, webhook secret) | Created 2026-10-08: [`yard-builder`](https://github.com/apps/yard-builder), owned by `ma-za-kpe` ([SETUP §7](SETUP.md#7-yard-github-app)) | Repository contents read/write and pull requests read/write on **selected repositories only**; metadata read. No organisation or admin permissions | Yard runtime environment |
+| Planner model key (`GROK_PLANNER_API_KEY`) | xAI (Grok), chosen 2026-10-08 | A project-scoped key with a hard **spend limit**; no organisation admin | Yard Foreman runtime only. Never in the build sandbox, prompts or logs |
 | Crew endpoint key id + HMAC secret | The separate Crew project ([Y21](yard/Y21-crew-service-contract.md)) | Signs dispatch nudges only; grants no Board or payment access | Yard runtime environment |
 | Operator keys (buyer, builders) | Issued by Yard per operator | Signed Board commands for that operator only | Each operator's own client |
 | Buyer **test** keys (Supabase, Firebase, AWS, …) | The buyer, at step 9, after signing | TEST/DEV projects only; live keys are refused | Entered by the buyer in the app; stored encrypted, write-only, deleted 7 days after handover |
@@ -41,7 +43,7 @@
 
 | Account | Needed for | Notes |
 |---|---|---|
-| Render | Deploying the Blueprint, preview services | Free plan, Frankfurt. Secrets are prompted at Blueprint creation |
+| Render | Deploying the Blueprint, preview services | Frankfurt. `stood-api` free; `stood-reconciler` Starter (paid, no free workers). Secrets set through the Render API ([SETUP](SETUP.md#5-render)) |
 | Neon | Postgres | Free tier does not expire |
 | Kernel | Driving the sandbox buyer approval in a cloud browser | Sandbox buyer accounts only |
 | APIMatic, Postman, AG Studio, Bryntum | Partner integrations | Check licence and trial terms before adopting |
