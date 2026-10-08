@@ -381,7 +381,10 @@ export function createPayPalSimulator(config: {
       else if (action === 'void') {
         auth.status = 'VOIDED';
         emit('PAYMENT.AUTHORIZATION.VOIDED', auth);
-        reply = { status: 204, body: null };
+        // Like PayPal: 200 with the authorization when asked for return=representation, otherwise 204.
+        reply = /return=representation/.test(c.req.header('Prefer') ?? '')
+          ? { status: 200, body: structuredClone(auth) }
+          : { status: 204, body: null };
       } else if (
         !(action === 'reauthorize' && body.amount === undefined) &&
         canonical(amount(body.amount)) !== canonical(auth.amount)

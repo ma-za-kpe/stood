@@ -29,7 +29,10 @@ export function paypalTransportContract(name: string, setup: () => Promise<PayPa
       expect((await h.transport.call('GET_AUTHORIZATION', h.input)).body).toMatchObject({ status: 'CAPTURED' });
     });
     it('cancels without reporting a capture', async () => {
-      expect((await h.transport.call('VOID', h.input)).status).toBe(204);
+      // Stood asks for return=representation; the real sandbox then answers 200 with the authorization (T-0222).
+      const voided = await h.transport.call('VOID', h.input);
+      expect(voided.status).toBe(200);
+      expect(voided.body).toMatchObject({ id: h.input.authorizationId, status: 'VOIDED' });
       expect((await h.transport.call('GET_AUTHORIZATION', h.input)).body).toMatchObject({ status: 'VOIDED' });
       expect((await h.transport.call('CAPTURE', { ...h.input, requestId: 'late-capture' })).status).toBe(422);
     });
