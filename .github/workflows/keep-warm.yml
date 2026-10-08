@@ -1,0 +1,23 @@
+# T-0089: keep the free Render web service awake for judges and demos. Render sleeps a free service after
+# about 15 minutes idle; this pings /health every 10 minutes. GitHub runs schedules on a best-effort basis,
+# so a cold start (about a minute) is less likely, not impossible. One service fits Render's 750 free hours.
+name: keep-warm
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions: {}
+    steps:
+      - name: Ping the sandbox API health check
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 https://stood-api.onrender.com/health)
+          echo "stood-api /health -> $code"
+          [ "$code" = 200 ] || echo "::warning::stood-api /health answered $code"
