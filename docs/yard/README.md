@@ -6,6 +6,8 @@
 **Status:** hosted sandbox phase. Yard serves its page, owner-issued browser sign-in, Board, events, site log and private intake. StartupTribunal research can be reviewed and imported into an intake. Stood’s signing and funding API is connected to PayPal sandbox; Yard’s Foreman and payment adapter are next. **Builder agents (the Crew) come last.**
 **Relationship to Stood:** same repository, **separate product, separate character**. Yard is a *caller* of Stood, exactly like [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite). It gets no private shortcuts into the money path ([Y02](Y02-product-boundary.md)).
 
+Live entry points: [Stood website](https://ma-za-kpe.github.io/stood/), [Yard companion site](https://ma-za-kpe.github.io/stood/yard/), [hosted Yard sign-in](https://stood-yard-api.onrender.com/app/), [Stood health](https://stood-api.onrender.com/health) and [Yard health](https://stood-yard-api.onrender.com/health). [Progress and screenshot guidance (#108)](https://github.com/ma-za-kpe/stood/issues/108) records the deployed C2 batch; [#76](https://github.com/ma-za-kpe/stood/issues/76) tracks hosted Foreman and Yard adapters.
+
 | # | Doc | Covers |
 |---|---|---|
 | Y01 | [Vision and story](Y01-vision-and-story.md) | Why Yard exists, the story, the agent economy it starts |

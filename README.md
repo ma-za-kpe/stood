@@ -47,7 +47,8 @@
 | Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake is connected; the Foreman and Yard payments remain off until their adapters are connected |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |
-| Work in progress | [#49 pre-credentials](https://github.com/ma-za-kpe/stood/issues/49) · [#50 credentials and deployment](https://github.com/ma-za-kpe/stood/issues/50) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | |
+| Current work | [#75 remaining deployment/Postman work](https://github.com/ma-za-kpe/stood/issues/75) · [#76 hosted Foreman and Yard adapters](https://github.com/ma-za-kpe/stood/issues/76) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | Hosted sign-in and StartupTribunal import are deployed; [#99](https://github.com/ma-za-kpe/stood/issues/99) is complete for C2 |
+| Latest progress | [Discord-ready update and screenshots (#108)](https://github.com/ma-za-kpe/stood/issues/108) | Verified against the deployed desktop/mobile app and public pages |
 | Hackathon | <https://paypalaihackathon.devpost.com/> | |
 | Yard GitHub App | <https://github.com/apps/yard-builder> | Installed only on [`yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox) ([setup](docs/SETUP.md#7-yard-github-app)) |
 | Yard test repository | <https://github.com/ma-za-kpe/yard-sandbox> | Throwaway: where Yard's `wo/*` branches and pull requests appear in demos |
@@ -316,4 +317,4 @@ Third-party tools and services (PayPal, AG Grid / AG Studio, Bryntum and the oth
 
 ### Connected local simulation
 
-Run `scripts/dev demo` to build and check the connected Docker journey, then open <http://localhost:3002/> for Stood or <http://localhost:3002/yard/app/?project=yard-project> for the Yard room. Choose **Buyer**. This uses real local services with simulated providers and synthetic evidence; no real payment is executed. No keys are needed. Stop the disposable demo with `scripts/dev demo:down`. The complete pre-credentials batch and live qualification are still pending.
+Run `scripts/dev demo` to build and check the connected Docker journey, then open <http://localhost:3002/> for Stood or <http://localhost:3002/yard/app/?project=yard-project> for the Yard room. Choose **Buyer**. This uses real local services with simulated providers and synthetic evidence; no real payment is executed. No keys are needed. Stop the disposable demo with `scripts/dev demo:down`. The hosted app is available at <https://stood-yard-api.onrender.com/app/> with owner-issued sign-in, the Board and private StartupTribunal intake. Stood signing/funding and reconciliation are qualified on the real PayPal sandbox. Hosted Foreman and Yard payment integration continue in [#76](https://github.com/ma-za-kpe/stood/issues/76).

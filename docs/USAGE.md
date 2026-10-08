@@ -7,7 +7,8 @@
 |---|---|
 | **Status** | **Live PayPal sandbox; no real money.** Hosted signing, funding, verified webhooks and reconciliation are connected. Some endpoint examples below describe the remaining target API; use the implemented signing/funding routes in [T04](tech/T04-api-spec.md). This manual describes the API being built for the PayPal AI Hackathon 2026. Every example uses the **PayPal sandbox**. Check the [changelog](https://ma-za-kpe.github.io/stood/changelog.html) for what has shipped |
 | **Licence** | MIT |
-| **Hosted demo** | `https://stood-api.onrender.com/v1` (sandbox, free tier: the first request after idle can take about 1 min) |
+| **Hosted API** | <https://stood-api.onrender.com/v1> · [health](https://stood-api.onrender.com/health) (sandbox, free tier: the first request after idle can take about 1 min) |
+| **Hosted Yard** | <https://stood-yard-api.onrender.com/app/> · [health](https://stood-yard-api.onrender.com/health). Owner-issued sign-in, Board and private research intake |
 | **SDK (planned)** | `npm i @stood/sdk` (TypeScript, APIMatic-generated). Kotlin and Python later |
 | **Spec (planned)** | `openapi/stood.yaml` (OpenAPI 3.1; generation is T-0053) |
 | **Docs** | [Overview](09-stood.md) · [API spec](tech/T04-api-spec.md) · [Evidence profiles](stood/S16-use-cases-and-evidence-profiles.md) |
@@ -16,11 +17,11 @@
 
 ## What Stood does, in 20 seconds
 
-**The hosted platform connects to the real PayPal sandbox.** `/health` reports readiness; no real money moves. The illustrative demos and isolated local network use synthetic evidence and execute no real payment. Provider keys do not change synthetic fixture results into real results. The isolated PayPal HTTP simulator can run without keys; see [the simulator guide](../services/simulators/README.md). Full provider switching and the complete Yard demo remain T-0230/T-0233. Actual PayPal connections remain sandbox-only and require qualification.
+**The hosted platform connects to the real PayPal sandbox.** `/health` reports readiness; no real money moves. The illustrative demos and isolated local network use synthetic evidence and execute no real payment. Provider keys do not change synthetic fixture results into real results. The isolated PayPal HTTP simulator can run without keys; see [the simulator guide](../services/simulators/README.md). Full provider switching and the complete Yard demo remain T-0230/T-0233. Hosted Stood signing/funding, verified webhooks and reconciliation have passed sandbox qualification. Hosted Yard planning/payment integration remains in [#76](https://github.com/ma-za-kpe/stood/issues/76).
 
 Your buyer or buying agent pays an operator for a code milestone against frozen signed acceptance tests and a budget mandate. Stood sits between "the stage is done" and "the money moves":
 
-1. **Allowance:** the buyer agrees frozen tests, repository, operator and budget once. Provider approval binding remains planned.
+1. **Allowance:** the buyer agrees frozen tests, repository, operator and budget once. Saved-account approval is collected through the implemented mandate path; authentic code-test/usage binding remains planned.
 2. **Hold:** when a milestone is ready, Stood asks PayPal to **authorise** (hold) the amount.
 3. **Commit package:** send the exact commit and authenticated test report; trusted runner ingestion remains planned.
 4. **Decision:** Stood's rules return **`RELEASE`** (PayPal capture), **`REFUSE`** (PayPal void, plus the named reason), or **`WAIT`** (a human reviews).
@@ -28,7 +29,7 @@ Your buyer or buying agent pays an operator for a code milestone against frozen 
 
 Stood **never holds money**, never pays anyone locally, and never knows your industry. You choose an **evidence profile** (`construction.stage@1`, `freelance.milestone@1`, …).
 
-The lead product direction is now code milestones and agent-to-agent payments: **Agents pay agents. Only when the work stands.** `code.milestone@1` adds deterministic signed-test, integrity, execution, new-commit, mutation and mandate findings; `code.final@1` additionally requires usage release. The profile is unit-tested; authentic runner/usage ingestion, Yard and A2A/AP2 remain planned. See [S17](stood/S17-agent-payments-positioning.md). A signed DRAFT is not a payer-approved mandate, and a synthetic passing finding is not actual execution evidence.
+The lead product direction is now code milestones and agent-to-agent payments: **Agents pay agents. Only when the work stands.** `code.milestone@1` adds deterministic signed-test, integrity, execution, new-commit, mutation and mandate findings; `code.final@1` additionally requires usage release. The profile is unit-tested; authentic runner/usage ingestion and A2A/AP2 remain planned; Yard sign-in, Board and private intake are deployed. See [S17](stood/S17-agent-payments-positioning.md). A signed DRAFT is not a payer-approved mandate, and a synthetic passing finding is not actual execution evidence.
 
 ---
 
@@ -68,7 +69,7 @@ Create a signed local DRAFT using the bearer/HMAC conventions in [T04](tech/T04-
   ], "window_days": 7, "max_resubmits": 2 }
 ```
 
-These params are draft metadata. This endpoint does not freeze/sign tests, validate a runner, approve a mandate or fund a hold. The future signed contract must replace the illustrative hashes with exact values and explicitly agree any usage exemption; a client flag cannot waive proof. The response is DRAFT with PENDING tranche IDs, no approval URL. Yard is planned.
+These params are draft metadata. This endpoint does not freeze/sign tests, validate a runner, approve a mandate or fund a hold. The future signed contract must replace the illustrative hashes with exact values and explicitly agree any usage exemption; a client flag cannot waive proof. The response is DRAFT with PENDING tranche IDs, no approval URL. Yard sign-in, Board and private intake are hosted; the Foreman and Yard payment adapter remain next.
 
 ## For hackathon judges: try it in 2 minutes
 
@@ -114,7 +115,7 @@ Existing good, wrong-plot, recycled, wrong-stage, substituted-fitting, nonce-unr
 
 Funding-declined and hold-expiry simulate domain transitions: outcome WAIT, states WAIT_FUNDING/EXPIRED and source synthetic_domain_transitions. Expiry requires simulated matched provider proof, not elapsed time alone. No reference is a real PayPal ID.
 
-Hosted provider replay, approval browser automation, receipts and Postman workspace remain planned; no hosted URL or provider confirmation is claimed here. Allowances/tranches accept GBP/USD/EUR with exact totals. The guarded funded-hold adapter is tested with fake/synthetic provider evidence and rechecks the five-minute expiry margin before calling; financial HTTP remains off.
+These fixture scenarios execute no provider calls. The hosted platform separately supports saved-account signing and funding intents through the [implemented API](tech/T04-api-spec.md#implemented-hosted-signing-and-funding-t-0260). Real PayPal sandbox release/refusal, saved-account holds, replay and drift qualification are recorded in [SETUP](SETUP.md). Public receipts and the Postman workspace remain open; allowances/tranches use exact GBP/USD/EUR minor-unit totals.
 
 ---
 
@@ -126,9 +127,9 @@ Run `scripts/dev setup` from an interactive terminal. Docker builds the API and 
 
 Create the PayPal credentials in your [sandbox app](https://developer.paypal.com/dashboard/applications/sandbox); see [PayPal authentication](https://developer.paypal.com/api/rest/authentication/). Obtain the webhook id from that app's [webhook configuration](https://developer.paypal.com/api/rest/webhooks/). The tool validates the client id/secret using sandbox OAuth, discards the access token and writes only the six keys into git-ignored `.env`, with private file permissions. Other configuration is preserved. Invalid input or failed OAuth validation leaves existing configuration untouched. Values containing whitespace, quotes, backslashes or interpolation characters are rejected; keys are never altered silently. Symlinks and hard links are refused. The webhook id and platform keys are collected, but their provider ownership is not checked by this local tool.
 
-Restart the API with `docker compose up -d --force-recreate api` after setup. Compose passes named variables only; the API also gets its fixed local database connection and STOOD_PLATFORM_ID (default local-platform). The local `/health` returns `paymentReady: false`, `missing` (variable **names** only) and setup guidance. Presence of every variable is not proof of valid credentials or payment readiness. With STOOD_API_KEY and STOOD_HMAC_SECRET configured, POST `/v1/allowances` creates a DRAFT and signed reads are available after migrations. Metadata-only commit-package intake is available; other allowance, tranche and payment writes return `503 payments_not_configured` while a key is missing, and `503 payments_not_qualified` once every key is set but the PayPal sandbox adapter has not passed qualification; initial funding, evidence processing and real sandbox qualification are still required. Synthetic demo scenarios remain available. No financial request is executed by setup or these guards.
+Restart the API with `docker compose up -d --force-recreate api` after setup. Compose passes named variables only; the API also gets its fixed local database connection and STOOD_PLATFORM_ID (default local-platform). The local `/health` returns `paymentReady: false`, `missing` (variable **names** only) and setup guidance. Presence of every variable is not proof of valid credentials or payment readiness. With STOOD_API_KEY and STOOD_HMAC_SECRET configured, POST `/v1/allowances` creates a DRAFT and signed reads are available after migrations. Metadata-only commit-package intake is available; other allowance, tranche and payment writes return `503 payments_not_configured` while a key is missing, and `503 payments_not_qualified` once every key is set but the PayPal sandbox adapter has not passed qualification; Check `/health` for the actual composition: the hosted Stood API is qualified and its background worker processes saved-account signing/funding; trusted evidence processing remains planned. Local fixture scenarios remain available. No financial request is executed by setup or these guards.
 
-Hosted onboarding, webhook URL registration, copy-once platform key issuance and rotation remain planned under T-0150. Tests for the local tool use fake OAuth responses; no real sandbox credentials were supplied or verified during development. The sandbox-only boot guard remains in place.
+Hosted onboarding, webhook URL registration, copy-once platform key issuance and rotation remain planned under T-0150. Tests for the local setup tool isolate OAuth responses; actual hosted sandbox qualification is recorded separately in [SETUP](SETUP.md). The sandbox-only boot guard remains in place.
 
 ### Local signed draft API (implemented subset)
 
@@ -152,7 +153,7 @@ Response: `201 { "id": "alw_…", "status": "DRAFT", "tranches": [{ "id": "trn_�
 
 `GET /v1/allowances/{id}` returns the owned draft. `GET /v1/tranches/{id}` returns recovered state, version, amount, profile, decision, hold age/expiry, pending effect/status/creation time, settlement and `sentences.payer` / `sentences.inspector`. A missing or foreign record returns the same 404. Identical POST bytes with the same platform/key replay the stored response across restart; changed bytes return 409. The local implementation retains keys indefinitely (at least the promised 24 hours). JSON formatting changes count as changed bytes.
 
-Dispatch, versions and uploads are still guarded. The allowance examples and approval URLs in the hosted sections below describe the **planned full API**, not this draft subset. Fixtures remain public synthetic previews and execute no payment.
+Saved-account signing and funding intents are available through [the implemented hosted routes](tech/T04-api-spec.md#implemented-hosted-signing-and-funding-t-0260). The legacy dispatch endpoint, version amendments and report uploads remain guarded. The allowance examples and approval URLs in the hosted sections below describe the **planned full API**, not this draft subset. Fixtures remain public synthetic previews and execute no payment.
 
 ### A. Calling Stood from your platform (hosted)
 
@@ -380,7 +381,7 @@ After database migrations and sandbox key setup, run `scripts/dev reconcile` in 
 
 The worker ticks every 15 seconds, claims up to ten due jobs, retries unresolved status checks after 60 seconds and idle states after an hour. Database leases expire after 90 seconds and require a matching token to finish. It reserves cancellation of old-rule holds automatically and records reviewer-owned `SAFE_CANCEL_REQUESTED`, `PROVIDER_UNKNOWN`, `UNRESOLVED_3H` and `WORKER_FAILURE` rows in `payment_alerts`; resolved rows remain available. The reviewer must investigate unknown outcomes and any pending safe-mode cancellation.
 
-This command reads PayPal status and writes local state and alerts. It does **not** submit captures, cancellations or renewals. A reserved safe-mode cancellation therefore remains pending until a qualified executor submits it or the reviewer cancels it through PayPal and matching provider proof confirms the outcome. Transaction Search auditing, dashboard presentation and email/Slack notification delivery remain planned (T-0155 / T-0142). No raw provider responses or credentials are logged.
+The reconciliation step reads provider status and writes recovered state and alerts; it does not itself execute settlement. In the same worker, a separately configured signing/funding step advances durable saved-account mandates and funding intents through PayPal. A reserved safe-mode cancellation still requires an executor or reviewer and matching provider proof. The deployed worker also runs hourly Transaction Search audits. [Counts-only attention](https://stood-api.onrender.com/ops/attention) drives the repository’s `ops-attention` issue through the keep-warm job; dashboard and Slack delivery remain planned. No raw provider responses or credentials are logged.
 
 ## Local commit-package references (T-0172)
 
@@ -398,7 +399,7 @@ Run `docker compose --profile yard up -d --wait yard-api`. Its localhost-only po
 
 Results remain DRAFT or QUEUED. Typed `StoodClientError.code` values identify authentication, validation, not-found, conflict, invalid response and unavailable storage. TIMEOUT/UNKNOWN_OUTCOME do not prove a POST was absent: inspect the resource or deliberately resend the same request with the same durable key. The SDK never retries automatically. It has no dispatch, signing, settlement or webhook-authority method. The contract tests use the real local HTTP router with fake storage, not a deployed service or PayPal sandbox.
 
-The reconciliation worker now requires an explicit `PROVIDER_PAYPAL` selection and uses the same provider runtime as the API. With `PROVIDER_PAYPAL=sim`, `scripts/dev reconcile` reads the simulator clock and needs no PayPal keys. With `live`, sandbox readiness and keys are required; there is no fallback. Each reconciliation tick freezes one provider-clock instant. Simulated notification headers or bodies are rejected unless the receiver is explicitly in simulator mode, even if a verifier would otherwise accept them. Normal runtime webhook ingestion remains off until its durable queue is wired.
+The reconciliation worker now requires an explicit `PROVIDER_PAYPAL` selection and uses the same provider runtime as the API. With `PROVIDER_PAYPAL=sim`, `scripts/dev reconcile` reads the simulator clock and needs no PayPal keys. With `live`, sandbox readiness and keys are required; there is no fallback. Each reconciliation tick freezes one provider-clock instant. Simulated notification headers or bodies are rejected unless the receiver is explicitly in simulator mode, even if a verifier would otherwise accept them. The hosted runtime verifies PayPal webhook signatures and durably deduplicates accepted events; see [SETUP](SETUP.md#6-paypal-webhook-after-the-first-successful-deploy).
 
 ### Isolated network simulation
 
@@ -488,4 +489,6 @@ To reuse Startup Tribunal research:
 
 The page refuses malformed JSON, inputs over 128 KiB UTF-8, excessive nesting, recognised credentials, private storage pointers and viewer identifiers. Unknown report fields are retained only as in-memory research data and ignored by intake mapping. Links in pasted research are never fetched.
 
-For a production-image browser check against disposable Postgres and synthetic operator codes, run `scripts/check-hosted-yard`. It uses the existing Chromium/axe tooling and saves screenshots to `artifacts/hosted-yard/`.
+For a production-image browser check against disposable Postgres and isolated test operator codes, run `scripts/check-hosted-yard`. It uses the existing Chromium/axe tooling and saves screenshots to `artifacts/hosted-yard/`.
+
+Actual hosted desktop/mobile checks and screenshot instructions are recorded in [#108](https://github.com/ma-za-kpe/stood/issues/108). The remaining hosted Foreman/payment integration is [#76](https://github.com/ma-za-kpe/stood/issues/76); the C2 import work in [#99](https://github.com/ma-za-kpe/stood/issues/99) is deployed.
