@@ -275,17 +275,28 @@ export class StoodClient {
       .digest('hex');
     headers.set('Stood-Signature', `t=${timestamp},v2=${signature}`);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
+    // The SDK owns its deadline: a transport that misses or ignores the abort still ends at the timeout.
+    let expire = () => {};
+    const deadline = new Promise<never>((_resolve, reject) => {
+      expire = () => reject(new Error('deadline'));
+    });
+    const timer = setTimeout(() => {
+      controller.abort();
+      expire();
+    }, this.timeout);
     try {
-      const response = await this.transport(
-        new Request(url, {
-          method,
-          headers,
-          redirect: 'error',
-          signal: controller.signal,
-          ...(method === 'POST' ? { body } : {}),
-        }),
-      );
+      const response = await Promise.race([
+        this.transport(
+          new Request(url, {
+            method,
+            headers,
+            redirect: 'error',
+            signal: controller.signal,
+            ...(method === 'POST' ? { body } : {}),
+          }),
+        ),
+        deadline,
+      ]);
       if (response.redirected || (response.status >= 300 && response.status < 400))
         throw new StoodClientError('INVALID_RESPONSE');
       if (!response.ok) {
