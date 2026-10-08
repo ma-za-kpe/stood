@@ -35,6 +35,13 @@ Sessions use opaque Secure/HttpOnly/SameSite=Strict cookies and expire after eig
 
 The buyer can paste Startup Tribunal Copy JSON, review its source caveat and quality signals, then save a private intake. The public discovery feed is read from one fixed HTTPS endpoint, bounded to ten items/64 KiB and cached for ten minutes; rate-limit responses delay retries. Imported blueprints are bounded to 128 KiB and twenty levels, scanned with the existing credential guard, and never rendered as HTML or executed. Only a reviewed, bounded excerpt becomes intake; the full raw research stays in memory and is discarded when the panel closes. Planning remains disabled until the hosted Foreman is connected.
 
+### Deployed C2 entry points and evidence
+
+- [Hosted Yard](https://stood-yard-api.onrender.com/app/): owner-issued sign-in, Board, events, site log and private intake with StartupTribunal browse/import. [Yard health](https://stood-yard-api.onrender.com/health) reports intake on; Foreman and Yard payments remain off.
+- [Stood health](https://stood-api.onrender.com/health): earned `paymentReady` for saved-account signing and milestone funding on the real PayPal sandbox. No real money moves.
+- [Stood website](https://ma-za-kpe.github.io/stood/) and [Yard companion site](https://ma-za-kpe.github.io/stood/yard/): public status comes from those health checks; Yard links to the hosted app.
+- Shipped through [#104](https://github.com/ma-za-kpe/stood/pull/104) and [#105](https://github.com/ma-za-kpe/stood/pull/105); the [progress post (#108)](https://github.com/ma-za-kpe/stood/issues/108) includes actual desktop/mobile checks and screenshot instructions. [#99](https://github.com/ma-za-kpe/stood/issues/99) is complete for import/private intake. Hosted planning continues in [#76](https://github.com/ma-za-kpe/stood/issues/76); Postman follow-up remains on [#75](https://github.com/ma-za-kpe/stood/issues/75).
+
 ## 2. Where the secrets live
 
 | Store | Holds | Who can read it |

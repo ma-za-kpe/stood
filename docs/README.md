@@ -3,6 +3,8 @@
 > **Agents pay agents. Only when the work stands.**
 
 **Status:** hosted PayPal sandbox. Stood signing, funding, guarded payments and reconciliation are connected. Yard hosts its Board, browser sign-in and private intake with StartupTribunal import. Trusted runner ingestion, Yard’s Foreman/payment adapters and A2A/AP2 are the next work.
+
+Live entry points: [Stood website](https://ma-za-kpe.github.io/stood/), [Yard companion site](https://ma-za-kpe.github.io/stood/yard/), [hosted Yard sign-in](https://stood-yard-api.onrender.com/app/), [Stood health](https://stood-api.onrender.com/health) and [Yard health](https://stood-yard-api.onrender.com/health). [Progress and screenshot guidance (#108)](https://github.com/ma-za-kpe/stood/issues/108) records the deployed C2 batch; [#76](https://github.com/ma-za-kpe/stood/issues/76) tracks hosted Foreman and Yard adapters.
 **Last updated:** 2026-10-05
 **Target:** PayPal AI Hackathon. Submissions close **12 Nov 2026, 2:00 pm PT**. Winners announced 21 Dec 2026.
 
@@ -40,7 +42,7 @@ Brand assets (SVG): [`brand/`](brand/): logo, app icons, social, stamps.
 
 ## Technical docs (`tech/`)
 
-Requirements, architecture, domain model, API, data, PayPal integration, evidence pipeline, **[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) integration**, stack, **deployment (free tier)**, security, testing, runbooks, milestones: **[tech/README.md](tech/README.md)**.
+Requirements, architecture, domain model, API, data, PayPal integration, evidence pipeline, **[EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) integration**, stack, **deployment (Render Free/Starter and Neon)**, security, testing, runbooks, milestones: **[tech/README.md](tech/README.md)**.
 
 ## Research docs
 
