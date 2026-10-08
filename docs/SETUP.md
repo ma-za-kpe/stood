@@ -114,6 +114,17 @@ Only `DATABASE_URL` from `.env` reaches the container, and the connection must p
 
 **Test runs are not findings (T-0259).** `scripts/dev sandbox-run` and the nightly job capture real sandbox money outside Stood's ledger on purpose. Their PayPal `invoice_id` is `sandbox-<scenario>-<time>-settle`; the audit sets exactly those aside. Stood's own operation keys always contain `:`, so a real payment can never be mistaken for a test run.
 
+### Saved PayPal tokens are sealed (T-0227)
+
+A saved PayPal token is a standing permission to charge the buyer, so Stood never stores it in plain text. `mandate_signatures.token_id` holds it sealed with AES-256-GCM, bound to its own mandate row (migration 0021), and the append-only history only ever sees the sealed value. A SHA-256 fingerprint keeps one token to one mandate. Keys live in `VAULT_TOKEN_KEYS` (`v2:<key>,v1:<key>`, newest first; every listed key can open, only the newest seals):
+
+```bash
+scripts/dev vault-key      # add a new newest key to .env (never printed)
+scripts/dev vault-rotate   # re-seal every saved token under it
+```
+
+Then copy `VAULT_TOKEN_KEYS` to Render, and drop the old key only after rotation reports it re-sealed everything. A store missing a key fails closed: it refuses to open the token rather than guess.
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -13,6 +13,7 @@ import { PostgresFunding } from './funding.js';
 import { mandateTermsHash, PostgresMandates } from './mandates.js';
 import { PostgresPlatformApi } from './platform-api.js';
 import * as schema from './schema.js';
+import { TokenCipher } from './token-cipher.js';
 
 const name = `test_mandates_${randomUUID().replaceAll('-', '')}`;
 const admin = new pg.Pool({ connectionString: 'postgres://stood:stood_local_only@db:5432/stood' });
@@ -20,9 +21,12 @@ const options = {
   connectionString: `postgres://stood:stood_local_only@db:5432/${name}`,
   options: '-c statement_timeout=5000',
 };
+const v1 = `v1:${randomBytes(32).toString('base64')}`,
+  v2 = `v2:${randomBytes(32).toString('base64')}`;
+const cipher = new TokenCipher(v1);
 const pool = new pg.Pool(options),
   db = drizzle(pool, { schema }),
-  store = new PostgresMandates(db);
+  store = new PostgresMandates(db, cipher);
 const now = Date.parse('2026-10-05T00:00:00Z');
 beforeAll(async () => {
   await admin.query(`CREATE DATABASE ${name}`);
@@ -76,7 +80,7 @@ it('reserves exact signed terms and independent provider IDs durably, with tenan
   expect(reserved.expiresAt).toBe(now + 7 * 86400000);
   const other = new pg.Pool(options);
   try {
-    expect(await new PostgresMandates(drizzle(other, { schema })).reserve(input)).toEqual(reserved);
+    expect(await new PostgresMandates(drizzle(other, { schema }), cipher).reserve(input)).toEqual(reserved);
   } finally {
     await other.end();
   }
@@ -271,7 +275,7 @@ it('restores a lost actual-SDK token reply across database connections using mat
     ).toBe(true);
     expect(await advanceMandate(store, terms, provider, input.key, () => now)).toMatchObject({ outcome: 'WAIT' });
     expect((await store.load(input.key)).status).toBe('TOKENIZING');
-    const restarted = new PostgresMandates(drizzle(other, { schema }));
+    const restarted = new PostgresMandates(drizzle(other, { schema }), cipher);
     expect(
       await advanceMandate(restarted, terms, provider, input.key, () => now, { tokenId: 'SIM-TOKEN-3' }),
     ).toMatchObject({ outcome: 'SIGNED' });
@@ -357,4 +361,61 @@ it('funds under a signed mandate straight from CREATING, and keeps the token out
       unsigned.key,
     ]),
   ).rejects.toThrow();
+});
+
+// T-0227: a saved token is a standing permission to charge the buyer. It is sealed in the row and in the
+// append-only history, opens only through the store, and survives key rotation.
+it('seals the saved token at rest and in history, refuses a second mandate for it, and rotates keys', async () => {
+  const signed = async () => {
+    const value = await tokenizing();
+    const r = receipt(value.input.key);
+    const token = {
+      setupId: r.setupId,
+      customerId: r.customerId,
+      payerId: 'PAYER',
+      tokenId: `SECRET-${value.input.key}`,
+    };
+    return { key: value.input.key, token, mandate: await store.confirm(value.input.key, token) };
+  };
+  const { key, token, mandate } = await signed();
+  expect(mandate.tokenId).toBe(token.tokenId);
+  const raw = async () =>
+    (await pool.query('SELECT token_id, token_fingerprint FROM mandate_signatures WHERE key = $1', [key])).rows[0];
+  const stored = await raw();
+  expect(stored.token_id).toMatch(/^v1\./);
+  expect(stored.token_id).not.toContain('SECRET-');
+  expect(stored.token_fingerprint).toBe(cipher.fingerprint(token.tokenId));
+  const history = await pool.query('SELECT snapshot::text AS s FROM mandate_events WHERE key = $1', [key]);
+  expect(history.rows.length).toBeGreaterThan(3);
+  expect(history.rows.some((row) => row.s.includes('SECRET-'))).toBe(false);
+  expect((await store.load(key)).tokenId).toBe(token.tokenId);
+  expect(await store.confirm(key, token)).toMatchObject({ status: 'SIGNED', tokenId: token.tokenId });
+  // The same PayPal token can back only one mandate.
+  const other = await tokenizing();
+  const r = receipt(other.input.key);
+  await expect(
+    store.confirm(other.input.key, {
+      setupId: r.setupId,
+      customerId: r.customerId,
+      payerId: 'PAYER',
+      tokenId: token.tokenId,
+    }),
+  ).rejects.toThrow();
+  await expect(
+    pool.query('UPDATE mandate_signatures SET token_fingerprint = $1, version = version + 1 WHERE key = $2', [
+      'f'.repeat(64),
+      key,
+    ]),
+  ).rejects.toThrow();
+
+  const rotated = new PostgresMandates(db, new TokenCipher(`${v2},${v1}`));
+  expect(await rotated.rotateTokens()).toBeGreaterThanOrEqual(1);
+  expect((await raw()).token_id).toMatch(/^v2\./);
+  expect((await raw()).token_fingerprint).toBe(stored.token_fingerprint);
+  expect((await rotated.load(key)).tokenId).toBe(token.tokenId);
+  expect(await rotated.rotateTokens()).toBe(0);
+  const rehistory = await pool.query('SELECT snapshot::text AS s FROM mandate_events WHERE key = $1', [key]);
+  expect(rehistory.rows.some((row) => row.s.includes('SECRET-'))).toBe(false);
+  // A store without the new key fails closed rather than handing out anything.
+  await expect(store.load(key)).rejects.toThrow('Token cannot be opened');
 });

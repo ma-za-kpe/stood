@@ -148,6 +148,13 @@
       "when": 1791462637443,
       "tag": "0020_funding_saved_account",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791469384269,
+      "tag": "0021_mandate_sealed_tokens",
+      "breakpoints": true
     }
   ]
 }

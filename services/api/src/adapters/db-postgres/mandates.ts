@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { canonicalMandate, mandateTermsHash } from '../../application/mandate-terms.js';
 import type { FundingAuthority } from '../../ports/funding-provider.js';
@@ -13,6 +13,7 @@ import {
   type TokenReceipt,
 } from '../../ports/mandate-store.js';
 import * as schema from './schema.js';
+import type { TokenCipher } from './token-cipher.js';
 
 export { mandateTermsHash } from '../../application/mandate-terms.js';
 
@@ -23,8 +24,17 @@ const text = (v: unknown): v is string => typeof v === 'string' && !!v.trim() &&
 function fail(code: ConstructorParameters<typeof MandateStoreError>[0]): never {
   throw new MandateStoreError(code);
 }
+type Row = typeof schema.mandateSignatures.$inferSelect;
 export class PostgresMandates implements MandateStore, FundingAuthority {
-  constructor(private readonly db: Database) {}
+  // T-0227: the saved token is sealed in token_id and opened only on its way out of the store.
+  constructor(
+    private readonly db: Database,
+    private readonly cipher: TokenCipher,
+  ) {}
+  private reveal(row: Row): Mandate {
+    const { tokenFingerprint: _fingerprint, ...mandate } = structuredClone(row);
+    return { ...mandate, tokenId: row.tokenId === null ? null : this.cipher.open(row.tokenId, row.key) };
+  }
   async reserve(value: MandateReservation): Promise<Mandate> {
     const input = structuredClone(value);
     if (
@@ -56,7 +66,7 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       if (prior) {
         if (Object.entries(input).some(([key, v]) => prior[key as keyof MandateReservation] !== v))
           fail('IDENTITY_CONFLICT');
-        return structuredClone(prior);
+        return this.reveal(prior);
       }
       if (input.termsVersion !== 1 || mandateTermsHash(allowance.body) !== input.termsHash) fail('IDENTITY_CONFLICT');
       const [active] = await tx
@@ -86,14 +96,14 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
           tokenRequestId: randomUUID(),
         })
         .returning();
-      await this.event(tx, row!);
-      return structuredClone(row!);
+      await this.event(tx, row as Row);
+      return this.reveal(row as Row);
     });
   }
   async load(key: string): Promise<Mandate> {
     const [row] = await this.db.select().from(schema.mandateSignatures).where(eq(schema.mandateSignatures.key, key));
     if (!row) fail('NOT_FOUND');
-    return structuredClone(row);
+    return this.reveal(row);
   }
   events(key: string) {
     return this.db
@@ -105,7 +115,7 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
   // T-0154: the saved PayPal token for a signed mandate, read only when the PayPal adapter is about to call.
   async tokenFor(instruction: FundingInstruction): Promise<string | null> {
     const [row] = await this.db
-      .select({ tokenId: schema.mandateSignatures.tokenId })
+      .select({ key: schema.mandateSignatures.key, tokenId: schema.mandateSignatures.tokenId })
       .from(schema.mandateSignatures)
       .where(
         and(
@@ -115,7 +125,7 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
           eq(schema.mandateSignatures.status, 'SIGNED'),
         ),
       );
-    return row?.tokenId ?? null;
+    return row?.tokenId ? this.cipher.open(row.tokenId, row.key) : null;
   }
   async canFund(instruction: FundingInstruction, now: number): Promise<boolean> {
     if (!Number.isSafeInteger(now) || now < 0) return false;
@@ -239,18 +249,49 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
         .where(eq(schema.mandateSignatures.key, key))
         .for('update');
       if (!row) fail('NOT_FOUND');
-      const change = action(structuredClone(row));
-      if (!change) return structuredClone(row);
+      const change = action(this.reveal(row));
+      if (!change) return this.reveal(row);
+      const { tokenId, ...rest } = change;
+      const sealed = tokenId
+        ? { tokenId: this.cipher.seal(tokenId, key), tokenFingerprint: this.cipher.fingerprint(tokenId) }
+        : {};
       const [updated] = await tx
         .update(schema.mandateSignatures)
-        .set({ ...change, version: row.version + 1 })
+        .set({ ...rest, ...sealed, version: row.version + 1 })
         .where(eq(schema.mandateSignatures.key, key))
         .returning();
-      await this.event(tx, updated!);
-      return structuredClone(updated!);
+      await this.event(tx, updated as Row);
+      return this.reveal(updated as Row);
     });
   }
-  private async event(tx: Tx, row: Mandate) {
+  // T-0227: re-seal every token not under the newest key. Same token, same fingerprint, one history event each.
+  async rotateTokens(): Promise<number> {
+    const rows = await this.db
+      .select({ key: schema.mandateSignatures.key, tokenId: schema.mandateSignatures.tokenId })
+      .from(schema.mandateSignatures)
+      .where(isNotNull(schema.mandateSignatures.tokenId));
+    let rotated = 0;
+    for (const candidate of rows) {
+      if (!candidate.tokenId || this.cipher.current(candidate.tokenId)) continue;
+      rotated += await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(schema.mandateSignatures)
+          .where(eq(schema.mandateSignatures.key, candidate.key))
+          .for('update');
+        if (!row?.tokenId || this.cipher.current(row.tokenId)) return 0;
+        const [updated] = await tx
+          .update(schema.mandateSignatures)
+          .set({ tokenId: this.cipher.seal(this.cipher.open(row.tokenId, row.key), row.key), version: row.version + 1 })
+          .where(eq(schema.mandateSignatures.key, row.key))
+          .returning();
+        await this.event(tx, updated as Row);
+        return 1;
+      });
+    }
+    return rotated;
+  }
+  private async event(tx: Tx, row: Row) {
     await tx
       .insert(schema.mandateEvents)
       .values({ key: row.key, version: row.version, status: row.status, snapshot: row });
