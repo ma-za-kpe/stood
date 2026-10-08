@@ -23,6 +23,7 @@ Yard is not deployed yet. Its credentialed composition root is batch C2 in issue
 | Project `.env` (repository root, gitignored, mode 600) | All local values | The owner. Never committed |
 | `~/.config/stood/.env` (mode 600) | A copy of the project `.env`, outside every repository | The owner and local tooling |
 | Render service environment | Each service's runtime values (table below) | Render and the owner |
+| Project `.env` only (not on Render yet) | `GROK_PLANNER_API_KEY` for Yard's planner model (xAI). Checked with a free model listing (HTTP 200). The live adapter is T-0181 | The owner |
 | `~/.claude/settings.json` | `PAYPAL_SANDBOX_ACCESS_TOKEN` for the PayPal AI Toolkit MCP server only ([T16](tech/T16-paypal-ai-toolkit.md)) | The developer's Claude Code |
 
 Rules we followed: no value in Git, chat, issues or screenshots; tools report only "set" or "empty". Values containing `&` (such as database URLs) must be read with a parser, not `source`d by a shell.
