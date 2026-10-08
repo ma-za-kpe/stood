@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.stood.paypal-mcp-token</string>
+  <key>ProgramArguments</key>
+  <array><string>/usr/bin/python3</string><string>__HOME__/.config/stood/refresh-paypal-mcp-token.py</string></array>
+  <!-- Every morning at 07:00, at login, and every 8 hours (sandbox tokens last about 8.5-9 hours). -->
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StartInterval</key><integer>28800</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardErrorPath</key><string>__HOME__/.config/stood/paypal-mcp-token.err.log</string>
+</dict>
+</plist>

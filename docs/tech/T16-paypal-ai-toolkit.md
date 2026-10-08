@@ -36,6 +36,7 @@ This keeps the product's central promise intact: rules move money, AI only helps
 
 3. Put the single-line value in the `env` block of `~/.claude/settings.json` as `PAYPAL_SANDBOX_ACCESS_TOKEN`, then fully quit and reopen Claude Code.
 4. Run `/paypal:setup`. Tokens expire within about 8–9 hours; on a 401, run `/paypal:setup refresh`.
+5. Or let [`tools/paypal-mcp-token`](../../tools/paypal-mcp-token/README.md) do steps 2–3 automatically (at login, 07:00 daily and every 8 hours). It is installed on the owner's machine.
 
 ## Recording evidence
 
