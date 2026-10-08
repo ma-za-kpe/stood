@@ -604,7 +604,7 @@ button:disabled {
 
 /* Handover: the rotation checklist. Yard items are pre-ticked and locked. */
 .handover {
-  border: 1px solid var(--border);
+  border: 1px solid var(--y-steel);
   border-radius: var(--r-card, 10px);
   padding: var(--s-5, 24px);
   background: var(--surface);
@@ -631,7 +631,7 @@ button:disabled {
 
 /* Step 9 keys: write-only fields; metadata list only. */
 .keys {
-  border: 1px solid var(--border);
+  border: 1px solid var(--y-steel);
   border-radius: var(--r-card, 10px);
   padding: var(--s-5, 24px);
   background: var(--surface);
@@ -690,4 +690,29 @@ fieldset.board-grid {
 .cost-breakdown dd {
   margin: 0;
   text-align: right;
+}
+
+.tribunal-import {
+  border: 1px solid var(--y-steel);
+  padding: 1.25rem;
+  margin-block: 1rem;
+  min-width: 0;
+}
+.tribunal-import textarea {
+  width: 100%;
+  max-width: 100%;
+}
+.tribunal-import dt {
+  font-weight: 700;
+  margin-top: 1rem;
+}
+.tribunal-import dd {
+  margin-inline-start: 0;
+  overflow-wrap: anywhere;
+}
+.research-text {
+  width: 100%;
+  white-space: pre-wrap;
+  max-height: 18rem;
+  overflow: auto;
 }

@@ -112,3 +112,9 @@ Tables `yard.site_logs`, `site_log_lines`, `site_log_commands` and `site_log_wri
 ### Local unsigned blueprint edits
 
 Signed `POST /yard/v1/plans/:id/edits` requires the owning buyer, `If-Match` review version and an `Idempotency-Key`. Its exact body is `summary`, `requirements`, `milestones` (including test id/path/content) and `risks`; fixed intake fields and client-authored payment/profile fields are rejected. The response is a fresh `BUYER_REVIEW` plan. Exact retries return the original saved edit receipt; changed bodies conflict. Version checks, full validation and the checkpoint receipt precede another buyer review pause. No runner, signature, work order or payment is created.
+
+## Hosted browser sessions (C2)
+
+`GET /app/api/session` returns `mode: hosted` and the current role or null. `POST /app/api/session` accepts an owner-issued `access_code`, creates an opaque eight-hour Secure/HttpOnly/SameSite=Strict cookie, and returns the server-owned role. `DELETE /app/api/session` signs out. Session responses are private/no-store. Mutations require the configured Origin; guessing and in-memory entries are bounded. Operator retirement is checked on sign-in and session reads. A restart revokes every session.
+
+The existing signature-v2 proxy forwards only Board, blueprint, plan and intake paths using that operator's server-held key. The hosted runtime never mounts the local demo role-selection endpoint. `GET /app/api/research/ideas` serves only the fixed public Startup Tribunal discovery projection with attribution and caveats, cached for ten minutes. It grants no Board identity or write authority.

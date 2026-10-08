@@ -24,11 +24,11 @@ it('wires the Board, site log and secrets from configuration, and says why the r
     board: true,
     siteLog: true,
     events: true,
-    intake: false,
+    intake: true,
     payments: false,
   });
   expect(runtime.notes).toEqual([
-    'Intake and Foreman off: the hosted planner is not connected yet.',
+    'Foreman off: the hosted planner is not connected yet.',
     'Payments off: Yard is not connected to Stood yet.',
   ]);
   await runtime.stop();
@@ -58,4 +58,26 @@ it('stays up with the Board off when configuration is missing or unsafe, without
   expect(() => yardRuntime({ ...hosted, YARD_ENV: 'production' })).toThrow(
     'Yard is not configured for hosted operation',
   );
+});
+
+// T-0266/T-0267: access codes turn on hosted sign-in; short or repeated codes are refused without echoing them.
+it('turns on hosted sign-in and the page only with valid access codes', () => {
+  const coded = JSON.stringify([
+    { key: 'buyer-key', secret, accessCode: 'a'.repeat(32), actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' } },
+  ]);
+  const on = yardRuntime({ ...hosted, YARD_OPERATORS: coded, YARD_WEB_DIR: '/app/web' });
+  expect(on.config.browser).toEqual({ origin: 'https://stood-yard-api.onrender.com' });
+  expect(on.config.web).toEqual({ root: '/app/web' });
+  const short = yardRuntime({ ...hosted, YARD_OPERATORS: coded.replace('a'.repeat(32), 'short-code') });
+  expect(short.notes).toContain('Board off: YARD_OPERATORS is not a valid operator list.');
+  expect(JSON.stringify(short.notes)).not.toContain('short-code');
+  expect(yardRuntime(hosted).config.browser).toBeUndefined();
+});
+
+it('connects private durable intake independently from the planner', async () => {
+  const runtime = yardRuntime(hosted);
+  expect(runtime.config.board?.intakes).toBeDefined();
+  expect(await capabilities(hosted)).toMatchObject({ intake: true, foreman: false, payments: false });
+  expect(runtime.notes).not.toContain('Intake and Foreman off: the hosted planner is not connected yet.');
+  await runtime.stop();
 });

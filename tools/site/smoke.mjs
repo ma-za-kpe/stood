@@ -29,7 +29,7 @@ try {
       live
         ? route.fulfill({
             json: {
-              paymentReady: false,
+              paymentReady: true,
               providers: [{ provider: 'paypal', mode: 'live', simulated: false, ready: true }],
             },
           })
@@ -39,8 +39,8 @@ try {
       live ? route.fulfill({ json: { capabilities: { board: true } } }) : route.abort(),
     );
     const status = live
-      ? /^Live status: PayPal sandbox connected · payments off until qualified · Yard Board live\. PayPal sandbox only; no real money\.$/
-      : /^Mock preview\. The hosted sandbox did not answer/;
+      ? /^Live status: PayPal sandbox connected · sandbox payments on · Yard Board live\. PayPal sandbox only; no real money\.$/
+      : /^Live status unavailable\. The hosted sandbox did not answer/;
     assert.equal((await page.goto('http://127.0.0.1:4173/yard/')).status(), 200);
     await page.waitForFunction(() => document.getElementById('system-status')?.dataset.state !== 'checking');
     assert.match(await page.locator('#system-status').innerText(), status);
@@ -80,7 +80,7 @@ try {
     await page.waitForFunction(() => document.getElementById('system-status')?.dataset.state !== 'checking');
     assert.match(await page.locator('#system-status').innerText(), status);
     const family = page.getByRole('link', {
-      name: 'Yard builds. Stood pays. Explore the simulated Yard preview.',
+      name: 'Yard builds. Stood pays. Explore Yard.',
       exact: true,
     });
     assert.equal(await family.count(), 1, 'Stood shows the linked family lockup');

@@ -1,6 +1,6 @@
 # Technical docs
 
-Code milestones lead: frozen signed tests, commit package, budget mandate and outside usage release. The code profile and durable core are tested; runner, funding HTTP, Yard and A2A/AP2 remain planned. This index describes implementation and target design, with field work labelled as a scenario. Product intent is in [`../stood/`](../stood/). How we work is in [`../WAYS_OF_WORKING.md`](../WAYS_OF_WORKING.md).
+Code milestones lead: frozen signed tests, commit package, budget mandate and outside usage release. The code profile, durable core, signing and funding HTTP/worker path run on the PayPal sandbox. Yard’s hosted Board and private intake are available; connecting its Foreman and payment adapter is next. The runner and A2A/AP2 remain target designs. This index describes implementation and target design, with field work labelled as a scenario. Product intent is in [`../stood/`](../stood/). How we work is in [`../WAYS_OF_WORKING.md`](../WAYS_OF_WORKING.md).
 
 | # | Doc | Covers |
 |---|---|---|

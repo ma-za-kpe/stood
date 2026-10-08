@@ -1,9 +1,11 @@
 import pg from 'pg';
 import { LocalKeyWrapper } from './adapters/crypto/local-key-wrapper.js';
 import { PostgresYardEvents } from './adapters/db-postgres/events.js';
+import { PostgresIntakes } from './adapters/db-postgres/intakes.js';
 import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
+import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, type Operator } from './application/board.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
@@ -32,7 +34,7 @@ export function yardRuntime(env: Env) {
   else if (!operators) notes.push('Board off: YARD_OPERATORS is not a valid operator list.');
   if (!env.YARD_SECRET_KEYS?.trim()) notes.push('Board off: YARD_SECRET_KEYS is missing.');
   else if (!keys) notes.push('Board off: YARD_SECRET_KEYS is not a valid key list.');
-  notes.push('Intake and Foreman off: the hosted planner is not connected yet.');
+  notes.push('Foreman off: the hosted planner is not connected yet.');
   notes.push('Payments off: Yard is not connected to Stood yet.');
   if (notes.some((n) => n.startsWith('Board off')) || !operators || !keys)
     return { config: { environment } as Config, notes, start: async () => {}, stop: async () => {} };
@@ -44,10 +46,16 @@ export function yardRuntime(env: Env) {
   const logs = new PostgresSiteLogs(pool, events);
   const scanner = new GitleaksScanner();
   let retention: ReturnType<typeof startLogRetention> | null = null;
+  // T-0266/T-0267: hosted sign-in when the owner issued access codes, and the page when it is built into the image.
+  const signIn = operators.some((o) => o.accessCode);
   const config: Config = {
     environment,
+    research: new TribunalCatalog(),
+    ...(signIn ? { browser: { origin: env.YARD_PUBLIC_ORIGIN ?? 'https://stood-yard-api.onrender.com' } } : {}),
+    ...(env.YARD_WEB_DIR ? { web: { root: env.YARD_WEB_DIR } } : {}),
     board: {
       board,
+      intakes: new PostgresIntakes(pool, events),
       clock,
       operators,
       secrets: new SecretVault(new PostgresSecretRows(pool), new LocalKeyWrapper(keys.keys, keys.current)),
@@ -84,10 +92,12 @@ function parseOperators(value: string | undefined): Operators | null {
         typeof actor?.id === 'string' &&
         typeof actor.root === 'string' &&
         (actor.kind === 'BUYER' || actor.kind === 'BUILDER') &&
-        (o.payeeRef === undefined || typeof o.payeeRef === 'string')
+        (o.payeeRef === undefined || typeof o.payeeRef === 'string') &&
+        (o.accessCode === undefined || (typeof o.accessCode === 'string' && o.accessCode.length >= 24))
       );
     });
-    return ok ? (list as Operators) : null;
+    const codes = list.map((o) => o.accessCode).filter((c) => c !== undefined);
+    return ok && new Set(codes).size === codes.length ? (list as Operators) : null;
   } catch {
     return null;
   }

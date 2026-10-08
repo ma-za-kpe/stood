@@ -951,6 +951,6 @@ footer p {
   content: "● ";
   color: #3ccf7a;
 }
-.system-status[data-state="mock"]::before {
+.system-status[data-state="unavailable"]::before {
   content: "○ ";
 }

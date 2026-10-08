@@ -1,4 +1,4 @@
-import { completeIntakeChecked, intakeDraftSchema } from '@stood/yard-contracts';
+import { completeIntakeChecked, type IntakeDraft, intakeDraftSchema } from '@stood/yard-contracts';
 import type { CostLine } from '@stood/yard-domain';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -10,6 +10,7 @@ import { CostBreakdown } from './CostBreakdown.js';
 import { browserRequestKey } from './claim-keys.js';
 import { ApiError, api } from './http.js';
 import { foremanChoices, formDraft, formFields, formValues, type IntakeValues, stepNames } from './intake-form.js';
+import { TribunalImportPanel } from './TribunalImportPanel.js';
 
 const recordSchema = z.object({
   id: z.string(),
@@ -67,7 +68,7 @@ const encoded = (values: IntakeValues) =>
   Object.fromEntries(Object.entries(values).map(([k, v]) => [k.replace('.', '__'), v]));
 const decoded = (values: IntakeValues) =>
   Object.fromEntries(Object.entries(values).map(([k, v]) => [k.replace('__', '.'), v]));
-export function IntakePanel({ enabled }: { enabled: boolean }) {
+export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hosted?: boolean }) {
   const actorRef = useRef<ReturnType<typeof createActor<typeof wizard>> | null>(null);
   const [state, setState] = useState({ view: 'editing', step: 0 });
   const [record, setRecord] = useState<Record | null>(null),
@@ -160,13 +161,17 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
     actorRef.current?.send({ type: 'RESTORE', step: next.step });
     window.history.replaceState(null, '', `?intake=${encodeURIComponent(next.id)}`);
   };
-  const open = async (create: boolean) => {
+  const createDraft = useRef<IntakeDraft>({});
+  const open = async (create: boolean, draft: IntakeDraft = {}) => {
     if (pending.current || !enabled) return;
     pending.current = true;
     setBusy(true);
     setError('');
     try {
-      if (create && !createId.current) createId.current = `idea-${browserRequestKey()}`;
+      if (create && !createId.current) {
+        createId.current = `idea-${browserRequestKey()}`;
+        createDraft.current = draft;
+      }
       const id = create ? (createId.current ?? '') : resumeId;
       if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new Error('Enter the intake ID from your saved link.');
       install(
@@ -176,7 +181,7 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
             ? {
                 method: 'POST',
                 headers: { 'If-Match': '0', 'Idempotency-Key': id },
-                body: JSON.stringify({ id, step: 0, draft: {} }),
+                body: JSON.stringify({ id, step: 0, draft: createDraft.current }),
               }
             : undefined,
         ),
@@ -277,7 +282,7 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
   };
   const planWork = async () => {
     const current = recordRef.current;
-    if (!current || pending.current || externalStale) return;
+    if (!current || pending.current || externalStale || hosted) return;
     pending.current = true;
     setBusy(true);
     setError('');
@@ -397,7 +402,7 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
     return (
       <section className="intake-panel">
         <h2>Describe it. Build it.</h2>
-        <p>Choose the simulated buyer to start or resume a private intake.</p>
+        <p>Sign in as a buyer to start or resume a private intake.</p>
       </section>
     );
   return (
@@ -405,8 +410,9 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
       <p className="eyebrow">Yard / the Foreman</p>
       <h2 id="intake-title">Your idea. A clear blueprint.</h2>
       <p>
-        Choices first, keys later. The pilot is free; a future platform fee will be shown before agreement. This demo
-        plans with a scripted model. It never executes a payment.
+        {hosted
+          ? 'Choices first, keys later. Private intake is live. The Foreman connection is next; saving a brief does not sign an allowance or authorise payment.'
+          : 'Choices first, keys later. The pilot is free; a future platform fee will be shown before agreement. This local run uses a scripted planner and executes no payment.'}
       </p>
       {error && (
         <p role="alert">
@@ -415,9 +421,16 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
             : error}
         </p>
       )}
+      {hosted && (
+        <p role="note">
+          Complete the missing choices and save your brief. Planning will be available when the hosted Foreman is
+          connected.
+        </p>
+      )}
       <p role="status">{busy ? 'Working…' : status}</p>
       {!record ? (
         <div className="intake-start">
+          <TribunalImportPanel busy={busy} onConfirm={(draft) => open(true, draft)} />
           <button type="button" disabled={busy} onClick={() => void open(true)}>
             Start a private intake
           </button>
@@ -563,7 +576,7 @@ export function IntakePanel({ enabled }: { enabled: boolean }) {
               <button type="button" disabled={busy} onClick={() => actorRef.current?.send({ type: 'EDIT' })}>
                 Edit choices
               </button>
-              <button type="button" disabled={busy} onClick={() => void planWork()}>
+              <button type="button" disabled={busy || hosted} onClick={() => void planWork()}>
                 Ask the Foreman for a blueprint
               </button>
             </>

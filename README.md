@@ -25,7 +25,7 @@
   <a href="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml/badge.svg"></a>
   <a href="https://github.com/ma-za-kpe/stood/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ma-za-kpe/stood?include_prereleases&style=flat-square&color=6C4DFF"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-C8FF3D?style=flat-square&labelColor=0D0A1E"></a>
-  <img alt="Status: early implementation" src="https://img.shields.io/badge/status-early%20implementation-FFC53D?style=flat-square&labelColor=0D0A1E">
+  <img alt="Status: live sandbox" src="https://img.shields.io/badge/status-live%20sandbox-FFC53D?style=flat-square&labelColor=0D0A1E">
   <img alt="PayPal sandbox only" src="https://img.shields.io/badge/PayPal-sandbox%20only-FF5533?style=flat-square&labelColor=0D0A1E">
   <img alt="pre-commit enforced" src="https://img.shields.io/badge/pre--commit-enforced-C8FF3D?style=flat-square&labelColor=0D0A1E">
   <a href="https://paypalaihackathon.devpost.com/"><img alt="PayPal AI Hackathon 2026" src="https://img.shields.io/badge/PayPal%20AI%20Hackathon-2026-6C4DFF?style=flat-square&labelColor=0D0A1E"></a>
@@ -33,9 +33,7 @@
 
 ---
 
-> **Simulated demos. No payment is executed.** Current demo evidence and outcomes are synthetic. An isolated PayPal HTTP simulator exercises the real SDK without keys; real-provider connections require sandbox keys and qualification. Keys alone do not qualify an adapter or turn fixtures into real results.
->
-> ⚠️ **Status: early implementation.** Docker tooling, tested Stood/Yard domains, a server-side HTTP SDK, durable DRAFT/package intake and a synthetic-fixture API are implemented. Full funding, trusted execution, hosted replay and production product screens remain planned. PayPal integration is **sandbox only**: no real money, no real personal data. See the [roadmap](#roadmap) and [simulator guide](services/simulators/README.md).
+> **Live PayPal sandbox. No real money.** Stood's hosted API and reconciler connect to the real PayPal sandbox, including saved-account signing and milestone funding. `/health` reports current readiness. Yard's hosted app uses owner-issued access codes for its Board, events, site log and private intake. The Foreman, repository/preview adapters and Yard-to-Stood payment connection are the next integration work. Illustrative examples and the isolated local test network remain labelled separately.
 
 ## Public links
 
@@ -45,7 +43,8 @@
 | Yard (companion site) | <https://ma-za-kpe.github.io/stood/yard/> | Live |
 | Changelog | <https://ma-za-kpe.github.io/stood/changelog.html> | Live |
 | Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**. `/health` says whether sandbox payments are on and, if not, what is missing ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
-| Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Intake, the Foreman and payments show as off until they are connected |
+| Hosted Yard app | <https://stood-yard-api.onrender.com/app/> | Owner-issued access code; Board, events, site log and private intake |
+| Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake is connected; the Foreman and Yard payments remain off until their adapters are connected |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |
 | Work in progress | [#49 pre-credentials](https://github.com/ma-za-kpe/stood/issues/49) · [#50 credentials and deployment](https://github.com/ma-za-kpe/stood/issues/50) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | |
@@ -59,7 +58,7 @@
 
 Adaeze delegates a code milestone to Yard or a human developer. A green badge alone does not show whether signed tests were changed, skipped or too weak. Her payment needs a new commit, intact acceptance tests, a trustworthy run and the agreed budget and usage conditions. Buyer and builder identity does not change the decision.
 
-The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. [Yard](docs/yard/README.md) is the companion product in this monorepo. Its durable Board and first connected Docker mock are implemented for review; the planner, hosted previews, live integrations and A2A/AP2 surface remain planned. The [Yard page](site/yard/index.html) is an illustrative simulation, not a live work-order screen. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
+The implemented `code.milestone@1` rule profile composes deterministic findings. Trusted signed-runner ingestion is still planned (T-0159); the landing page's four commit examples are illustrative. [Yard](docs/yard/README.md) is the companion product in this monorepo. Its Board, events and site log run on Render. The hosted app adds private sign-in and intake; the planner and remaining live adapters are being connected in C3. The isolated Docker network exercises the complete scripted journey. The [Yard page](site/yard/index.html) is an illustrative simulation, not a live work-order screen. Read [the positioning and trust boundary](docs/stood/S17-agent-payments-positioning.md). EyeOnSite remains a site-visit scenario.
 
 [EyeOnSite](https://github.com/ma-za-kpe/eyeonsite) is a linked site-visit scenario, with its original research preserved in the [historical docs](docs/11-africa-payments-and-eyeonsite.md).
 
@@ -67,7 +66,7 @@ The implemented `code.milestone@1` rule profile composes deterministic findings.
 
 Stood is the **gate** a platform calls before a staged payment leaves.
 
-Target financial flow; funding, trusted evidence intake and payment HTTP remain planned:
+Saved-account signing and funding run through the hosted API and worker. Trusted execution and the complete release workflow are still being built:
 
 1. **Allowance:** the buyer freezes signed acceptance tests, the operator/payee, repository, base commit and budget: a $4,000 cap and $1,200 build milestone.
 2. **Hold:** PayPal authorises a milestone amount before work is submitted. Stood holds no money.
@@ -281,7 +280,7 @@ git push -u origin feature/42-hold-timers   # open a PR into develop
 
 - `feature/*` → `develop` (squash, Conventional-Commit PR title) → `main` (merge commit) → release-please tags `vX.Y.Z` and updates the [changelog](https://ma-za-kpe.github.io/stood/changelog.html). `develop` is the default branch ([ADR-0006](docs/adr/0006-open-source-branching-strategy.md)).
 - **Test-first, domain-driven:** red → green → refactor. 100% branch coverage on decision and money code ([WoW §4–6](docs/WAYS_OF_WORKING.md#4-test-driven-development)).
-- **Reviews:** engineers implement. Every PR gets a code review and a product review against the specs and the Definition of Done.
+- **Review gate:** sandbox PRs merge after required CI passes, including the product and network checks ([ADR-0024](docs/adr/0024-ci-gate-reviews-agent-code-in-the-sandbox.md)). Human money-path approval is required before real money.
 
 ## Roadmap
 
