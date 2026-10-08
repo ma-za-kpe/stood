@@ -47,7 +47,7 @@ services:
     plan: starter
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    dockerCommand: dist/reconcile-cli.js
+    dockerCommand: /nodejs/bin/node dist/reconcile-cli.js
     autoDeploy: false
     envVars:
       - key: APP_ENV
