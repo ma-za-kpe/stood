@@ -294,6 +294,7 @@ Current ADRs:
 - **Secret domains are separate:** the evidence agent (Astropods) gets **no** PayPal credentials. Zapier gets outbound-only webhooks. CI gets sandbox-only credentials, scoped to tests.
 - **Personal data:** real plot coordinates, faces and phone numbers never go in fixtures or the public repo. Fixtures are synthetic or consented and anonymised.
 - GitHub Actions are pinned to **full commit SHAs**. Default token permissions are read-only. Only the release workflow gets write access.
+- **Supply-chain checks** run like in large open-source projects: CodeQL on every pull request and weekly, GitHub dependency review on pull requests (high-severity vulnerabilities and GPL-3.0/AGPL-3.0 licences fail), OSV-Scanner on the lockfile, OpenSSF Scorecard weekly, and Dependabot for npm, Actions and pre-commit hooks. A finding is fixed or recorded as a task with a reason; it is never silenced quietly.
 - Commercial dependencies (AG Studio / AG Grid Enterprise, Bryntum) are installed from their registries with keys from env. **Never vendored.**
 
 ---

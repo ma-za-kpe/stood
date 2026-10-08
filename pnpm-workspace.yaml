@@ -9,3 +9,7 @@ syncInjectedDepsAfterScripts:
   - build
 patchedDependencies:
   '@langchain/langgraph-checkpoint@1.1.5': patches/langgraph-checkpoint-1.1.5.patch
+overrides:
+  # drizzle-kit 0.31 still pulls esbuild 0.18 through @esbuild-kit (GHSA-67mh-4wv8-2f99, fixed in 0.25.0).
+  # 0.25.12 is already used elsewhere in the workspace. Remove when drizzle-kit drops @esbuild-kit.
+  '@esbuild-kit/core-utils>esbuild': 0.25.12

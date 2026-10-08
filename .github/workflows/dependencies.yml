@@ -1,0 +1,42 @@
+# Supply-chain checks on dependencies: GitHub dependency review on pull requests,
+# and Google's OSV-Scanner on the lockfile (pull requests and weekly).
+name: dependencies
+on:
+  pull_request:
+    branches: [develop, main]
+  schedule:
+    - cron: "17 5 * * 3"
+permissions: {}
+concurrency:
+  group: dependencies-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/dependency-review-action v5.0.0
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-3.0-only, AGPL-3.0-or-later, GPL-3.0-only, GPL-3.0-or-later
+  osv-scanner:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # google/osv-scanner-action/osv-scanner-action v2.6.0
+      - uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc
+        with:
+          scan-args: |-
+            --lockfile=./pnpm-lock.yaml

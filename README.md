@@ -20,6 +20,8 @@
 
 <p align="center">
   <a href="https://github.com/ma-za-kpe/stood/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ma-za-kpe/stood/actions/workflows/ci.yml/badge.svg?branch=develop"></a>
+  <a href="https://github.com/ma-za-kpe/stood/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/ma-za-kpe/stood/actions/workflows/codeql.yml/badge.svg?branch=develop"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/ma-za-kpe/stood"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/ma-za-kpe/stood/badge"></a>
   <a href="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml/badge.svg"></a>
   <a href="https://github.com/ma-za-kpe/stood/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ma-za-kpe/stood?include_prereleases&style=flat-square&color=6C4DFF"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-C8FF3D?style=flat-square&labelColor=0D0A1E"></a>
