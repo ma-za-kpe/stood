@@ -256,6 +256,10 @@ const t = await stood.tranches.get(held.id); // t.state: RELEASED | REFUSED | WA
 
 ---
 
+## Webhooks Stood receives from PayPal (implemented, T-0033)
+
+`POST /v1/webhooks/paypal` accepts PayPal sandbox notifications. Each one is checked with PayPal's `verify-webhook-signature` API before it is accepted (`202`); unverified deliveries get `401`, malformed ones `422`, and a PayPal verification outage `503` so PayPal retries. Verified events are stored once (PayPal may resend). They never move money by themselves: the reconciler reads provider proof first.
+
 ## Webhooks you'll receive (planned)
 
 Register one HTTPS URL. Every event is signed: `Stood-Signature: t=<unix>,v1=<hex hmac_sha256(secret, t + "." + body)>`.

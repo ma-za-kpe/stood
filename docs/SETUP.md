@@ -40,7 +40,7 @@ Rules we followed: no value in Git, chat, issues or screenshots; tools report on
 | `DATABASE_URL` | ✓ | ✓ | Neon, direct URL |
 | `STOOD_API_KEY`, `STOOD_HMAC_SECRET`, `STOOD_WEBHOOK_SECRET` | ✓ | — | Generated locally (256-bit random) |
 | `RECONCILIATION_OWNER` | — | ✓ (`ma-za-kpe`) | A name, not a secret |
-| `PAYPAL_WEBHOOK_ID` | empty | — | Waits for the webhook (section 6) |
+| `PAYPAL_WEBHOOK_ID` | ✓ | — | The sandbox app's webhook (section 6), set 2026-10-08 |
 
 ## 3. PayPal sandbox app
 
@@ -77,6 +77,8 @@ Add one webhook in the sandbox app:
 - URL: `https://stood-api.onrender.com/v1/webhooks/paypal`
 - Events: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.AUTHORIZATION.VOIDED` (the four Stood handles, not "all events")
 - Put the webhook ID in `.env` and on `stood-api` as `PAYPAL_WEBHOOK_ID`, then redeploy.
+
+What `stood-api` does with each delivery (T-0033): it asks PayPal's `verify-webhook-signature` API whether PayPal really sent it (OAuth token cached, sandbox host only), refuses deliveries with missing transmission headers or a certificate URL outside `paypal.com`, stores each verified event once in the `provider_events` table (migration 0017), and answers `202`. If PayPal's verification API is down it answers `503`, so PayPal retries. An event is only a hint: the reconciler still reads provider proof before any money state changes. The receiver is off unless `PROVIDER_PAYPAL=live`, `DATABASE_URL` and all three PayPal values are set.
 
 ## 7. Yard GitHub App
 
