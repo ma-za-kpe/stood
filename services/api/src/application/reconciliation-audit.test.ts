@@ -55,3 +55,20 @@ it('waits three hours before calling a capture missing, because Transaction Sear
     )[0],
   ).toMatchObject({ kind: 'DUPLICATE_CAPTURE' });
 });
+
+// T-0259: the operator run tool and the nightly sandbox job capture real sandbox money outside Stood's ledger,
+// on purpose. Their keys are marked at source; a real Stood operation key always contains ':' so never matches.
+it('sets aside captures made by the sandbox run tool, and nothing that only looks similar', () => {
+  const capture = (id: string, invoiceId: string) =>
+    ({ id, invoiceId, minor: 1000, currency: 'USD', status: 'COMPLETED' }) as const;
+  const findings = auditCaptures(
+    [],
+    [
+      capture('RUN-1', 'sandbox-release-2026-10-08T02-01-38-901Z-settle'),
+      capture('RUN-2', 'sandbox-vault-release-2026-10-08T10-51-03-742Z-settle'),
+      capture('REAL', 'sandbox-release:0:CAPTURE:1'),
+      capture('ODD', 'sandbox-release-2026-10-08T02-01-38-901Z-settle-extra'),
+    ],
+  );
+  expect(findings.map((f) => f.providerId)).toEqual(['REAL', 'ODD']);
+});

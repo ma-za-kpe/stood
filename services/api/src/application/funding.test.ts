@@ -6,7 +6,7 @@ import { type FundingOperation, type FundingStore, FundingStoreError } from '../
 import { advanceFunding } from './funding.js';
 
 const now = 1791244800000;
-async function harness() {
+async function harness(source?: 'SAVED_PAYPAL') {
   const tranches = new MemoryTranches();
   await tranches.create(
     createTrancheRecord({
@@ -38,6 +38,7 @@ async function harness() {
       allowanceId: 'allowance',
       payeeRef: 'sandbox-payee',
       amount: { minor: 1000, currency: 'USD' },
+      ...(source ? { source } : {}),
     },
   };
   const change = (status: FundingOperation['status'], extra: Partial<FundingOperation> = {}) => {
@@ -270,4 +271,41 @@ it.each([
   expect(await h.run()).toBe('WAIT');
   expect(h.row().status).toBe('AUTHORIZING');
   expect(restoreTrancheRecord((await h.tranches.load('tranche')).record).state).toBe('PENDING');
+});
+
+// T-0154: with a saved PayPal account (a signed mandate), PayPal authorizes when the order is created
+// (recording sandbox-vault-release-2026-10-08T10-51-03-742Z), so there is no buyer approval step.
+it('funds from a saved PayPal account in one step, and still never skips approval for anyone else', async () => {
+  const saved = await harness('SAVED_PAYPAL');
+  vi.mocked(saved.provider.create).mockImplementation(async () => saved.proof('HELD', { hold: saved.hold }));
+  expect(await saved.run()).toBe('HELD');
+  expect(saved.row()).toMatchObject({ status: 'HELD', reference: 'ORDER:AUTH' });
+  expect(saved.provider.authorize).not.toHaveBeenCalled();
+  expect(saved.provider.read).not.toHaveBeenCalled();
+  const buyer = await harness();
+  vi.mocked(buyer.provider.create).mockImplementation(async () => buyer.proof('HELD', { hold: buyer.hold }));
+  expect(await buyer.run()).toBe('WAIT');
+  expect(buyer.row().status).toBe('CREATING');
+});
+it('records a declined saved account, and recovers a lost create reply by reading, never by creating again', async () => {
+  const declined = await harness('SAVED_PAYPAL');
+  vi.mocked(declined.provider.create).mockImplementation(async () =>
+    declined.proof('DECLINED', { reference: 'debug-1' }),
+  );
+  expect(await declined.run()).toBe('FAILED');
+  expect(declined.row()).toMatchObject({ status: 'FAILED', reference: 'debug-1' });
+  const lost = await harness('SAVED_PAYPAL');
+  vi.mocked(lost.provider.create).mockImplementation(async () => ({ complete: false }));
+  vi.mocked(lost.provider.read).mockImplementation(async () => lost.proof('HELD', { hold: lost.hold }));
+  expect(await lost.run()).toBe('WAIT');
+  expect(lost.row().status).toBe('CREATING');
+  expect(
+    await advanceFunding(lost.store, lost.tranches, lost.provider, lost.authority, 'funding', () => now, 'ORDER'),
+  ).toBe('HELD');
+  expect(lost.provider.create).toHaveBeenCalledTimes(1);
+  const odd = await harness('SAVED_PAYPAL');
+  vi.mocked(odd.provider.create).mockImplementation(async () =>
+    odd.proof('HELD', { hold: { ...odd.hold, orderId: 'OTHER' } }),
+  );
+  expect(await odd.run()).toBe('WAIT');
 });

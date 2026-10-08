@@ -24,6 +24,32 @@ type Order = {
   authorizations: string[];
   captures: ObjectValue[];
 };
+const ERROR_NAMES: Readonly<Record<number, readonly [string, string]>> = {
+  400: ['INVALID_REQUEST', 'Request is not well-formed, syntactically incorrect, or violates schema.'],
+  401: [
+    'AUTHENTICATION_FAILURE',
+    'Authentication failed due to invalid authentication credentials or a missing Authorization header.',
+  ],
+  403: ['NOT_AUTHORIZED', 'Authorization failed due to insufficient permissions.'],
+  404: ['RESOURCE_NOT_FOUND', 'The specified resource does not exist.'],
+  405: ['METHOD_NOT_SUPPORTED', 'The server does not implement the requested HTTP method.'],
+  413: ['INVALID_REQUEST', 'Request is not well-formed, syntactically incorrect, or violates schema.'],
+  422: [
+    'UNPROCESSABLE_ENTITY',
+    'The requested action could not be performed, semantically incorrect, or failed business validation.',
+  ],
+  503: ['SERVICE_UNAVAILABLE', 'Service Unavailable.'],
+};
+// Descriptions as the real sandbox wrote them where we have seen them.
+const ISSUE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  REAUTHORIZATION_TOO_SOON:
+    'A reauthorization is only allowed once from Day 4 to Day 29 since the date of the original authorization.',
+  MAX_CAPTURE_AMOUNT_EXCEEDED: 'Capture amount exceeds allowable limit.',
+  PREVIOUSLY_VOIDED: 'Authorization has been previously voided and hence cannot be voided again.',
+  AUTHORIZATION_VOIDED: 'Authorization has been voided.',
+  INVALID_RESOURCE_ID: 'Specified resource ID does not exist. Please check the resource ID and try again.',
+  PERMISSION_DENIED: 'You do not have permission to access or perform operations on this resource.',
+};
 const DAY = 86400000;
 const object = (x: unknown): ObjectValue => (x && typeof x === 'object' && !Array.isArray(x) ? (x as ObjectValue) : {});
 function canonical(value: unknown): string {
@@ -45,6 +71,15 @@ function amount(value: unknown): Amount | null {
   )
     return null;
   return { currency_code: a.currency_code as string, value: a.value };
+}
+// True when a capture asks for more of the same currency than the authorization holds.
+function more(requested: unknown, held: Amount): boolean {
+  const a = amount(requested);
+  return (
+    !!a &&
+    a.currency_code === held.currency_code &&
+    BigInt(a.value.replace('.', '')) > BigInt(held.value.replace('.', ''))
+  );
 }
 export function createPayPalSimulator(config: {
   environment: string;
@@ -71,14 +106,26 @@ export function createPayPalSimulator(config: {
   };
   let sequence = 0;
   const id = (kind: string) => `SIM-${kind}-${++sequence}`;
-  const error = (status: number, issue: string): Reply => ({
-    status,
-    body: {
-      name: status === 404 ? 'RESOURCE_NOT_FOUND' : 'UNPROCESSABLE_ENTITY',
-      details: [{ issue }],
-      debug_id: id('DEBUG'),
-    },
-  });
+  // T-0222: the error body PayPal's sandbox returns (fidelity/paypal-sandbox-errors-2026-10-08.json).
+  const error = (status: number, issue: string): Reply => {
+    const [name, message] = ERROR_NAMES[status] ?? ERROR_NAMES[422]!;
+    return {
+      status,
+      body: {
+        name,
+        message,
+        details: [{ issue, description: ISSUE_DESCRIPTIONS[issue] ?? 'Simulated PayPal error.' }],
+        debug_id: id('DEBUG'),
+        links: [
+          {
+            href: `https://developer.paypal.com/api/rest/reference/orders/v2/errors/#${issue}`,
+            rel: 'information_link',
+            method: 'GET',
+          },
+        ],
+      },
+    };
+  };
   const response = (reply: Reply) =>
     new Response(reply.status === 204 ? null : JSON.stringify(reply.body), {
       status: reply.status,
@@ -328,10 +375,10 @@ export function createPayPalSimulator(config: {
       old = undefined;
     }
     if (old) {
-      if (old.signature !== signature) return response(error(422, 'DUPLICATE_REQUEST_ID'));
+      // Seen on the real sandbox (2026-10-08): a reused request id returns the original result even when the body
+      // changed, and a replayed order or capture answers 200, not 201. Callers must never reuse an id.
       const replay = structuredClone(old.reply);
-      // Seen on the real sandbox (2026-10-08): a replayed capture returns the same capture with 200, not 201.
-      if (/\/capture$/.test(path) && replay.status === 201) replay.status = 200;
+      if ((path === '/v2/checkout/orders' || /\/capture$/.test(path)) && replay.status === 201) replay.status = 200;
       return response(replay);
     }
     let reply: Reply;
@@ -353,7 +400,7 @@ export function createPayPalSimulator(config: {
         (payee !== null && (typeof payee.merchant_id !== 'string' || !payee.merchant_id.trim()))
       )
         reply = error(422, 'INVALID_ORDER');
-      else if (vaultId !== undefined && !tokens.has(String(vaultId))) reply = error(422, 'INVALID_RESOURCE_ID');
+      else if (vaultId !== undefined && !tokens.has(String(vaultId))) reply = error(403, 'PERMISSION_DENIED');
       else {
         const o: Order = {
           id: id('ORDER'),
@@ -396,13 +443,18 @@ export function createPayPalSimulator(config: {
       const auth = authorizations.get(path.split('/')[4] ?? '');
       const action = path.split('/')[5];
       if (!auth) reply = error(404, 'INVALID_RESOURCE_ID');
+      // The real sandbox checks the honor period before the authorization's state (reauthorize after void).
+      else if (action === 'reauthorize' && now() < Date.parse(auth.create_time) + 3 * DAY)
+        reply = error(422, 'REAUTHORIZATION_TOO_SOON');
       else if (refresh(auth).status !== 'CREATED')
         reply = error(
           422,
           auth.status === 'EXPIRED'
             ? 'AUTHORIZATION_EXPIRED'
             : auth.status === 'VOIDED'
-              ? 'AUTHORIZATION_VOIDED'
+              ? action === 'void'
+                ? 'PREVIOUSLY_VOIDED'
+                : 'AUTHORIZATION_VOIDED'
               : 'AUTHORIZATION_ALREADY_CAPTURED',
         );
       else if (
@@ -421,7 +473,9 @@ export function createPayPalSimulator(config: {
         !(action === 'reauthorize' && body.amount === undefined) &&
         canonical(amount(body.amount)) !== canonical(auth.amount)
       )
-        reply = error(422, 'AMOUNT_MISMATCH');
+        // More than held is MAX_CAPTURE_AMOUNT_EXCEEDED, as on the sandbox. PayPal allows up to 115% by default;
+        // the simulator conservatively refuses any other amount, which Stood never sends.
+        reply = error(422, more(body.amount, auth.amount) ? 'MAX_CAPTURE_AMOUNT_EXCEEDED' : 'AMOUNT_MISMATCH');
       else if (action === 'capture') {
         if (body.final_capture !== true || typeof body.invoice_id !== 'string' || !body.invoice_id.trim())
           reply = error(422, 'INVALID_CAPTURE');
@@ -441,8 +495,7 @@ export function createPayPalSimulator(config: {
           emit('PAYMENT.CAPTURE.COMPLETED', capture);
           reply = { status: 201, body: capture };
         }
-      } else if (now() < Date.parse(auth.create_time) + 3 * DAY) reply = error(422, 'AUTHORIZATION_IN_HONOR_PERIOD');
-      else {
+      } else {
         const o = orders.get(auth.supplementary_data.related_ids.order_id) as Order;
         reply =
           o.authorizations.length !== 1

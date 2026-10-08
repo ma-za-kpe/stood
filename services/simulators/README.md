@@ -25,6 +25,10 @@ Idempotency is a conservative fixture policy: the same request ID returns a save
 
 Renewals conservatively follow the [single-renewal checkout guide](https://developer.paypal.com/checkout/extend-authorization/), including rejecting renewal of a renewed authorization. The current [Payments v2 reference](https://developer.paypal.com/api/payments/v2/authorizations-reauthorize) describes multiple renewals, so actual sandbox qualification must resolve that documentation conflict before widening this subset. Its optional `amount` is supported: omitting it preserves the authorized amount; an explicit different amount is still outside this subset and rejected. Same-request-ID replay returns the original renewal rather than creating another hold.
 
+## Fidelity to the real sandbox
+
+Behaviour seen on the real PayPal sandbox wins over our reading of the docs. [`tools/paypal-probe/probe.py`](../../tools/paypal-probe/probe.py) asks the sandbox how it answers edge cases; its findings are kept in [`fidelity/`](fidelity/paypal-sandbox-errors-2026-10-08.json) and tested in `src/paypal.test.ts`. Live recordings of whole scenarios live in `services/api/test/scenarios/sandbox/` and are replayed by `simulator-drift.test.ts`. When the two disagree, re-run the probe and change the simulator, not the evidence.
+
 ## Start and test
 
 ```console

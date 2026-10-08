@@ -5,6 +5,24 @@ if [ "$#" -eq 0 ]; then set -- validate; fi
 case "$1" in
   setup) shift; exec docker compose run --rm -it app sh -c 'pnpm --filter @stood/api build && node services/api/dist/setup-cli.js "$@"' setup "$@" ;;
   reconcile) exec docker compose --profile operations run --rm reconciler ;;
+  vault-key)
+    # T-0227: put a new saved-token key first in VAULT_TOKEN_KEYS in .env. The key is never printed.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    current=$(grep -E '^VAULT_TOKEN_KEYS=' .env | tail -1 | cut -d= -f2-)
+    last=$(printf '%s' "$current" | tr ',' '\n' | sed -n 's/^v\([0-9]*\):.*/\1/p' | sort -n | tail -1)
+    next="v$(( ${last:-0} + 1 )):$(openssl rand -base64 32)"
+    tmp=$(mktemp); chmod 600 "$tmp"
+    grep -vE '^VAULT_TOKEN_KEYS=' .env >"$tmp"
+    printf 'VAULT_TOKEN_KEYS=%s\n' "$next${current:+,$current}" >>"$tmp"
+    cat "$tmp" >.env; rm -f "$tmp"
+    echo "Added ${next%%:*} as the newest key in .env. Run scripts/dev vault-rotate, then copy VAULT_TOKEN_KEYS to Render." ;;
+  vault-rotate)
+    # Re-seal saved tokens under the newest key. Only DATABASE_URL and VAULT_TOKEN_KEYS reach the container.
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(DATABASE_URL|VAULT_TOKEN_KEYS)=' .env >"$keys" || true
+    printf 'APP_ENV=demo\n' >>"$keys"
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/vault-keys-cli.js rotate' ;;
   findings)
     # Reconciliation findings in the database named by .env (T-0257). Only DATABASE_URL reaches the container.
     shift; [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }

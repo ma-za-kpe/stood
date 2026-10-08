@@ -73,11 +73,26 @@ export async function advanceFunding(
         (await authority.canFund(structuredClone(operation.instruction), now))
       );
     };
+    // T-0154: a saved PayPal account is authorized when the order is created; there is no approval step.
+    const saved = operation.instruction.source === 'SAVED_PAYPAL';
+    const settleSaved = async (proof: Record<string, unknown>): Promise<Result> => {
+      if (proof.outcome === 'DECLINED' && text(proof.reference)) {
+        await store.fail(key, proof.reference);
+        return 'FAILED';
+      }
+      const now = await clock();
+      if (proof.outcome !== 'HELD' || !text(proof.orderId) || !Number.isSafeInteger(now) || now < 0) return 'WAIT';
+      const hold = held(proof.hold, proof.orderId, now, false);
+      if (!hold) return 'WAIT';
+      await store.confirm(key, hold);
+      return 'HELD';
+    };
     if (operation.status === 'RESERVED') {
       if (!(await permitted())) return 'WAIT';
       operation = await store.beginCreate(key, operation.version);
       if (!(await permitted())) return 'WAIT';
       const proof = matching(await provider.create(structuredClone(operation)), operation);
+      if (saved) return proof ? settleSaved(proof) : 'WAIT';
       if (!proof || proof.outcome !== 'CREATED' || typeof proof.approvalUrl !== 'string') return 'WAIT';
       await store.orderCreated(key, { orderId: proof.orderId as string, approvalUrl: proof.approvalUrl });
       return 'AWAITING_APPROVAL';
@@ -85,6 +100,7 @@ export async function advanceFunding(
     let proof = matching(await provider.read(structuredClone(operation), candidateOrderId), operation);
     if (!proof) return 'WAIT';
     if (operation.status === 'CREATING') {
+      if (saved) return settleSaved(proof);
       if (!['CREATED', 'APPROVED'].includes(String(proof.outcome)) || typeof proof.approvalUrl !== 'string')
         return 'WAIT';
       await store.orderCreated(key, { orderId: proof.orderId as string, approvalUrl: proof.approvalUrl });

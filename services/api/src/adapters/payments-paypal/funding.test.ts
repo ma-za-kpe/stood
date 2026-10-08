@@ -149,3 +149,48 @@ it('only classifies a consistent well-formed instrument decline on authorisation
       complete: false,
     });
 });
+
+// T-0154: a saved account is authorized at create; a decline there is final, and a failed lookup never calls PayPal.
+it('reads a saved-account create as an authorization, records a decline, and never calls PayPal when the token lookup fails', async () => {
+  const saved: FundingOperation = {
+    ...operation,
+    status: 'CREATING',
+    orderId: null,
+    approvalUrl: null,
+    instruction: { ...operation.instruction, source: 'SAVED_PAYPAL' },
+  };
+  const tokens = { tokenFor: async () => 'VAULT-TOKEN' };
+  const sent = vi.fn(async (_action: string, input: { vaultId?: string | null }) => {
+    expect(input.vaultId).toBe('VAULT-TOKEN');
+    return { status: 201, body: order() };
+  });
+  expect(await new PayPalFundingAdapter({ fund: sent }, tokens).create(saved)).toMatchObject({
+    outcome: 'HELD',
+    hold: { authorizationId: 'AUTH' },
+  });
+  const declined = {
+    status: 422,
+    body: {
+      name: 'UNPROCESSABLE_ENTITY',
+      message: 'Declined',
+      debug_id: 'debug',
+      details: [{ issue: 'INSTRUMENT_DECLINED' }],
+    },
+  };
+  expect(await new PayPalFundingAdapter({ fund: async () => declined }, tokens).create(saved)).toMatchObject({
+    outcome: 'DECLINED',
+    reference: 'debug',
+  });
+  const approvable = { status: 201, body: { ...order(), status: 'PAYER_ACTION_REQUIRED' } };
+  expect(await new PayPalFundingAdapter({ fund: async () => approvable }, tokens).create(saved)).toEqual({
+    complete: false,
+  });
+  const untouched = vi.fn();
+  const broken = {
+    tokenFor: async () => {
+      throw new Error('database down');
+    },
+  };
+  expect(await new PayPalFundingAdapter({ fund: untouched }, broken).create(saved)).toEqual({ complete: false });
+  expect(untouched).not.toHaveBeenCalled();
+});

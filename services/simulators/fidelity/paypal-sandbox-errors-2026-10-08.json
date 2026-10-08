@@ -1,0 +1,36 @@
+{
+  "source": "tools/paypal-probe/probe.py against https://api-m.sandbox.paypal.com, 2026-10-08 (T-0222). Ids removed.",
+  "error_body": {
+    "fields": [
+      "name",
+      "message",
+      "debug_id",
+      "details[].issue",
+      "details[].description",
+      "links[rel=information_link]"
+    ],
+    "unprocessable": {
+      "name": "UNPROCESSABLE_ENTITY",
+      "message": "The requested action could not be performed, semantically incorrect, or failed business validation."
+    },
+    "not_found": { "name": "RESOURCE_NOT_FOUND", "message": "The specified resource does not exist." },
+    "not_authorized": { "name": "NOT_AUTHORIZED", "message": "Authorization failed due to insufficient permissions." }
+  },
+  "cases": [
+    { "case": "vaulted order create", "status": 201, "result": "COMPLETED with the authorization" },
+    {
+      "case": "same PayPal-Request-Id, different body",
+      "status": 200,
+      "result": "the original order; the new body is ignored"
+    },
+    { "case": "reauthorize inside the honor period", "status": 422, "issue": "REAUTHORIZATION_TOO_SOON" },
+    { "case": "capture more than the authorization", "status": 422, "issue": "MAX_CAPTURE_AMOUNT_EXCEEDED" },
+    { "case": "void", "status": 200, "result": "VOIDED (Prefer: return=representation)" },
+    { "case": "void again with a new request id", "status": 422, "issue": "PREVIOUSLY_VOIDED" },
+    { "case": "capture after void", "status": 422, "issue": "AUTHORIZATION_VOIDED" },
+    { "case": "reauthorize after void, inside the honor period", "status": 422, "issue": "REAUTHORIZATION_TOO_SOON" },
+    { "case": "capture an unknown authorization", "status": 404, "issue": "INVALID_RESOURCE_ID" },
+    { "case": "get an unknown order", "status": 404, "issue": "INVALID_RESOURCE_ID" },
+    { "case": "order with an unknown vault_id", "status": 403, "issue": "PERMISSION_DENIED" }
+  ]
+}

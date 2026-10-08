@@ -81,8 +81,10 @@ scripts/dev sandbox-run vault-refuse    # a later hold from the saved token, the
 1. **Create a setup token** (`POST /v3/vault/setup-tokens`, `payment_source.paypal` with return and cancel URLs on one https origin).
 2. **The buyer approves** at its `approve` link.
 3. **Read the setup token back** until `APPROVED`; it carries PayPal's `customer.id`.
-4. **Create the payment token** (`POST /v3/vault/payment-tokens` from the setup token and the customer id). Treat its id as a secret: it is a standing permission to charge the buyer. Stood keeps it in `.env` only and never records it.
+4. **Create the payment token** (`POST /v3/vault/payment-tokens` from the setup token and the customer id). Treat its id as a secret: it is a standing permission to charge the buyer. The run tool keeps it in `.env` only and never records it; the product keeps it in the signed mandate, out of funding records and logs.
 5. **Later holds:** create the order with `payment_source.paypal.vault_id` = the token and `intent: AUTHORIZE`. No approval link is needed, and **the sandbox authorizes at once**: the create call answers `COMPLETED` with the authorization already in `purchase_units[0].payments.authorizations`. Skip the separate authorize call and go straight to capture or void.
+
+**How Stood does step 5 (T-0154).** When a buyer has a signed saved-PayPal mandate, a tranche's funding is marked `SAVED_PAYPAL` when it is reserved. The funding record never holds the token: the PayPal adapter looks it up from the mandate only at the moment it calls PayPal. A `COMPLETED` create is read as the hold itself, so funding goes straight from `CREATING` to `HELD` (or `FAILED` on `INSTRUMENT_DECLINED`). If the create reply is lost, Stood reads the order instead of creating another one. Everyone else still goes through buyer approval, and the database refuses the shortcut for them (migration 0020).
 
 **Lesson 10: setup tokens need `usage_type: MERCHANT`.** Without it, PayPal creates the setup token with status `CREATED` and **no approval link**, so no buyer can ever approve it. With it, the status is `PAYER_ACTION_REQUIRED` and there is an `approve` link. We found this when our first real setup run returned no link; the fix was one field.
 
@@ -103,6 +105,26 @@ tools/paypal-witness/witness.py disputes
 **Lesson 11: Transaction Search lists every balance event, not only payments.** Our first audit flagged `32H01288U93789309` as a capture with no release: it was event `T1900`, the sandbox account's opening balance. Payment events have codes starting `T00` (`T0006` is a PayPal checkout payment); keep only those when you compare captures (T-0155).
 
 **Lesson 12: an audit needs a way for a person to close a finding.** A capture made outside your app (we captured `3WS56911LU245183B` with an operator tool) is real money PayPal reports and your ledger never saw, so it is flagged every hour. Stood lets a named person resolve it with a reason (`scripts/dev findings resolve <id> --by <name> --note "<reason>"`); the audit then never reopens it (T-0257).
+
+## 4b. How the sandbox says no (probed)
+
+[`tools/paypal-probe/probe.py`](../../tools/paypal-probe/probe.py) places one 1.00 USD hold from the saved test buyer, tries the edge cases below against it, and voids it (nothing is captured). It prints statuses and PayPal's error names only. What it found on 8 October 2026, recorded in [`services/simulators/fidelity/`](../../services/simulators/fidelity/paypal-sandbox-errors-2026-10-08.json):
+
+| You do | PayPal answers |
+| --- | --- |
+| Reuse a `PayPal-Request-Id` with a **different body** | `200` and the **original** order; the new body is silently ignored |
+| Reauthorize within 3 days (the honor period), even after a void | `422 REAUTHORIZATION_TOO_SOON` |
+| Capture more than the authorization | `422 MAX_CAPTURE_AMOUNT_EXCEEDED` (PayPal allows up to 115% by default) |
+| Void twice | `422 PREVIOUSLY_VOIDED` |
+| Capture after a void | `422 AUTHORIZATION_VOIDED` |
+| Use an unknown saved token (`vault_id`) | `403 NOT_AUTHORIZED`, issue `PERMISSION_DENIED` |
+| Ask for an unknown id | `404 RESOURCE_NOT_FOUND`, issue `INVALID_RESOURCE_ID` |
+
+Every error carries `name`, `message`, `debug_id`, `details[].issue` with a `description`, and an `information_link`. Log the `debug_id`: PayPal support asks for it.
+
+**Lesson 13: never reuse a request id for a different request.** PayPal does not reject it; it returns the first result. A reused id with a new amount would look like success and move the old amount. Stood creates one random id per operation and stores it before calling PayPal.
+
+**Lesson 14: test your simulator against the real thing.** Our simulator had invented four of these codes and left out `message`. Stood's failure classifier requires `message`, so in simulation every definite refusal looked "unknown". The probe found it in one run.
 
 ## 5. Webhooks
 

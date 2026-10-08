@@ -81,7 +81,11 @@ export class PostgresTranches implements TrancheStore {
           inArray(schema.fundingOperations.status, ['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING']),
         ),
       );
-    if (funding && (funding.key !== fundingKey || funding.status !== 'AUTHORIZING' || copy.method !== 'confirmFunding'))
+    // T-0154: a saved PayPal account's funding resolves straight from CREATING.
+    const resolvable =
+      funding?.status === 'AUTHORIZING' ||
+      (funding?.status === 'CREATING' && funding.instruction.source === 'SAVED_PAYPAL');
+    if (funding && (funding.key !== fundingKey || !resolvable || copy.method !== 'confirmFunding'))
       throw new TrancheStoreError('IDENTITY_CONFLICT');
     await this.snapshot(tx, trancheId);
     const record = advanceTrancheRecord(stream.record, copy);

@@ -43,6 +43,8 @@ export const mandateSignatures = pgTable(
     customerId: text('customer_id'),
     payerId: text('payer_id'),
     tokenId: text('token_id').unique(),
+    // T-0227: token_id holds the sealed token; this SHA-256 fingerprint keeps one token to one mandate.
+    tokenFingerprint: text('token_fingerprint').unique(),
     approvalUrl: text('approval_url'),
     acceptedAt: bigint('accepted_at', { mode: 'number' }).notNull(),
     expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
@@ -72,6 +74,7 @@ export const mandateSignatures = pgTable(
     (${table.status} = 'TOKENIZING' AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND length(trim(${table.payerId})) > 0 AND ${table.tokenId} IS NULL) OR
     (${table.status} IN ('SIGNED', 'REVOKED') AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND length(trim(${table.payerId})) > 0 AND length(trim(${table.tokenId})) > 0)) IS TRUE`,
     ),
+    check('mandate_token_fingerprint_paired', sql`(${table.tokenId} IS NULL) = (${table.tokenFingerprint} IS NULL)`),
   ],
 );
 export const mandateEvents = pgTable(
@@ -344,7 +347,8 @@ export const fundingOperations = pgTable(
     ),
     check(
       'funding_order_required',
-      sql`${t.status} NOT IN ('AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'EXPIRED') OR (${t.orderId} IS NOT NULL AND length(trim(${t.orderId})) > 0 AND ${t.approvalUrl} IS NOT NULL)`,
+      // T-0154: a saved PayPal account is authorized at create, so it has an order but no approval link.
+      sql`${t.status} NOT IN ('AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'EXPIRED') OR (${t.orderId} IS NOT NULL AND length(trim(${t.orderId})) > 0 AND (${t.approvalUrl} IS NOT NULL OR (${t.status} = 'HELD' AND ${t.instruction}->>'source' = 'SAVED_PAYPAL')))`,
     ),
     check(
       'funding_resolution_valid',
