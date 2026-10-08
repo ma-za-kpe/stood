@@ -1,0 +1,74 @@
+# T-0234: every night, two real PayPal SANDBOX holds from the saved test buyer, with no human approval:
+# one released (captured) and one refused (voided). Nothing is left open. Sandbox only, never live.
+# Skips until the owner adds the four sandbox secrets (docs/SETUP.md, "Nightly sandbox run").
+name: sandbox-nightly
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: sandbox-nightly
+  cancel-in-progress: false
+jobs:
+  sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      HAS_SECRETS: ${{ secrets.PAYPAL_SANDBOX_VAULT_TOKEN_ID != '' && secrets.PAYPAL_CLIENT_ID != '' }}
+    steps:
+      - name: Skip until the sandbox secrets exist
+        if: env.HAS_SECRETS != 'true'
+        run: echo "::notice::Sandbox secrets not configured; nothing to run."
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: env.HAS_SECRETS == 'true'
+        with:
+          persist-credentials: false
+      - name: Write a private .env with the sandbox values only
+        if: env.HAS_SECRETS == 'true'
+        env:
+          PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+          STOOD_SANDBOX_PAYEE_ID: ${{ secrets.STOOD_SANDBOX_PAYEE_ID }}
+          PAYPAL_SANDBOX_VAULT_TOKEN_ID: ${{ secrets.PAYPAL_SANDBOX_VAULT_TOKEN_ID }}
+        run: |
+          umask 077
+          {
+            echo "PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com"
+            echo "PAYPAL_CLIENT_ID=$PAYPAL_CLIENT_ID"
+            echo "PAYPAL_CLIENT_SECRET=$PAYPAL_CLIENT_SECRET"
+            echo "STOOD_SANDBOX_PAYEE_ID=$STOOD_SANDBOX_PAYEE_ID"
+            echo "PAYPAL_SANDBOX_VAULT_TOKEN_ID=$PAYPAL_SANDBOX_VAULT_TOKEN_ID"
+          } > .env
+      - name: Build the dev image
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          LOCAL_UID="$(id -u)"
+          LOCAL_GID="$(id -g)"
+          export LOCAL_UID LOCAL_GID
+          docker compose build app
+          docker compose run --rm app pnpm install --frozen-lockfile
+      - name: Release and refuse a hold from the saved buyer (no approval)
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          scripts/dev sandbox-run vault-release
+          scripts/dev sandbox-run vault-refuse
+      - name: Check the outcomes and confirm them with the independent witness
+        if: env.HAS_SECRETS == 'true'
+        env:
+          STOOD_ENV_FILE: .env
+        run: python3 tools/sandbox-nightly/verify.py services/api/test/scenarios/sandbox
+      - name: Keep the recordings (ids, statuses, amounts; no payer data or tokens)
+        if: always() && env.HAS_SECRETS == 'true'
+        # actions/upload-artifact v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sandbox-recordings
+          path: services/api/test/scenarios/sandbox/sandbox-vault-*.json
+          retention-days: 30
+      - name: Remove the private .env
+        if: always()
+        run: rm -f .env

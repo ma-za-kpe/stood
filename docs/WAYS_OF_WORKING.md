@@ -220,7 +220,7 @@ Hooks are pinned to commit SHAs (tag in a `# frozen:` comment) or to container i
 | commit | File hygiene | trailing whitespace, EOF, LF line endings, BOM, executable / shebang consistency, large files > 500 KB | Any drift (most are auto-fixed, and the commit still fails so you see the fix) |
 | commit | Formats | YAML, JSON, TOML, XML / SVG validity. **GitHub workflow and Dependabot schema** (check-jsonschema) | Invalid syntax or schema |
 | commit | GitHub Actions | **actionlint**, **zizmor** (unpinned actions, credential persistence, injection, over-broad permissions) | Any finding |
-| commit | Secrets | **gitleaks**, private-key and AWS-credential detection | Anything that looks like a secret |
+| commit | Secrets | **gitleaks**, private-key and AWS-credential detection, and **no-local-secrets**, which compares staged files with your actual `.env` values and the GitHub App key (never printing them) | Anything that looks like a secret, or any of your real values |
 | commit | Docs | **markdownlint-cli2** (pinned image, auto-fix), **lychee** offline links with fragments, **typos** | Broken links or anchors, lint errors, misspellings |
 | commit | Code style | **Biome** (pinned image; JS / TS / CSS / JSON), **shellcheck** (shell scripts), **ruff** check and format (Python tools), **hadolint** (Dockerfile) | Unformatted code or lint errors |
 | commit | Product voice | **banned-words** in user-facing copy (`site/`, `apps/`): `escrow`, `verified`, `fraud`, "Something went wrong" | Any hit |

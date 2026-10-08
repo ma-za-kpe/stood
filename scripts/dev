@@ -9,9 +9,21 @@ case "$1" in
     # Only the sandbox app keys reach the container, from a private temporary file (T-0224).
     shift; [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
     keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
-    grep -E '^(PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|STOOD_SANDBOX_PAYEE_ID)=' .env >"$keys" || true
+    grep -E '^(PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|STOOD_SANDBOX_PAYEE_ID|PAYPAL_SANDBOX_VAULT_TOKEN_ID)=' .env >"$keys" || true
     docker compose run --rm --env-from-file "$keys" app \
-      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/sandbox-run-cli.js "$@"' sandbox-run "$@" ;;
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/sandbox-run-cli.js "$@"' sandbox-run "$@"
+    # vault-setup leaves the saved payment token in .sandbox/; move it into .env (never printed), then delete it.
+    if [ -s .sandbox/vault-token ]; then
+      token=$(cat .sandbox/vault-token); rm -f .sandbox/vault-token
+      for f in .env "$HOME/.config/stood/.env"; do
+        [ -f "$f" ] || continue
+        next=$(mktemp); chmod 600 "$next"
+        grep -v '^PAYPAL_SANDBOX_VAULT_TOKEN_ID=' "$f" >"$next" || true
+        printf 'PAYPAL_SANDBOX_VAULT_TOKEN_ID=%s\n' "$token" >>"$next"
+        cat "$next" >"$f" && rm -f "$next" && chmod 600 "$f"   # writes through a symlinked .env
+      done
+      echo "Saved PAYPAL_SANDBOX_VAULT_TOKEN_ID to .env. Next: scripts/dev sandbox-run vault-release"
+    fi ;;
   site)
     docker compose run --rm app sh -c 'pnpm --filter @stood/yard-domain build && pnpm --filter @stood/yard-web build && npm ci --prefix tools/site && node tools/site/build.mjs'
     exec docker compose --profile site up -d --wait site ;;

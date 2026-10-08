@@ -62,6 +62,20 @@ repos:
         stages: [commit-msg]
 
   # ---------- secrets ----------
+  - repo: local
+    hooks:
+      # Knows your actual values (from .env and the GitHub App key) instead of guessing patterns (T-0252).
+      - id: no-local-secrets
+        name: no local secret values in staged files
+        language: system
+        entry: tools/no-local-secrets/check.py
+        types: [text]
+      - id: no-local-secrets-tests
+        name: no-local-secrets hook tests
+        language: system
+        entry: python3 -m unittest discover tools/no-local-secrets
+        pass_filenames: false
+        files: ^tools/no-local-secrets/
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
     hooks:
