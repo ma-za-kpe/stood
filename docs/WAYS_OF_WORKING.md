@@ -196,7 +196,7 @@ The [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) is the local gate, a
 
 ```console
 pip install pre-commit        # or: brew install pre-commit
-pre-commit install            # installs pre-commit + commit-msg hooks
+pre-commit install            # installs pre-commit, commit-msg and pre-push hooks
 git commit -s                 # always sign off (DCO)
 ```
 
@@ -208,23 +208,24 @@ pre-commit run --all-files --show-diff-on-failure
 
 ### The gate today
 
-| Area | Hooks | Fails when |
-|---|---|---|
-| Git hygiene | `no-commit-to-branch` (main), **`branch-name`**, merge-conflict, case-conflict, symlinks, submodules forbidden | You're on `main`, a branch name is off-pattern, conflict markers remain, … |
-| File hygiene | trailing whitespace, EOF, LF line endings, BOM, executable / shebang consistency, large files > 500 KB | Any drift (most are auto-fixed, and the commit still fails so you see the fix) |
-| Formats | YAML, JSON, TOML, XML / SVG validity. **GitHub workflow and Dependabot schema** (check-jsonschema) | Invalid syntax or schema |
-| GitHub Actions | **actionlint**, **zizmor** (security: unpinned actions, credential persistence, injection, over-broad permissions) | Any finding |
-| Secrets | **gitleaks**, private-key and AWS-credential detection | Anything that looks like a secret |
-| Docs | **markdownlint-cli2** (auto-fix), **lychee** offline links with fragments, **typos** | Broken links or anchors, lint errors, misspellings |
-| Web code | **Biome** (format + lint for `site/` and `tools/` JS / CSS / JSON) | Unformatted or lint errors |
-| Product voice | **banned-words** in user-facing copy (`site/`, later `apps/`): `escrow`, `verified`, `fraud`, "Something went wrong" | Any hit |
-| Commit message | **Conventional Commits** (strict types) + **DCO `Signed-off-by`** | Non-conforming message or missing sign-off |
+Hooks are pinned to commit SHAs (tag in a `# frozen:` comment) or to container image digests, and Dependabot proposes updates monthly ([ADR-0023](adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md)).
 
-### Pre-registered for when product code lands (added in the same PR as the first code)
+| Stage | Area | Hooks | Fails when |
+|---|---|---|---|
+| commit | Git hygiene | `no-commit-to-branch` (`main`, `develop`), **`branch-name`**, merge-conflict, case-conflict, symlinks, submodules forbidden | You're on a protected branch, a branch name is off-pattern, conflict markers remain, … |
+| commit | File hygiene | trailing whitespace, EOF, LF line endings, BOM, executable / shebang consistency, large files > 500 KB | Any drift (most are auto-fixed, and the commit still fails so you see the fix) |
+| commit | Formats | YAML, JSON, TOML, XML / SVG validity. **GitHub workflow and Dependabot schema** (check-jsonschema) | Invalid syntax or schema |
+| commit | GitHub Actions | **actionlint**, **zizmor** (unpinned actions, credential persistence, injection, over-broad permissions) | Any finding |
+| commit | Secrets | **gitleaks**, private-key and AWS-credential detection | Anything that looks like a secret |
+| commit | Docs | **markdownlint-cli2** (pinned image, auto-fix), **lychee** offline links with fragments, **typos** | Broken links or anchors, lint errors, misspellings |
+| commit | Code style | **Biome** (pinned image; JS / TS / CSS / JSON), **shellcheck** (shell scripts), **ruff** check and format (Python tools), **hadolint** (Dockerfile) | Unformatted code or lint errors |
+| commit | Product voice | **banned-words** in user-facing copy (`site/`, `apps/`): `escrow`, `verified`, `fraud`, "Something went wrong" | Any hit |
+| commit-msg | Commit message | **Conventional Commits** (strict types) + **DCO `Signed-off-by`** | Non-conforming message or missing sign-off |
+| **push** | Product gate | **`product-validation`** in Docker: Biome, `tsc --strict`, **dependency-cruiser money boundary**, all Vitest suites with coverage floors, build, real-Postgres tests | Any failure. Minutes long, so it runs before push rather than at every commit |
 
-`tsc --strict`, **dependency-cruiser money boundary**, affected Vitest suites, coverage floors, `pnpm audit`, and an OpenAPI breaking-change diff.
+**CI ([`ci.yml`](../.github/workflows/ci.yml))** runs both stages on every pull request (`pre-commit run --all-files`, then `--hook-stage pre-push`), plus `pr-title` (Conventional), `dco` (every non-bot commit signed off), the mock network and the site browser checks. Only green CI merges.
 
-**CI ([`ci.yml`](../.github/workflows/ci.yml)):** `pre-commit` (all files), `pr-title` (Conventional), `dco` (every non-bot commit signed off). Only green CI merges.
+Still planned: `pnpm audit` as a gate, an OpenAPI breaking-change diff (after T-0053) and mutation testing on the decision module (§4).
 
 ## 9. Releases (release-please)
 

@@ -213,11 +213,11 @@ Implemented core: `services/api`. Planned additional services: `apps/web`, `serv
 
 ```bash
 pip install pre-commit             # or: brew install pre-commit / pipx install pre-commit
-pre-commit install                 # installs BOTH hooks: pre-commit + commit-msg
+pre-commit install                 # installs pre-commit, commit-msg and pre-push hooks
 pre-commit run --all-files         # must pass before you push
 ```
 
-Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg` should list both files. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
+Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push` should list all three. Fast checks run on every commit; the Docker product gate (types, money boundary, all tests, build) runs before every push ([ADR-0023](docs/adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md)). Docker must be running, because some hooks run in pinned containers. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
 
 **There's no way around the gate:**
 
