@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { missingPaymentKeys, type PaymentKeys, SETUP_GUIDANCE } from '../application/payment-readiness.js';
+import { missingPaymentKeys, type PaymentKeys, paymentGuidance } from '../application/payment-readiness.js';
 import type { ProviderHealth } from '../application/provider-registry.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
@@ -194,7 +194,7 @@ export function createApp(config: AppConfig) {
       clock: { mode: config.clockMode ?? 'system', now: c.get('now') },
       providers: config.providerHealth?.() ?? [],
       missing: missingPaymentKeys(config.paymentKeys),
-      sentence: SETUP_GUIDANCE,
+      sentence: paymentGuidance(config.paymentKeys).detail,
     }),
   );
   if (config.api) {
@@ -221,13 +221,14 @@ export function createApp(config: AppConfig) {
       ['POST', 'PUT', 'PATCH', 'DELETE'].includes(c.req.method) &&
       /^\/v1\/(allowances|tranches|payments)(?:\/|$)/.test(c.req.path)
     ) {
+      const guidance = paymentGuidance(config.paymentKeys);
       return c.newResponse(
         JSON.stringify({
-          type: 'urn:stood:problem:payments_not_configured',
-          title: 'Payments not configured',
+          type: `urn:stood:problem:${guidance.code}`,
+          title: guidance.title,
           status: 503,
-          code: 'payments_not_configured',
-          detail: SETUP_GUIDANCE,
+          code: guidance.code,
+          detail: guidance.detail,
         }),
         503,
         { 'Content-Type': 'application/problem+json' },
