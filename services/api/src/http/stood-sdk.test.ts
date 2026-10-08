@@ -152,6 +152,16 @@ describe('Public SDK against the actual local Stood HTTP router (T-0179)', () =>
         }),
     });
     await expect(timed.getDraft('alw')).rejects.toMatchObject({ code: 'TIMEOUT' });
+    // A transport that never settles and ignores the abort still times out: the SDK owns its deadline.
+    const stuck = new StoodClient({
+      baseUrl: 'https://stood.fixture',
+      key: 'key',
+      secret: 'secret',
+      clock: () => at,
+      timeoutMs: 5,
+      transport: () => new Promise<Response>(() => {}),
+    });
+    await expect(stuck.getDraft('alw')).rejects.toMatchObject({ code: 'TIMEOUT' });
   });
   it('rejects malformed or oversized success bodies and redirects rather than trusting them', async () => {
     for (const response of [
