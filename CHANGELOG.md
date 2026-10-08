@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/ma-za-kpe/stood/compare/v0.6.0...v0.7.0) (2026-10-08)
+
+
+### Features
+
+* **payments:** close out C1: alerts, saved-account funding, sandbox-faithful simulator, sealed tokens ([#95](https://github.com/ma-za-kpe/stood/issues/95)) ([8d9a1f3](https://github.com/ma-za-kpe/stood/commit/8d9a1f38c07d9b40ef7acc7cf0939e5096903f5a))
+
 ## [0.6.0](https://github.com/ma-za-kpe/stood/compare/v0.5.0...v0.6.0) (2026-10-08)
 
 
