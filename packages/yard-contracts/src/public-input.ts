@@ -12,9 +12,9 @@ const credentials = [
   /\bAIza[A-Za-z0-9_-]{30,}\b/,
   /["']?(?:client_secret|private_key|api_key|access_token|secret_access_key)["']?\s*[:=]\s*["']?[^\s"',}]{8,}/i,
 ];
-export function assertPublicInput(value: unknown, boundary: 'INTAKE' | 'MODEL' = 'INTAKE'): void {
-  if (boundary !== 'INTAKE' && boundary !== 'MODEL') throw new IntakeError('INVALID_INTAKE');
-  const maxBytes = boundary === 'MODEL' ? 65536 : 49152;
+export function assertPublicInput(value: unknown, boundary: 'INTAKE' | 'MODEL' | 'IMPORT' = 'INTAKE'): void {
+  if (boundary !== 'INTAKE' && boundary !== 'MODEL' && boundary !== 'IMPORT') throw new IntakeError('INVALID_INTAKE');
+  const maxBytes = boundary === 'IMPORT' ? 131072 : boundary === 'MODEL' ? 65536 : 49152;
   let raw: string;
   try {
     raw = JSON.stringify(value) ?? '';

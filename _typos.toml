@@ -19,4 +19,6 @@ opsz = "opsz"
 extend-ignore-re = ["\\*\\*[A-Z]\\*\\*[a-z]+"]
 
 [files]
-extend-exclude = ["docs/brand/**/*.svg", "*.lock", "CHANGELOG.md"]
+extend-exclude = ["docs/brand/**/*.svg", "*.lock", "CHANGELOG.md", "packages/yard-contracts/test/fakes/startup-tribunal.json"]
+
+# The excluded #99 report is upstream data: preserve source keys (som_usd) and brands (Canva).
