@@ -1,0 +1,43 @@
+{
+  "scenario": "release",
+  "mode": "live",
+  "runId": "sandbox-vault-release-2026-10-08T10-51-03-742Z",
+  "outcome": "CAPTURED",
+  "steps": [
+    {
+      "step": "CREATE_ORDER",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "order": "5KD70970Y9323125U",
+        "hold": "58V63022RU284920T"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "CAPTURE",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "capture": "8LY18336RC844131D"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_AUTHORIZATION",
+      "httpStatus": 200,
+      "status": "CAPTURED",
+      "ids": {
+        "hold": "58V63022RU284920T"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-08T10:51:09.573Z"
+}

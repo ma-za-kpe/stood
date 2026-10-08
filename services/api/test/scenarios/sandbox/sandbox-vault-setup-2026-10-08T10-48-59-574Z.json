@@ -1,0 +1,42 @@
+{
+  "scenario": "vault-setup",
+  "mode": "live",
+  "runId": "sandbox-vault-setup-2026-10-08T10-48-59-574Z",
+  "outcome": "VAULTED",
+  "steps": [
+    {
+      "step": "CREATE_SETUP",
+      "httpStatus": 201,
+      "status": "PAYER_ACTION_REQUIRED",
+      "ids": {
+        "setup": "0TL2283216418424J"
+      },
+      "amount": null,
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_SETUP",
+      "httpStatus": 200,
+      "status": "APPROVED",
+      "ids": {
+        "setup": "0TL2283216418424J"
+      },
+      "amount": null,
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "CREATE_TOKEN",
+      "httpStatus": 201,
+      "status": null,
+      "ids": {
+        "token": "saved locally, not recorded"
+      },
+      "amount": null,
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-08T10:50:25.261Z"
+}

@@ -82,7 +82,9 @@ scripts/dev sandbox-run vault-refuse    # a later hold from the saved token, the
 2. **The buyer approves** at its `approve` link.
 3. **Read the setup token back** until `APPROVED`; it carries PayPal's `customer.id`.
 4. **Create the payment token** (`POST /v3/vault/payment-tokens` from the setup token and the customer id). Treat its id as a secret: it is a standing permission to charge the buyer. Stood keeps it in `.env` only and never records it.
-5. **Later holds:** create the order with `payment_source.paypal.vault_id` = the token. No approval link is needed; authorize, then capture or void as in step 3.
+5. **Later holds:** create the order with `payment_source.paypal.vault_id` = the token and `intent: AUTHORIZE`. No approval link is needed, and **the sandbox authorizes at once**: the create call answers `COMPLETED` with the authorization already in `purchase_units[0].payments.authorizations`. Skip the separate authorize call and go straight to capture or void.
+
+**Lesson 10: setup tokens need `usage_type: MERCHANT`.** Without it, PayPal creates the setup token with status `CREATED` and **no approval link**, so no buyer can ever approve it. With it, the status is `PAYER_ACTION_REQUIRED` and there is an `approve` link. We found this when our first real setup run returned no link; the fix was one field.
 
 ## 4. Check what PayPal recorded, independently
 
@@ -119,5 +121,8 @@ Two runs through Stood's production adapter, each confirmed by the independent w
 |---|---|---|
 | Release | `5DR752893E000704A` | authorization `CAPTURED`; capture `COMPLETED`, 10.00 USD, `invoice_id` = Stood's operation key |
 | Refuse | `64V46505SU3606334` | authorization `VOIDED`; no capture, nothing charged |
+| Vault setup | setup `0TL2283216418424J` | buyer approved saving PayPal; token kept in `.env` only |
+| Vault release (no buyer) | `5KD70970Y9323125U` | authorized at creation, then `CAPTURED`, 10.00 USD |
+| Vault refuse (no buyer) | `4EP95447F22898734` | authorized at creation, then `VOIDED`; no capture |
 
 The sanitised recordings (ids, statuses, amounts; no payer data) are in [`services/api/test/scenarios/sandbox/`](../../services/api/test/scenarios/sandbox/). Earlier runs that failed (the Ugandan payee, and the 403 void with a third-party payee) are kept there too, because they are the evidence for lessons 1 and 2.

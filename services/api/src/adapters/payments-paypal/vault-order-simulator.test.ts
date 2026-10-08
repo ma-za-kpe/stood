@@ -48,14 +48,14 @@ it('places and captures a later hold from a saved payment token without buyer ap
       requestId: 'order-1',
       vaultId: token.id,
     });
+    // As the real sandbox answered (recording sandbox-vault-release-2026-10-08T10-51-03-742Z): with a saved token,
+    // creating an AUTHORIZE order authorizes at once, so the order is COMPLETED and already holds the authorization.
     expect(created.status).toBe(201);
-    expect(created.body).toMatchObject({ status: 'APPROVED' });
-    const orderId = (created.body as { id: string }).id;
-    const authorized = await sdk.fund('AUTHORIZE_ORDER', { ...order, orderId, requestId: 'auth-1', vaultId: token.id });
-    expect(authorized.status).toBe(201);
+    expect(created.body).toMatchObject({ status: 'COMPLETED' });
     const authorizationId = (
-      authorized.body as { purchase_units: { payments: { authorizations: { id: string }[] } }[] }
+      created.body as { purchase_units: { payments: { authorizations: { id: string; status: string }[] } }[] }
     ).purchase_units[0]?.payments.authorizations[0]?.id;
+    expect(authorizationId).toBeTruthy();
     const captured = await sdk.call('CAPTURE', {
       authorizationId: authorizationId ?? '',
       requestId: 'cap-1',

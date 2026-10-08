@@ -321,7 +321,7 @@ export function createPayPalSimulator(config: {
       const unit = object(units[0]);
       const money = amount(unit.amount);
       const payee = unit.payee === undefined ? null : object(unit.payee);
-      // A saved payment token (merchant-initiated) needs no buyer approval: the order starts APPROVED.
+      // A saved payment token (merchant-initiated) needs no buyer approval link.
       const vaultId = object(object(body.payment_source).paypal).vault_id;
       if (
         body.intent !== 'AUTHORIZE' ||
@@ -338,7 +338,7 @@ export function createPayPalSimulator(config: {
       else {
         const o: Order = {
           id: id('ORDER'),
-          status: vaultId === undefined ? 'CREATED' : 'APPROVED',
+          status: 'CREATED',
           customId: unit.custom_id,
           referenceId: typeof unit.reference_id === 'string' ? unit.reference_id : 'default',
           payee: payee ? { merchant_id: payee.merchant_id } : null,
@@ -347,6 +347,12 @@ export function createPayPalSimulator(config: {
           captures: [],
         };
         orders.set(o.id, o);
+        // A saved payment token (merchant-initiated) needs no buyer: like the real sandbox, the AUTHORIZE order
+        // is authorized at creation and answered COMPLETED with the authorization.
+        if (vaultId !== undefined) {
+          authorize(o, now() + 29 * DAY);
+          o.status = 'COMPLETED';
+        }
         reply = {
           status: 201,
           body: {
