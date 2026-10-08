@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { cors } from 'hono/cors';
 import { missingPaymentKeys, type PaymentKeys, paymentGuidance } from '../application/payment-readiness.js';
 import type { ProviderHealth } from '../application/provider-registry.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
@@ -127,11 +128,16 @@ const siteVisitScenarios: Readonly<Record<string, Scenario>> = Object.freeze({
   },
 });
 
+export const SITE_ORIGIN = 'https://ma-za-kpe.github.io';
 export function createApp(config: AppConfig) {
   if (!['local', 'ci', 'demo'].includes(config.appEnv) || config.paypalBaseUrl !== 'https://api-m.sandbox.paypal.com') {
     throw new Error('Only explicitly configured sandbox environments are supported');
   }
   const app = new Hono<{ Variables: { now: number } }>();
+  // T-0262: only the project site may read health and attention across origins (GET, no credentials).
+  const site = cors({ origin: (origin) => (origin === SITE_ORIGIN ? origin : null), allowMethods: ['GET'] });
+  app.use('/health', site);
+  app.use('/ops/attention', site);
   app.use('*', async (c, next) => {
     try {
       const now = config.requestClock ? await config.requestClock() : (config.api?.clock() ?? Date.now());

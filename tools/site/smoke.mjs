@@ -23,7 +23,27 @@ try {
     page.on('request', (r) => {
       if (r.method() !== 'GET') errors.push(`Unexpected mutation ${r.method()}`);
     });
+    // T-0262: the hosted health checks are intercepted. Desktop sees them answer; mobile sees them fail.
+    const live = name === 'desktop';
+    await page.route('https://stood-api.onrender.com/health', (route) =>
+      live
+        ? route.fulfill({
+            json: {
+              paymentReady: false,
+              providers: [{ provider: 'paypal', mode: 'live', simulated: false, ready: true }],
+            },
+          })
+        : route.abort(),
+    );
+    await page.route('https://stood-yard-api.onrender.com/health', (route) =>
+      live ? route.fulfill({ json: { capabilities: { board: true } } }) : route.abort(),
+    );
+    const status = live
+      ? /^Live status: PayPal sandbox connected · payments off until qualified · Yard Board live\. PayPal sandbox only; no real money\.$/
+      : /^Mock preview\. The hosted sandbox did not answer/;
     assert.equal((await page.goto('http://127.0.0.1:4173/yard/')).status(), 200);
+    await page.waitForFunction(() => document.getElementById('system-status')?.dataset.state !== 'checking');
+    assert.match(await page.locator('#system-status').innerText(), status);
     await page.getByRole('heading', { level: 1 }).waitFor();
     await page.keyboard.press('Tab');
     assert.equal(
@@ -57,6 +77,8 @@ try {
     await page.getByRole('link', { name: '← Back to Stood' }).click();
     await page.waitForURL('http://127.0.0.1:4173/');
     await page.waitForLoadState('load');
+    await page.waitForFunction(() => document.getElementById('system-status')?.dataset.state !== 'checking');
+    assert.match(await page.locator('#system-status').innerText(), status);
     const family = page.getByRole('link', {
       name: 'Yard builds. Stood pays. Explore the simulated Yard preview.',
       exact: true,
