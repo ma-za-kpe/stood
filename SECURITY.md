@@ -17,3 +17,7 @@ Stood decides whether money moves. We take reports seriously.
 ## Supported versions
 
 Before 1.0.0, only the latest release is supported. After 1.0.0, the latest minor plus security fixes on the previous minor ([ADR-0006](docs/adr/0006-open-source-branching-strategy.md)).
+
+## OpenSSF
+
+Scorecard results: <https://scorecard.dev/viewer/?uri=github.com/ma-za-kpe/stood>. Prepared answers for the OpenSSF Best Practices badge: [docs/security/openssf-best-practices.md](docs/security/openssf-best-practices.md).
