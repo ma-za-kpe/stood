@@ -2,7 +2,7 @@
 
 > **Agents pay agents. Only when the work stands.**
 
-**Status:** early implementation. Domain, durable storage, guarded sandbox adapter and signed local DRAFT API are tested. Trusted runner ingestion, funding HTTP, Yard and A2A/AP2 remain planned.
+**Status:** hosted PayPal sandbox. Stood signing, funding, guarded payments and reconciliation are connected. Yard hosts its Board, browser sign-in and private intake with StartupTribunal import. Trusted runner ingestion, Yard’s Foreman/payment adapters and A2A/AP2 are the next work.
 **Last updated:** 2026-10-05
 **Target:** PayPal AI Hackathon. Submissions close **12 Nov 2026, 2:00 pm PT**. Winners announced 21 Dec 2026.
 

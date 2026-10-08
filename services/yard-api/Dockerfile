@@ -13,13 +13,15 @@ WORKDIR /workspace
 COPY . .
 RUN pnpm install --frozen-lockfile \
     && pnpm --filter "@stood/yard-api..." build \
-    && pnpm --filter @stood/yard-api deploy --prod --offline /workspace/release
+    && pnpm --filter @stood/yard-web build \
+    && pnpm --filter @stood/yard-api deploy --prod --offline /workspace/release \
+    && cp -r apps/yard-web/dist /workspace/release/web
 
 FROM gcr.io/distroless/nodejs24-debian12:nonroot@sha256:14d42e2511532589a7c7e01a753667a74fcc96266e137e8125006b87b0c32d0a AS yard-api
 WORKDIR /app
 COPY --from=log-scanner /usr/bin/gitleaks /usr/local/bin/gitleaks
 COPY --from=build --chown=65532:65532 /workspace/release .
-ENV YARD_ENV=demo PORT=3001
+ENV YARD_ENV=demo PORT=3001 YARD_WEB_DIR=/app/web
 EXPOSE 3001
 USER 65532:65532
 HEALTHCHECK --interval=30s --timeout=5s CMD ["/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

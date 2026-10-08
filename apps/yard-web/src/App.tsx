@@ -11,11 +11,12 @@ import { BoardPanel } from './BoardPanel.js';
 import { leaseRemaining } from './board-ui.js';
 import { connectionMachine, staleConnection } from './connection.js';
 import { HandoverPanel } from './HandoverPanel.js';
-import { api } from './http.js';
+import { ApiError, api } from './http.js';
 import { IntakePanel } from './IntakePanel.js';
 import { KeysPanel } from './KeysPanel.js';
 import { applyEvent, type ProjectRoom, type RoomEvent, roomChecked } from './project-state.js';
 import { SiteLogPanel } from './SiteLogPanel.js';
+import { notice, sessionChecked } from './session.js';
 
 const useUI = create<{ theme: 'dark' | 'paper'; toggle(): void }>((set) => ({
   theme: 'dark',
@@ -136,6 +137,89 @@ export function App() {
       roomChecked(await api(`/blueprints/${encodeURIComponent(selected)}/room`, { signal })),
   });
   const connection = useRoomStream(selected, room.data?.version ?? 0, session.ready && !!room.data, session.generation);
+  // T-0266: the server says how people sign in here: an access code on hosted Yard, a demo operator locally.
+  const status = useQuery({
+    queryKey: ['session'],
+    refetchInterval: 60_000,
+    retry: false,
+    queryFn: async ({ signal }) => sessionChecked(await api('/session', { signal })),
+  });
+  const mode = status.data?.mode;
+  const said = notice(status.isError ? 'unreachable' : (mode ?? 'loading'));
+  const [code, setCode] = useState('');
+  useEffect(() => {
+    if (status.data && !status.data.role && session.ready && !switching.current) {
+      setRole(null);
+      setSession({ ready: false, generation: ++generation.current, switching: false });
+      void client
+        .cancelQueries({
+          predicate: (q) => ['room', 'board', 'plans', 'intakes', 'site-log'].includes(String(q.queryKey[0])),
+        })
+        .then(() => {
+          for (const key of ['room', 'board', 'plans', 'intakes', 'site-log'])
+            client.removeQueries({ queryKey: [key] });
+        });
+      return;
+    }
+    const signedIn = status.data?.role;
+    if (signedIn && !session.ready && !switching.current) {
+      setRole(signedIn);
+      setSession((s) => ({ ...s, ready: true }));
+    }
+  }, [client, status.data, session.ready]);
+  const signIn = async () => {
+    if (switching.current) return;
+    switching.current = true;
+    const nextGeneration = ++generation.current;
+    setSession({ ready: false, generation: nextGeneration, switching: true });
+    setSessionError('');
+    try {
+      await client.cancelQueries({ queryKey: ['session'] });
+      const result = sessionChecked(
+        await api('/session', { method: 'POST', body: JSON.stringify({ access_code: code.trim() }) }),
+      );
+      if (!result.role) throw new Error('That access code was not accepted.');
+      await client.cancelQueries({
+        predicate: (q) => ['room', 'board', 'plans', 'intakes', 'site-log'].includes(String(q.queryKey[0])),
+      });
+      for (const key of ['room', 'board', 'plans', 'intakes', 'site-log']) client.removeQueries({ queryKey: [key] });
+      client.setQueryData(['session'], result);
+      setCode('');
+      setRole(result.role);
+      setSession({ ready: true, generation: nextGeneration, switching: false });
+    } catch (e) {
+      setSession({ ready: false, generation: nextGeneration, switching: false });
+      setSessionError(
+        e instanceof ApiError && e.status === 429
+          ? 'Too many attempts. Wait a minute and try again.'
+          : e instanceof ApiError && e.status === 401
+            ? 'That access code was not accepted.'
+            : (e as Error).message,
+      );
+    } finally {
+      switching.current = false;
+    }
+  };
+  const signOut = async () => {
+    if (switching.current) return;
+    switching.current = true;
+    setSessionError('');
+    try {
+      await client.cancelQueries({ queryKey: ['session'] });
+      const result = sessionChecked(await api('/session', { method: 'DELETE' }));
+      await client.cancelQueries({
+        predicate: (q) => ['room', 'board', 'plans', 'intakes', 'site-log'].includes(String(q.queryKey[0])),
+      });
+      for (const key of ['room', 'board', 'plans', 'intakes', 'site-log']) client.removeQueries({ queryKey: [key] });
+      client.setQueryData(['session'], result);
+      setRole(null);
+      setSession({ ready: false, generation: ++generation.current, switching: false });
+    } catch {
+      setSessionError('Sign-out could not be confirmed. Try again.');
+    } finally {
+      switching.current = false;
+    }
+  };
   const choose = async (role: 'buyer' | 'builder') => {
     if (switching.current) return;
     switching.current = true;
@@ -148,6 +232,7 @@ export function App() {
         predicate: (query) => ['room', 'board', 'plans', 'intakes', 'site-log'].includes(String(query.queryKey[0])),
       });
       for (const key of ['room', 'board', 'plans', 'intakes', 'site-log']) client.removeQueries({ queryKey: [key] });
+      await client.cancelQueries({ queryKey: ['session'] });
       const result = await api('/demo/session', { method: 'POST', body: JSON.stringify({ role }) });
       if (
         !z
@@ -156,6 +241,7 @@ export function App() {
           .safeParse(result).success
       )
         throw new Error('The simulated operator could not be confirmed. Try again.');
+      client.setQueryData(['session'], { mode: 'mock', role });
       setRole(role);
       setSession({ ready: true, generation: nextGeneration, switching: false });
     } catch (e) {
@@ -171,12 +257,12 @@ export function App() {
         Skip to project
       </a>
       <header className="masthead">
-        <a href="../">
+        <a href={mode === 'mock' ? '../' : 'https://ma-za-kpe.github.io/stood/yard/'}>
           <img src={logo} alt="Yard" width="145" height="40" />
         </a>
         <nav aria-label="Product navigation">
-          <a href="../../">Stood ↗</a>
-          <a href="../">Yard story</a>
+          <a href={mode === 'mock' ? '../../' : 'https://ma-za-kpe.github.io/stood/'}>Stood ↗</a>
+          <a href={mode === 'mock' ? '../' : 'https://ma-za-kpe.github.io/stood/yard/'}>Yard story</a>
           <button type="button" aria-pressed={pane === 'intake'} onClick={() => setPane('intake')}>
             Describe a project
           </button>
@@ -192,8 +278,7 @@ export function App() {
         </nav>
       </header>
       <aside className="simulation" role="note">
-        <span className="signal">SIMULATED</span> Local providers and synthetic evidence. No real payment is executed.
-        Live integrations wait for keys and qualification.
+        <span className="signal">{said.signal}</span> {said.text}
       </aside>
       <main id="main">
         <div className="room-intro">
@@ -205,25 +290,74 @@ export function App() {
               <em>Money with proof.</em>
             </h1>
             <p className="lede">
-              A real service stream, with simulated providers. Stood decides the payment; Yard shows the build.
+              {mode === 'mock'
+                ? 'A real service stream, with simulated providers. Stood decides the payment; Yard shows the build.'
+                : 'A live Board and event stream. Stood decides the payment; Yard shows the build.'}
             </p>
           </div>
           <div className="operator-card">
-            <fieldset>
-              <legend>Demo operator</legend>
-              <button type="button" disabled={session.switching} onClick={() => void choose('buyer')}>
-                Buyer
-              </button>
-              <button type="button" disabled={session.switching} onClick={() => void choose('builder')}>
-                Builder
-              </button>
-            </fieldset>
-            <p className="fine">Synthetic accounts only. Operator keys stay on the server.</p>
-            {session.switching && <p role="status">Switching simulated operator…</p>}
-            {sessionError && <p role="alert">{sessionError}</p>}
+            {mode === 'hosted' ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void signIn();
+                }}
+              >
+                {role ? (
+                  <>
+                    <p role="status">Signed in as the {role}.</p>
+                    <button type="button" onClick={() => void signOut()}>
+                      Sign out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <label htmlFor="access-code">Access code</label>
+                    <input
+                      id="access-code"
+                      type="password"
+                      autoComplete="current-password"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      minLength={24}
+                      required
+                    />
+                    <button type="submit" disabled={session.switching}>
+                      Sign in
+                    </button>
+                  </>
+                )}
+                <p className="fine">The project owner issues access codes. Operator keys stay on the server.</p>
+                {session.switching && <p role="status">Signing in…</p>}
+                {sessionError && <p role="alert">{sessionError}</p>}
+              </form>
+            ) : mode === 'mock' ? (
+              <>
+                <fieldset>
+                  <legend>Demo operator</legend>
+                  <button type="button" disabled={session.switching} onClick={() => void choose('buyer')}>
+                    Buyer
+                  </button>
+                  <button type="button" disabled={session.switching} onClick={() => void choose('builder')}>
+                    Builder
+                  </button>
+                </fieldset>
+                <p className="fine">Synthetic accounts only. Operator keys stay on the server.</p>
+              </>
+            ) : (
+              <p>Connecting to Yard…</p>
+            )}
+            {mode !== 'hosted' && session.switching && <p role="status">Switching simulated operator…</p>}
+            {mode !== 'hosted' && sessionError && <p role="alert">{sessionError}</p>}
           </div>
         </div>
-        {pane === 'intake' && <IntakePanel key={session.generation} enabled={session.ready && role === 'buyer'} />}
+        {pane === 'intake' && (
+          <IntakePanel
+            key={session.generation}
+            enabled={session.ready && role === 'buyer'}
+            hosted={mode === 'hosted'}
+          />
+        )}
         {pane === 'board' && (
           <BoardPanel
             key={session.generation}
@@ -423,7 +557,8 @@ export function App() {
         )}
       </main>
       <footer>
-        Yard builds. Stood pays. <a href="../">Back to the Yard →</a>
+        Yard builds. Stood pays.{' '}
+        <a href={mode === 'mock' ? '../' : 'https://ma-za-kpe.github.io/stood/yard/'}>Back to the Yard →</a>
       </footer>
     </div>
   );

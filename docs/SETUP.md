@@ -10,7 +10,7 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 |---|---|---|---|---|
 | `stood-api` | Render web service (Docker, `Dockerfile` target `api`) | Free | Frankfurt | `https://stood-api.onrender.com`, health at `/health`. Sleeps after about 15 minutes idle |
 | `stood-reconciler` | Render background worker (same image, `dist/reconcile-cli.js`) | **Starter (paid, about $7/month)** | Frankfurt | Render has no free background workers. The owner chose to pay rather than fold it into `stood-api` |
-| `stood-yard-api` | Render web service (Docker, `services/yard-api/Dockerfile`) | **Starter (paid, about $7/month)** | Frankfurt | `https://stood-yard-api.onrender.com/health`. Always on for lease-expiry and log-retention jobs. Owner's choice (2026-10-08). The Yard web page is not hosted yet: it needs real browser sessions first |
+| `stood-yard-api` | Render web service (Docker, `services/yard-api/Dockerfile`) | **Starter (paid, about $7/month)** | Frankfurt | `https://stood-yard-api.onrender.com/health`. Always on for lease-expiry and log-retention jobs. Owner's choice (2026-10-08). The Yard web app is served by this image at `/app/`; sign-in uses an owner-issued operator access code |
 | Postgres | Neon | Free | AWS eu-central-1 (Frankfurt) | **Direct (unpooled) URL**, because Stood uses `LISTEN` |
 | PayPal | Developer Dashboard, sandbox app `stood-merchant-app` (type **Merchant**) | Sandbox | — | Owned by a US sandbox business account; a US personal account is the test buyer. Step-by-step: [the PayPal sandbox guide](guides/paypal-sandbox-authorize-capture-void.md) |
 | Blueprint | Render Blueprint from `render.yaml` on `main` | — | — | Syncs automatically when `main` changes. Services deploy `main` automatically once its GitHub checks pass (T-0256) |
@@ -23,7 +23,17 @@ Yard shares Stood's Neon database through **its own roles**: `yard_owner` (no lo
 scripts/dev yard-setup   # creates both roles, applies Yard's schema, writes the Yard settings into .env (never printed)
 ```
 
-It writes `YARD_DATABASE_URL` (the restricted runtime URL), `YARD_MIGRATION_DATABASE_URL` (the owner URL, used only by the pre-deploy step), `YARD_SECRET_KEYS` and `YARD_OPERATORS` (the signed API clients). Copy all four to the `stood-yard-api` service on Render. Each release, Render's pre-deploy runs `db-cli.js migrate` before the new version goes live. `/health` says what is on: the Board, site log and events now; intake and the Foreman wait for the hosted planner, and payments wait for the Stood connection. Anything missing is a named line in the service log, never a crash.
+It writes `YARD_DATABASE_URL` (the restricted runtime URL), `YARD_MIGRATION_DATABASE_URL` (the owner URL, used only by the pre-deploy step), `YARD_SECRET_KEYS` and `YARD_OPERATORS` (the signed API clients). Copy all four to the `stood-yard-api` service on Render. Each release, Render's pre-deploy runs `db-cli.js migrate` before the new version goes live. `/health` says what is on: the Board, site log and events now; private intake is connected independently; the Foreman waits for its hosted adapter, and Yard payments wait for the Stood connection. Anything missing is a named line in the service log, never a crash.
+
+### Hosted Yard sign-in and research import
+
+The same Yard service serves `/app/` and `/app/api/*`; no additional web service or account is needed. `YARD_WEB_DIR=/app/web` is baked into its image, and `YARD_PUBLIC_ORIGIN` defaults to `https://stood-yard-api.onrender.com`. Operator signing secrets stay on the server.
+
+Run `scripts/dev yard-access-codes` once to add an unpredictable `accessCode` to each operator in the private `.env`. It writes the role-to-code list to `~/.config/stood/yard-access-codes` with mode 600 and prints only the path. Copy the updated **YARD_OPERATORS** value to the Yard service through the Render API, then deploy. Share each code privately with that operator; never put codes in an issue, a Discord post or a screenshot.
+
+Sessions use opaque Secure/HttpOnly/SameSite=Strict cookies and expire after eight hours. Sign-out removes the server session and private browser queries. Sessions live in this single service instance; a restart signs everyone out. Access-code guessing is limited; mutations require the configured page origin. Rotation replaces the code in YARD_OPERATORS and deploys, revoking the old code and sessions.
+
+The buyer can paste Startup Tribunal Copy JSON, review its source caveat and quality signals, then save a private intake. The public discovery feed is read from one fixed HTTPS endpoint, bounded to ten items/64 KiB and cached for ten minutes; rate-limit responses delay retries. Imported blueprints are bounded to 128 KiB and twenty levels, scanned with the existing credential guard, and never rendered as HTML or executed. Only a reviewed, bounded excerpt becomes intake; the full raw research stays in memory and is discarded when the panel closes. Planning remains disabled until the hosted Foreman is connected.
 
 ## 2. Where the secrets live
 

@@ -1,6 +1,6 @@
 # Y22: Privacy and data rules
 
-Status: pre-credentials. This page describes what the code does today and what remains open. It is not legal advice, and no regulator has reviewed it. Before a real buyer uses Yard, the product owner must take advice for each country Yard serves (GDPR/UK GDPR, Nigeria's NDPA/NDPR, South Africa's POPIA, Kenya's Data Protection Act).
+Status: hosted sandbox pilot. Owner-issued browser sessions protect buyer-owned intake. This page describes what the code does today and what remains open. It is not legal advice, and no regulator has reviewed it. Before a real buyer uses Yard, the product owner must take advice for each country Yard serves (GDPR/UK GDPR, Nigeria's NDPA/NDPR, South Africa's POPIA, Kenya's Data Protection Act).
 
 ## What Yard holds
 
@@ -10,7 +10,7 @@ Status: pre-credentials. This page describes what the code does today and what r
 | Intake history | `yard.intake_events` | Version and step numbers only | Buyer |
 | Blueprint, work orders, payments | `yard.events` (append-only) | Business terms, operator IDs, Stood references | Buyer; builders see their own work; the public Board sees no buyer identity |
 | Build logs | `yard.site_log_lines` | Builder output | Buyer and the current builder |
-| Test keys | `yard.secrets` (envelope-encrypted) | Secret | Nobody reads values back; the buyer sees names |
+| Stored keys | `yard.secrets` (envelope-encrypted) | Secret | Nobody reads values back; the buyer sees names |
 | Notices | `yard.notices` | Operator IDs and links | The addressed operator |
 
 `packages/yard-contracts/src/privacy.ts` classifies every intake field (`INTAKE_DATA_CLASSES`). A test fails if a new intake field is added without a classification, and checks that personal answers are buyer-only.
@@ -28,7 +28,7 @@ Status: pre-credentials. This page describes what the code does today and what r
 | --- | --- |
 | Project events | Kept as the payment audit trail (Y18). Personal answers are never written to them. |
 | Build log text | 90 days, then folded into counts by kind |
-| Test keys | Deleted 7 days after handover, or on revoke |
+| Stored keys | Deleted 7 days after handover, or on revoke |
 | Previews | At most 30 days, and removed when the project closes |
 | Intake drafts | Kept until deletion is built (open item below) |
 
@@ -40,5 +40,5 @@ Status: pre-credentials. This page describes what the code does today and what r
 
 - **Deletion requests.** Erasing an intake draft, and replacing operator IDs in old events with a tombstone where law requires it, is not built. The event store is append-only by design, so erasure needs a reviewed approach (for example per-project keys that can be destroyed).
 - **Automatic intake expiry** for abandoned drafts.
-- **Hosting region and processors.** Data residency follows the hosting decision (Y20); the processor list (Render, Postgres host, email provider, model provider) must be published.
+- **Hosting region and processors.** Yard runs on Render in Frankfurt with its own restricted Neon schema and roles. Research discovery contacts StartupTribunal’s public feed; pasted JSON is reviewed in the browser, then only the confirmed intake excerpt is saved. Hosted model and email adapters remain unconnected; publish the full processor list before enabling them.
 - **Legal review** of the consent copy and of the lawful basis for keeping payment records.

@@ -20,7 +20,7 @@ export async function api(path: string, options?: RequestInit) {
     throw new ApiError(
       response.status,
       response.status === 401
-        ? 'Choose a simulated operator to open the room.'
+        ? 'Sign in to open the room.'
         : response.status === 403
           ? 'This operator does not have access. Claim work from the Board first.'
           : response.status === 409
