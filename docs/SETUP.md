@@ -12,7 +12,7 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 | `stood-reconciler` | Render background worker (same image, `dist/reconcile-cli.js`) | **Starter (paid, about $7/month)** | Frankfurt | Render has no free background workers. The owner chose to pay rather than fold it into `stood-api` |
 | Postgres | Neon | Free | AWS eu-central-1 (Frankfurt) | **Direct (unpooled) URL**, because Stood uses `LISTEN` |
 | PayPal | Developer Dashboard, sandbox app `stood-merchant-app` (type **Merchant**) | Sandbox | — | Owned by a US sandbox business account; a US personal account is the test buyer. Step-by-step: [the PayPal sandbox guide](guides/paypal-sandbox-authorize-capture-void.md) |
-| Blueprint | Render Blueprint from `render.yaml` on `main` | — | — | Syncs automatically when `main` changes. Services have `autoDeploy: false`; deploys are triggered on purpose |
+| Blueprint | Render Blueprint from `render.yaml` on `main` | — | — | Syncs automatically when `main` changes. Services deploy `main` automatically once its GitHub checks pass (T-0256) |
 
 Yard is not deployed yet. Its credentialed composition root is batch C2 in issue #50.
 
@@ -98,6 +98,17 @@ What `stood-api` does with each delivery (T-0033): it asks PayPal's `verify-webh
 ### Nightly sandbox run (T-0234)
 
 `.github/workflows/sandbox-nightly.yml` runs every night at 03:17 UTC (and on demand): a hold from the saved test buyer is released (captured) and another refused (voided), with no human approval, then `tools/sandbox-nightly/verify.py` checks the outcomes and confirms them with the independent witness. Recordings are kept as a 30-day artifact, never committed. Nothing is left open. It needs four **GitHub Actions secrets**, sandbox values only: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `STOOD_SANDBOX_PAYEE_ID` and `PAYPAL_SANDBOX_VAULT_TOKEN_ID` (from `scripts/dev sandbox-run vault-setup`). Until they exist the job skips with a notice.
+
+### Reconciliation findings (T-0155, T-0257)
+
+Every hour `stood-reconciler` compares the last 30 days of PayPal payment captures (Transaction Search, settled for 3 hours) with Stood's ledger and records each mismatch in `reconciliation_findings` (migrations 0018 and 0019). Its log says `Audit: N captures checked, M findings open.` A finding the audit no longer sees closes itself. One that is explained (for example a capture made by an operator tool, outside Stood) is closed by a person, with a name and a reason, and stays closed:
+
+```bash
+scripts/dev findings list
+scripts/dev findings resolve finding_… --by "<your name>" --note "<why this is not a problem>"
+```
+
+Only `DATABASE_URL` from `.env` reaches the container, and the connection must pass the same TLS policy as production.
 
 ## 7. Yard GitHub App
 

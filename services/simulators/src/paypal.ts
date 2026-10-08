@@ -226,17 +226,30 @@ export function createPayPalSimulator(config: {
           page < 1
         )
           return response(error(400, 'INVALID_REQUEST'));
-        const all = [...orders.values()].flatMap((o) =>
-          o.captures.map((cap) => ({
+        // Like a new sandbox account: an opening balance credit (T1900) comes first, then payments (T0006).
+        const all = [
+          {
             transaction_info: {
-              transaction_id: cap.id,
-              invoice_id: cap.invoice_id,
-              transaction_amount: cap.amount,
+              transaction_id: 'SIM-OPENING-BALANCE',
+              transaction_event_code: 'T1900',
+              transaction_amount: { currency_code: 'USD', value: '5000.00' },
               transaction_status: 'S',
-              transaction_initiation_date: cap.create_time,
+              transaction_initiation_date: new Date(0).toISOString(),
             },
-          })),
-        );
+          },
+          ...[...orders.values()].flatMap((o) =>
+            o.captures.map((cap) => ({
+              transaction_info: {
+                transaction_id: cap.id,
+                transaction_event_code: 'T0006',
+                invoice_id: cap.invoice_id,
+                transaction_amount: cap.amount,
+                transaction_status: 'S',
+                transaction_initiation_date: cap.create_time,
+              },
+            })),
+          ),
+        ];
         return response({
           status: 200,
           body: {

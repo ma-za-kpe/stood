@@ -31,3 +31,13 @@ updates:
       default-days: 7
     commit-message:
       prefix: "ci"
+  - package-ecosystem: pip
+    directory: /.github/requirements
+    schedule:
+      interval: monthly
+    target-branch: develop
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
