@@ -25,7 +25,7 @@ Yard is not deployed yet. Its credentialed composition root is batch C2 in issue
 | Render service environment | Each service's runtime values (table below) | Render and the owner |
 | Project `.env` only (not on Render yet) | `GROK_PLANNER_API_KEY` for Yard's planner model (xAI). Checked with a free model listing (HTTP 200). The live adapter is T-0181 | The owner |
 | `~/.config/stood/yard-github-app.pem` (mode 600) | The Yard GitHub App private key; `.env` holds `GITHUB_APP_ID` and the key's path. The app is installable only on the owner's account, on selected test repositories, with Contents and Pull requests read/write and Metadata read; its webhook stays off until Yard is deployed | The owner |
-| `~/.claude/settings.json` | `PAYPAL_SANDBOX_ACCESS_TOKEN` for the PayPal AI Toolkit MCP server only ([T16](tech/T16-paypal-ai-toolkit.md)) | The developer's Claude Code |
+| `~/.claude/settings.json` (mode 600) | `PAYPAL_SANDBOX_ACCESS_TOKEN` for the PayPal AI Toolkit MCP server only ([T16](tech/T16-paypal-ai-toolkit.md)), renewed automatically by the token refresher (section 8) | The developer's Claude Code |
 
 Rules we followed: no value in Git, chat, issues or screenshots; tools report only "set" or "empty". Values containing `&` (such as database URLs) must be read with a parser, not `source`d by a shell.
 
@@ -46,7 +46,7 @@ Rules we followed: no value in Git, chat, issues or screenshots; tools report on
 
 1. developer.paypal.com → **Sandbox → Accounts**: create a **Business** account and a **Personal** account, both in the **United States**. A Ugandan business account was available but not used: some capabilities (Vault, receiving) depend on country, and Stood's flows are in USD.
 2. **Apps & Credentials → Create App**, type **Merchant**. Stood authorises on dispatch and captures on proof inside one merchant app. **Platform** is PayPal's marketplace product: it needs seller onboarding, and its delayed disbursement auto-releases after 28 days.
-3. Features Stood uses: **Save payment methods (Vault)**, **Transaction search**, **Customer disputes**, **JavaScript SDK v6**. Orders, authorize and capture are on for every app. Payouts, Invoicing, Subscriptions, Payment links, Log in with PayPal and Mobile SDKs are not used. At the time of writing every feature was still ticked (the token included `payments/payouts`); untick the unused ones to narrow what any token from this app can do.
+3. Features Stood uses: **Save payment methods (Vault)**, **Transaction search**, **Customer disputes**, **JavaScript SDK v6**. Orders, authorize and capture are on for every app. Payouts, Invoicing, Subscriptions, Payment links, Log in with PayPal and Mobile SDKs are not used. Every feature is deliberately left ticked until the project is finished (owner decision, 2026-10-08), so the token includes scopes Stood does not use, such as `payments/payouts`. Stood's code calls only the APIs above, and the MCP server is used read-only (T16).
 4. Copy the client ID and secret into `.env` as `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`.
 5. Check without printing anything: a client-credentials call to `https://api-m.sandbox.paypal.com/v1/oauth2/token` returned HTTP 200, a 9-hour token, and scopes for authorize/capture, Vault payment tokens, Transaction Search and disputes.
 
@@ -100,7 +100,8 @@ The live adapter that uses the app (one-repository tokens, `wo/*` branches, pull
 | Tool | Use | Record |
 |---|---|---|
 | PayPal AI Toolkit (`/plugin install paypal@claude-plugins-official`) | Best-practices skill, `/paypal:*` commands, sandbox MCP server as a read-only second witness | [T16](tech/T16-paypal-ai-toolkit.md), T-0246 |
-| APIMatic PayPal Context Plugin (`npx context-plugins install https://github.com/paypaldev/server-sdk-context-plugin-preview`) | Grounds agent-written code in the PayPal Server SDK we already pin (`@paypal/paypal-server-sdk` 2.5.0: Orders, Payments, Vault, Transaction Search) | Planned: move the T-0155 Transaction Search reader onto the SDK's `TransactionSearchController` |
+| PayPal MCP token refresher ([`tools/paypal-mcp-token`](../tools/paypal-mcp-token/README.md)) | Mints the sandbox token into `~/.claude/settings.json` at login, 07:00 daily and every 8 hours (macOS LaunchAgent `com.stood.paypal-mcp-token`); never prints it | Installed 2026-10-08 |
+| APIMatic PayPal Context Plugin (`npx context-plugins install https://github.com/paypaldev/server-sdk-context-plugin-preview`) | Grounds agent-written code in the PayPal Server SDK we already pin (`@paypal/paypal-server-sdk` 2.5.0: Orders, Payments, Vault, Transaction Search). Installed 2026-10-08 into Claude Code, VS Code and Codex as `paypal@context-plugins-local` | Next: move the T-0155 Transaction Search reader onto the SDK's `TransactionSearchController` |
 | Render CLI | Deploys, logs, Blueprint validation | Section 5 |
 | GitHub CLI | Pull requests and issues. If the active `gh` account is not `ma-za-kpe`, use `GH_TOKEN=$(gh auth token --user ma-za-kpe)` per command instead of switching globally | — |
 
