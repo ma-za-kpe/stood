@@ -27,6 +27,8 @@ export default defineConfig({
         '**/migrate-cli.ts',
         '**/findings-cli.ts',
         '**/vault-keys-cli.ts',
+        '**/yard-api/src/db-cli.ts',
+        '**/yard-api/src/server.ts',
         '**/adapters/db-postgres/**',
       ],
       reporter: ['text', 'json-summary'],

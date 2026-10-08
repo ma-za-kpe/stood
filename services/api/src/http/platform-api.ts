@@ -4,9 +4,12 @@ import { bodyLimit } from 'hono/body-limit';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { allowanceDraft } from '../application/allowance-draft.js';
 import { commitPackage } from '../application/commit-package.js';
+import { mandateTermsHash } from '../application/mandate-terms.js';
 import { trancheSentences } from '../domain/recipient-sentences.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
 import { CommitPackageError, type CommitPackageStore } from '../ports/commit-package-store.js';
+import { type FundingStore, FundingStoreError } from '../ports/funding-store.js';
+import { type MandateStore, MandateStoreError } from '../ports/mandate-store.js';
 import { type PlatformApiStore, PlatformApiStoreError } from '../ports/platform-api-store.js';
 
 export type PlatformApiConfig = Readonly<{
@@ -16,6 +19,12 @@ export type PlatformApiConfig = Readonly<{
   key: string;
   secret: string;
   clock(): number;
+  // T-0260: saved-PayPal mandates and tranche funding. HTTP records intent; the worker makes the PayPal calls.
+  signing?: Readonly<{
+    mode: 'sim' | 'live';
+    mandates: Pick<MandateStore, 'reserve' | 'load'>;
+    funding: Pick<FundingStore, 'reserve' | 'load'>;
+  }>;
 }>;
 function problem(status: ContentfulStatusCode, code: string, detail: string): Response {
   return new Response(JSON.stringify({ type: `urn:stood:problem:${code}`, title: detail, status, code, detail }), {
@@ -71,9 +80,19 @@ export function platformApi(config: PlatformApiConfig): Hono {
           error.code.toLowerCase(),
           'Package request cannot be accepted.',
         )
-      : error instanceof PlatformApiStoreError
-        ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
-        : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
+      : error instanceof MandateStoreError || error instanceof FundingStoreError
+        ? error.code === 'NOT_FOUND'
+          ? problem(404, 'not_found', 'Not found.')
+          : error.code === 'INVALID'
+            ? problem(422, 'validation', 'The request is invalid.')
+            : error.code === 'STALE_VERSION'
+              ? problem(409, 'stale_version', 'The tranche changed. Read it again and retry with its version.')
+              : error.code === 'IDENTITY_CONFLICT'
+                ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
+                : problem(409, 'conflict', 'Another signature or funding is already in progress.')
+        : error instanceof PlatformApiStoreError
+          ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
+          : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
   );
   app.post('/tranches/:id/packages', async (c) => {
     if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
@@ -112,6 +131,83 @@ export function platformApi(config: PlatformApiConfig): Hono {
       .update(JSON.stringify([c.req.method, `/v1${c.req.path}`, body]))
       .digest('hex');
     return c.json(await config.store.create(config.platformId, key, fingerprint, input), 201);
+  });
+  const idempotency = (c: { req: { header(name: string): string | undefined } }) => {
+    const key = c.req.header('Idempotency-Key') ?? '';
+    return key.trim() && key.length <= 200 && /^application\/json(?:;|$)/i.test(c.req.header('Content-Type') ?? '')
+      ? key
+      : null;
+  };
+  // Status and the buyer's approval link only: never tokens, setup, customer, order or authorization ids.
+  const mandateView = (m: Awaited<ReturnType<MandateStore['load']>>) => ({
+    key: m.key,
+    status: m.status,
+    approve_url: m.status === 'AWAITING_APPROVAL' ? m.approvalUrl : null,
+    expires_at: m.expiresAt,
+  });
+  const fundingView = (f: Awaited<ReturnType<FundingStore['load']>>) => ({
+    key: f.key,
+    status: f.status,
+    approve_url: f.status === 'AWAITING_APPROVAL' ? f.approvalUrl : null,
+    hold_expires_at: f.status === 'HELD' ? (f.hold?.expiresAt ?? null) : null,
+  });
+  app.post('/allowances/:id/mandate', async (c) => {
+    if (!config.signing) return problem(503, 'signing_not_configured', 'Saved-PayPal signing is not configured.');
+    const key = idempotency(c);
+    if (!key) return problem(422, 'validation', 'JSON and an idempotency key are required.');
+    const allowance = await config.store.allowance(config.platformId, c.req.param('id'));
+    if (!allowance) return problem(404, 'not_found', 'Allowance not found.');
+    const reserved = await config.signing.mandates.reserve({
+      key,
+      platformId: config.platformId,
+      allowanceId: allowance.id,
+      termsVersion: 1,
+      termsHash: mandateTermsHash(allowance),
+      mode: config.signing.mode,
+      acceptedAt: config.clock(),
+    });
+    return c.json(mandateView(reserved), 202);
+  });
+  app.get('/allowances/:id/mandate/:key', async (c) => {
+    if (!config.signing) return problem(503, 'signing_not_configured', 'Saved-PayPal signing is not configured.');
+    const m = await config.signing.mandates.load(c.req.param('key'));
+    if (m.platformId !== config.platformId || m.allowanceId !== c.req.param('id'))
+      return problem(404, 'not_found', 'Not found.');
+    return c.json(mandateView(m));
+  });
+  app.post('/tranches/:id/funding', async (c) => {
+    if (!config.signing) return problem(503, 'signing_not_configured', 'Funding is not configured.');
+    const key = idempotency(c);
+    if (!key) return problem(422, 'validation', 'JSON and an idempotency key are required.');
+    let input: { expected_version?: unknown; nonce?: unknown };
+    try {
+      input = JSON.parse(await c.req.text());
+    } catch {
+      return problem(422, 'validation', 'The funding request is invalid.');
+    }
+    if (
+      !Number.isSafeInteger(input?.expected_version) ||
+      (input.expected_version as number) < 0 ||
+      typeof input.nonce !== 'string' ||
+      !/^[A-HJ-NP-Z2-9]{3}$/.test(input.nonce)
+    )
+      return problem(422, 'validation', 'expected_version and a three-character nonce are required.');
+    const reserved = await config.signing.funding.reserve({
+      key,
+      trancheId: c.req.param('id'),
+      platformId: config.platformId,
+      expectedVersion: input.expected_version as number,
+      nonce: input.nonce,
+      mode: config.signing.mode,
+    });
+    return c.json(fundingView(reserved), 202);
+  });
+  app.get('/tranches/:id/funding/:key', async (c) => {
+    if (!config.signing) return problem(503, 'signing_not_configured', 'Funding is not configured.');
+    const f = await config.signing.funding.load(c.req.param('key'));
+    if (f.instruction.platformId !== config.platformId || f.trancheId !== c.req.param('id'))
+      return problem(404, 'not_found', 'Not found.');
+    return c.json(fundingView(f));
   });
   app.get('/allowances/:id', async (c) => {
     const value = await config.store.allowance(config.platformId, c.req.param('id'));

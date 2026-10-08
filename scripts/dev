@@ -5,6 +5,28 @@ if [ "$#" -eq 0 ]; then set -- validate; fi
 case "$1" in
   setup) shift; exec docker compose run --rm -it app sh -c 'pnpm --filter @stood/api build && node services/api/dist/setup-cli.js "$@"' setup "$@" ;;
   reconcile) exec docker compose --profile operations run --rm reconciler ;;
+  yard-setup)
+    # T-0214, once: Yard's restricted roles on the database named by DATABASE_URL, and Yard's settings in .env.
+    # Generated values go straight into .env; nothing is printed. Safe to re-run: existing values are kept.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    db=$(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2-)
+    [ -n "$db" ] || { echo "DATABASE_URL is empty in .env" >&2; exit 2; }
+    has() { grep -qE "^$1=.+" .env; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    if ! has YARD_DATABASE_URL; then
+      password=$(openssl rand -hex 24)
+      printf 'YARD_ENV=demo\nYARD_MIGRATION_DATABASE_URL=%s\nYARD_RUNTIME_PASSWORD=%s\n' "$db" "$password" >"$keys"
+      docker compose run --rm --no-deps --env-from-file "$keys" app \
+        sh -c 'pnpm --filter "@stood/yard-api..." build >/dev/null && node services/yard-api/dist/db-cli.js roles && node services/yard-api/dist/db-cli.js migrate'
+      runtime=$(DB="$db" PW="$password" node -e 'const u=new URL(process.env.DB);u.username="yard_runtime";u.password=process.env.PW;process.stdout.write(u.toString())')
+      printf 'YARD_DATABASE_URL=%s\nYARD_MIGRATION_DATABASE_URL=%s\n' "$runtime" "$db" >>.env
+    fi
+    has YARD_SECRET_KEYS || printf 'YARD_SECRET_KEYS=k1:%s\n' "$(openssl rand -base64 32)" >>.env
+    if ! has YARD_OPERATORS; then
+      printf 'YARD_OPERATORS=[{"key":"yard-buyer","secret":"%s","actor":{"id":"buyer","root":"buyer-operator","kind":"BUYER"}},{"key":"yard-builder","secret":"%s","actor":{"id":"crew","root":"crew-operator","kind":"BUILDER"}}]\n' \
+        "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" >>.env
+    fi
+    echo "Yard roles ready and YARD_DATABASE_URL, YARD_MIGRATION_DATABASE_URL, YARD_SECRET_KEYS, YARD_OPERATORS set in .env." ;;
   vault-key)
     # T-0227: put a new saved-token key first in VAULT_TOKEN_KEYS in .env. The key is never printed.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }

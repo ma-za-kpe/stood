@@ -10,11 +10,20 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 |---|---|---|---|---|
 | `stood-api` | Render web service (Docker, `Dockerfile` target `api`) | Free | Frankfurt | `https://stood-api.onrender.com`, health at `/health`. Sleeps after about 15 minutes idle |
 | `stood-reconciler` | Render background worker (same image, `dist/reconcile-cli.js`) | **Starter (paid, about $7/month)** | Frankfurt | Render has no free background workers. The owner chose to pay rather than fold it into `stood-api` |
+| `stood-yard-api` | Render web service (Docker, `services/yard-api/Dockerfile`) | **Starter (paid, about $7/month)** | Frankfurt | `https://stood-yard-api.onrender.com/health`. Always on for lease-expiry and log-retention jobs. Owner's choice (2026-10-08). The Yard web page is not hosted yet: it needs real browser sessions first |
 | Postgres | Neon | Free | AWS eu-central-1 (Frankfurt) | **Direct (unpooled) URL**, because Stood uses `LISTEN` |
 | PayPal | Developer Dashboard, sandbox app `stood-merchant-app` (type **Merchant**) | Sandbox | — | Owned by a US sandbox business account; a US personal account is the test buyer. Step-by-step: [the PayPal sandbox guide](guides/paypal-sandbox-authorize-capture-void.md) |
 | Blueprint | Render Blueprint from `render.yaml` on `main` | — | — | Syncs automatically when `main` changes. Services deploy `main` automatically once its GitHub checks pass (T-0256) |
 
-Yard is not deployed yet. Its credentialed composition root is batch C2 in issue #50.
+### Yard on Render (T-0214, T-0220)
+
+Yard shares Stood's Neon database through **its own roles**: `yard_owner` (no login; owns the `yard` schema) and `yard_runtime` (login; can read and write only Yard's tables, never Stood's). Run once:
+
+```bash
+scripts/dev yard-setup   # creates both roles, applies Yard's schema, writes the Yard settings into .env (never printed)
+```
+
+It writes `YARD_DATABASE_URL` (the restricted runtime URL), `YARD_MIGRATION_DATABASE_URL` (the owner URL, used only by the pre-deploy step), `YARD_SECRET_KEYS` and `YARD_OPERATORS` (the signed API clients). Copy all four to the `stood-yard-api` service on Render. Each release, Render's pre-deploy runs `db-cli.js migrate` before the new version goes live. `/health` says what is on: the Board, site log and events now; intake and the Foreman wait for the hosted planner, and payments wait for the Stood connection. Anything missing is a named line in the service log, never a crash.
 
 ## 2. Where the secrets live
 
@@ -113,6 +122,12 @@ Only `DATABASE_URL` from `.env` reaches the container, and the connection must p
 **Alerts (T-0155).** `GET https://stood-api.onrender.com/ops/attention` answers with counts only (`needsPerson`, `openFindings`, `openAlerts`, `oldestOpenedAt`), never ids or amounts. The keep-warm job reads it every 10 minutes: while anything is open it keeps one GitHub issue labelled `ops-attention` open (watch the repository to get it by email), and closes that issue once nothing is. No extra secret and no extra workflow: the job already runs, and uses the repository's own token.
 
 **Test runs are not findings (T-0259).** `scripts/dev sandbox-run` and the nightly job capture real sandbox money outside Stood's ledger on purpose. Their PayPal `invoice_id` is `sandbox-<scenario>-<time>-settle`; the audit sets exactly those aside. Stood's own operation keys always contain `:`, so a real payment can never be mistaken for a test run.
+
+### Signing and funding, and when payments turn on (T-0260, T-0261)
+
+A platform asks Stood to sign a saved-PayPal mandate (`POST /v1/allowances/{id}/mandate`) and later to fund a tranche (`POST /v1/tranches/{id}/funding`). These routes only record the request. `stood-reconciler` makes every PayPal call on its next tick (every 15 seconds): it creates the setup token, waits for the buyer to approve saving PayPal once, saves the token sealed, then places later holds with no buyer present. Read progress with the matching `GET` routes; they show status, the approval link and the hold's expiry, never tokens or PayPal ids.
+
+`/health` reports `"paymentReady": true` only when all three hold: every payment key is set, the real PayPal sandbox (not the simulator) is connected and ready, and signing is wired (`VAULT_TOKEN_KEYS` set on both Stood services). Otherwise its `sentence` names what is missing. The public pages read this and say "sandbox payments on" or what is off. It is always the PayPal **sandbox**: no real money.
 
 ### Saved PayPal tokens are sealed (T-0227)
 

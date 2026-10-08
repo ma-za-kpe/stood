@@ -12,6 +12,7 @@ import { runReconciliationAudit } from './application/reconciliation-audit-run.j
 import { reconciliationTick } from './application/reconciliation-worker.js';
 import type { ProviderTransactions } from './ports/provider-transactions.js';
 import { reconciliationRuntime } from './reconciliation-runtime.js';
+import { signingWorker } from './signing-worker.js';
 
 const required = ['DATABASE_URL', 'PROVIDER_PAYPAL', 'RECONCILIATION_OWNER'] as const;
 const missing = required.filter((key) => !process.env[key]?.trim());
@@ -35,6 +36,19 @@ if (!missing.length && problem) {
     const findings = new PostgresReconciliationFindings(db);
     // T-0155: hourly ledger-versus-PayPal audit. Isolated: an audit failure never stops reconciliation.
     const search = providers.transport as Partial<ProviderTransactions>;
+    // T-0260: saved-PayPal mandates and tranche funding, advanced by their own use cases each tick.
+    let pending: ReturnType<typeof signingWorker> | null = null;
+    try {
+      pending = signingWorker({
+        db,
+        transport: providers.transport,
+        tranches: store,
+        vaultKeys: process.env.VAULT_TOKEN_KEYS ?? '',
+        clock: providers.clock,
+      });
+    } catch {
+      process.stderr.write('Signing and funding off: VAULT_TOKEN_KEYS is missing or invalid. See docs/SETUP.md.\n');
+    }
     let lastAudit = 0;
     while (!abort.signal.aborted) {
       const now = await providers.clock();
@@ -45,6 +59,13 @@ if (!missing.length && problem) {
       process.stdout.write(
         `Reconciliation: ${result.processed} processed, ${result.waiting} waiting, ${result.failed} failed.\n`,
       );
+      if (pending) {
+        const moved = await pending();
+        if (moved.mandates || moved.fundings || moved.failed)
+          process.stdout.write(
+            `Signing and funding: ${moved.mandates} mandates and ${moved.fundings} fundings advanced, ${moved.failed} failed.\n`,
+          );
+      }
       if (search.captures && now - lastAudit >= 3600000) {
         lastAudit = now;
         try {

@@ -44,7 +44,8 @@
 | Website | <https://ma-za-kpe.github.io/stood/> | Live |
 | Yard (companion site) | <https://ma-za-kpe.github.io/stood/yard/> | Live |
 | Changelog | <https://ma-za-kpe.github.io/stood/changelog.html> | Live |
-| Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**; payments stay off until the PayPal webhook is added ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
+| Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**. `/health` says whether sandbox payments are on and, if not, what is missing ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
+| Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Intake, the Foreman and payments show as off until they are connected |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |
 | Work in progress | [#49 pre-credentials](https://github.com/ma-za-kpe/stood/issues/49) · [#50 credentials and deployment](https://github.com/ma-za-kpe/stood/issues/50) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | |

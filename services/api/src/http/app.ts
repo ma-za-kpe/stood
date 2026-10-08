@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { cors } from 'hono/cors';
 import { missingPaymentKeys, type PaymentKeys, paymentGuidance } from '../application/payment-readiness.js';
 import type { ProviderHealth } from '../application/provider-registry.js';
 import { assessmentSentence } from '../domain/assessment-sentence.js';
@@ -127,11 +128,16 @@ const siteVisitScenarios: Readonly<Record<string, Scenario>> = Object.freeze({
   },
 });
 
+export const SITE_ORIGIN = 'https://ma-za-kpe.github.io';
 export function createApp(config: AppConfig) {
   if (!['local', 'ci', 'demo'].includes(config.appEnv) || config.paypalBaseUrl !== 'https://api-m.sandbox.paypal.com') {
     throw new Error('Only explicitly configured sandbox environments are supported');
   }
   const app = new Hono<{ Variables: { now: number } }>();
+  // T-0262: only the project site may read health and attention across origins (GET, no credentials).
+  const site = cors({ origin: (origin) => (origin === SITE_ORIGIN ? origin : null), allowMethods: ['GET'] });
+  app.use('/health', site);
+  app.use('/ops/attention', site);
   app.use('*', async (c, next) => {
     try {
       const now = config.requestClock ? await config.requestClock() : (config.api?.clock() ?? Date.now());
@@ -199,15 +205,33 @@ export function createApp(config: AppConfig) {
       return c.json({ code: 'attention_unavailable' }, 503);
     }
   });
+  // T-0261: earned, never assumed. Every key, the real sandbox connected and ready, and signing wired.
+  const readiness = () => {
+    const paypal = config.providerHealth?.().find((p) => p.provider === 'paypal');
+    const keysSet = !missingPaymentKeys(config.paymentKeys).length;
+    const sandbox = paypal?.mode === 'live' && paypal.simulated === false && paypal.ready === true;
+    if (keysSet && sandbox && config.api?.signing)
+      return {
+        ready: true,
+        sentence:
+          'Sandbox payments are on: PayPal sandbox connected, saved-account signing and funding wired. No real money.',
+      };
+    if (keysSet && sandbox)
+      return {
+        ready: false,
+        sentence: 'Payments are off: saved-account signing and funding need VAULT_TOKEN_KEYS. See docs/SETUP.md.',
+      };
+    return { ready: false, sentence: paymentGuidance(config.paymentKeys).detail };
+  };
   app.get('/health', (c) =>
     c.json({
       status: 'ok',
-      paymentReady: false,
+      paymentReady: readiness().ready,
       environment: config.appEnv,
       clock: { mode: config.clockMode ?? 'system', now: c.get('now') },
       providers: config.providerHealth?.() ?? [],
       missing: missingPaymentKeys(config.paymentKeys),
-      sentence: paymentGuidance(config.paymentKeys).detail,
+      sentence: readiness().sentence,
     }),
   );
   if (config.api) {
@@ -223,7 +247,9 @@ export function createApp(config: AppConfig) {
       if (
         response.status !== 404 ||
         (c.req.method === 'GET' && /^\/v1\/(allowances(?:\/[^/]+)?|tranches\/[^/]+)$/.test(c.req.path)) ||
-        /^\/v1\/tranches\/[^/]+\/packages(?:\/[^/]+)?$/.test(c.req.path)
+        /^\/v1\/tranches\/[^/]+\/packages(?:\/[^/]+)?$/.test(c.req.path) ||
+        // T-0260: signing and funding answer their own 404s.
+        /^\/v1\/(allowances\/[^/]+\/mandate|tranches\/[^/]+\/funding)(?:\/[^/]+)?$/.test(c.req.path)
       )
         return response;
       return next();
