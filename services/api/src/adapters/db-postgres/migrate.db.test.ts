@@ -31,3 +31,9 @@ it('applies every migration to an empty database, and a second run changes nothi
     await pool.end();
   }
 });
+
+it('fails loudly on a database it cannot reach, so the deploy stops (T-0253)', async () => {
+  await expect(
+    applyMigrations('postgres://stood:wrong@db:5432/no_such_database', resolve('services/api/drizzle')),
+  ).rejects.toThrow();
+});

@@ -238,3 +238,93 @@ describe('idempotent replay (T-0222)', () => {
     expect(recording.outcome).toBe('CAPTURED');
   });
 });
+
+describe('sandbox runs stop with a named outcome when PayPal says no (T-0154, T-0224)', () => {
+  const reply = (status: number, body: unknown) => ({ status, body });
+  const noWait = { approve: async () => {}, sleep: async () => {} };
+  it('names every way saving PayPal can fall short, and waits between approval checks', async () => {
+    const vault = (answers: Record<string, ReturnType<typeof reply>[]>) => {
+      const seen: Record<string, number> = {};
+      return {
+        vault: async (action: 'CREATE_SETUP' | 'GET_SETUP' | 'CREATE_TOKEN') => {
+          const list = answers[action] ?? [];
+          const i = Math.min(seen[action] ?? 0, list.length - 1);
+          seen[action] = (seen[action] ?? 0) + 1;
+          return list[i] ?? reply(500, {});
+        },
+      };
+    };
+    const created = reply(201, {
+      id: 'S1',
+      status: 'PAYER_ACTION_REQUIRED',
+      links: [{ rel: 'approve', href: 'https://x/S1' }],
+    });
+    const run = (transport: ReturnType<typeof vault>, maxPolls = 2) =>
+      runVaultSetup({ mode: 'sim', transport, runId: 'v', ...noWait, maxPolls });
+    // No approval link (the usage_type bug seen live).
+    expect(
+      (await run(vault({ CREATE_SETUP: [reply(201, { id: 'S1', status: 'CREATED', links: [] })] }))).recording.outcome,
+    ).toBe('SETUP_NOT_CREATED');
+    expect((await run(vault({ CREATE_SETUP: [reply(422, { name: 'UNPROCESSABLE_ENTITY' })] }))).recording.outcome).toBe(
+      'SETUP_NOT_CREATED',
+    );
+    // The buyer never approves within the polls.
+    expect(
+      (await run(vault({ CREATE_SETUP: [created], GET_SETUP: [reply(200, { status: 'PAYER_ACTION_REQUIRED' })] })))
+        .recording.outcome,
+    ).toBe('NOT_APPROVED');
+    // Approved on the second check, but PayPal refuses to make the token.
+    const sleeps: number[] = [];
+    const refused = await runVaultSetup({
+      mode: 'sim',
+      runId: 'v',
+      approve: async () => {},
+      sleep: async (ms) => void sleeps.push(ms),
+      maxPolls: 3,
+      transport: vault({
+        CREATE_SETUP: [created],
+        GET_SETUP: [
+          reply(200, { status: 'PAYER_ACTION_REQUIRED' }),
+          reply(200, { status: 'APPROVED', customer: { id: 'C1' } }),
+        ],
+        CREATE_TOKEN: [reply(422, { name: 'UNPROCESSABLE_ENTITY', debug_id: 'dbg' })],
+      }),
+    });
+    expect(refused.recording.outcome).toBe('NOT_VAULTED');
+    expect(refused.tokenId).toBeNull();
+    expect(sleeps).toEqual([5000]);
+  });
+
+  it('names an order that was never created, a vaulted order PayPal did not approve, and a hold never made', async () => {
+    const transport = (create: ReturnType<typeof reply>, authorize = reply(201, { id: 'O1' })) => ({
+      fund: async (action: string) =>
+        action === 'CREATE_ORDER'
+          ? create
+          : action === 'AUTHORIZE_ORDER'
+            ? authorize
+            : reply(200, { status: 'APPROVED' }),
+      call: async () => reply(200, {}),
+    });
+    const run = (t: ReturnType<typeof transport>, vaultId?: string) =>
+      runSandboxScenario({
+        scenario: 'release',
+        mode: 'sim',
+        transport: t,
+        payeeRef: 'X',
+        runId: 'r',
+        ...(vaultId ? { vaultId } : {}),
+        ...noWait,
+        maxPolls: 1,
+      });
+    expect((await run(transport(reply(422, { name: 'UNPROCESSABLE_ENTITY' })))).outcome).toBe('ORDER_NOT_CREATED');
+    expect((await run(transport(reply(201, { id: 'O1', status: 'CREATED', links: [] })))).outcome).toBe(
+      'ORDER_NOT_CREATED',
+    );
+    expect((await run(transport(reply(201, { id: 'O1', status: 'PAYER_ACTION_REQUIRED' })), 'TOKEN')).outcome).toBe(
+      'VAULT_ORDER_NOT_APPROVED',
+    );
+    expect((await run(transport(reply(201, { id: 'O1', status: 'APPROVED' }), reply(422, {})), 'TOKEN')).outcome).toBe(
+      'NOT_AUTHORIZED',
+    );
+  });
+});
