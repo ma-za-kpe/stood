@@ -419,3 +419,12 @@ it('seals the saved token at rest and in history, refuses a second mandate for i
   // A store without the new key fails closed rather than handing out anything.
   await expect(store.load(key)).rejects.toThrow('Token cannot be opened');
 });
+
+it('lists only mandates the worker still has to move (T-0260)', async () => {
+  const open = await store.unresolved();
+  const { input } = await tokenizing();
+  expect(await store.unresolved()).toContain(input.key);
+  expect((await store.unresolved()).length).toBe(open.length + 1);
+  const rows = await pool.query("SELECT key FROM mandate_signatures WHERE status IN ('SIGNED', 'REVOKED')");
+  for (const row of rows.rows) expect(await store.unresolved()).not.toContain(row.key);
+});

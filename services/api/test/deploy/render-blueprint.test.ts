@@ -33,6 +33,7 @@ const reads: Record<string, readonly string[]> = {
     'PORT',
     'PROVIDER_PAYPAL',
     'STOOD_PLATFORM_ID',
+    'VAULT_TOKEN_KEYS',
     ...PAYMENT_KEYS,
   ],
   'stood-reconciler': [
@@ -43,6 +44,7 @@ const reads: Record<string, readonly string[]> = {
     'RECONCILIATION_OWNER',
     'PAYPAL_CLIENT_ID',
     'PAYPAL_CLIENT_SECRET',
+    'VAULT_TOKEN_KEYS',
   ],
   // T-0214: yard-api reads its own restricted database URL; the owner-capable URL is used only by pre-deploy.
   'stood-yard-api': [
