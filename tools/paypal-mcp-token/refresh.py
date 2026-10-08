@@ -33,9 +33,11 @@ with open(ENV) as env_file:
             if v or k not in values:  # a later empty duplicate never erases a value
                 values[k] = v
 base = values.get("PAYPAL_BASE_URL") or "https://api-m.sandbox.paypal.com"
-if "sandbox" not in base:
-    log("refused: PAYPAL_BASE_URL is not the sandbox")
+# Exactly the sandbox API host: not the live API, and not the sandbox website (sandbox.paypal.com).
+if base.rstrip("/") != "https://api-m.sandbox.paypal.com":
+    log("refused: PAYPAL_BASE_URL must be https://api-m.sandbox.paypal.com")
     sys.exit(2)
+base = "https://api-m.sandbox.paypal.com"
 cid, secret = values.get("PAYPAL_CLIENT_ID"), values.get("PAYPAL_CLIENT_SECRET")
 if not cid or not secret:
     log("missing PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET")

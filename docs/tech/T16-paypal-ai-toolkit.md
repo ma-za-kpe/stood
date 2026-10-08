@@ -24,6 +24,20 @@ This keeps the product's central promise intact: rules move money, AI only helps
 | MCP `list_disputes`, `get_dispute` | During the sandbox E2E, confirms that no dispute exists before a release, and records any dispute opened on a test buyer account. | Planned |
 | MCP `create_order`, `pay_order`, `create_refund` | **Not used against Stood's orders.** These would change money state outside Stood's rules. They may only be used to make unrelated fixture data in the sandbox, labelled as such. | Excluded by the rule above |
 
+## Status of the MCP server, and the workaround
+
+Since 2026-10-08 every sandbox MCP tool we tried (`list_invoices`, `list_transactions`, `list_disputes`) returns `PAYPAL_API_SETUP_ERROR: Unsupported cache mode: default`, with a fresh token and a working connection. Reported upstream as [paypal/AI-Toolkit#34](https://github.com/paypal/AI-Toolkit/issues/34).
+
+Until it is fixed, [`tools/paypal-witness`](../../tools/paypal-witness/witness.py) does the second-witness job: a read-only Python script (standard library only, a separate code path from Stood's TypeScript SDK adapter) that reads an order, a Transaction Search window or the dispute list straight from the PayPal sandbox REST API. It prints ids, amounts and statuses only, never personal data or tokens, and accepts only `https://api-m.sandbox.paypal.com`.
+
+```bash
+tools/paypal-witness/witness.py order ORDER_ID
+tools/paypal-witness/witness.py transactions 2026-10-01T00:00:00Z 2026-10-08T23:59:59Z
+tools/paypal-witness/witness.py disputes
+```
+
+When the MCP server works again, the same checks move back to `get_order`, `list_transactions` and `list_disputes`.
+
 ## How a developer sets it up
 
 1. In Claude Code: `/plugin install paypal@claude-plugins-official`, then `/reload-plugins`.
