@@ -396,3 +396,31 @@ export const providerEvents = pgTable(
     check('provider_event_resource_valid', sql`jsonb_typeof(${t.resource}) = 'object'`),
   ],
 );
+// T-0155: audit findings between Stood's ledger and PayPal's Transaction Search, owned until a person or a
+// later audit resolves them. No tranche foreign key: a PayPal capture Stood never made has no tranche.
+export const reconciliationFindings = pgTable(
+  'reconciliation_findings',
+  {
+    id: text().primaryKey(),
+    kind: text().notNull(),
+    trancheId: text('tranche_id'),
+    providerId: text('provider_id'),
+    operationKey: text('operation_key'),
+    owner: text().notNull(),
+    status: text().notNull().default('OPEN'),
+    openedAt: timestamp('opened_at', { withTimezone: true, mode: 'string' }).notNull().default(sql`clock_timestamp()`),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true, mode: 'string' }),
+  },
+  (t) => [
+    check(
+      'finding_kind_valid',
+      sql`${t.kind} IN ('CAPTURE_WITHOUT_RELEASE', 'RELEASE_WITHOUT_CAPTURE', 'AMOUNT_MISMATCH', 'DUPLICATE_CAPTURE')`,
+    ),
+    check('finding_owner_valid', sql`length(trim(${t.owner})) > 0`),
+    check('finding_status_valid', sql`${t.status} IN ('OPEN', 'RESOLVED')`),
+    check('finding_subject_valid', sql`${t.providerId} IS NOT NULL OR ${t.operationKey} IS NOT NULL`),
+  ],
+);

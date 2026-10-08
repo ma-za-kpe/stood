@@ -51,6 +51,8 @@ describe('Simulator matches the real PayPal sandbox recordings (T-0224)', () => 
               payeeRef: 'SIMMERCHANT1',
               runId: 'drift',
               ...(vaulted ? { vaultId: saved.tokenId ?? '' } : {}),
+              // Older recordings were made before the idempotency replay step existed.
+              replay: recording.steps.some((step) => step.step.endsWith('_REPLAY')),
               approve: approveAt('approve'),
             });
       expect(shape(replay)).toEqual(shape(recording));

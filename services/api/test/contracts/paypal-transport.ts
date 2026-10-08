@@ -23,7 +23,10 @@ export function paypalTransportContract(name: string, setup: () => Promise<PayPa
         invoice_id: h.input.operationKey,
         amount: { currency_code: 'USD', value: '10.00' },
       });
-      expect(await h.transport.call('CAPTURE', h.input)).toEqual(result);
+      // Replaying the request id returns the same capture; PayPal answers the replay with 200 (seen live).
+      const replay = await h.transport.call('CAPTURE', h.input);
+      expect(replay.status).toBe(200);
+      expect(replay.body).toEqual(result.body);
       const second = await h.transport.call('CAPTURE', { ...h.input, requestId: 'different-request' });
       expect(second.status).toBe(422);
       expect((await h.transport.call('GET_AUTHORIZATION', h.input)).body).toMatchObject({ status: 'CAPTURED' });

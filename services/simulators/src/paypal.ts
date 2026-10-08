@@ -233,6 +233,7 @@ export function createPayPalSimulator(config: {
               invoice_id: cap.invoice_id,
               transaction_amount: cap.amount,
               transaction_status: 'S',
+              transaction_initiation_date: cap.create_time,
             },
           })),
         );
@@ -313,8 +314,13 @@ export function createPayPalSimulator(config: {
       cache.delete(key);
       old = undefined;
     }
-    if (old)
-      return response(old.signature === signature ? structuredClone(old.reply) : error(422, 'DUPLICATE_REQUEST_ID'));
+    if (old) {
+      if (old.signature !== signature) return response(error(422, 'DUPLICATE_REQUEST_ID'));
+      const replay = structuredClone(old.reply);
+      // Seen on the real sandbox (2026-10-08): a replayed capture returns the same capture with 200, not 201.
+      if (/\/capture$/.test(path) && replay.status === 201) replay.status = 200;
+      return response(replay);
+    }
     let reply: Reply;
     if (path === '/v2/checkout/orders') {
       const units = Array.isArray(body.purchase_units) ? body.purchase_units : [];
@@ -413,6 +419,7 @@ export function createPayPalSimulator(config: {
             status: 'COMPLETED',
             amount: auth.amount,
             invoice_id: body.invoice_id,
+            create_time: new Date(now()).toISOString(),
             supplementary_data: {
               related_ids: { authorization_id: auth.id, order_id: auth.supplementary_data.related_ids.order_id },
             },

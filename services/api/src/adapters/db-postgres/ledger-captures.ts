@@ -11,7 +11,13 @@ export async function confirmedCaptures(
 ): Promise<LedgerCapture[]> {
   const { paymentOperations: ops, paymentStreams: streams } = schema;
   const rows = await db
-    .select({ key: ops.key, trancheId: ops.trancheId, reference: ops.reference, record: streams.record })
+    .select({
+      key: ops.key,
+      trancheId: ops.trancheId,
+      reference: ops.reference,
+      record: streams.record,
+      createdAt: ops.createdAt,
+    })
     .from(ops)
     .innerJoin(streams, eq(streams.trancheId, ops.trancheId))
     .where(
@@ -29,6 +35,7 @@ export async function confirmedCaptures(
       reference: String(r.reference),
       minor: Number(amount.minor),
       currency: amount.currency,
+      at: Date.parse(r.createdAt),
     };
   });
 }

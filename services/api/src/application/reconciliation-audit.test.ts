@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { auditCaptures } from './reconciliation-audit.js';
+import { auditCaptures, auditSettled } from './reconciliation-audit.js';
 
 const ledger = [{ trancheId: 't1', operationKey: 'op1', reference: 'CAP-1', minor: 1000, currency: 'USD' }];
 const capture = { id: 'CAP-1', invoiceId: 'op1', minor: 1000, currency: 'USD', status: 'COMPLETED' as const };
@@ -24,4 +24,34 @@ it('flags captures Stood never released, releases with no capture, mismatched am
   expect(auditCaptures(ledger, [{ ...capture, status: 'REFUNDED' }])[0]).toMatchObject({
     kind: 'RELEASE_WITHOUT_CAPTURE',
   });
+});
+
+it('waits three hours before calling a capture missing, because Transaction Search lags (T-0155)', () => {
+  const now = Date.parse('2026-10-08T12:00:00Z');
+  const hour = 3600000;
+  const fresh = { ...ledger[0]!, at: now - hour };
+  const settled = { ...ledger[0]!, at: now - 4 * hour };
+  // A release confirmed an hour ago may simply not be searchable yet: no finding.
+  expect(auditSettled([fresh], [], now)).toEqual([]);
+  expect(auditSettled([settled], [], now)).toEqual([
+    { kind: 'RELEASE_WITHOUT_CAPTURE', trancheId: 't1', providerId: null, operationKey: 'op1' },
+  ]);
+  // A PayPal capture Stood never released: reported once it is three hours old, or at once if its time is unknown.
+  expect(auditSettled([], [{ ...capture, at: now - hour }], now)).toEqual([]);
+  expect(auditSettled([], [{ ...capture, at: now - 4 * hour }], now)[0]).toMatchObject({
+    kind: 'CAPTURE_WITHOUT_RELEASE',
+  });
+  expect(auditSettled([], [{ ...capture, at: null }], now)[0]).toMatchObject({ kind: 'CAPTURE_WITHOUT_RELEASE' });
+  // Wrong amounts and duplicates are never a matter of delay.
+  expect(auditSettled([fresh], [{ ...capture, minor: 1, at: now }], now)[0]).toMatchObject({ kind: 'AMOUNT_MISMATCH' });
+  expect(
+    auditSettled(
+      [fresh],
+      [
+        { ...capture, at: now },
+        { ...capture, id: 'CAP-2', at: now },
+      ],
+      now,
+    )[0],
+  ).toMatchObject({ kind: 'DUPLICATE_CAPTURE' });
 });
