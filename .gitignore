@@ -12,3 +12,5 @@ coverage/
 .pnpm-store/
 .mock-dist/
 artifacts/
+# Transient sandbox-run hand-off (vault token); moved into .env by scripts/dev
+.sandbox/

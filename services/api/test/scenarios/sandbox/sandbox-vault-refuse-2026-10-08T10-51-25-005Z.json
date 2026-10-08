@@ -1,0 +1,43 @@
+{
+  "scenario": "refuse",
+  "mode": "live",
+  "runId": "sandbox-vault-refuse-2026-10-08T10-51-25-005Z",
+  "outcome": "VOIDED",
+  "steps": [
+    {
+      "step": "CREATE_ORDER",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "order": "4EP95447F22898734",
+        "hold": "03372589RJ335512W"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "VOID",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "03372589RJ335512W"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_AUTHORIZATION",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "03372589RJ335512W"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-08T10:51:31.104Z"
+}

@@ -5,6 +5,7 @@ import {
   Environment,
   OrdersController,
   PaymentsController,
+  PaypalPaymentTokenUsageType,
   TransactionSearchController,
   VaultController,
   VaultTokenRequestType,
@@ -31,6 +32,8 @@ export type PayPalFundingInput = Readonly<{
   trancheId: string;
   payeeRef: string;
   amount: Readonly<{ currencyCode: string; value: string }>;
+  // T-0154: a saved PayPal payment token pays a later hold with no buyer present.
+  vaultId?: string | null;
 }>;
 export interface PayPalFundingTransport {
   fund(
@@ -133,7 +136,14 @@ export class ServerSdkTransport implements PayPalTransport, ProviderTransactions
               paypalRequestId: input.requestId,
               body: {
                 customer: { merchantCustomerId: input.customerRef },
-                paymentSource: { paypal: { permitMultiplePaymentTokens: true, experienceContext: this.callbacks! } },
+                // MERCHANT usage is required: without it PayPal creates a setup token the buyer can never approve.
+                paymentSource: {
+                  paypal: {
+                    permitMultiplePaymentTokens: true,
+                    usageType: PaypalPaymentTokenUsageType.Merchant,
+                    experienceContext: this.callbacks!,
+                  },
+                },
               },
             })
           : action === 'CREATE_TOKEN'
@@ -173,6 +183,7 @@ export class ServerSdkTransport implements PayPalTransport, ProviderTransactions
                     amount: input.amount,
                   },
                 ],
+                ...(input.vaultId ? { paymentSource: { paypal: { vaultId: input.vaultId } } } : {}),
               },
             })
           : action === 'AUTHORIZE_ORDER'

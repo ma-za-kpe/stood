@@ -1,18 +1,27 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
 import { ServerSdkTransport } from './adapters/payments-paypal/sdk.js';
-import { runSandboxScenario } from './application/sandbox-run.js';
+import { runSandboxScenario, runVaultSetup, type SandboxRecording } from './application/sandbox-run.js';
 
-// Operator tool (T-0224): one real PayPal SANDBOX run through Stood's own adapter. The buyer approves in a
-// browser; the run then holds, releases (capture) or refuses (void), and records ids, statuses and amounts.
+// Operator tool (T-0224, T-0154): real PayPal SANDBOX runs through Stood's own adapter.
+//   release | refuse            the buyer approves this hold in a browser, then capture or void
+//   vault-setup                 the buyer approves saving PayPal once; the token goes to .env via scripts/dev
+//   vault-release | vault-refuse a later hold from the saved token, with no buyer approval
+// Recordings keep ids, statuses and amounts only; the saved token is never printed or recorded.
 const SANDBOX = 'https://api-m.sandbox.paypal.com';
-const scenario = process.argv[2];
+const SCENARIOS = ['release', 'refuse', 'vault-setup', 'vault-release', 'vault-refuse'] as const;
+const scenario = process.argv[2] as (typeof SCENARIOS)[number];
 const clientId = process.env.PAYPAL_CLIENT_ID?.trim() ?? '';
 const clientSecret = process.env.PAYPAL_CLIENT_SECRET?.trim() ?? '';
-if ((scenario !== 'release' && scenario !== 'refuse') || !clientId || !clientSecret) {
+const vaultToken = process.env.PAYPAL_SANDBOX_VAULT_TOKEN_ID?.trim() ?? '';
+if (!SCENARIOS.includes(scenario) || !clientId || !clientSecret) {
   process.stderr.write(
-    'Usage: sandbox-run-cli.js release|refuse, with PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET set.\n',
+    `Usage: sandbox-run-cli.js ${SCENARIOS.join('|')}, with PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET set.\n`,
   );
+  process.exit(2);
+}
+if ((scenario === 'vault-release' || scenario === 'vault-refuse') && !vaultToken) {
+  process.stderr.write('Run vault-setup first: it saves PAYPAL_SANDBOX_VAULT_TOKEN_ID to .env.\n');
   process.exit(2);
 }
 
@@ -54,26 +63,49 @@ async function payee(): Promise<string> {
 }
 
 const runId = `sandbox-${scenario}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-const transport = new ServerSdkTransport({ appEnv: 'local', mode: 'live', baseUrl: SANDBOX, clientId, clientSecret });
-const recording = await runSandboxScenario({
-  scenario,
+// Saving PayPal needs approval callbacks; any https page on one origin works (the buyer just lands there).
+const transport = new ServerSdkTransport({
+  appEnv: 'local',
   mode: 'live',
-  transport,
-  payeeRef: await payee(),
-  runId,
-  approve: async (link) => {
-    process.stdout.write(
-      `\nOpen this link and approve as your SANDBOX PERSONAL (buyer) account:\n\n  ${link}\n\nWaiting up to 15 minutes...\n`,
-    );
-  },
-  sleep: (ms) => setTimeout(ms),
-  maxPolls: 180,
+  baseUrl: SANDBOX,
+  clientId,
+  clientSecret,
+  vaultReturnUrl: 'https://ma-za-kpe.github.io/stood/?vault=saved',
+  vaultCancelUrl: 'https://ma-za-kpe.github.io/stood/?vault=cancelled',
 });
+const approve = async (link: string) => {
+  process.stdout.write(
+    `\nOpen this link and approve as your SANDBOX PERSONAL (buyer) account:\n\n  ${link}\n\nWaiting up to 15 minutes...\n`,
+  );
+};
+const sleep = (ms: number) => setTimeout(ms);
+let recording: SandboxRecording;
+if (scenario === 'vault-setup') {
+  const saved = await runVaultSetup({ mode: 'live', transport, runId, approve, sleep, maxPolls: 180 });
+  recording = saved.recording;
+  if (saved.tokenId) {
+    // Handed to scripts/dev, which moves it into .env and deletes the file.
+    mkdirSync('.sandbox', { recursive: true, mode: 0o700 });
+    writeFileSync('.sandbox/vault-token', saved.tokenId, { mode: 0o600 });
+  }
+} else {
+  recording = await runSandboxScenario({
+    scenario: scenario.endsWith('release') ? 'release' : 'refuse',
+    mode: 'live',
+    transport,
+    payeeRef: await payee(),
+    runId,
+    ...(scenario.startsWith('vault-') ? { vaultId: vaultToken } : {}),
+    approve,
+    sleep,
+    maxPolls: 180,
+  });
+}
 const dir = 'services/api/test/scenarios/sandbox';
 mkdirSync(dir, { recursive: true });
 const file = `${dir}/${runId}.json`;
 writeFileSync(file, `${JSON.stringify({ ...recording, recordedAt: new Date().toISOString() }, null, 2)}\n`);
-const order = recording.steps[0]?.ids.order ?? 'ORDER_ID';
+const order = recording.steps[0]?.ids.order;
 process.stdout.write(
-  `\nOutcome: ${recording.outcome}\nRecorded: ${file}\nSecond witness: tools/paypal-witness/witness.py order ${order}\n`,
+  `\nOutcome: ${recording.outcome}\nRecorded: ${file}\n${order ? `Second witness: tools/paypal-witness/witness.py order ${order}\n` : ''}`,
 );
