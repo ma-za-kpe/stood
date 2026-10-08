@@ -106,6 +106,26 @@ tools/paypal-witness/witness.py disputes
 
 **Lesson 12: an audit needs a way for a person to close a finding.** A capture made outside your app (we captured `3WS56911LU245183B` with an operator tool) is real money PayPal reports and your ledger never saw, so it is flagged every hour. Stood lets a named person resolve it with a reason (`scripts/dev findings resolve <id> --by <name> --note "<reason>"`); the audit then never reopens it (T-0257).
 
+## 4b. How the sandbox says no (probed)
+
+[`tools/paypal-probe/probe.py`](../../tools/paypal-probe/probe.py) places one 1.00 USD hold from the saved test buyer, tries the edge cases below against it, and voids it (nothing is captured). It prints statuses and PayPal's error names only. What it found on 8 October 2026, recorded in [`services/simulators/fidelity/`](../../services/simulators/fidelity/paypal-sandbox-errors-2026-10-08.json):
+
+| You do | PayPal answers |
+| --- | --- |
+| Reuse a `PayPal-Request-Id` with a **different body** | `200` and the **original** order; the new body is silently ignored |
+| Reauthorize within 3 days (the honor period), even after a void | `422 REAUTHORIZATION_TOO_SOON` |
+| Capture more than the authorization | `422 MAX_CAPTURE_AMOUNT_EXCEEDED` (PayPal allows up to 115% by default) |
+| Void twice | `422 PREVIOUSLY_VOIDED` |
+| Capture after a void | `422 AUTHORIZATION_VOIDED` |
+| Use an unknown saved token (`vault_id`) | `403 NOT_AUTHORIZED`, issue `PERMISSION_DENIED` |
+| Ask for an unknown id | `404 RESOURCE_NOT_FOUND`, issue `INVALID_RESOURCE_ID` |
+
+Every error carries `name`, `message`, `debug_id`, `details[].issue` with a `description`, and an `information_link`. Log the `debug_id`: PayPal support asks for it.
+
+**Lesson 13: never reuse a request id for a different request.** PayPal does not reject it; it returns the first result. A reused id with a new amount would look like success and move the old amount. Stood creates one random id per operation and stores it before calling PayPal.
+
+**Lesson 14: test your simulator against the real thing.** Our simulator had invented four of these codes and left out `message`. Stood's failure classifier requires `message`, so in simulation every definite refusal looked "unknown". The probe found it in one run.
+
 ## 5. Webhooks
 
 Add **one** webhook on the app for the events you handle (we use `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.AUTHORIZATION.VOIDED`), not "all events". Verify every delivery with `POST /v1/notifications/verify-webhook-signature`, store each event id once (PayPal retries), answer quickly, and treat an event as a hint: read the payment itself before acting. Stood's receiver: [`webhook-verifier.ts`](../../services/api/src/adapters/payments-paypal/webhook-verifier.ts).
