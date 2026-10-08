@@ -95,7 +95,7 @@ repos:
         types: [markdown]
         require_serial: true   # --fix rewrites files; parallel containers would race
   - repo: https://github.com/crate-ci/typos
-    rev: 00f422f3b19c57bc6338715ebfe3316d38768461  # frozen: v1.50.3
+    rev: b859c0df7f391deba73030f79b957e62b4d81dc6  # frozen: varcon-core-v5.0.7
     hooks:
       - id: typos
         args: [--force-exclude]   # report only: never auto-rewrite names like Magentic
