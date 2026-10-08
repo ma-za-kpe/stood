@@ -134,6 +134,13 @@
       "when": 1791457665357,
       "tag": "0018_reconciliation_findings",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791459963058,
+      "tag": "0019_finding_person_resolution",
+      "breakpoints": true
     }
   ]
 }

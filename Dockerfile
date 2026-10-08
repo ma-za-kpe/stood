@@ -5,7 +5,12 @@ FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35
 COPY --from=log-scanner /usr/bin/gitleaks /usr/local/bin/gitleaks
 ARG DEV_UID=1000
 ARG DEV_GID=1000
-RUN npm install --global pnpm@10.32.1 \
+# pnpm comes through Corepack, pinned by the tarball's SHA-512; Corepack refuses any other bytes.
+# A shared COREPACK_HOME holds the verified copy for every user; never fall back to "latest".
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_DEFAULT_TO_LATEST=0 COREPACK_HOME=/usr/local/share/corepack
+RUN corepack enable pnpm \
+    && corepack prepare pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be --activate \
+    && chmod -R a+rX /usr/local/share/corepack \
     && groupmod --gid "$DEV_GID" node \
     && usermod --uid "$DEV_UID" --gid "$DEV_GID" node \
     && mkdir -p /workspace/node_modules \

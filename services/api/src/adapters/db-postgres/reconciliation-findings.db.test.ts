@@ -60,3 +60,36 @@ it('resolves nothing when nothing was re-checked, and everything re-checked when
   expect(await store.resolveFixed([], { operationKeys: [], providerIds: ['CAP-7', 'CAP-8'] })).toBe(2);
   expect((await rows()).every((r) => r.status === 'RESOLVED')).toBe(true);
 });
+
+it('keeps a person’s resolution with their reason, even when the hourly audit sees the same capture again (T-0257)', async () => {
+  await pool.query('DELETE FROM reconciliation_findings');
+  const store = new PostgresReconciliationFindings(db);
+  const test = {
+    kind: 'CAPTURE_WITHOUT_RELEASE' as const,
+    trancheId: null,
+    providerId: 'CAP-T',
+    operationKey: 'sandbox-run',
+  };
+  await store.record([test], 'reviewer');
+  const [open] = await store.open();
+  expect(open).toMatchObject({ kind: 'CAPTURE_WITHOUT_RELEASE', providerId: 'CAP-T', operationKey: 'sandbox-run' });
+  await expect(store.resolveByPerson(open?.id ?? '', 'ma-za-kpe', ' ')).rejects.toThrow('reason');
+  await expect(store.resolveByPerson(open?.id ?? '', ' ', 'known test')).rejects.toThrow('name');
+  await expect(store.resolveByPerson('finding_unknown', 'ma-za-kpe', 'known test')).rejects.toThrow('open finding');
+  await store.resolveByPerson(open?.id ?? '', 'ma-za-kpe', 'Operator sandbox-run capture, not a Stood release');
+  // The next hourly audit finds the same capture: the person's resolution stands.
+  await store.record([test], 'reviewer');
+  const row = (
+    await pool.query(
+      'SELECT status, resolved_by, resolution_note FROM reconciliation_findings WHERE provider_id = $1',
+      ['CAP-T'],
+    )
+  ).rows[0];
+  expect(row).toEqual({
+    status: 'RESOLVED',
+    resolved_by: 'ma-za-kpe',
+    resolution_note: 'Operator sandbox-run capture, not a Stood release',
+  });
+  expect(await store.open()).toEqual([]);
+  await expect(store.resolveByPerson(open?.id ?? '', 'ma-za-kpe', 'again')).rejects.toThrow('open finding');
+});

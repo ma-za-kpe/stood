@@ -100,6 +100,10 @@ tools/paypal-witness/witness.py disputes
 
 **Lesson 8: Transaction Search accepts at most 31 days per request**, in pages. Stood's SDK reader pages through `total_pages` and refuses longer windows ([`captures()`](../../services/api/src/adapters/payments-paypal/sdk.ts)).
 
+**Lesson 11: Transaction Search lists every balance event, not only payments.** Our first audit flagged `32H01288U93789309` as a capture with no release: it was event `T1900`, the sandbox account's opening balance. Payment events have codes starting `T00` (`T0006` is a PayPal checkout payment); keep only those when you compare captures (T-0155).
+
+**Lesson 12: an audit needs a way for a person to close a finding.** A capture made outside your app (we captured `3WS56911LU245183B` with an operator tool) is real money PayPal reports and your ledger never saw, so it is flagged every hour. Stood lets a named person resolve it with a reason (`scripts/dev findings resolve <id> --by <name> --note "<reason>"`); the audit then never reopens it (T-0257).
+
 ## 5. Webhooks
 
 Add **one** webhook on the app for the events you handle (we use `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.AUTHORIZATION.VOIDED`), not "all events". Verify every delivery with `POST /v1/notifications/verify-webhook-signature`, store each event id once (PayPal retries), answer quickly, and treat an event as a hint: read the payment itself before acting. Stood's receiver: [`webhook-verifier.ts`](../../services/api/src/adapters/payments-paypal/webhook-verifier.ts).

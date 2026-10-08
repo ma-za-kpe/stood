@@ -14,3 +14,7 @@ coverage/
 artifacts/
 # Transient sandbox-run hand-off (vault token); moved into .env by scripts/dev
 .sandbox/
+
+# Python bytecode caches (never commit binaries)
+__pycache__/
+*.pyc

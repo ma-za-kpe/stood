@@ -25,6 +25,7 @@ export default defineConfig({
         '**/reconcile-cli.ts',
         '**/sandbox-run-cli.ts',
         '**/migrate-cli.ts',
+        '**/findings-cli.ts',
         '**/adapters/db-postgres/**',
       ],
       reporter: ['text', 'json-summary'],

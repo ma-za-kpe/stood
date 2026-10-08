@@ -60,7 +60,8 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
-      - run: pip install pre-commit==4.6.2
+      # Hash-locked (Scorecard Pinned-Dependencies); Dependabot keeps .github/requirements current.
+      - run: pip install --require-hashes -r .github/requirements/pre-commit.txt
       - name: Prepare the Docker toolchain
         run: |
           LOCAL_UID="$(id -u)"

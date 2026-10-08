@@ -5,6 +5,14 @@ if [ "$#" -eq 0 ]; then set -- validate; fi
 case "$1" in
   setup) shift; exec docker compose run --rm -it app sh -c 'pnpm --filter @stood/api build && node services/api/dist/setup-cli.js "$@"' setup "$@" ;;
   reconcile) exec docker compose --profile operations run --rm reconciler ;;
+  findings)
+    # Reconciliation findings in the database named by .env (T-0257). Only DATABASE_URL reaches the container.
+    shift; [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^DATABASE_URL=' .env >"$keys" || true
+    printf 'APP_ENV=demo\n' >>"$keys"
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/findings-cli.js "$@"' findings "$@" ;;
   sandbox-run)
     # Only the sandbox app keys reach the container, from a private temporary file (T-0224).
     shift; [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }

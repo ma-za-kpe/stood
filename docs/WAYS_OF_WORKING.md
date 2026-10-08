@@ -250,7 +250,7 @@ Still planned: `pnpm audit` as a gate, an OpenAPI breaking-change diff (after T-
 ### Deployment
 
 - The hosted sandbox runs on Render (`stood-api` web service, `stood-reconciler` worker) with Neon Postgres in Frankfurt. [`docs/SETUP.md`](SETUP.md) is the record of what runs where and how to repeat it.
-- Deploys are **deliberate**: services have `autoDeploy: false`; a deploy is triggered after the change reaches `main`. The Docker image build runs the full product gate, so a failing test blocks the image.
+- Deploys are **automatic and gated**: Render deploys `main` once its GitHub checks pass (`autoDeployTrigger: checksPass`, T-0256), at no cost in Actions minutes. The Docker image build runs the full product gate, and the reconciler's pre-deploy step applies migrations, so a failing test or migration stops the release.
 - **Migrations are applied before the release**: `stood-reconciler`'s Render pre-deploy command runs `dist/migrate-cli.js`, and a failure stops the deploy (T-0253). Deploy the reconciler first, then `stood-api`. Migrations are additive (expand first, contract in a later release), so the running API stays compatible. The server itself never migrates at start.
 - After every deploy, check `/health` and the reconciler's logs, and record the result in `TASKS.md`.
 

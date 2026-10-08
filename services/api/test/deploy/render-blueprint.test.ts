@@ -15,6 +15,8 @@ type Service = {
   preDeployCommand?: string;
   healthCheckPath?: string;
   autoDeploy?: boolean;
+  autoDeployTrigger?: string;
+  branch?: string;
   envVars: EnvVar[];
 };
 const blueprint = parse(readFileSync('render.yaml', 'utf8')) as { services: Service[] };
@@ -54,7 +56,9 @@ it('declares Stood services in Frankfurt (free web, Starter worker) with health 
       plan: s.type === 'worker' ? 'starter' : 'free',
       dockerfilePath: './Dockerfile',
     });
-    expect(s.autoDeploy).toBe(false);
+    // Render deploys from main only after GitHub checks pass: no Actions minutes, no untested release.
+    expect(s).toMatchObject({ branch: 'main', autoDeployTrigger: 'checksPass' });
+    expect(s.autoDeploy).toBeUndefined();
     if (s.type === 'web') expect(s.healthCheckPath).toBe('/health');
   }
   expect(blueprint.services.find((s) => s.name === 'stood-reconciler')).toMatchObject({
