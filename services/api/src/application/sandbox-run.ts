@@ -66,7 +66,7 @@ function record(step: string, reply: Reply): SandboxStep {
   // Order steps describe the order, a capture reply the capture, and void or read replies the hold.
   // "hold" is Stood's word for a PayPal authorization; it also keeps secret scanners from mistaking
   // an `"authorization": "<id>"` pair for an HTTP Authorization header.
-  if (id) ids[step.includes('ORDER') ? 'order' : step === 'CAPTURE' ? 'capture' : 'hold'] = id;
+  if (id) ids[step.includes('ORDER') ? 'order' : step.startsWith('CAPTURE') ? 'capture' : 'hold'] = id;
   const authorization = str(list(payments.authorizations)[0]?.id);
   if (authorization) ids.hold = authorization;
   const money = obj(body.amount).value ? obj(body.amount) : obj(unit.amount);
@@ -99,6 +99,8 @@ export async function runSandboxScenario(
     runId: string;
     // A saved payment token (T-0154): the hold needs no buyer approval. It is never recorded.
     vaultId?: string;
+    // Replay the settling call once with the same request id (default true). Off only to replay old recordings.
+    replay?: boolean;
     approve(link: string): Promise<void>;
     sleep(ms: number): Promise<void>;
     maxPolls: number;
@@ -151,10 +153,27 @@ export async function runSandboxScenario(
     if (!authorizationId) return done('NOT_AUTHORIZED');
     const effect = run.scenario === 'release' ? 'CAPTURE' : 'VOID';
     const payment = { authorizationId, operationKey: `${run.runId}-settle`, amount: AMOUNT };
-    steps.push(record(effect, await run.transport.call(effect, { ...payment, requestId: `${run.runId}-${effect}` })));
+    const requestId = `${run.runId}-${effect}`;
+    const first = record(effect, await run.transport.call(effect, { ...payment, requestId }));
+    steps.push(first);
+    // T-0222: replay the same PayPal-Request-Id once. PayPal must answer with the same capture or hold,
+    // never a second one; anything else is a money-safety failure worth stopping on.
+    let replayMatches = true;
+    if (run.replay !== false) {
+      const again = record(`${effect}_REPLAY`, await run.transport.call(effect, { ...payment, requestId }));
+      steps.push(again);
+      // Same resource and state is what matters; PayPal answers a replayed create with 200 instead of 201 (seen live).
+      const ok = (status: number | null) => status === 200 || status === 201;
+      // Only a successful first call makes a claim to compare against; a failed one is judged by the final read.
+      replayMatches =
+        !ok(first.httpStatus) ||
+        (ok(again.httpStatus) &&
+          again.status === first.status &&
+          JSON.stringify(again.ids) === JSON.stringify(first.ids));
+    }
     const final = await run.transport.call('GET_AUTHORIZATION', { ...payment, requestId: `${run.runId}-check` });
     steps.push(record('GET_AUTHORIZATION', final));
-    return done(steps.at(-1)?.status ?? 'UNKNOWN');
+    return done(replayMatches ? (steps.at(-1)?.status ?? 'UNKNOWN') : 'REPLAY_MISMATCH');
   }
 }
 

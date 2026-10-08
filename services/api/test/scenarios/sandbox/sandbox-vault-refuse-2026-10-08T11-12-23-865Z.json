@@ -1,0 +1,54 @@
+{
+  "scenario": "refuse",
+  "mode": "live",
+  "runId": "sandbox-vault-refuse-2026-10-08T11-12-23-865Z",
+  "outcome": "VOIDED",
+  "steps": [
+    {
+      "step": "CREATE_ORDER",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "order": "0T949049LR507554F",
+        "hold": "78591779PP338603S"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "VOID",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "78591779PP338603S"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "VOID_REPLAY",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "78591779PP338603S"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_AUTHORIZATION",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "78591779PP338603S"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-08T11:12:32.037Z"
+}

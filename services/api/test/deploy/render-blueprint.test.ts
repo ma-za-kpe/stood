@@ -12,6 +12,7 @@ type Service = {
   plan: string;
   dockerfilePath?: string;
   dockerCommand?: string;
+  preDeployCommand?: string;
   healthCheckPath?: string;
   autoDeploy?: boolean;
   envVars: EnvVar[];
@@ -60,6 +61,8 @@ it('declares Stood services in Frankfurt (free web, Starter worker) with health 
     type: 'worker',
     // Render's dockerCommand replaces the image ENTRYPOINT (distroless /nodejs/bin/node), so name the runtime.
     dockerCommand: '/nodejs/bin/node dist/reconcile-cli.js',
+    // T-0253: migrations run before each release goes live; a failure stops the deploy.
+    preDeployCommand: '/nodejs/bin/node dist/migrate-cli.js',
   });
 });
 

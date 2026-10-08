@@ -50,7 +50,7 @@ There's no production environment during the hackathon. Going live would need a 
 
 ## Services on Render (Blueprint `render.yaml`)
 
-**As deployed (2026-10-08):** `stood-api` (free web service) and `stood-reconciler` (**Starter** background worker, about $7/month, because Render has no free workers), both Docker, Frankfurt, deployed on purpose (`autoDeploy: false`). The server does **not** run migrations at start: migrations are applied with `pnpm db:migrate` before a release. Neon uses the **direct** URL, not the pooled one, because Stood uses `LISTEN`. `stood-web` and Workflows below are still planned. The full record is [`SETUP.md`](../SETUP.md).
+**As deployed (2026-10-08):** `stood-api` (free web service) and `stood-reconciler` (**Starter** background worker, about $7/month, because Render has no free workers), both Docker, Frankfurt, deployed on purpose (`autoDeploy: false`). The server does **not** run migrations at start: the reconciler's pre-deploy command applies them before each release (T-0253). Neon uses the **direct** URL, not the pooled one, because Stood uses `LISTEN`. `stood-web` and Workflows below are still planned. The full record is [`SETUP.md`](../SETUP.md).
 
 | Service | Type | Plan | Build | Start | Health |
 |---|---|---|---|---|---|

@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { PostgresCommitPackages } from './adapters/db-postgres/commit-packages.js';
+import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js';
 import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import { PostgresProviderEvents } from './adapters/db-postgres/provider-events.js';
 import * as schema from './adapters/db-postgres/schema.js';
@@ -11,7 +12,13 @@ import { providerRuntime } from './provider-runtime.js';
 import { paypalWebhookReceiver } from './provider-webhooks.js';
 
 const providers = await providerRuntime(process.env);
-const pool = process.env.DATABASE_URL ? new pg.Pool({ connectionString: process.env.DATABASE_URL }) : null;
+// T-0254: an unsafe database URL leaves the API up without database features (readiness, not a crash).
+const databaseProblem = process.env.DATABASE_URL
+  ? databaseUrlProblem(process.env.DATABASE_URL, process.env.APP_ENV ?? 'local')
+  : null;
+if (databaseProblem) process.stderr.write(`Database off: ${databaseProblem}. See docs/SETUP.md.\n`);
+const pool =
+  process.env.DATABASE_URL && !databaseProblem ? new pg.Pool({ connectionString: process.env.DATABASE_URL }) : null;
 const signedApi = !!(pool && process.env.STOOD_API_KEY?.trim() && process.env.STOOD_HMAC_SECRET?.trim());
 const providerEvents = pool
   ? paypalWebhookReceiver(process.env, {

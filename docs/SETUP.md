@@ -62,9 +62,11 @@ PayPal's checkout error pages carry a base64 `code=` parameter: `PAYEE_ACCOUNT_L
 ## 4. Neon Postgres
 
 1. Create the project in **AWS Europe Central 1 (Frankfurt)**. The first project was created in us-east-2 (Ohio). Every query from Frankfurt would have crossed the Atlantic, and Render cannot move an existing service's region ("changing region not supported"), so we made a new Neon project instead.
-2. **Connect → connection pooling off**, and copy the direct URL into `DATABASE_URL`. The pooled host contains `-pooler` and does not support `LISTEN`.
+2. **Connect → connection pooling off**, and copy the direct URL into `DATABASE_URL`. The pooled host contains `-pooler` and does not support `LISTEN`. Change `sslmode=require` to **`sslmode=verify-full`**, so the client checks Neon's certificate and hostname (the Postgres client warns that `require` will change meaning). Outside `local` and `ci`, Stood refuses a URL without `verify-full` or with the pooled host (T-0254): the CLIs stop with a named reason, and the API stays up without database features.
+
+   Render applies a changed environment variable on the next **deploy**, not on a restart.
 3. Check: `psql "$DATABASE_URL" -c "listen probe; select 1"` succeeds.
-4. **Apply the schema**: `docker compose run --rm -e DATABASE_URL app pnpm db:migrate`. This created 14 tables. The deployed server does **not** run migrations when it starts, so every new migration must be applied this way before its release, until a pre-deploy migration step exists.
+4. **Apply the schema**: from release T-0253 on, `stood-reconciler`'s Render pre-deploy command (`/nodejs/bin/node dist/migrate-cli.js`) applies pending migrations before each release goes live, and a failed migration stops the deploy. Deploy the reconciler first, then `stood-api`. For a brand-new database before the first deploy, or to run it by hand: `docker compose run --rm -e DATABASE_URL app pnpm db:migrate` (the same `drizzle.__drizzle_migrations` record, so both ways agree).
 
 We skipped Neon's quick-start (Neon CLI, MCP server, Neon Functions, buckets and Auth): Stood needs only the connection string.
 
@@ -88,6 +90,10 @@ Add one webhook in the sandbox app:
 - Put the webhook ID in `.env` and on `stood-api` as `PAYPAL_WEBHOOK_ID`, then redeploy.
 
 What `stood-api` does with each delivery (T-0033): it asks PayPal's `verify-webhook-signature` API whether PayPal really sent it (OAuth token cached, sandbox host only), refuses deliveries with missing transmission headers or a certificate URL outside `paypal.com`, stores each verified event once in the `provider_events` table (migration 0017), and answers `202`. If PayPal's verification API is down it answers `503`, so PayPal retries. An event is only a hint: the reconciler still reads provider proof before any money state changes. The receiver is off unless `PROVIDER_PAYPAL=live`, `DATABASE_URL` and all three PayPal values are set.
+
+### Keep-warm (T-0089)
+
+`.github/workflows/keep-warm.yml` calls `/health` every 10 minutes so the free `stood-api` rarely sleeps. GitHub runs schedules on a best-effort basis, so a cold start (about a minute) is still possible; the API's first answer after sleep is slow, not wrong.
 
 ### Nightly sandbox run (T-0234)
 

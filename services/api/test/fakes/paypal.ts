@@ -20,10 +20,13 @@ export class FakePayPalTransport implements PayPalTransport {
     const key = `${action}:${input.requestId}`;
     if (!action.startsWith('GET_')) {
       const cached = this.cache.get(key);
-      if (cached)
-        return cached.input === JSON.stringify(input)
-          ? structuredClone(cached.result)
-          : { status: 422, body: { name: 'UNPROCESSABLE_ENTITY' } };
+      if (cached) {
+        if (cached.input !== JSON.stringify(input)) return { status: 422, body: { name: 'UNPROCESSABLE_ENTITY' } };
+        const replay = structuredClone(cached.result);
+        // Like the real sandbox: a replayed capture returns the same capture with 200, not 201.
+        if (action === 'CAPTURE' && replay.status === 201) replay.status = 200;
+        return replay;
+      }
     }
     if (this.days >= 29 && this.state === 'CREATED') this.state = 'EXPIRED';
     const amount = { currency_code: 'USD', value: '10.00' };
