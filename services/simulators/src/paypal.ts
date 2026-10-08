@@ -320,6 +320,8 @@ export function createPayPalSimulator(config: {
       const unit = object(units[0]);
       const money = amount(unit.amount);
       const payee = unit.payee === undefined ? null : object(unit.payee);
+      // A saved payment token (merchant-initiated) needs no buyer approval: the order starts APPROVED.
+      const vaultId = object(object(body.payment_source).paypal).vault_id;
       if (
         body.intent !== 'AUTHORIZE' ||
         units.length !== 1 ||
@@ -331,10 +333,11 @@ export function createPayPalSimulator(config: {
         (payee !== null && (typeof payee.merchant_id !== 'string' || !payee.merchant_id.trim()))
       )
         reply = error(422, 'INVALID_ORDER');
+      else if (vaultId !== undefined && !tokens.has(String(vaultId))) reply = error(422, 'INVALID_RESOURCE_ID');
       else {
         const o: Order = {
           id: id('ORDER'),
-          status: 'CREATED',
+          status: vaultId === undefined ? 'CREATED' : 'APPROVED',
           customId: unit.custom_id,
           referenceId: typeof unit.reference_id === 'string' ? unit.reference_id : 'default',
           payee: payee ? { merchant_id: payee.merchant_id } : null,
@@ -347,7 +350,10 @@ export function createPayPalSimulator(config: {
           status: 201,
           body: {
             ...orderBody(o),
-            links: [{ href: `http://paypal-sim:8080/__sim/approve/${o.id}`, rel: 'approve', method: 'POST' }],
+            links:
+              vaultId === undefined
+                ? [{ href: `http://paypal-sim:8080/__sim/approve/${o.id}`, rel: 'approve', method: 'POST' }]
+                : [],
           },
         };
       }

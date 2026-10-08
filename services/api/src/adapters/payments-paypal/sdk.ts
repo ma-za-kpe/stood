@@ -31,6 +31,8 @@ export type PayPalFundingInput = Readonly<{
   trancheId: string;
   payeeRef: string;
   amount: Readonly<{ currencyCode: string; value: string }>;
+  // T-0154: a saved PayPal payment token pays a later hold with no buyer present.
+  vaultId?: string | null;
 }>;
 export interface PayPalFundingTransport {
   fund(
@@ -173,6 +175,7 @@ export class ServerSdkTransport implements PayPalTransport, ProviderTransactions
                     amount: input.amount,
                   },
                 ],
+                ...(input.vaultId ? { paymentSource: { paypal: { vaultId: input.vaultId } } } : {}),
               },
             })
           : action === 'AUTHORIZE_ORDER'
