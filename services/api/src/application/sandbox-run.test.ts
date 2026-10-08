@@ -52,7 +52,7 @@ describe('Sandbox scenario run (T-0224)', () => {
         expect(recording.steps.at(-1)?.status).toBe(end);
         // A void reply describes the authorization, a capture reply the capture.
         const settled = recording.steps[3];
-        expect(Object.keys(settled?.ids ?? {})).toEqual([effect === 'CAPTURE' ? 'capture' : 'authorization']);
+        expect(Object.keys(settled?.ids ?? {})).toEqual([effect === 'CAPTURE' ? 'capture' : 'hold']);
         expect(recording.outcome).toBe(end);
         // Sanitised: ids, statuses and amounts only; no payer, links or names.
         const text = JSON.stringify(recording);

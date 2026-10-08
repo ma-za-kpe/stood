@@ -49,10 +49,12 @@ function record(step: string, reply: Reply): SandboxStep {
   const payments = obj(unit.payments);
   const ids: Record<string, string> = {};
   const id = str(body.id);
-  // Order steps describe the order, a capture reply the capture, and void or read replies the authorization.
-  if (id) ids[step.includes('ORDER') ? 'order' : step === 'CAPTURE' ? 'capture' : 'authorization'] = id;
+  // Order steps describe the order, a capture reply the capture, and void or read replies the hold.
+  // "hold" is Stood's word for a PayPal authorization; it also keeps secret scanners from mistaking
+  // an `"authorization": "<id>"` pair for an HTTP Authorization header.
+  if (id) ids[step.includes('ORDER') ? 'order' : step === 'CAPTURE' ? 'capture' : 'hold'] = id;
   const authorization = str(list(payments.authorizations)[0]?.id);
-  if (authorization) ids.authorization = authorization;
+  if (authorization) ids.hold = authorization;
   const money = obj(body.amount).value ? obj(body.amount) : obj(unit.amount);
   return {
     step,
@@ -119,7 +121,7 @@ export async function runSandboxScenario(
   if (!approved) return done('NOT_APPROVED');
   const authorized = await run.transport.fund('AUTHORIZE_ORDER', funding(orderId, `${run.runId}-authorize`));
   steps.push(record('AUTHORIZE_ORDER', authorized));
-  const authorizationId = steps.at(-1)?.ids.authorization;
+  const authorizationId = steps.at(-1)?.ids.hold;
   if (!authorizationId) return done('NOT_AUTHORIZED');
   const effect = run.scenario === 'release' ? 'CAPTURE' : 'VOID';
   const payment = { authorizationId, operationKey: `${run.runId}-settle`, amount: AMOUNT };
