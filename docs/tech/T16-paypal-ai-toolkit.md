@@ -41,3 +41,15 @@ This keeps the product's central promise intact: rules move money, AI only helps
 ## Recording evidence
 
 Each MCP check stores a sanitised record next to the scenario's recorded exchange (T-0224). The record contains the tool name, the PayPal object IDs, the compared fields and the result, but no tokens and no buyer personal data. The hackathon "Built with" section points to this page and to those records.
+
+## APIMatic PayPal Context Plugin
+
+The [Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) gives coding agents authoritative knowledge of the PayPal Server SDK that Stood already pins (`@paypal/paypal-server-sdk` 2.5.0). Installed 2026-10-08 (`npx context-plugins install …`) into Claude Code, VS Code and Codex as `paypal@context-plugins-local`.
+
+### What we built with it
+
+| Change | What the plugin's TypeScript guidance settled | Evidence |
+|---|---|---|
+| T-0155: the reconciliation audit reads PayPal **Transaction Search** through the SDK's `TransactionSearchController` instead of a hand-written HTTP client (`services/api/src/adapters/payments-paypal/sdk.ts`, `captures()`) | Controllers are **constructed** from the client (`new TransactionSearchController(client)`), not reached through it; `searchTransactions` is generated in the **options-object form** because it has several optional parameters, so it is called as `searchTransactions({ startDate, endDate, fields, pageSize, page })`; non-2xx responses throw `ApiError`, whose body carries PayPal's `debug_id` | `simulator-transactions.test.ts` (paging across 3 captures with page size 2, the 31-day window, an outage reported with its debug id) and the mock money flow, whose 9 scenarios now end with an audit through the SDK |
+
+How it was used, honestly: the plugin was installed mid-session, after the coding agent's session had started, so its skills were not loaded as live skills. The agent read the plugin's TypeScript skill files (`typescript-calling-endpoints`, error-handling, models) directly and followed them, then confirmed each call against the SDK's own source in `src/controllers/`, which the plugin names as authoritative.

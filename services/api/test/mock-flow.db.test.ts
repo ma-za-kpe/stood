@@ -16,7 +16,6 @@ import { PostgresPlatformApi } from '../src/adapters/db-postgres/platform-api.js
 import * as schema from '../src/adapters/db-postgres/schema.js';
 import { PostgresTranches } from '../src/adapters/db-postgres/tranches.js';
 import { PayPalAdapter } from '../src/adapters/payments-paypal/adapter.js';
-import { HttpTransactionSearch } from '../src/adapters/payments-paypal/transactions.js';
 import { executePayment } from '../src/application/execute-payment.js';
 import { reconcile } from '../src/application/reconcile.js';
 import { auditCaptures } from '../src/application/reconciliation-audit.js';
@@ -317,8 +316,8 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
         };
         const captures = order.purchase_units[0]?.payments.captures ?? [];
         // T-0155: the provider's captures and Stood's confirmed ledger agree exactly.
-        const search = new HttpTransactionSearch({ baseUrl: h.baseUrl, token: async () => 'sim-access-token' });
-        const provider = (await search.captures(0, at + 366 * 86400000)).filter((p) =>
+        // Through the pinned Server SDK's Transaction Search, within PayPal's 31-day window.
+        const provider = (await h.transport.captures(at - 86400000, at + 30 * 86400000)).filter((p) =>
           captures.some((c) => c.id === p.id),
         );
         expect(auditCaptures(await confirmedCaptures(db, trancheId), provider)).toEqual([]);
