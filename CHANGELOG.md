@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/ma-za-kpe/stood/compare/v0.5.0...v0.6.0) (2026-10-08)
+
+
+### Features
+
+* **payments:** let a named person resolve a reconciliation finding (T-0257) ([165e6d3](https://github.com/ma-za-kpe/stood/commit/165e6d3b30fb192d2f0d1411bbb24b67784cbe6b))
+
+
+### Documentation
+
+* **security:** prepare the OpenSSF Best Practices badge answers (T-0258) ([f494c30](https://github.com/ma-za-kpe/stood/commit/f494c30707a7e053d34df27677e1127fe8fe609a))
+
 ## [0.5.0](https://github.com/ma-za-kpe/stood/compare/v0.4.1...v0.5.0) (2026-10-08)
 
 
