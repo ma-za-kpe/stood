@@ -39,6 +39,8 @@ export type BoardConfig = Readonly<{
     actor: Operator;
     notAfter?: number;
     payeeRef?: string;
+    // T-0266: a code the owner gives this operator for signing in on the hosted page (24+ characters).
+    accessCode?: string;
   }>[];
   packages?: PackageGateway;
   siteLog?: SiteLog;

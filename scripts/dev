@@ -27,6 +27,30 @@ case "$1" in
         "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" >>.env
     fi
     echo "Yard roles ready and YARD_DATABASE_URL, YARD_MIGRATION_DATABASE_URL, YARD_SECRET_KEYS, YARD_OPERATORS set in .env." ;;
+  yard-access-codes)
+    # T-0266: give each Yard operator an access code for signing in on the hosted page. Codes go into
+    # YARD_OPERATORS in .env and, for the owner to read, into ~/.config/stood/yard-access-codes (mode 600).
+    # Nothing is printed. Existing codes are kept; copy YARD_OPERATORS to Render afterwards.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    mkdir -p "$HOME/.config/stood"
+    python3 -I - .env "$HOME/.config/stood/yard-access-codes" <<'PY'
+import json, os, secrets, sys
+env_path, codes_path = sys.argv[1], sys.argv[2]
+lines = open(env_path, encoding="utf-8").read().splitlines()
+index = next(i for i, line in enumerate(lines) if line.startswith("YARD_OPERATORS="))
+operators = json.loads(lines[index].split("=", 1)[1])
+for operator in operators:
+    operator.setdefault("accessCode", secrets.token_urlsafe(24))
+lines[index] = "YARD_OPERATORS=" + json.dumps(operators, separators=(",", ":"))
+with open(env_path, "w", encoding="utf-8") as handle:
+    handle.write("\n".join(lines) + "\n")
+fd = os.open(codes_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as handle:
+    for operator in operators:
+        handle.write(f"{operator['actor']['kind'].lower()}: {operator['accessCode']}\n")
+print(f"Access codes set for {len(operators)} operators. Read them in {codes_path} (owner only).")
+PY
+    ;;
   vault-key)
     # T-0227: put a new saved-token key first in VAULT_TOKEN_KEYS in .env. The key is never printed.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
