@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+project="stood-hosted-check-$$"
+finish() {
+  result=$?
+  trap - EXIT INT TERM
+  if [ "$result" -ne 0 ]; then docker logs "$project-api" 2>&1 || true; fi
+  docker rm -f "$project-api" "$project-db" >/dev/null 2>&1 || true
+  docker network rm "$project" >/dev/null 2>&1 || true
+  exit "$result"
+}
+trap finish EXIT INT TERM
+docker build -f services/yard-api/Dockerfile -t stood-yard-hosted-check .
+docker build -f tools/site/Dockerfile.test -t stood-site-browser .
+docker network create "$project" >/dev/null
+docker run -d --name "$project-db" --network "$project" --network-alias db \
+  -e POSTGRES_USER=stood -e POSTGRES_PASSWORD=stood_hosted_test_only -e POSTGRES_DB=stood \
+  pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d >/dev/null
+attempt=0
+until docker exec "$project-db" pg_isready -U stood -d stood >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 30 ]; then exit 1; fi
+  sleep 1
+done
+for action in roles migrate; do
+  docker run --rm --network "$project" \
+    -e YARD_ENV=ci -e YARD_MIGRATION_DATABASE_URL=postgres://stood:stood_hosted_test_only@db:5432/stood \
+    -e YARD_RUNTIME_PASSWORD=hosted_test_runtime_password_0123456789 \
+    --entrypoint /nodejs/bin/node stood-yard-hosted-check dist/db-cli.js "$action"
+done
+docker run -d --name "$project-api" --network "$project" \
+  -e YARD_ENV=ci -e YARD_PUBLIC_ORIGIN=http://localhost:3001 \
+  -e YARD_DATABASE_URL=postgres://yard_runtime:hosted_test_runtime_password_0123456789@db:5432/stood \
+  -e YARD_SECRET_KEYS=k1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+  -e 'YARD_OPERATORS=[{"key":"test-buyer","secret":"hosted-test-signature-secret-0123456789","accessCode":"hosted-test-buyer-code-0123456789abcdef","actor":{"id":"test-buyer","root":"test-buyer","kind":"BUYER"}},{"key":"test-builder","secret":"hosted-test-builder-secret-0123456789","accessCode":"hosted-test-builder-code-0123456789abcdef","actor":{"id":"test-builder","root":"test-builder","kind":"BUILDER"}}]' \
+  stood-yard-hosted-check >/dev/null
+attempt=0
+until docker exec "$project-api" /nodejs/bin/node -e "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 30 ]; then exit 1; fi
+  sleep 1
+done
+mkdir -p artifacts/hosted-yard
+docker run --rm --init --shm-size=256m --network "container:$project-api" \
+  --mount "type=bind,src=$(pwd)/tools/site/hosted-yard-smoke.mjs,dst=/workspace/tools/site/hosted-yard-smoke.mjs,readonly" \
+  --mount "type=bind,src=$(pwd)/packages/yard-contracts/test/fakes/startup-tribunal.json,dst=/fixture.json,readonly" \
+  --mount "type=bind,src=$(pwd)/artifacts/hosted-yard,dst=/out" \
+  stood-site-browser node tools/site/hosted-yard-smoke.mjs

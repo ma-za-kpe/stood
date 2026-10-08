@@ -125,3 +125,13 @@ jobs:
             fi
           done < <(git rev-list --no-merges "$BASE..$HEAD")
           exit "$missing"
+
+  hosted-yard-browser:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Hosted Yard production-image journey with disposable Postgres
+        run: scripts/check-hosted-yard
