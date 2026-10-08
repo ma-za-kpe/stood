@@ -55,6 +55,8 @@
 | Guide for PayPal developers | [Authorize, capture and void on the PayPal sandbox, step by step](docs/guides/paypal-sandbox-authorize-capture-void.md) | Written from our own setup, with every error we hit |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
+**Browse ideas:** open [hosted Yard](https://stood-yard-api.onrender.com/app/), sign in with the buyer code from the private `~/.config/stood/yard-access-codes` file, then choose **Describe a project → Browse free research ideas**. No StartupTribunal API key is needed for public discovery. Codes are already configured as `accessCode` entries in the private `.env` `YARD_OPERATORS`; never paste them into issues or screenshots.
+
 ## The problem
 
 Adaeze delegates a code milestone to Yard or a human developer. A green badge alone does not show whether signed tests were changed, skipped or too weak. Her payment needs a new commit, intact acceptance tests, a trustworthy run and the agreed budget and usage conditions. Buyer and builder identity does not change the decision.
