@@ -207,23 +207,45 @@ export function createPayPalSimulator(config: {
       if (tid)
         return response(tokens.has(tid) ? { status: 200, body: tokens.get(tid) } : error(404, 'INVALID_RESOURCE_ID'));
       // Transaction Search shape (captures only) for the reconciliation audit.
-      if (path === '/v1/reporting/transactions')
+      if (path === '/v1/reporting/transactions') {
+        // Transaction Search shape: start/end required, at most 31 days, 1-based pages (T-0155, T-0222).
+        const from = Date.parse(c.req.query('start_date') ?? ''),
+          to = Date.parse(c.req.query('end_date') ?? '');
+        const size = Number(c.req.query('page_size') ?? '100'),
+          page = Number(c.req.query('page') ?? '1');
+        if (
+          !Number.isFinite(from) ||
+          !Number.isFinite(to) ||
+          to < from ||
+          to - from > 31 * 86400000 ||
+          !Number.isInteger(size) ||
+          size < 1 ||
+          size > 500 ||
+          !Number.isInteger(page) ||
+          page < 1
+        )
+          return response(error(400, 'INVALID_REQUEST'));
+        const all = [...orders.values()].flatMap((o) =>
+          o.captures.map((cap) => ({
+            transaction_info: {
+              transaction_id: cap.id,
+              invoice_id: cap.invoice_id,
+              transaction_amount: cap.amount,
+              transaction_status: 'S',
+            },
+          })),
+        );
         return response({
           status: 200,
           body: {
-            transaction_details: [...orders.values()].flatMap((o) =>
-              o.captures.map((c) => ({
-                transaction_info: {
-                  transaction_id: c.id,
-                  invoice_id: c.invoice_id,
-                  transaction_amount: c.amount,
-                  transaction_status: 'S',
-                },
-              })),
-            ),
+            transaction_details: all.slice((page - 1) * size, page * size),
+            page,
+            total_items: all.length,
+            total_pages: Math.max(1, Math.ceil(all.length / size)),
             simulated: true,
           },
         });
+      }
       if (path === '/v1/notifications/webhooks-events')
         return response({ status: 200, body: { events: structuredClone(events) } });
       const cid = /^\/v2\/payments\/captures\/([^/]+)$/.exec(path)?.[1];
@@ -359,7 +381,10 @@ export function createPayPalSimulator(config: {
       else if (action === 'void') {
         auth.status = 'VOIDED';
         emit('PAYMENT.AUTHORIZATION.VOIDED', auth);
-        reply = { status: 204, body: null };
+        // Like PayPal: 200 with the authorization when asked for return=representation, otherwise 204.
+        reply = /return=representation/.test(c.req.header('Prefer') ?? '')
+          ? { status: 200, body: structuredClone(auth) }
+          : { status: 204, body: null };
       } else if (
         !(action === 'reauthorize' && body.amount === undefined) &&
         canonical(amount(body.amount)) !== canonical(auth.amount)

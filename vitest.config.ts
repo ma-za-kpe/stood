@@ -18,7 +18,14 @@ export default defineConfig({
         'packages/yard-contracts/src/**/*.ts',
         'packages/stood-sdk/src/**/*.ts',
       ],
-      exclude: ['**/*.test.ts', '**/server.ts', '**/setup-cli.ts', '**/reconcile-cli.ts', '**/adapters/db-postgres/**'],
+      exclude: [
+        '**/*.test.ts',
+        '**/server.ts',
+        '**/setup-cli.ts',
+        '**/reconcile-cli.ts',
+        '**/sandbox-run-cli.ts',
+        '**/adapters/db-postgres/**',
+      ],
       reporter: ['text', 'json-summary'],
       thresholds: {
         branches: 85,

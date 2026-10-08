@@ -11,7 +11,7 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 | `stood-api` | Render web service (Docker, `Dockerfile` target `api`) | Free | Frankfurt | `https://stood-api.onrender.com`, health at `/health`. Sleeps after about 15 minutes idle |
 | `stood-reconciler` | Render background worker (same image, `dist/reconcile-cli.js`) | **Starter (paid, about $7/month)** | Frankfurt | Render has no free background workers. The owner chose to pay rather than fold it into `stood-api` |
 | Postgres | Neon | Free | AWS eu-central-1 (Frankfurt) | **Direct (unpooled) URL**, because Stood uses `LISTEN` |
-| PayPal | Developer Dashboard, sandbox app (type **Merchant**) | Sandbox | — | US sandbox business account for the app; US personal account as the test buyer |
+| PayPal | Developer Dashboard, sandbox app `stood-merchant-app` (type **Merchant**) | Sandbox | — | Owned by a US sandbox business account; a US personal account is the test buyer. Step-by-step: [the PayPal sandbox guide](guides/paypal-sandbox-authorize-capture-void.md) |
 | Blueprint | Render Blueprint from `render.yaml` on `main` | — | — | Syncs automatically when `main` changes. Services have `autoDeploy: false`; deploys are triggered on purpose |
 
 Yard is not deployed yet. Its credentialed composition root is batch C2 in issue #50.
@@ -40,7 +40,7 @@ Rules we followed: no value in Git, chat, issues or screenshots; tools report on
 | `DATABASE_URL` | ✓ | ✓ | Neon, direct URL |
 | `STOOD_API_KEY`, `STOOD_HMAC_SECRET`, `STOOD_WEBHOOK_SECRET` | ✓ | — | Generated locally (256-bit random) |
 | `RECONCILIATION_OWNER` | — | ✓ (`ma-za-kpe`) | A name, not a secret |
-| `PAYPAL_WEBHOOK_ID` | empty | — | Waits for the webhook (section 6) |
+| `PAYPAL_WEBHOOK_ID` | ✓ | — | The sandbox app's webhook (section 6), set 2026-10-08 |
 
 ## 3. PayPal sandbox app
 
@@ -49,6 +49,15 @@ Rules we followed: no value in Git, chat, issues or screenshots; tools report on
 3. Features Stood uses: **Save payment methods (Vault)**, **Transaction search**, **Customer disputes**, **JavaScript SDK v6**. Orders, authorize and capture are on for every app. Payouts, Invoicing, Subscriptions, Payment links, Log in with PayPal and Mobile SDKs are not used. Every feature is deliberately left ticked until the project is finished (owner decision, 2026-10-08), so the token includes scopes Stood does not use, such as `payments/payouts`. Stood's code calls only the APIs above, and the MCP server is used read-only (T16).
 4. Copy the client ID and secret into `.env` as `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`.
 5. Check without printing anything: a client-credentials call to `https://api-m.sandbox.paypal.com/v1/oauth2/token` returned HTTP 200, a 9-hour token, and scopes for authorize/capture, Vault payment tokens, Transaction Search and disputes.
+
+### Sandbox accounts for real runs
+
+`scripts/dev sandbox-run release|refuse` (T-0224) needs two **United States** sandbox accounts besides the app owner:
+
+- **Business (merchant)**, the payee. Its public **Account ID** goes in `.env` as `STOOD_SANDBOX_PAYEE_ID`. The app's own business account was Ugandan, and PayPal refused it as payee with `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (Uganda's accounts are send-only). Naming a US business account as payee lets the app **capture** (the release run succeeded on 2026-10-08) but **not void**: PayPal answered the refuse run's void with HTTP 403, because only the payee's own app may void its holds. So the sandbox app must be **owned by the US business account**; a third-party payee is not a full workaround. Done on 2026-10-08: the app `stood-merchant-app` (app id `APP-92D42792B8255350D`) is owned by the US business account `NSBFV7E76WDQL`; with it the release run captured and the refuse run voided. The first app's values are kept in `.env` as `RETIRED_UG_APP_PAYPAL_*`, unused. Its webhook was narrowed from all events to the four Stood handles.
+- **Personal (buyer)**, who approves. A new personal account may have no payment method; add a generated sandbox test card (Sandbox → Card testing), kept in `.env` as `PAYPAL_SANDBOX_TEST_CARD_*`.
+
+PayPal's checkout error pages carry a base64 `code=` parameter: `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (payee cannot receive) and `PAYMENT_ALREADY_DONE` (the link was opened again after approval) are the two we met.
 
 ## 4. Neon Postgres
 
@@ -78,6 +87,8 @@ Add one webhook in the sandbox app:
 - Events: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.AUTHORIZATION.VOIDED` (the four Stood handles, not "all events")
 - Put the webhook ID in `.env` and on `stood-api` as `PAYPAL_WEBHOOK_ID`, then redeploy.
 
+What `stood-api` does with each delivery (T-0033): it asks PayPal's `verify-webhook-signature` API whether PayPal really sent it (OAuth token cached, sandbox host only), refuses deliveries with missing transmission headers or a certificate URL outside `paypal.com`, stores each verified event once in the `provider_events` table (migration 0017), and answers `202`. If PayPal's verification API is down it answers `503`, so PayPal retries. An event is only a hint: the reconciler still reads provider proof before any money state changes. The receiver is off unless `PROVIDER_PAYPAL=live`, `DATABASE_URL` and all three PayPal values are set.
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.
@@ -101,7 +112,7 @@ The live adapter that uses the app (one-repository tokens, `wo/*` branches, pull
 |---|---|---|
 | PayPal AI Toolkit (`/plugin install paypal@claude-plugins-official`) | Best-practices skill, `/paypal:*` commands, sandbox MCP server as a read-only second witness | [T16](tech/T16-paypal-ai-toolkit.md), T-0246 |
 | PayPal MCP token refresher ([`tools/paypal-mcp-token`](../tools/paypal-mcp-token/README.md)) | Mints the sandbox token into `~/.claude/settings.json` at login, 07:00 daily and every 8 hours (macOS LaunchAgent `com.stood.paypal-mcp-token`); never prints it | Installed 2026-10-08 |
-| APIMatic PayPal Context Plugin (`npx context-plugins install https://github.com/paypaldev/server-sdk-context-plugin-preview`) | Grounds agent-written code in the PayPal Server SDK we already pin (`@paypal/paypal-server-sdk` 2.5.0: Orders, Payments, Vault, Transaction Search). Installed 2026-10-08 into Claude Code, VS Code and Codex as `paypal@context-plugins-local` | Next: move the T-0155 Transaction Search reader onto the SDK's `TransactionSearchController` |
+| APIMatic PayPal Context Plugin (`npx context-plugins install https://github.com/paypaldev/server-sdk-context-plugin-preview`) | Grounds agent-written code in the PayPal Server SDK we already pin (`@paypal/paypal-server-sdk` 2.5.0: Orders, Payments, Vault, Transaction Search). Installed 2026-10-08 into Claude Code, VS Code and Codex as `paypal@context-plugins-local` | Used for T-0155 (Transaction Search through the SDK); recorded in [T16](tech/T16-paypal-ai-toolkit.md#apimatic-paypal-context-plugin) |
 | Render CLI | Deploys, logs, Blueprint validation | Section 5 |
 | GitHub CLI | Pull requests and issues. If the active `gh` account is not `ma-za-kpe`, use `GH_TOKEN=$(gh auth token --user ma-za-kpe)` per command instead of switching globally | — |
 

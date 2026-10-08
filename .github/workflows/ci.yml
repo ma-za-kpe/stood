@@ -72,6 +72,10 @@ jobs:
         env:
           SKIP: no-commit-to-branch,branch-name
         run: pre-commit run --all-files --show-diff-on-failure
+      - name: Run the pre-push product gate (Docker validation and Postgres tests)
+        env:
+          SKIP: no-commit-to-branch,branch-name
+        run: pre-commit run --all-files --hook-stage pre-push --show-diff-on-failure
 
   pr-title:
     if: github.event_name == 'pull_request'

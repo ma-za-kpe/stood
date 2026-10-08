@@ -24,6 +24,20 @@ This keeps the product's central promise intact: rules move money, AI only helps
 | MCP `list_disputes`, `get_dispute` | During the sandbox E2E, confirms that no dispute exists before a release, and records any dispute opened on a test buyer account. | Planned |
 | MCP `create_order`, `pay_order`, `create_refund` | **Not used against Stood's orders.** These would change money state outside Stood's rules. They may only be used to make unrelated fixture data in the sandbox, labelled as such. | Excluded by the rule above |
 
+## Status of the MCP server, and the workaround
+
+Since 2026-10-08 every sandbox MCP tool we tried (`list_invoices`, `list_transactions`, `list_disputes`) returns `PAYPAL_API_SETUP_ERROR: Unsupported cache mode: default`, with a fresh token and a working connection. Reported upstream as [paypal/AI-Toolkit#34](https://github.com/paypal/AI-Toolkit/issues/34).
+
+Until it is fixed, [`tools/paypal-witness`](../../tools/paypal-witness/witness.py) does the second-witness job: a read-only Python script (standard library only, a separate code path from Stood's TypeScript SDK adapter) that reads an order, a Transaction Search window or the dispute list straight from the PayPal sandbox REST API. It prints ids, amounts and statuses only, never personal data or tokens, and accepts only `https://api-m.sandbox.paypal.com`.
+
+```bash
+tools/paypal-witness/witness.py order ORDER_ID
+tools/paypal-witness/witness.py transactions 2026-10-01T00:00:00Z 2026-10-08T23:59:59Z
+tools/paypal-witness/witness.py disputes
+```
+
+When the MCP server works again, the same checks move back to `get_order`, `list_transactions` and `list_disputes`.
+
 ## How a developer sets it up
 
 1. In Claude Code: `/plugin install paypal@claude-plugins-official`, then `/reload-plugins`.
@@ -41,3 +55,15 @@ This keeps the product's central promise intact: rules move money, AI only helps
 ## Recording evidence
 
 Each MCP check stores a sanitised record next to the scenario's recorded exchange (T-0224). The record contains the tool name, the PayPal object IDs, the compared fields and the result, but no tokens and no buyer personal data. The hackathon "Built with" section points to this page and to those records.
+
+## APIMatic PayPal Context Plugin
+
+The [Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) gives coding agents authoritative knowledge of the PayPal Server SDK that Stood already pins (`@paypal/paypal-server-sdk` 2.5.0). Installed 2026-10-08 (`npx context-plugins install …`) into Claude Code, VS Code and Codex as `paypal@context-plugins-local`.
+
+### What we built with it
+
+| Change | What the plugin's TypeScript guidance settled | Evidence |
+|---|---|---|
+| T-0155: the reconciliation audit reads PayPal **Transaction Search** through the SDK's `TransactionSearchController` instead of a hand-written HTTP client (`services/api/src/adapters/payments-paypal/sdk.ts`, `captures()`) | Controllers are **constructed** from the client (`new TransactionSearchController(client)`), not reached through it; `searchTransactions` is generated in the **options-object form** because it has several optional parameters, so it is called as `searchTransactions({ startDate, endDate, fields, pageSize, page })`; non-2xx responses throw `ApiError`, whose body carries PayPal's `debug_id` | `simulator-transactions.test.ts` (paging across 3 captures with page size 2, the 31-day window, an outage reported with its debug id) and the mock money flow, whose 9 scenarios now end with an audit through the SDK |
+
+How it was used, honestly: the plugin was installed mid-session, after the coding agent's session had started, so its skills were not loaded as live skills. The agent read the plugin's TypeScript skill files (`typescript-calling-endpoints`, error-handling, models) directly and followed them, then confirmed each call against the SDK's own source in `src/controllers/`, which the plugin names as authoritative.

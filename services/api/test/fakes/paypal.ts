@@ -52,7 +52,8 @@ export class FakePayPalTransport implements PayPalTransport {
       };
     } else if (action === 'VOID') {
       this.state = 'VOIDED';
-      result = { status: 204, body: null };
+      // Stood always sends Prefer: return=representation, so PayPal answers 200 with the authorization.
+      result = { status: 200, body: { id: input.authorizationId, status: 'VOIDED', amount } };
     } else if (action === 'REAUTHORIZE' && this.days >= 3 && !this.renewed) {
       this.renewed = true;
       result = { status: 201, body: { id: 'fake-renewed-auth', status: 'CREATED', amount } };

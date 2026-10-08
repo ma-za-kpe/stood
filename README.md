@@ -20,6 +20,8 @@
 
 <p align="center">
   <a href="https://github.com/ma-za-kpe/stood/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ma-za-kpe/stood/actions/workflows/ci.yml/badge.svg?branch=develop"></a>
+  <a href="https://github.com/ma-za-kpe/stood/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/ma-za-kpe/stood/actions/workflows/codeql.yml/badge.svg?branch=develop"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/ma-za-kpe/stood"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/ma-za-kpe/stood/badge"></a>
   <a href="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/ma-za-kpe/stood/actions/workflows/pages.yml/badge.svg"></a>
   <a href="https://github.com/ma-za-kpe/stood/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ma-za-kpe/stood?include_prereleases&style=flat-square&color=6C4DFF"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-C8FF3D?style=flat-square&labelColor=0D0A1E"></a>
@@ -49,6 +51,7 @@
 | Hackathon | <https://paypalaihackathon.devpost.com/> | |
 | Yard GitHub App | <https://github.com/apps/yard-builder> | Installed only on [`yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox) ([setup](docs/SETUP.md#7-yard-github-app)) |
 | Yard test repository | <https://github.com/ma-za-kpe/yard-sandbox> | Throwaway: where Yard's `wo/*` branches and pull requests appear in demos |
+| Guide for PayPal developers | [Authorize, capture and void on the PayPal sandbox, step by step](docs/guides/paypal-sandbox-authorize-capture-void.md) | Written from our own setup, with every error we hit |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
 ## The problem
@@ -213,11 +216,11 @@ Implemented core: `services/api`. Planned additional services: `apps/web`, `serv
 
 ```bash
 pip install pre-commit             # or: brew install pre-commit / pipx install pre-commit
-pre-commit install                 # installs BOTH hooks: pre-commit + commit-msg
+pre-commit install                 # installs pre-commit, commit-msg and pre-push hooks
 pre-commit run --all-files         # must pass before you push
 ```
 
-Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg` should list both files. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
+Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push` should list all three. Fast checks run on every commit; the Docker product gate (types, money boundary, all tests, build) runs before every push ([ADR-0023](docs/adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md)). Docker must be running, because some hooks run in pinned containers. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
 
 **There's no way around the gate:**
 

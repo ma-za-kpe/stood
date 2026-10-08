@@ -10,7 +10,7 @@ All of this lives in `adapters/payments-paypal`, the **only** module allowed to 
 | **Orders v2**, `intent=AUTHORIZE` with the vaulted `payment_source` | The hold per tranche on dispatch | FR-10 |
 | **Authorizations**: capture / void / reauthorize | Release / refuse / timers | FR-12, 38 |
 | Order metadata: `custom_id` (tranche id); capture `invoice_id` (operation key), description | The decision bound to PayPal's record | FR-38 |
-| **Webhooks** + verify-webhook-signature | State confirmation | FR-61 |
+| **Webhooks** + verify-webhook-signature | State confirmation (hints; proof is read by the reconciler). Inbound verification and idempotent storage implemented (T-0033) | FR-61 |
 | **Disputes API** | The dispute packet and evidence | FR-52 |
 | **Transaction Search** (`/v1/reporting/transactions`) | Reconciliation in the reviewer file | FR-54 |
 | **Agent Toolkit MCP** (read tools) | Reviewer agent reads disputes and transactions | FR-53 |
@@ -87,7 +87,7 @@ Allowance and direct tranche creation accept only GBP/USD/EUR, Stood's current s
 
 ## Sandbox setup
 
-Wiring T-0027 is blocked on durable payment operations (T-0132), reconciliation/status checks (T-0056 / T-0138) and guided key onboarding/readiness (T-0135). The local `scripts/dev setup` tool asks for sandbox app/webhook credentials, keeps them out of output/Git and validates client credentials with sandbox OAuth. Missing/invalid keys leave payment readiness false; guarded financial writes return `503 payments_not_configured` with setup guidance. Health lists missing variable names, never values. See [USAGE: keys and configuration](../USAGE.md#keys-and-configuration); the local prompt/OAuth check and readiness guards are implemented with fake-response tests; hosted issuance/rotation remain planned under T-0150.
+Wiring T-0027 is blocked on durable payment operations (T-0132), reconciliation/status checks (T-0056 / T-0138) and guided key onboarding/readiness (T-0135). The local `scripts/dev setup` tool asks for sandbox app/webhook credentials, keeps them out of output/Git and validates client credentials with sandbox OAuth. Missing/invalid keys leave payment readiness false; guarded financial writes return `503 payments_not_configured` with setup guidance while a key is missing, and `503 payments_not_qualified` once every key is set but qualification is still pending (T-0248). Health lists missing variable names, never values. See [USAGE: keys and configuration](../USAGE.md#keys-and-configuration); the local prompt/OAuth check and readiness guards are implemented with fake-response tests; hosted issuance/rotation remain planned under T-0150.
 
 An ambiguous renewal must remain reserved past the deadline until provider status resolves whether it renewed. A confirmed renewal supplies the new id for expiry; a confirmed absence of renewal plus provider expiry/no payment needs a matched typed renewal-reconciliation exit (T-0138). The domain now has the matched `confirmNoRenewalExpiry` exit; elapsed time or an inconclusive lookup cannot clear it. Package intake during REAUTHORIZE_PENDING must queue durably and retry when the operation resolves (T-0137).
 

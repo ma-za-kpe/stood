@@ -5,6 +5,13 @@ if [ "$#" -eq 0 ]; then set -- validate; fi
 case "$1" in
   setup) shift; exec docker compose run --rm -it app sh -c 'pnpm --filter @stood/api build && node services/api/dist/setup-cli.js "$@"' setup "$@" ;;
   reconcile) exec docker compose --profile operations run --rm reconciler ;;
+  sandbox-run)
+    # Only the sandbox app keys reach the container, from a private temporary file (T-0224).
+    shift; [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|STOOD_SANDBOX_PAYEE_ID)=' .env >"$keys" || true
+    docker compose run --rm --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/sandbox-run-cli.js "$@"' sandbox-run "$@" ;;
   site)
     docker compose run --rm app sh -c 'pnpm --filter @stood/yard-domain build && pnpm --filter @stood/yard-web build && npm ci --prefix tools/site && node tools/site/build.mjs'
     exec docker compose --profile site up -d --wait site ;;

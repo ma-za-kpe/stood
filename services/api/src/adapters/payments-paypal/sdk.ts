@@ -5,9 +5,11 @@ import {
   Environment,
   OrdersController,
   PaymentsController,
+  TransactionSearchController,
   VaultController,
   VaultTokenRequestType,
 } from '@paypal/paypal-server-sdk';
+import type { ProviderCapture, ProviderTransactions } from '../../ports/provider-transactions.js';
 export type PayPalVaultCall = 'CREATE_SETUP' | 'GET_SETUP' | 'CREATE_TOKEN' | 'GET_TOKEN';
 export type PayPalVaultInput = Readonly<{
   mode: 'sim' | 'live';
@@ -46,10 +48,12 @@ export type PayPalInput = Readonly<{
 export interface PayPalTransport {
   call(action: PayPalCall, input: PayPalInput): Promise<Readonly<{ status: number | null; body: unknown }>>;
 }
-export class ServerSdkTransport implements PayPalTransport {
+export class ServerSdkTransport implements PayPalTransport, ProviderTransactions {
   private readonly payments: PaymentsController;
   private readonly orders: OrdersController;
   private readonly vaultController: VaultController;
+  private readonly search: TransactionSearchController;
+  private readonly searchPageSize: number;
   private readonly callbacks: Readonly<{ returnUrl: string; cancelUrl: string }> | null;
   private readonly mode: 'sim' | 'live';
   constructor(
@@ -62,6 +66,7 @@ export class ServerSdkTransport implements PayPalTransport {
       timeoutMs?: number;
       vaultReturnUrl?: string;
       vaultCancelUrl?: string;
+      searchPageSize?: number;
     }>,
   ) {
     const simulated = config.mode === 'sim';
@@ -113,6 +118,11 @@ export class ServerSdkTransport implements PayPalTransport {
     this.payments = new PaymentsController(client);
     this.orders = new OrdersController(client);
     this.vaultController = new VaultController(client);
+    // Controllers are constructed from the client, not reached through it (APIMatic Context Plugin).
+    this.search = new TransactionSearchController(client);
+    this.searchPageSize = config.searchPageSize ?? 100;
+    if (!Number.isInteger(this.searchPageSize) || this.searchPageSize < 1 || this.searchPageSize > 500)
+      throw new Error('Invalid search page size');
   }
   async vault(action: PayPalVaultCall, input: PayPalVaultInput) {
     if (input.mode !== this.mode || (action === 'CREATE_SETUP' && !this.callbacks)) return { status: null, body: null };
@@ -181,6 +191,51 @@ export class ServerSdkTransport implements PayPalTransport {
       };
     }
   }
+  // T-0155: PayPal Transaction Search through the pinned SDK, every page (APIMatic Context Plugin guidance).
+  async captures(fromMs: number, toMs: number): Promise<readonly ProviderCapture[]> {
+    // PayPal Transaction Search accepts at most 31 days per request; refuse instead of silently truncating.
+    if (
+      !Number.isSafeInteger(fromMs) ||
+      !Number.isSafeInteger(toMs) ||
+      toMs < fromMs ||
+      toMs - fromMs > MAX_SEARCH_WINDOW_MS
+    )
+      throw new RangeError('Transaction search window must be 0-31 days');
+    const captures: ProviderCapture[] = [];
+    for (let page = 1; ; page++) {
+      if (page > MAX_SEARCH_PAGES) throw new Error('Transaction search exceeded the page limit');
+      let result: Awaited<ReturnType<TransactionSearchController['searchTransactions']>>['result'];
+      try {
+        // Form B: one options object, as the SDK generates this list operation.
+        ({ result } = await this.search.searchTransactions({
+          startDate: new Date(fromMs).toISOString(),
+          endDate: new Date(toMs).toISOString(),
+          fields: 'transaction_info',
+          pageSize: this.searchPageSize,
+          page,
+        }));
+      } catch (error) {
+        if (error instanceof ApiError)
+          throw new Error(`Transaction search unavailable (HTTP ${error.statusCode}, debug id ${debugId(error.body)})`);
+        throw error;
+      }
+      for (const detail of result.transactionDetails ?? []) {
+        const t = detail.transactionInfo;
+        const value = t?.transactionAmount?.value;
+        if (!t?.transactionId || !value || !/^\d+\.\d{2}$/.test(value) || !t.transactionAmount?.currencyCode)
+          throw new Error('Unexpected transaction shape');
+        captures.push({
+          id: t.transactionId,
+          invoiceId: t.invoiceId ?? null,
+          minor: Number(value.replace('.', '')),
+          currency: t.transactionAmount.currencyCode,
+          status: SEARCH_STATUS[t.transactionStatus ?? ''] ?? 'PENDING',
+        });
+      }
+      if (page >= (result.totalPages ?? 1)) return captures;
+    }
+  }
+
   async call(action: PayPalCall, input: PayPalInput) {
     try {
       const common = {
@@ -277,5 +332,22 @@ function parseBody(body: unknown): unknown {
     return JSON.parse(body);
   } catch {
     return null;
+  }
+}
+
+const MAX_SEARCH_WINDOW_MS = 31 * 86400000;
+const MAX_SEARCH_PAGES = 100;
+const SEARCH_STATUS: Readonly<Record<string, ProviderCapture['status']>> = {
+  S: 'COMPLETED',
+  P: 'PENDING',
+  D: 'DECLINED',
+  V: 'REFUNDED',
+};
+function debugId(body: unknown): string {
+  try {
+    const parsed = typeof body === 'string' ? (JSON.parse(body) as { debug_id?: unknown }) : null;
+    return typeof parsed?.debug_id === 'string' ? parsed.debug_id : 'none';
+  } catch {
+    return 'none';
   }
 }

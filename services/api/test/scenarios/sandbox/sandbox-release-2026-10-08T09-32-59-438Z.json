@@ -1,0 +1,60 @@
+{
+  "scenario": "release",
+  "mode": "live",
+  "runId": "sandbox-release-2026-10-08T09-32-59-438Z",
+  "outcome": "CAPTURED",
+  "steps": [
+    {
+      "step": "CREATE_ORDER",
+      "httpStatus": 201,
+      "status": "CREATED",
+      "ids": {
+        "order": "5DR752893E000704A"
+      },
+      "amount": "10.00 USD",
+      "debugId": null
+    },
+    {
+      "step": "GET_FUNDING_ORDER",
+      "httpStatus": 200,
+      "status": "APPROVED",
+      "ids": {
+        "order": "5DR752893E000704A"
+      },
+      "amount": "10.00 USD",
+      "debugId": null
+    },
+    {
+      "step": "AUTHORIZE_ORDER",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "order": "5DR752893E000704A",
+        "hold": "6UL624923A651723C"
+      },
+      "amount": "10.00 USD",
+      "debugId": null
+    },
+    {
+      "step": "CAPTURE",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "capture": "13832294TH804340T"
+      },
+      "amount": "10.00 USD",
+      "debugId": null
+    },
+    {
+      "step": "GET_AUTHORIZATION",
+      "httpStatus": 200,
+      "status": "CAPTURED",
+      "ids": {
+        "hold": "6UL624923A651723C"
+      },
+      "amount": "10.00 USD",
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-08T09:34:02.222Z"
+}

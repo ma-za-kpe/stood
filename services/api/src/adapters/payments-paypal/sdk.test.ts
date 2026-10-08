@@ -38,6 +38,7 @@ vi.mock('@paypal/paypal-server-sdk', () => ({
     createOrder = fake.createOrder;
     authorizeOrder = fake.authorizeOrder;
   },
+  TransactionSearchController: class {},
   VaultController: class {
     createSetupToken = fake.createSetup;
     getSetupToken = fake.getSetup;
