@@ -54,7 +54,7 @@ Rules we followed: no value in Git, chat, issues or screenshots; tools report on
 
 `scripts/dev sandbox-run release|refuse` (T-0224) needs two **United States** sandbox accounts besides the app owner:
 
-- **Business (merchant)**, the payee. Its public **Account ID** goes in `.env` as `STOOD_SANDBOX_PAYEE_ID`. The app's own business account was Ugandan, and PayPal refused it as payee with `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (Uganda's accounts are send-only). Naming a US business account as payee works without a new app: the run captured successfully on 2026-10-08.
+- **Business (merchant)**, the payee. Its public **Account ID** goes in `.env` as `STOOD_SANDBOX_PAYEE_ID`. The app's own business account was Ugandan, and PayPal refused it as payee with `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (Uganda's accounts are send-only). Naming a US business account as payee lets the app **capture** (the release run succeeded on 2026-10-08) but **not void**: PayPal answered the refuse run's void with HTTP 403, because only the payee's own app may void its holds. So the sandbox app must be **owned by the US business account**; a third-party payee is not a full workaround.
 - **Personal (buyer)**, who approves. A new personal account may have no payment method; add a generated sandbox test card (Sandbox → Card testing), kept in `.env` as `PAYPAL_SANDBOX_TEST_CARD_*`.
 
 PayPal's checkout error pages carry a base64 `code=` parameter: `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (payee cannot receive) and `PAYMENT_ALREADY_DONE` (the link was opened again after approval) are the two we met.
