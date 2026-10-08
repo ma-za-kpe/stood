@@ -48,3 +48,15 @@ it('keeps one owned row per finding, and resolves it only when a later audit re-
   expect((await rows()).find((r) => r.operation_key === 'op1')?.status).toBe('OPEN');
   await expect(store.record([missing], ' ')).rejects.toThrow();
 });
+
+it('resolves nothing when nothing was re-checked, and everything re-checked when no findings remain', async () => {
+  await pool.query('DELETE FROM reconciliation_findings');
+  const store = new PostgresReconciliationFindings(db);
+  const stray = { kind: 'CAPTURE_WITHOUT_RELEASE' as const, trancheId: null, providerId: 'CAP-7', operationKey: null };
+  const dup = { kind: 'DUPLICATE_CAPTURE' as const, trancheId: 't3', providerId: 'CAP-8', operationKey: 'op3' };
+  await store.record([stray, dup], 'reviewer');
+  expect(await store.resolveFixed([], { operationKeys: [], providerIds: [] })).toBe(0);
+  // Re-checked by provider id only, and nothing is wrong any more: both resolve.
+  expect(await store.resolveFixed([], { operationKeys: [], providerIds: ['CAP-7', 'CAP-8'] })).toBe(2);
+  expect((await rows()).every((r) => r.status === 'RESOLVED')).toBe(true);
+});

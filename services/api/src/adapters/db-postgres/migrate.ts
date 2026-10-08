@@ -7,10 +7,11 @@ import pg from 'pg';
 export async function applyMigrations(url: string, folder: string): Promise<Readonly<{ applied: number }>> {
   const pool = new pg.Pool({ connectionString: url, max: 1 });
   try {
+    // count(*) always returns exactly one row; pg types rows as any.
     const count = async (): Promise<number> => {
       const exists = await pool.query("SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS ok");
-      if (!exists.rows[0]?.ok) return 0;
-      return Number((await pool.query('SELECT count(*) AS n FROM drizzle.__drizzle_migrations')).rows[0]?.n ?? 0);
+      if (!exists.rows[0].ok) return 0;
+      return Number((await pool.query('SELECT count(*) AS n FROM drizzle.__drizzle_migrations')).rows[0].n);
     };
     const before = await count();
     await migrate(drizzle(pool), { migrationsFolder: folder });
