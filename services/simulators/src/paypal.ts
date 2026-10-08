@@ -233,6 +233,7 @@ export function createPayPalSimulator(config: {
               invoice_id: cap.invoice_id,
               transaction_amount: cap.amount,
               transaction_status: 'S',
+              transaction_initiation_date: cap.create_time,
             },
           })),
         );
@@ -413,6 +414,7 @@ export function createPayPalSimulator(config: {
             status: 'COMPLETED',
             amount: auth.amount,
             invoice_id: body.invoice_id,
+            create_time: new Date(now()).toISOString(),
             supplementary_data: {
               related_ids: { authorization_id: auth.id, order_id: auth.supplementary_data.related_ids.order_id },
             },

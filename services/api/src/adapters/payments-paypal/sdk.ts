@@ -241,6 +241,7 @@ export class ServerSdkTransport implements PayPalTransport, ProviderTransactions
           minor: Number(value.replace('.', '')),
           currency: t.transactionAmount.currencyCode,
           status: SEARCH_STATUS[t.transactionStatus ?? ''] ?? 'PENDING',
+          at: t.transactionInitiationDate ? Date.parse(t.transactionInitiationDate) : null,
         });
       }
       if (page >= (result.totalPages ?? 1)) return captures;

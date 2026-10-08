@@ -5,6 +5,8 @@ export type ProviderCapture = Readonly<{
   minor: number;
   currency: string;
   status: 'COMPLETED' | 'PENDING' | 'DECLINED' | 'REFUNDED';
+  // When PayPal started the transaction (epoch ms), if it says.
+  at?: number | null;
 }>;
 export interface ProviderTransactions {
   captures(fromMs: number, toMs: number): Promise<readonly ProviderCapture[]>;
