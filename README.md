@@ -51,6 +51,7 @@
 | Hackathon | <https://paypalaihackathon.devpost.com/> | |
 | Yard GitHub App | <https://github.com/apps/yard-builder> | Installed only on [`yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox) ([setup](docs/SETUP.md#7-yard-github-app)) |
 | Yard test repository | <https://github.com/ma-za-kpe/yard-sandbox> | Throwaway: where Yard's `wo/*` branches and pull requests appear in demos |
+| Guide for PayPal developers | [Authorize, capture and void on the PayPal sandbox, step by step](docs/guides/paypal-sandbox-authorize-capture-void.md) | Written from our own setup, with every error we hit |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
 ## The problem

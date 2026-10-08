@@ -26,6 +26,7 @@ export type SandboxStep = Readonly<{
   status: string | null;
   ids: Readonly<Record<string, string>>;
   amount: string | null;
+  issue: string | null;
   debugId: string | null;
 }>;
 export type SandboxRecording = Readonly<{
@@ -48,7 +49,8 @@ function record(step: string, reply: Reply): SandboxStep {
   const payments = obj(unit.payments);
   const ids: Record<string, string> = {};
   const id = str(body.id);
-  if (id) ids[step.includes('ORDER') ? 'order' : step === 'GET_AUTHORIZATION' ? 'authorization' : 'capture'] = id;
+  // Order steps describe the order, a capture reply the capture, and void or read replies the authorization.
+  if (id) ids[step.includes('ORDER') ? 'order' : step === 'CAPTURE' ? 'capture' : 'authorization'] = id;
   const authorization = str(list(payments.authorizations)[0]?.id);
   if (authorization) ids.authorization = authorization;
   const money = obj(body.amount).value ? obj(body.amount) : obj(unit.amount);
@@ -58,8 +60,18 @@ function record(step: string, reply: Reply): SandboxStep {
     status: str(body.status),
     ids,
     amount: money.value ? `${money.value} ${money.currency_code}` : null,
+    issue: issueOf(body),
     debugId: str(body.debug_id),
   };
+}
+
+// PayPal errors carry a name and per-field issues, e.g. "NOT_AUTHORIZED: PERMISSION_DENIED".
+function issueOf(body: Json): string | null {
+  const name = str(body.name);
+  const issues = list(body.details)
+    .map((d) => str(d.issue))
+    .filter((i): i is string => !!i);
+  return name ? [name, ...issues].join(': ') : null;
 }
 
 export async function runSandboxScenario(

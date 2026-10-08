@@ -11,7 +11,7 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 | `stood-api` | Render web service (Docker, `Dockerfile` target `api`) | Free | Frankfurt | `https://stood-api.onrender.com`, health at `/health`. Sleeps after about 15 minutes idle |
 | `stood-reconciler` | Render background worker (same image, `dist/reconcile-cli.js`) | **Starter (paid, about $7/month)** | Frankfurt | Render has no free background workers. The owner chose to pay rather than fold it into `stood-api` |
 | Postgres | Neon | Free | AWS eu-central-1 (Frankfurt) | **Direct (unpooled) URL**, because Stood uses `LISTEN` |
-| PayPal | Developer Dashboard, sandbox app (type **Merchant**) | Sandbox | — | US sandbox business account for the app; US personal account as the test buyer |
+| PayPal | Developer Dashboard, sandbox app `stood-merchant-app` (type **Merchant**) | Sandbox | — | Owned by a US sandbox business account; a US personal account is the test buyer. Step-by-step: [the PayPal sandbox guide](guides/paypal-sandbox-authorize-capture-void.md) |
 | Blueprint | Render Blueprint from `render.yaml` on `main` | — | — | Syncs automatically when `main` changes. Services have `autoDeploy: false`; deploys are triggered on purpose |
 
 Yard is not deployed yet. Its credentialed composition root is batch C2 in issue #50.
@@ -54,7 +54,7 @@ Rules we followed: no value in Git, chat, issues or screenshots; tools report on
 
 `scripts/dev sandbox-run release|refuse` (T-0224) needs two **United States** sandbox accounts besides the app owner:
 
-- **Business (merchant)**, the payee. Its public **Account ID** goes in `.env` as `STOOD_SANDBOX_PAYEE_ID`. The app's own business account was Ugandan, and PayPal refused it as payee with `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (Uganda's accounts are send-only). Naming a US business account as payee lets the app **capture** (the release run succeeded on 2026-10-08) but **not void**: PayPal answered the refuse run's void with HTTP 403, because only the payee's own app may void its holds. So the sandbox app must be **owned by the US business account**; a third-party payee is not a full workaround.
+- **Business (merchant)**, the payee. Its public **Account ID** goes in `.env` as `STOOD_SANDBOX_PAYEE_ID`. The app's own business account was Ugandan, and PayPal refused it as payee with `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (Uganda's accounts are send-only). Naming a US business account as payee lets the app **capture** (the release run succeeded on 2026-10-08) but **not void**: PayPal answered the refuse run's void with HTTP 403, because only the payee's own app may void its holds. So the sandbox app must be **owned by the US business account**; a third-party payee is not a full workaround. Done on 2026-10-08: the app `stood-merchant-app` (app id `APP-92D42792B8255350D`) is owned by the US business account `NSBFV7E76WDQL`; with it the release run captured and the refuse run voided. The first app's values are kept in `.env` as `RETIRED_UG_APP_PAYPAL_*`, unused. Its webhook was narrowed from all events to the four Stood handles.
 - **Personal (buyer)**, who approves. A new personal account may have no payment method; add a generated sandbox test card (Sandbox → Card testing), kept in `.env` as `PAYPAL_SANDBOX_TEST_CARD_*`.
 
 PayPal's checkout error pages carry a base64 `code=` parameter: `PAYEE_ACCOUNT_LOCKED_OR_CLOSED` (payee cannot receive) and `PAYMENT_ALREADY_DONE` (the link was opened again after approval) are the two we met.

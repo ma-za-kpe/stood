@@ -46,10 +46,13 @@ describe('Sandbox scenario run (T-0224)', () => {
           ['CREATE_ORDER', 201],
           ['GET_FUNDING_ORDER', 200],
           ['AUTHORIZE_ORDER', 201],
-          [effect, effect === 'CAPTURE' ? 201 : 204],
+          [effect, effect === 'CAPTURE' ? 201 : 200],
           ['GET_AUTHORIZATION', 200],
         ]);
         expect(recording.steps.at(-1)?.status).toBe(end);
+        // A void reply describes the authorization, a capture reply the capture.
+        const settled = recording.steps[3];
+        expect(Object.keys(settled?.ids ?? {})).toEqual([effect === 'CAPTURE' ? 'capture' : 'authorization']);
         expect(recording.outcome).toBe(end);
         // Sanitised: ids, statuses and amounts only; no payer, links or names.
         const text = JSON.stringify(recording);
@@ -86,5 +89,39 @@ describe('Sandbox scenario run (T-0224)', () => {
     } finally {
       await h.close();
     }
+  });
+});
+
+describe('recording a PayPal refusal', () => {
+  it('keeps the error name, issue and debug id so a failed step can be diagnosed', async () => {
+    const refusal = {
+      status: 403,
+      body: { name: 'NOT_AUTHORIZED', details: [{ issue: 'PERMISSION_DENIED' }], debug_id: 'dbg-403' },
+    };
+    const recording = await runSandboxScenario({
+      scenario: 'refuse',
+      mode: 'sim',
+      payeeRef: 'X',
+      runId: 'r',
+      approve: async () => {},
+      sleep: async () => {},
+      maxPolls: 1,
+      transport: {
+        fund: async (action) =>
+          action === 'CREATE_ORDER'
+            ? { status: 201, body: { id: 'O1', status: 'CREATED', links: [{ rel: 'approve', href: 'https://x/O1' }] } }
+            : action === 'GET_FUNDING_ORDER'
+              ? { status: 200, body: { id: 'O1', status: 'APPROVED' } }
+              : { status: 201, body: { id: 'O1', purchase_units: [{ payments: { authorizations: [{ id: 'A1' }] } }] } },
+        call: async (action) => (action === 'VOID' ? refusal : { status: 200, body: { id: 'A1', status: 'CREATED' } }),
+      },
+    });
+    expect(recording.steps[3]).toMatchObject({
+      step: 'VOID',
+      httpStatus: 403,
+      issue: 'NOT_AUTHORIZED: PERMISSION_DENIED',
+      debugId: 'dbg-403',
+    });
+    expect(recording.outcome).toBe('CREATED');
   });
 });
