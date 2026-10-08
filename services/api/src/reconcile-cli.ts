@@ -1,6 +1,7 @@
 import { setTimeout } from 'node:timers/promises';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js';
 import { confirmedCaptures } from './adapters/db-postgres/ledger-captures.js';
 import { PostgresReconciliationFindings } from './adapters/db-postgres/reconciliation-findings.js';
 import { PostgresReconciliationQueue } from './adapters/db-postgres/reconciliation-queue.js';
@@ -14,7 +15,11 @@ import { reconciliationRuntime } from './reconciliation-runtime.js';
 
 const required = ['DATABASE_URL', 'PROVIDER_PAYPAL', 'RECONCILIATION_OWNER'] as const;
 const missing = required.filter((key) => !process.env[key]?.trim());
-if (missing.length) {
+const problem = databaseUrlProblem(process.env.DATABASE_URL ?? '', process.env.APP_ENV ?? 'local');
+if (!missing.length && problem) {
+  process.stderr.write(`Reconciliation is off: ${problem}. See docs/SETUP.md.\n`);
+  process.exitCode = 1;
+} else if (missing.length) {
   process.stderr.write(`Reconciliation is off. Add: ${missing.join(', ')}. See docs/USAGE.md.\n`);
   process.exitCode = 1;
 } else {
