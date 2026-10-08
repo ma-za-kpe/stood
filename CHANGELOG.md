@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.0](https://github.com/ma-za-kpe/stood/compare/v0.3.0...v0.4.0) (2026-10-08)
+
+
+### Features
+
+* batch 7 — evidence path, reconciliation audit, pricing disclosure, privacy ([#55](https://github.com/ma-za-kpe/stood/issues/55)) ([6c42523](https://github.com/ma-za-kpe/stood/commit/6c425236b1d89974570a4b3a0eac65a619c05163))
+* **yard:** A2A surface, search and public Board stream, notices, previews and remaining fakes ([#54](https://github.com/ma-za-kpe/stood/issues/54)) ([e11901a](https://github.com/ma-za-kpe/stood/commit/e11901a443045e02e8fb88f4b28618b621cd7ee4))
+* **yard:** advance pre-credential implementation round ([#46](https://github.com/ma-za-kpe/stood/issues/46)) ([bba9e58](https://github.com/ma-za-kpe/stood/commit/bba9e5841e1c6961cd8669a184aacd291778d8e3))
+* **yard:** hold-gated builds, Stood mandate, change orders, operators and reputation ([#53](https://github.com/ma-za-kpe/stood/issues/53)) ([a0395c5](https://github.com/ma-za-kpe/stood/commit/a0395c59508e38a057f46be939a388efc18b4989))
+* **yard:** refused, reworked and paid judge path across Stood and Yard ([#47](https://github.com/ma-za-kpe/stood/issues/47)) ([70da339](https://github.com/ma-za-kpe/stood/commit/70da33904d04cd411045f61e242933223c10e0e7))
+* **yard:** role-filtered stream, step 9 key screen and planner contract suite ([#52](https://github.com/ma-za-kpe/stood/issues/52)) ([05a632d](https://github.com/ma-za-kpe/stood/commit/05a632d807fd20dedb098e2c97347610ae4dade0))
+* **yard:** test-key vault, step 9 intake, handover checklist and Render Blueprint ([#48](https://github.com/ma-za-kpe/stood/issues/48)) ([55e66bb](https://github.com/ma-za-kpe/stood/commit/55e66bb3b2c3c83613a06030fa91f1d53fd27770))
+
+
+### Fixes
+
+* **build:** give tests more time inside Render's image build ([#64](https://github.com/ma-za-kpe/stood/issues/64)) ([dd605db](https://github.com/ma-za-kpe/stood/commit/dd605db8edfca7d987bb68e322f713f14c5c60df))
+* **ci:** build yard-contracts before the Yard web app in the Pages site build ([#68](https://github.com/ma-za-kpe/stood/issues/68)) ([e484627](https://github.com/ma-za-kpe/stood/commit/e4846270f42d38a05ba99fd97532482ded105044))
+* **deploy:** Render build fixes and Starter reconciler ([#60](https://github.com/ma-za-kpe/stood/issues/60)) ([9704b43](https://github.com/ma-za-kpe/stood/commit/9704b436af8db56c7ee4cad35fe79255a829c49f))
+* **deploy:** start the reconciler with an explicit node runtime ([#67](https://github.com/ma-za-kpe/stood/issues/67)) ([95e76c1](https://github.com/ma-za-kpe/stood/commit/95e76c10862619367f0fc49f400c70a30716ec6f))
+
+
+### Documentation
+
+* **paypal:** how we use the PayPal AI Toolkit and sandbox MCP ([#56](https://github.com/ma-za-kpe/stood/issues/56)) ([7344a85](https://github.com/ma-za-kpe/stood/commit/7344a859c5c13e1dbeb5bf16ae43abf63c3500f2))
+* **paypal:** record how the AI Toolkit and sandbox MCP server are used ([defd64d](https://github.com/ma-za-kpe/stood/commit/defd64d8467b18358d22b0fdec9b73b171ce5cc8))
+* **paypal:** record how the AI Toolkit and sandbox MCP server are used ([7344a85](https://github.com/ma-za-kpe/stood/commit/7344a859c5c13e1dbeb5bf16ae43abf63c3500f2))
+
 ## [0.3.0](https://github.com/ma-za-kpe/stood/compare/v0.2.0...v0.3.0) (2026-10-05)
 
 
