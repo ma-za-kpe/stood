@@ -1,0 +1,18 @@
+#!/bin/sh
+# Fails when services/api/src/adapters/db-postgres/schema.ts and the Drizzle migrations disagree:
+# `drizzle-kit generate` must have nothing to write. Anything it writes is removed again.
+set -eu
+cd "$(dirname "$0")/.."
+exec docker compose run --rm -T app sh -c '
+  set -eu
+  dir=services/api/drizzle
+  find "$dir" -type f | sort >/tmp/before
+  cp "$dir/meta/_journal.json" /tmp/journal.json
+  pnpm exec drizzle-kit generate --name schema-drift-check >/tmp/generate.log 2>&1
+  find "$dir" -type f | sort >/tmp/after
+  if cmp -s /tmp/before /tmp/after; then echo "Migrations match the schema."; exit 0; fi
+  comm -13 /tmp/before /tmp/after | while read -r added; do rm -f "$added"; echo "would add: $added" >&2; done
+  cp /tmp/journal.json "$dir/meta/_journal.json"
+  echo "Schema drift: write the migration and its snapshot in the same change as schema.ts." >&2
+  exit 1
+'
