@@ -17,7 +17,7 @@ const item = z.object({
   title: text,
   slug: z.string().regex(/^[A-Za-z0-9_-]{1,200}$/),
   problem_statement: text,
-  target_customer: text,
+  target_customer: text.nullable(),
   catalog_decision: z.literal('rejected'),
   catalog_caveat: text.nullable(),
   catalog_reason_codes: z.array(text).max(32),

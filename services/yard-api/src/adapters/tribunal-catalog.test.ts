@@ -85,9 +85,13 @@ it('backs off failed refreshes so unavailable research cannot exhaust the public
 
 it('retains explicit null caveats from the live rejected-only feed without inventing an endorsement', async () => {
   const catalog = new TribunalCatalog(async () =>
-    Response.json({ ...payload, items: [{ ...payload.items[0], catalog_caveat: null, catalog_reason_codes: [] }] }),
+    Response.json({
+      ...payload,
+      items: [{ ...payload.items[0], catalog_caveat: null, catalog_reason_codes: [], target_customer: null }],
+    }),
   );
   const value = await catalog.list();
   expect(value.items[0]?.catalog_decision).toBe('rejected');
   expect(value.items[0]?.catalog_caveat).toBeNull();
+  expect(value.items[0]?.target_customer).toBeNull();
 });
