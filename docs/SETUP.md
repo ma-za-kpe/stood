@@ -90,7 +90,7 @@ Yard reads and writes the buyer's repository through a GitHub App, never a perso
    - Installable **only on this account**. Making it public is a later decision (buyers connecting their own repositories).
 2. Note the **App ID** → `GITHUB_APP_ID` in `.env`.
 3. **Generate a private key**, then move it out of Downloads: `mv ~/Downloads/*.private-key.pem ~/.config/stood/yard-github-app.pem && chmod 600 ~/.config/stood/yard-github-app.pem`. `GITHUB_APP_PRIVATE_KEY_PATH` points to it. Downloads are readable by every user on the machine.
-4. **Install App → Only select repositories** → a throwaway test repository, never `stood` itself. The first install accidentally chose **All repositories**, which gave write access to every repository on the account; check the selection after installing.
+4. **Install App → Only select repositories** → [`ma-za-kpe/yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox), a public throwaway repository whose README explains why it exists. Never `stood` itself. The first install accidentally chose **All repositories**, which gave write access to every repository on the account; check the selection after installing.
 5. Check without printing secrets: sign a 9-minute JWT with the private key (`iss` = App ID, RS256), call `GET /app` (expect slug `yard-builder` and exactly the three permissions), then `POST /app/installations/{id}/access_tokens` and `GET /installation/repositories` (expect only the test repository). The installation token expires within an hour and is never stored.
 
 The live adapter that uses the app (one-repository tokens, `wo/*` branches, pull requests and attack cases) is T-0188 in batch C3.
@@ -116,7 +116,7 @@ The live adapter that uses the app (one-repository tokens, `wo/*` branches, pull
 | Second image build failed: two Yard HTTP tests timed out | Render's builder is slower than CI and built both services at once | The image build sets `STOOD_TEST_TIMEOUT_MS=30000`; CI keeps 5 s (#64) |
 | Pooled database URL | Neon's default connection string uses the pooler | Switched to the direct URL |
 | Database in Ohio, services in Frankfurt | Neon project created in us-east-2 | New Neon project in eu-central-1, migrated again |
-| GitHub App installed on **all** repositories | "All repositories" was chosen at install time | Narrowed to one test repository; the check in section 7 confirms it |
+| GitHub App installed on **all** repositories | "All repositories" was chosen at install time | Narrowed to `yard-sandbox`; the check in section 7 confirmed exactly one reachable repository |
 | `stood-reconciler` exited with status 128 at start | Render's `dockerCommand` replaces the image ENTRYPOINT, so it tried to execute the `.js` file directly | `dockerCommand: /nodejs/bin/node dist/reconcile-cli.js` (#67) |
 | GitHub App private key in `~/Downloads` | Browsers save there readable by every user | Moved to `~/.config/stood/` with mode 600 |
 | Claude could not read `~/Documents`; `brew install` failed with `getcwd` | macOS privacy (Files and Folders) blocked the terminal app | Granted Documents access; ran installs from `~` |
