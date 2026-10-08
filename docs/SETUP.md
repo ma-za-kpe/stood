@@ -123,6 +123,12 @@ Only `DATABASE_URL` from `.env` reaches the container, and the connection must p
 
 **Test runs are not findings (T-0259).** `scripts/dev sandbox-run` and the nightly job capture real sandbox money outside Stood's ledger on purpose. Their PayPal `invoice_id` is `sandbox-<scenario>-<time>-settle`; the audit sets exactly those aside. Stood's own operation keys always contain `:`, so a real payment can never be mistaken for a test run.
 
+### Signing and funding, and when payments turn on (T-0260, T-0261)
+
+A platform asks Stood to sign a saved-PayPal mandate (`POST /v1/allowances/{id}/mandate`) and later to fund a tranche (`POST /v1/tranches/{id}/funding`). These routes only record the request. `stood-reconciler` makes every PayPal call on its next tick (every 15 seconds): it creates the setup token, waits for the buyer to approve saving PayPal once, saves the token sealed, then places later holds with no buyer present. Read progress with the matching `GET` routes; they show status, the approval link and the hold's expiry, never tokens or PayPal ids.
+
+`/health` reports `"paymentReady": true` only when all three hold: every payment key is set, the real PayPal sandbox (not the simulator) is connected and ready, and signing is wired (`VAULT_TOKEN_KEYS` set on both Stood services). Otherwise its `sentence` names what is missing. The public pages read this and say "sandbox payments on" or what is off. It is always the PayPal **sandbox**: no real money.
+
 ### Saved PayPal tokens are sealed (T-0227)
 
 A saved PayPal token is a standing permission to charge the buyer, so Stood never stores it in plain text. `mandate_signatures.token_id` holds it sealed with AES-256-GCM, bound to its own mandate row (migration 0021), and the append-only history only ever sees the sealed value. A SHA-256 fingerprint keeps one token to one mandate. Keys live in `VAULT_TOKEN_KEYS` (`v2:<key>,v1:<key>`, newest first; every listed key can open, only the newest seals):

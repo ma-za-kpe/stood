@@ -36,3 +36,47 @@ describe('Payment readiness', () => {
     expect((await app.request('/v1/demo/scenarios/good', { method: 'POST' })).status).toBe(200);
   });
 });
+
+// T-0261: payments are reported on only when they can really run on the sandbox: every key set, the real PayPal
+// sandbox connected and ready, and saved-account signing and funding wired. Nothing else turns the flag on.
+it('earns paymentReady from keys, a ready real sandbox and wired signing, and names what is missing', async () => {
+  const keys = Object.fromEntries(
+    [
+      'PAYPAL_CLIENT_ID',
+      'PAYPAL_CLIENT_SECRET',
+      'PAYPAL_WEBHOOK_ID',
+      'STOOD_API_KEY',
+      'STOOD_HMAC_SECRET',
+      'STOOD_WEBHOOK_SECRET',
+    ].map((k) => [k, 'set']),
+  );
+  const paypal = (over: object = {}) => [{ provider: 'paypal', mode: 'live', simulated: false, ready: true, ...over }];
+  const signing = { mode: 'live' as const, mandates: {} as never, funding: {} as never };
+  const api = { store: {} as never, platformId: 'p', key: 'k', secret: 's', clock: () => 1 };
+  const health = async (config: object) =>
+    (
+      await createApp({
+        appEnv: 'demo',
+        paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
+        demoMode: true,
+        paymentKeys: keys,
+        // biome-ignore lint/suspicious/noExplicitAny: provider health fixtures
+        providerHealth: () => paypal() as any,
+        api: { ...api, signing },
+        ...config,
+      }).request('/health')
+    ).json();
+  expect(await health({})).toMatchObject({
+    paymentReady: true,
+    sentence:
+      'Sandbox payments are on: PayPal sandbox connected, saved-account signing and funding wired. No real money.',
+  });
+  expect(await health({ api })).toMatchObject({
+    paymentReady: false,
+    sentence: 'Payments are off: saved-account signing and funding need VAULT_TOKEN_KEYS. See docs/SETUP.md.',
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: provider health fixtures
+  for (const over of [{ ready: false }, { simulated: true }, { mode: 'sim' }])
+    expect(await health({ providerHealth: () => paypal(over) as any })).toMatchObject({ paymentReady: false });
+  expect(await health({ paymentKeys: { ...keys, PAYPAL_WEBHOOK_ID: '' } })).toMatchObject({ paymentReady: false });
+});

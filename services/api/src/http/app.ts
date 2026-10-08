@@ -205,15 +205,33 @@ export function createApp(config: AppConfig) {
       return c.json({ code: 'attention_unavailable' }, 503);
     }
   });
+  // T-0261: earned, never assumed. Every key, the real sandbox connected and ready, and signing wired.
+  const readiness = () => {
+    const paypal = config.providerHealth?.().find((p) => p.provider === 'paypal');
+    const keysSet = !missingPaymentKeys(config.paymentKeys).length;
+    const sandbox = paypal?.mode === 'live' && paypal.simulated === false && paypal.ready === true;
+    if (keysSet && sandbox && config.api?.signing)
+      return {
+        ready: true,
+        sentence:
+          'Sandbox payments are on: PayPal sandbox connected, saved-account signing and funding wired. No real money.',
+      };
+    if (keysSet && sandbox)
+      return {
+        ready: false,
+        sentence: 'Payments are off: saved-account signing and funding need VAULT_TOKEN_KEYS. See docs/SETUP.md.',
+      };
+    return { ready: false, sentence: paymentGuidance(config.paymentKeys).detail };
+  };
   app.get('/health', (c) =>
     c.json({
       status: 'ok',
-      paymentReady: false,
+      paymentReady: readiness().ready,
       environment: config.appEnv,
       clock: { mode: config.clockMode ?? 'system', now: c.get('now') },
       providers: config.providerHealth?.() ?? [],
       missing: missingPaymentKeys(config.paymentKeys),
-      sentence: paymentGuidance(config.paymentKeys).detail,
+      sentence: readiness().sentence,
     }),
   );
   if (config.api) {
