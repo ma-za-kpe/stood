@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { AuditFinding } from '../../application/reconciliation-audit.js';
 import * as schema from './schema.js';
@@ -30,8 +30,49 @@ export class PostgresReconciliationFindings {
         })
         .onConflictDoUpdate({
           target: t.id,
-          set: { lastSeenAt: sql`clock_timestamp()`, owner, status: 'OPEN', resolvedAt: null },
+          // Reopen what the audit auto-resolved; a person's resolution (resolved_by set) stands.
+          set: {
+            lastSeenAt: sql`clock_timestamp()`,
+            owner,
+            status: sql`CASE WHEN ${t.resolvedBy} IS NULL THEN 'OPEN' ELSE ${t.status} END`,
+            resolvedAt: sql`CASE WHEN ${t.resolvedBy} IS NULL THEN NULL ELSE ${t.resolvedAt} END`,
+          },
         });
+  }
+
+  async open() {
+    const t = schema.reconciliationFindings;
+    return this.db
+      .select({
+        id: t.id,
+        kind: t.kind,
+        trancheId: t.trancheId,
+        providerId: t.providerId,
+        operationKey: t.operationKey,
+        owner: t.owner,
+        openedAt: t.openedAt,
+      })
+      .from(t)
+      .where(eq(t.status, 'OPEN'))
+      .orderBy(asc(t.openedAt));
+  }
+
+  // T-0257: a person closes a finding for good, with their name and the reason.
+  async resolveByPerson(id: string, by: string, note: string): Promise<void> {
+    if (!by.trim()) throw new Error('A resolution needs the name of the person resolving it');
+    if (!note.trim()) throw new Error('A resolution needs a reason');
+    const t = schema.reconciliationFindings;
+    const done = await this.db
+      .update(t)
+      .set({
+        status: 'RESOLVED',
+        resolvedAt: sql`clock_timestamp()`,
+        resolvedBy: by.trim(),
+        resolutionNote: note.trim(),
+      })
+      .where(and(eq(t.id, id), eq(t.status, 'OPEN')))
+      .returning({ id: t.id });
+    if (!done.length) throw new Error('No open finding with that id');
   }
 
   // Resolve open findings about captures this audit re-checked that are no longer findings.

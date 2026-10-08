@@ -99,6 +99,17 @@ What `stood-api` does with each delivery (T-0033): it asks PayPal's `verify-webh
 
 `.github/workflows/sandbox-nightly.yml` runs every night at 03:17 UTC (and on demand): a hold from the saved test buyer is released (captured) and another refused (voided), with no human approval, then `tools/sandbox-nightly/verify.py` checks the outcomes and confirms them with the independent witness. Recordings are kept as a 30-day artifact, never committed. Nothing is left open. It needs four **GitHub Actions secrets**, sandbox values only: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `STOOD_SANDBOX_PAYEE_ID` and `PAYPAL_SANDBOX_VAULT_TOKEN_ID` (from `scripts/dev sandbox-run vault-setup`). Until they exist the job skips with a notice.
 
+### Reconciliation findings (T-0155, T-0257)
+
+Every hour `stood-reconciler` compares the last 30 days of PayPal payment captures (Transaction Search, settled for 3 hours) with Stood's ledger and records each mismatch in `reconciliation_findings` (migrations 0018 and 0019). Its log says `Audit: N captures checked, M findings open.` A finding the audit no longer sees closes itself. One that is explained (for example a capture made by an operator tool, outside Stood) is closed by a person, with a name and a reason, and stays closed:
+
+```bash
+scripts/dev findings list
+scripts/dev findings resolve finding_… --by "<your name>" --note "<why this is not a problem>"
+```
+
+Only `DATABASE_URL` from `.env` reaches the container, and the connection must pass the same TLS policy as production.
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.

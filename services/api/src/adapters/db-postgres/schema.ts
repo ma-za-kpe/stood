@@ -413,8 +413,15 @@ export const reconciliationFindings = pgTable(
       .notNull()
       .default(sql`clock_timestamp()`),
     resolvedAt: timestamp('resolved_at', { withTimezone: true, mode: 'string' }),
+    // T-0257: a person's resolution is permanent and needs a reason; the audit never reopens it.
+    resolvedBy: text('resolved_by'),
+    resolutionNote: text('resolution_note'),
   },
   (t) => [
+    check(
+      'finding_person_resolution_valid',
+      sql`${t.resolvedBy} IS NULL OR (length(trim(${t.resolvedBy})) > 0 AND length(trim(coalesce(${t.resolutionNote}, ''))) > 0 AND ${t.status} = 'RESOLVED')`,
+    ),
     check(
       'finding_kind_valid',
       sql`${t.kind} IN ('CAPTURE_WITHOUT_RELEASE', 'RELEASE_WITHOUT_CAPTURE', 'AMOUNT_MISMATCH', 'DUPLICATE_CAPTURE')`,
