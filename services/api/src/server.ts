@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { PostgresCommitPackages } from './adapters/db-postgres/commit-packages.js';
 import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js';
+import { PostgresOperationsAttention } from './adapters/db-postgres/operations-attention.js';
 import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import { PostgresProviderEvents } from './adapters/db-postgres/provider-events.js';
 import * as schema from './adapters/db-postgres/schema.js';
@@ -29,6 +30,7 @@ const providerEvents = pool
   : undefined;
 const app = createApp({
   ...(providerEvents ? { providerEvents } : {}),
+  ...(pool ? { attention: new PostgresOperationsAttention(drizzle(pool, { schema })) } : {}),
   ...(pool && signedApi
     ? {
         api: {
