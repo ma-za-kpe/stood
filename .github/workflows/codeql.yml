@@ -13,6 +13,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   analyze:
+    # Release PRs only change CHANGELOG and versions, already analysed on the way in.
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
