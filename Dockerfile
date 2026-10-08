@@ -17,6 +17,8 @@ CMD ["pnpm", "test"]
 FROM dev AS build
 # One store for install, the release test and the release itself: `pnpm store path` must agree with them.
 ENV npm_config_store_dir=/workspace/.pnpm-store
+# Render's builder is slower than CI and builds both services at once; give each test more time.
+ENV STOOD_TEST_TIMEOUT_MS=30000
 COPY --chown=node:node . .
 RUN pnpm install --frozen-lockfile && pnpm validate
 RUN pnpm --filter @stood/api deploy --prod --offline /workspace/release
