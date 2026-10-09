@@ -257,13 +257,8 @@ export function TribunalImportPanel({
 }
 
 const regions = new Intl.DisplayNames(['en'], { type: 'region' });
-const region = (code: string) => {
-  try {
-    return regions.of(code) ?? code;
-  } catch {
-    return code;
-  }
-};
+// The contract admits only two-letter ISO codes, which always have a display name.
+const region = (code: string) => String(regions.of(code));
 const label = (slug: string) => {
   const words = slug.replaceAll('-', ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
