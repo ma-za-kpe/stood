@@ -140,6 +140,15 @@ export class GrokPlannerModel implements PlannerModel {
 }
 
 // Only the product description reaches the model: no sign-off name or email, budget, repository or deadline.
+// Research imported from StartupTribunal, as Yard's import writes it. Only the catalog's own origin counts.
+const RESEARCH =
+  /Research by StartupTribunal: (https:\/\/startuptribunal\.com\/catalog\/[A-Za-z0-9_-]{1,200})\nTribunal decision: ([a-z]{1,20})\. ?([^\n]{0,1500})/;
+function research(intake: PlannerIntake) {
+  const m = RESEARCH.exec(intake.description);
+  return m
+    ? { source: 'StartupTribunal', url: m[1] as string, decision: m[2] as string, caveat: (m[3] ?? '').trim() }
+    : null;
+}
 function brief(intake: PlannerIntake, revision?: Revision): string {
   const context = intake.context ? completeIntakeChecked(JSON.parse(intake.context), 0) : undefined;
   const data = {
@@ -157,6 +166,7 @@ function brief(intake: PlannerIntake, revision?: Revision): string {
   };
   return [
     `<untrusted_intake>${JSON.stringify(data)}</untrusted_intake>`,
+    ...(research(intake) ? [`<untrusted_research>${JSON.stringify(research(intake))}</untrusted_research>`] : []),
     ...(revision ? [`<untrusted_feedback>${JSON.stringify(revision.feedback)}</untrusted_feedback>`] : []),
     'Draft the blueprint.',
   ].join('\n');
@@ -198,7 +208,7 @@ function priced(proposal: Proposal, intake: PlannerIntake) {
   return {
     summary: proposal.summary,
     requirements: proposal.requirements,
-    risks: proposal.risks,
+    risks: withResearch(intake, proposal.risks),
     milestones: kept.map((m, i) => ({
       id: m.id,
       name: m.name,
@@ -207,6 +217,14 @@ function priced(proposal: Proposal, intake: PlannerIntake) {
       tests: m.tests,
     })),
   };
+}
+
+// The source's verdict always reaches the buyer's plan, first, whatever the model wrote.
+function withResearch(intake: PlannerIntake, risks: unknown): unknown {
+  const r = research(intake);
+  if (!r || !Array.isArray(risks)) return risks;
+  const note = `Source research (${r.source}, ${r.url}) was ${r.decision} by its tribunal${r.caveat ? `: ${r.caveat}` : '.'} The buyer reviews it before any build.`;
+  return [note, ...risks].slice(0, 30);
 }
 
 // In-memory daily guard (UTC days) for tests and single-process runs; hosted Yard uses the Postgres guard.
