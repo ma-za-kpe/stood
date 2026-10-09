@@ -131,6 +131,12 @@ repos:
         entry: scripts/check-docker
         pass_filenames: false
         files: (^Dockerfile$|^tools/site/Dockerfile\.test$|^scripts/check-docker$)
+      - id: hooks-installed
+        name: pre-commit, commit-msg and pre-push hooks are installed (T-0286)
+        language: system
+        entry: scripts/check-hooks-installed
+        pass_filenames: false
+        always_run: true
       - id: ci-local
         name: every CI job, locally, before anything is pushed (T-0286; about 25 minutes)
         language: system

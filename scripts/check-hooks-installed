@@ -1,0 +1,13 @@
+#!/bin/sh
+# T-0286: the pre-push hook runs the whole CI locally, so a clone without it would push unchecked (it happened:
+# this repository's own clone predated pre-push). Fail any commit until all three hooks are installed. CI has no
+# hooks directory of its own and runs the jobs directly, so it skips this check.
+set -eu
+[ -n "${CI:-}" ] && exit 0
+hooks=$(git rev-parse --git-common-dir)/hooks
+for hook in pre-commit commit-msg pre-push; do
+  if [ ! -x "$hooks/$hook" ]; then
+    echo "The $hook hook is not installed. Run: pre-commit install" >&2
+    exit 1
+  fi
+done
