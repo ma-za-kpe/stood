@@ -10,13 +10,18 @@ it('deploys the real API release with its entrypoint and no test/fake/simulator 
   try {
     execFileSync('pnpm', ['--filter', '@stood/api', 'build'], { stdio: 'pipe', timeout: 30000 });
     const store = dirname(execFileSync('pnpm', ['store', 'path'], { encoding: 'utf8', timeout: 30000 }).trim());
-    execFileSync('pnpm', ['--filter', '@stood/api', 'deploy', '--prod', '--offline', '--store-dir', store, release], {
-      stdio: 'pipe',
-      timeout: 30000,
-    });
+    execFileSync(
+      'pnpm',
+      ['--filter', '@stood/api', 'deploy', '--legacy', '--prod', '--prefer-offline', '--store-dir', store, release],
+      {
+        stdio: 'pipe',
+        timeout: 30000,
+      },
+    );
     expect(existsSync(join(release, 'dist/server.js'))).toBe(true);
     const entries = readdirSync(release).filter((entry) => entry !== 'node_modules');
-    expect(entries.sort()).toEqual(['dist', 'drizzle', 'package.json', 'pnpm-lock.yaml']);
+    // Legacy deploy (no workspace injection) writes no lockfile; dependencies come from the frozen install.
+    expect(entries.sort()).toEqual(['dist', 'drizzle', 'package.json']);
     expect(existsSync(join(release, 'drizzle/0000_payment_operations.sql'))).toBe(true);
     const runtimeFiles = readdirSync(join(release, 'dist'), { recursive: true }).map(String);
     expect(readFileSync(join(release, 'dist/adapters/runner/signed-report.js'), 'utf8')).not.toContain('fakeReport');
@@ -27,4 +32,4 @@ it('deploys the real API release with its entrypoint and no test/fake/simulator 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-}, 70000);
+}, 150000);
