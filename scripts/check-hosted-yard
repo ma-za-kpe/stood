@@ -16,7 +16,7 @@ docker build -f tools/site/Dockerfile.test -t stood-site-browser .
 docker network create "$project" >/dev/null
 docker run -d --name "$project-db" --network "$project" --network-alias db \
   -e POSTGRES_USER=stood -e POSTGRES_PASSWORD=stood_hosted_test_only -e POSTGRES_DB=stood \
-  pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d >/dev/null
+  mirror.gcr.io/pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d >/dev/null
 attempt=0
 until docker exec "$project-db" pg_isready -U stood -d stood >/dev/null 2>&1; do
   attempt=$((attempt + 1))
