@@ -58,7 +58,9 @@ export class KernelSandboxApprover {
         }
         await page.click(APPROVE);
         // Approved once PayPal hands the buyer back to the merchant's return URL.
-        await page.waitForURL((u) => !u.hostname.endsWith('paypal.com'), { timeout: 60_000 });
+        await page.waitForURL((u) => u.hostname !== 'paypal.com' && !u.hostname.endsWith('.paypal.com'), {
+          timeout: 60_000,
+        });
       } finally {
         await browser.close();
       }

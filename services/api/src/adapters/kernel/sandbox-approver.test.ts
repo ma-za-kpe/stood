@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type ApprovalPage, KernelSandboxApprover } from './sandbox-approver.js';
 
-const link = 'https://www.sandbox.paypal.com/checkoutnow?token=5O190127TN364715T';
+const link = 'https://www.sandbox.paypal.com/checkoutnow?token=EC-TEST-TOKEN';
 function harness(over: { returnTo?: string; loginShown?: boolean } = {}) {
   const calls: string[] = [];
   let url = '';
@@ -86,6 +86,8 @@ describe('KernelSandboxApprover', () => {
       expect(h.kernel).toEqual([]);
     }
     const stuck = harness({ returnTo: 'https://www.sandbox.paypal.com/still-here' });
+    const lookalike = harness({ returnTo: 'https://notpaypal.com/return' });
+    await lookalike.approver.approve(link);
     await expect(stuck.approver.approve(link)).rejects.toThrow();
     expect(stuck.calls.at(-1)).toBe('close');
     expect(stuck.kernel.at(-1)).toBe('DELETE /browsers/ses_1 Bearer kernel-key');

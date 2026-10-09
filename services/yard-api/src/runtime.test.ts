@@ -89,7 +89,7 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const planner = {
     ...hosted,
-    GROK_PLANNER_API_KEY: 'xai-not-a-real-key-0000',
+    GROK_PLANNER_API_KEY: 'xai-test-key',
     GITHUB_APP_ID: '123456',
     GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from(privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
     GITHUB_APP_INSTALLATION_ID: '987654',
@@ -133,7 +133,7 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
     const env = { ...planner, ...change };
     const runtime = yardRuntime(env);
     expect(runtime.notes).toContain(note);
-    expect(JSON.stringify(runtime.notes)).not.toMatch(/xai-not|987654|owner\/sandbox|lots/);
+    expect(JSON.stringify(runtime.notes)).not.toMatch(/xai-test|987654|owner\/sandbox|lots/);
     expect(await capabilities(env)).toMatchObject({ foreman: false });
     await runtime.stop();
   }
