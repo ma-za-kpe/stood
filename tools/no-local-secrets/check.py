@@ -31,6 +31,9 @@ PUBLIC = {
     "VERCEL_PROJECT_ID",
     "S3_BUCKET",
     "S3_PREFIX",
+    # C4: the evidence bucket's name and endpoint locate it; its scoped key pair stays secret.
+    "STOOD_EVIDENCE_S3_BUCKET",
+    "STOOD_EVIDENCE_S3_ENDPOINT",
 }
 MIN_LENGTH = 12
 
