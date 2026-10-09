@@ -229,9 +229,9 @@ Hooks are pinned to commit SHAs (tag in a `# frozen:` comment) or to container i
 | commit | Code style | **Biome** (pinned image; JS / TS / CSS / JSON), **shellcheck** (shell scripts), **ruff** check and format (Python tools), **hadolint** (Dockerfile) | Unformatted code or lint errors |
 | commit | Product voice | **banned-words** in user-facing copy (`site/`, `apps/`): `escrow`, `verified`, `fraud`, "Something went wrong" | Any hit |
 | commit-msg | Commit message | **Conventional Commits** (strict types) + **DCO `Signed-off-by`** | Non-conforming message or missing sign-off |
-| **push** | Product gate | **`product-validation`** in Docker: Biome, `tsc --strict`, **dependency-cruiser money boundary**, all Vitest suites with coverage floors, build, real-Postgres tests | Any failure. Minutes long, so it runs before push rather than at every commit |
+| **push** | Every CI job, locally | **`ci-local`** ([`scripts/ci-local`](../scripts/ci-local), T-0286): a clean no-cache app image, install, every commit hook on every file, the Docker product gate (Biome, `tsc --strict`, **dependency-cruiser money boundary**, all Vitest suites with coverage floors, build, real-Postgres tests), the site browser check, the mock network and the hosted Yard production-image journey. Any remote Docker Hub pull fails it | Any failure. About 25 minutes, so it runs before push rather than at every commit. CI must never be the first place a failure shows up |
 
-**CI ([`ci.yml`](../.github/workflows/ci.yml))** runs both stages on every pull request (`pre-commit run --all-files`, then `--hook-stage pre-push`), plus `pr-title` (Conventional), `dco` (every non-bot commit signed off), the mock network and the site browser checks. Only green CI merges.
+**CI ([`ci.yml`](../.github/workflows/ci.yml))** runs the commit stage on every pull request (`pre-commit run --all-files`), the pre-push hooks except `ci-local`, then `scripts/check-product`, plus `pr-title` (Conventional), `dco` (every non-bot commit signed off), the mock network and the site browser checks. Only green CI merges.
 
 Still planned: `pnpm audit` as a gate, an OpenAPI breaking-change diff (after T-0053) and mutation testing on the decision module (§4).
 
