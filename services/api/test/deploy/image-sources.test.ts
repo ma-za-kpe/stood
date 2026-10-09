@@ -22,6 +22,9 @@ it('pulls every container image from a named registry, pinned by digest, never a
   expect(images.length).toBeGreaterThan(8);
   const hubOnly = images.filter((i) => !/^[^:]+: [a-z0-9-]+(\.[a-z0-9-]+)+\//.test(i));
   expect(hubOnly).toEqual([]);
+  // A '# syntax=' directive makes BuildKit fetch a parser image from Docker Hub before building (504 on 2026-10-09);
+  // the built-in parser handles everything these Dockerfiles use.
+  for (const f of files) expect(readFileSync(f, 'utf8'), f).not.toMatch(/^#\s*syntax=/m);
   for (const f of files)
     for (const line of readFileSync(f, 'utf8').split('\n'))
       if (/^FROM\s+(?!\w+\s*$)/.test(line) && !/^FROM\s+\w+\s+AS\b/i.test(line))

@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # T-0214: hosted Yard API (Render, Starter). Build from the repository root:
 #   docker build -f services/yard-api/Dockerfile .
 # CI has already run every test before Render deploys (autoDeployTrigger: checksPass), so this build only compiles.
