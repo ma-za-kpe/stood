@@ -22,6 +22,14 @@ step() {
   fi
 }
 echo "Running every CI job locally (log: $log)"
+# The product gate's Postgres binds 127.0.0.1:5432. Another checkout's database there fails the run after minutes,
+# so say so up front, with the container to stop.
+project=$(basename "$PWD" | tr -cd 'a-z0-9_-')
+holder=$(docker ps --format '{{.Names}} {{.Ports}}' | grep '127.0.0.1:5432->' | awk '{print $1}' | grep -vx "${project}-db-1" || true)
+if [ -n "$holder" ]; then
+  echo "FAIL  port 5432 is held by $holder (another checkout). Stop it first: docker stop $holder"
+  exit 1
+fi
 # A clean image build, as CI has no cache. Any remote Docker Hub pull fails the run (rate limits, outages).
 step build docker compose build --no-cache --progress=plain app
 step install docker compose run --rm -T app pnpm install --frozen-lockfile
