@@ -826,14 +826,14 @@ T-0272 evidence: README, docs indices, SETUP, HANDOFF, USAGE and Y12 now link th
 
 ## C2 UI instrumentation audit (owner requirement, 2026-10-08)
 
-- `[~]` T-0273 Verify actual hosted discovery/Board contents and audit full app coverage, browser instrumentation and state-transition evidence. Keep #75/C2 open.
-- `[~]` T-0274 Correct hosted Board/empty-room copy and prove it with production-image browser assertions.
+- `[x]` T-0273 Verify actual hosted discovery/Board contents and audit full app coverage, browser instrumentation and state-transition evidence. Keep #75/C2 open. Done 2026-10-09: the audit led to T-0275 (98% enforced) and the retired merge recorded in T17.
+- `[x]` T-0274 Correct hosted Board/empty-room copy and prove it with production-image browser assertions. Done 2026-10-09: the production-image journey asserts LIVE BOARD; component tests assert the hosted empty-room copy.
 - `[x]` T-0275 98% across the Yard web app, enforced: statements 98.88%, branches 98.06%, functions 100%, lines 99.78% over every `apps/yard-web/src` file (unexecuted screens count as zero), measured by one instrumentation (Vitest V8 over unit and jsdom component tests, Testing Library; dev dependencies jsdom 30.1.1, @testing-library/react 16.3.3, user-event 14.6.7, dom 10.4.2, all published at least two weeks earlier). `pnpm test:ui` is part of `pnpm validate`, so pre-push and CI require it. The previous unit-plus-browser merge double-counted statements (Istanbul merges by location; the two builds place statements differently), so it is retired with the reason recorded in T17; browser journeys remain behaviour gates. Found and fixed two real bugs (T-0280, T-0281). Evidence: 79 tests pass; numbers identical across three runs; thresholds unmodified.
 
-- `[~]` T-0276 Make idea discovery automatic and visible, with searchable clickable cards and focused detail review beside the own-project option; put Copy JSON import in secondary disclosure.
-- `[~]` T-0277 Sanitize owner/viewer/storage/credential metadata from copied research before validation; accept the owner-null Kenyan coffee report shape, preserve source veto and numeric quality, and report removal/error reasons without echoing secrets.
+- `[x]` T-0276 Make idea discovery automatic and visible, with searchable clickable cards and focused detail review beside the own-project option; put Copy JSON import in secondary disclosure. Done 2026-10-09: the production-image journey (desktop and mobile) asserts ideas load automatically, search, and the focused detail view.
+- `[x]` T-0277 Sanitize owner/viewer/storage/credential metadata from copied research before validation; accept the owner-null Kenyan coffee report shape, preserve source veto and numeric quality, and report removal/error reasons without echoing secrets. Done 2026-10-09: the production-image journey imports an owner_user_id: null report and shows the private-metadata notice; source veto and scores are preserved.
 
-- `[~]` T-0278 Smooth saved intake: auto-open owner-scoped links, show the project brief first, disclose optional detail fields, allow direct section navigation and partial-brief review while keeping complete-intake validation before actual planning. Verify autosave/reload and both viewport sizes.
+- `[x]` T-0278 Smooth saved intake: auto-open owner-scoped links, show the project brief first, disclose optional detail fields, allow direct section navigation and partial-brief review while keeping complete-intake validation before actual planning. Verify autosave/reload and both viewport sizes. Done 2026-10-09: the production-image journey opens saved links on the brief overview and returns there after edits; partial briefs can be reviewed.
 
 ## Owner decision: Postman deferred (2026-10-09)
 
