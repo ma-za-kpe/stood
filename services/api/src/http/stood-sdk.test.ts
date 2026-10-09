@@ -33,7 +33,11 @@ function contract() {
     allowance: vi.fn(async () => stored as typeof stored | null),
     tranche: vi.fn(async () => null),
   };
-  const packages = { submit: vi.fn(async () => item), get: vi.fn(async () => item as typeof item | null) };
+  const packages = {
+    submit: vi.fn(async () => item),
+    get: vi.fn(async () => item as typeof item | null),
+    latest: vi.fn(async () => item as typeof item | null),
+  };
   const app = createApp({
     appEnv: 'ci',
     paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
@@ -230,6 +234,11 @@ it('reads a held tranche through the public view and rejects malformed views (T-
     holdExpiresAt: new Date(at + 29 * 86400000).toISOString(),
     settlement: null,
     decision: null,
+    // T-0189: the facts a platform needs to act on this read alone.
+    amount: { minor: 120000, currency: 'USD' },
+    packageId: 'pkg_1',
+    resubmissionsLeft: 1,
+    provider: 'simulator',
   });
   f.store.tranche.mockResolvedValue(null);
   await expect(f.client.getTranche('trn_1')).rejects.toMatchObject({ code: 'NOT_FOUND' });

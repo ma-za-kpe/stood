@@ -40,6 +40,11 @@ export type TrancheView = Readonly<{
   holdExpiresAt: string | null;
   settlement: Readonly<{ effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string }> | null;
   decision: Readonly<{ outcome: 'RELEASE' | 'REFUSE' | 'WAIT'; namedField: string | null; reason: string }> | null;
+  // T-0189: enough to act on one fresh read: the amount, the package being judged and what is left.
+  amount: Readonly<{ minor: number; currency: string }>;
+  packageId: string | null;
+  resubmissionsLeft: number;
+  provider: 'simulator' | 'paypal-sandbox';
 }>;
 const STATES = [
   'PENDING',
@@ -121,7 +126,17 @@ function trancheView(v: unknown, trancheId: string): TrancheView {
       (!object(v.decision) ||
         !['RELEASE', 'REFUSE', 'WAIT'].includes(String(v.decision.outcome)) ||
         typeof v.decision.reason !== 'string' ||
-        (v.decision.namedField !== null && typeof v.decision.namedField !== 'string')))
+        (v.decision.namedField !== null && typeof v.decision.namedField !== 'string'))) ||
+    !object(v.amount) ||
+    !Number.isSafeInteger(v.amount.minor) ||
+    Number(v.amount.minor) <= 0 ||
+    typeof v.amount.currency !== 'string' ||
+    !/^[A-Z]{3}$/.test(v.amount.currency) ||
+    (v.package_id !== null && !id(v.package_id)) ||
+    !Number.isSafeInteger(v.resubmissions_left) ||
+    Number(v.resubmissions_left) < 0 ||
+    Number(v.resubmissions_left) > 6 ||
+    !['simulator', 'paypal-sandbox'].includes(String(v.provider))
   )
     throw new StoodClientError('INVALID_RESPONSE');
   const s = v.settlement as { effect: 'CAPTURE' | 'VOID' | 'EXPIRE'; reference: string } | null;
@@ -133,6 +148,13 @@ function trancheView(v: unknown, trancheId: string): TrancheView {
     holdExpiresAt: v.hold === null ? null : String((v.hold as { expires_at: string }).expires_at),
     settlement: s ? Object.freeze({ effect: s.effect, reference: s.reference }) : null,
     decision: d ? Object.freeze({ outcome: d.outcome, namedField: d.namedField, reason: d.reason }) : null,
+    amount: Object.freeze({
+      minor: Number((v.amount as { minor: number }).minor),
+      currency: String((v.amount as { currency: string }).currency),
+    }),
+    packageId: v.package_id === null ? null : String(v.package_id),
+    resubmissionsLeft: Number(v.resubmissions_left),
+    provider: v.provider as 'simulator' | 'paypal-sandbox',
   });
 }
 function packageView(v: unknown, trancheId: string): PackageView {

@@ -46,7 +46,11 @@ function fixture() {
     metadata: input,
     createdAt: new Date(now).toISOString(),
   };
-  const packages = { submit: vi.fn(async () => item), get: vi.fn(async () => item as typeof item | null) };
+  const packages = {
+    submit: vi.fn(async () => item),
+    get: vi.fn(async () => item as typeof item | null),
+    latest: vi.fn(async () => null),
+  };
   const store = { create: vi.fn(), allowance: vi.fn(), tranche: vi.fn() };
   return {
     packages,

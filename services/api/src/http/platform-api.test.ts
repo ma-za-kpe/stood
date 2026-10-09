@@ -194,7 +194,53 @@ describe('Signed platform API draft foundation', () => {
       settlement: null,
       pending: null,
       sentences: { payer: 'Your stage is waiting. Nothing was paid.' },
+      // T-0189: what a platform needs to act on a fresh read without trusting a notification.
+      package_id: null,
+      resubmissions_left: 2,
+      provider: 'simulator',
     });
+  });
+  it('names the latest package and the PayPal sandbox provider in the tranche view (T-0189)', async () => {
+    const store = {
+      create: vi.fn(),
+      allowance: vi.fn(),
+      tranche: vi.fn(async () => ({
+        trancheId: 'trn_fixture',
+        version: 0,
+        pending: null,
+        record: createTrancheRecord({
+          id: 'trn_fixture',
+          amount: draft.cap,
+          profileId: 'code.milestone@1',
+          maxResubmits: 0,
+        }),
+      })),
+    };
+    const latest = vi.fn(async () => ({ id: 'pkg_2' }));
+    const unused = { reserve: vi.fn(), load: vi.fn() };
+    const app = createApp({
+      appEnv: 'ci',
+      paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
+      demoMode: true,
+      api: {
+        store,
+        packages: { submit: vi.fn(), get: vi.fn(), latest },
+        signing: { mode: 'live', mandates: unused, funding: unused },
+        platformId: 'platform_a',
+        key,
+        secret,
+        clock: () => now,
+      } as never,
+    });
+    const response = await app.request('/v1/tranches/trn_fixture', {
+      headers: headers('', now, { path: '/v1/tranches/trn_fixture' }),
+    });
+    expect(await response.json()).toMatchObject({
+      package_id: 'pkg_2',
+      resubmissions_left: 1,
+      provider: 'paypal-sandbox',
+    });
+    expect(latest).toHaveBeenCalledWith('platform_a', 'trn_fixture');
   });
   it('maps durable conflicts and contains unavailable storage without disclosing exception text', async () => {
     const { app, store } = fixture();

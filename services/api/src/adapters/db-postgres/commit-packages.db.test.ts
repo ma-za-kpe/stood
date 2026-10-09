@@ -73,6 +73,18 @@ describe('Durable commit-package references without execution (T-0172)', () => {
       });
     expect((await pool.query('SELECT * FROM commit_packages WHERE tranche_id=$1', [id])).rows).toHaveLength(1);
   });
+  // T-0189: the tranche view names the package Stood is judging, the latest one submitted; never a foreign one.
+  it('reads the latest package for a tranche and nothing for another platform', async () => {
+    const id = await tranche();
+    expect(await store.latest('platform_a', id)).toBeNull();
+    await store.submit('platform_a', id, 'first', 'a'.repeat(64), metadata);
+    const second = await store.submit('platform_a', id, 'second', 'b'.repeat(64), {
+      ...metadata,
+      commit_sha: 'e'.repeat(40),
+    });
+    expect((await store.latest('platform_a', id))?.id).toBe(second.id);
+    expect(await store.latest('platform_b', id)).toBeNull();
+  });
   it('hides absent and foreign tranches and packages without disclosing metadata', async () => {
     const id = await tranche();
     const item = await store.submit('platform_a', id, 'own', 'a'.repeat(64), metadata);

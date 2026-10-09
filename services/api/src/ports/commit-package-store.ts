@@ -22,6 +22,8 @@ export interface CommitPackageStore {
     input: CommitPackageInput,
   ): Promise<StoredCommitPackage>;
   get(platformId: string, trancheId: string, id: string): Promise<StoredCommitPackage | null>;
+  // T-0189: the package Stood is judging now (the latest submitted for the tranche).
+  latest(platformId: string, trancheId: string): Promise<StoredCommitPackage | null>;
 }
 export class CommitPackageError extends Error {
   constructor(readonly code: 'NOT_FOUND' | 'CONFLICT' | 'INVALID_PACKAGE') {
