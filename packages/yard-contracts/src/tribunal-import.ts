@@ -62,28 +62,41 @@ export function tribunalImport(raw: string, selectedId?: string): TribunalImport
   } catch {
     throw invalid();
   }
-  const visit = (value: unknown, depth: number) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) throw invalid();
+  if ('is_public' in source && source.is_public === false) throw new ImportError('PRIVATE_REPORT');
+  let removed = false;
+  const sanitize = (value: unknown, depth: number): unknown => {
     if (depth > 20) throw invalid();
     if (typeof value === 'string') {
       if (value.normalize('NFKC').toLowerCase().includes('gs://')) throw invalid();
       if (/^\s*(?:javascript|data|file):/i.test(value)) throw invalid();
-    } else if (value && typeof value === 'object') {
-      for (const [key, item] of Object.entries(value)) {
-        if (['__proto__', 'constructor', 'prototype', 'owner_user_id'].includes(key) || key.endsWith('_gcs_url'))
-          throw invalid();
-        visit(item, depth + 1);
-      }
+      return value;
     }
+    if (Array.isArray(value)) return value.map((item) => sanitize(item, depth + 1));
+    if (value && typeof value === 'object') {
+      const clean: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(value)) {
+        const normalized = key
+          .normalize('NFKC')
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .toLowerCase();
+        if (['__proto__', 'constructor', 'prototype'].includes(normalized)) throw invalid();
+        if (
+          normalized === 'owner_user_id' ||
+          normalized.endsWith('_gcs_url') ||
+          ['client_secret', 'private_key', 'api_key', 'access_token', 'secret_access_key'].includes(normalized) ||
+          (depth === 0 && ['isunlocked', 'ispurchasable', 'viewer_user_id'].includes(normalized))
+        ) {
+          removed = true;
+          continue;
+        }
+        clean[key] = sanitize(item, depth + 1);
+      }
+      return clean;
+    }
+    return value;
   };
-  visit(source, 0);
-  if (
-    !source ||
-    typeof source !== 'object' ||
-    Array.isArray(source) ||
-    'isUnlocked' in source ||
-    'isPurchasable' in source
-  )
-    throw invalid();
+  source = sanitize(source, 0);
   assertPublicInput(source, 'IMPORT');
   const parsed = rowSchema.safeParse(source);
   if (!parsed.success) throw invalid();
@@ -92,7 +105,7 @@ export function tribunalImport(raw: string, selectedId?: string): TribunalImport
   if (row.ideas_generated.length > 1 && !selectedId) throw new ImportError('SELECT_IDEA');
   const selected = selectedId ? row.ideas_generated.find((i) => i.id === selectedId) : row.ideas_generated[0];
   if (!selected) throw invalid();
-  const warnings: string[] = [];
+  const warnings: string[] = removed ? ['Private metadata was removed from this research before review.'] : [];
   const excerpt = (value: string, limit: number) => {
     if (value.length <= limit) return value;
     const warning =

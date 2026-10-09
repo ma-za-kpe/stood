@@ -33,7 +33,14 @@ Run `scripts/dev yard-access-codes` once to add an unpredictable `accessCode` to
 
 Sessions use opaque Secure/HttpOnly/SameSite=Strict cookies and expire after eight hours. Sign-out removes the server session and private browser queries. Sessions live in this single service instance; a restart signs everyone out. Access-code guessing is limited; mutations require the configured page origin. Rotation replaces the code in YARD_OPERATORS and deploys, revoking the old code and sessions.
 
-The buyer can paste Startup Tribunal Copy JSON, review its source caveat and quality signals, then save a private intake. The public discovery feed is read from one fixed HTTPS endpoint, bounded to ten items/64 KiB and cached for ten minutes; rate-limit responses delay retries. Imported blueprints are bounded to 128 KiB and twenty levels, scanned with the existing credential guard, and never rendered as HTML or executed. Only a reviewed, bounded excerpt becomes intake; the full raw research stays in memory and is discarded when the panel closes. Planning remains disabled until the hosted Foreman is connected.
+Buyer sign-in opens the start screen with automatically loaded clickable research cards and a separate own-project option. Cards open focused review and can start a private summary brief. Full Startup Tribunal Copy JSON import is a secondary disclosure; known private metadata is stripped automatically with a notice, and source caveats/scores are preserved. Saved links open a brief overview; editing returns to the saved section. The public discovery feed is read from one fixed HTTPS endpoint, bounded to ten items/64 KiB and cached for ten minutes; rate-limit responses delay retries. Imported blueprints are bounded to 128 KiB and twenty levels, scanned with the existing credential guard, and never rendered as HTML or executed. Only a reviewed, bounded excerpt becomes intake; the full raw research stays in memory and is discarded when the panel closes. Planning remains disabled until the hosted Foreman is connected.
+
+### Deployed C2 entry points and evidence
+
+- [Hosted Yard](https://stood-yard-api.onrender.com/app/): owner-issued sign-in, Board, events, site log and private intake with StartupTribunal browse/import. [Yard health](https://stood-yard-api.onrender.com/health) reports intake on; Foreman and Yard payments remain off.
+- [Stood health](https://stood-api.onrender.com/health): earned `paymentReady` for saved-account signing and milestone funding on the real PayPal sandbox. No real money moves.
+- [Stood website](https://ma-za-kpe.github.io/stood/) and [Yard companion site](https://ma-za-kpe.github.io/stood/yard/): public status comes from those health checks; Yard links to the hosted app.
+- Shipped through [#104](https://github.com/ma-za-kpe/stood/pull/104) and [#105](https://github.com/ma-za-kpe/stood/pull/105); the [progress post (#108)](https://github.com/ma-za-kpe/stood/issues/108) includes actual desktop/mobile checks and screenshot instructions. [#99](https://github.com/ma-za-kpe/stood/issues/99) tracks copied-report sanitization after the initial import deployment. Hosted planning continues in [#76](https://github.com/ma-za-kpe/stood/issues/76); UX and 98% app coverage remain on [#75](https://github.com/ma-za-kpe/stood/issues/75).
 
 ## 2. Where the secrets live
 
@@ -203,3 +210,5 @@ The live adapter that uses the app (one-repository tokens, `wo/*` branches, pull
 5. Check `https://stood-api.onrender.com/health`, then add the PayPal webhook (section 6) and redeploy.
 6. GitHub App (section 7): create, key to `~/.config/stood/`, install on one test repository, check.
 7. Mint the MCP token for the PayPal AI Toolkit and run `/paypal:setup` ([T16](tech/T16-paypal-ai-toolkit.md)).
+
+Postman is deferred by the owner as of 2026-10-09. No upgrade or API key is needed for this phase or C2 closure. Existing Render health checks and GitHub Actions remain in use; see [the operational decision](tech/T10-deployment.md#postman-deferred).

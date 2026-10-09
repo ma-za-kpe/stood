@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright';
 
@@ -14,9 +14,28 @@ async function accessible(page, label) {
 
 mkdirSync('artifacts/mock-network', { recursive: true });
 const browser = await chromium.launch({ headless: true });
+const browserCoverage = [];
+async function capturePage(page) {
+  if (process.env.YARD_UI_COVERAGE !== '1') return;
+  for (const entry of (await page.coverage.stopJSCoverage()).filter((e) => /\/assets\/.*\.js$/.test(e.url))) {
+    const map = await page.context().request.get(`${entry.url}.map`);
+    assert.equal(map.status(), 200, 'connected app coverage requires source maps');
+    browserCoverage.push({ ...entry, sourceMap: await map.json() });
+  }
+}
+async function captureContext(context) {
+  for (const page of context.pages()) await capturePage(page);
+}
+async function navigate(page, url) {
+  await capturePage(page);
+  if (process.env.YARD_UI_COVERAGE === '1') await page.coverage.startJSCoverage({ resetOnNavigation: false });
+  return url ? page.goto(url) : page.reload();
+}
+
 try {
   const privacy = await browser.newContext({ viewport: { width: 1100, height: 850 }, reducedMotion: 'reduce' });
   const privatePage = await privacy.newPage();
+  if (process.env.YARD_UI_COVERAGE === '1') await privatePage.coverage.startJSCoverage({ resetOnNavigation: false });
   await privatePage.goto('http://web:3002/yard/app/');
   const [sessionResponse] = await Promise.all([
     privatePage.waitForResponse((response) => new URL(response.url()).pathname === '/app/api/demo/session'),
@@ -89,6 +108,7 @@ try {
     await release;
     await route.fulfill({ response }).catch(() => {});
   });
+  await privatePage.getByRole('button', { name: 'Project room', exact: true }).click();
   await privatePage.getByRole('textbox', { name: 'Project ID', exact: true }).fill(privateId);
   await privatePage.getByRole('button', { name: 'Open project →', exact: true }).click();
   await ready;
@@ -102,6 +122,7 @@ try {
     0,
     'a delayed buyer response must never populate the builder room',
   );
+  await captureContext(privacy);
   await privacy.close();
   for (const [name, width, height] of [
     ['desktop', 1440, 1000],
@@ -109,6 +130,7 @@ try {
   ]) {
     const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce' });
     const page = await context.newPage();
+    if (process.env.YARD_UI_COVERAGE === '1') await page.coverage.startJSCoverage({ resetOnNavigation: false });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('http://web:3002/yard/app/?project=yard-project');
@@ -237,20 +259,26 @@ try {
       await page.screenshot({ path: 'artifacts/mock-network/yard-board-mobile.png', fullPage: true });
     }
     assert.deepEqual(errors, []);
+    await captureContext(context);
     await context.close();
   }
   const nested = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const nestedPage = await nested.newPage();
+  if (process.env.YARD_UI_COVERAGE === '1') await nestedPage.coverage.startJSCoverage({ resetOnNavigation: false });
   await nestedPage.goto('http://web:3002/__pages/yard/app?project=yard-project');
   assert.equal(new URL(nestedPage.url()).pathname, '/__pages/yard/app/');
   assert.equal(new URL(nestedPage.url()).search, '?project=yard-project');
   await nestedPage.getByAltText('Yard', { exact: true }).waitFor();
   assert(await nestedPage.getByAltText('Yard', { exact: true }).evaluate((img) => img.naturalWidth > 0));
+  await capturePage(nestedPage);
+  if (process.env.YARD_UI_COVERAGE === '1') await nestedPage.coverage.startJSCoverage({ resetOnNavigation: false });
   await nestedPage.getByRole('link', { name: 'Yard story', exact: true }).click();
   assert.equal(new URL(nestedPage.url()).pathname, '/__pages/yard/');
+  await captureContext(nested);
   await nested.close();
   const intakeContext = await browser.newContext({ viewport: { width: 1100, height: 900 }, reducedMotion: 'reduce' });
   const intakePage = await intakeContext.newPage();
+  if (process.env.YARD_UI_COVERAGE === '1') await intakePage.coverage.startJSCoverage({ resetOnNavigation: false });
   await intakePage.goto('http://web:3002/yard/app');
   assert.equal(new URL(intakePage.url()).pathname, '/yard/app/');
   await intakePage.getByRole('button', { name: 'Buyer', exact: true }).click();
@@ -311,7 +339,7 @@ try {
     .getByLabel('Allow assigned agents or human builders to build this', { exact: true })
     .selectOption('true');
   await intakePage.getByRole('button', { name: 'Review my choices', exact: true }).click();
-  await intakePage.getByRole('heading', { name: 'Read your choices.', exact: true }).waitFor();
+  await intakePage.getByRole('heading', { name: 'Review your project brief.', exact: true }).waitFor();
   await accessible(intakePage, 'intake summary accessibility');
   await intakePage.getByRole('button', { name: 'Ask the Foreman for a blueprint', exact: true }).click();
   await intakePage.getByRole('heading', { name: 'Blueprint’s ready. Read the tests.', exact: true }).waitFor();
@@ -368,9 +396,8 @@ try {
   );
   await intakePage.screenshot({ path: 'artifacts/mock-network/intake-plan-mobile.png', fullPage: true });
   await accessible(intakePage, 'intake mobile accessibility');
-  await intakePage.reload();
+  await navigate(intakePage);
   await intakePage.getByRole('button', { name: 'Buyer', exact: true }).click();
-  await intakePage.getByRole('button', { name: 'Resume saved intake', exact: true }).click();
   await intakePage.getByRole('heading', { name: '8. Ownership and handover', exact: true }).waitFor();
   assert.equal(await intakePage.getByLabel('Your GitHub repository', { exact: true }).inputValue(), 'buyer/project');
   assert.equal(
@@ -407,7 +434,12 @@ try {
     0,
     'builder cannot retain buyer intake',
   );
+  await captureContext(intakeContext);
   await intakeContext.close();
+  if (process.env.YARD_UI_COVERAGE === '1') {
+    assert(browserCoverage.length > 0, 'connected browser coverage must not be empty');
+    writeFileSync('artifacts/mock-network/browser-coverage.json', JSON.stringify(browserCoverage));
+  }
   console.log(
     'Connected mock room: operator cancellation/isolation, desktop/mobile proof, SSE, simulation, theme, intake autosave/revision/recovery and overflow checks passed.',
   );

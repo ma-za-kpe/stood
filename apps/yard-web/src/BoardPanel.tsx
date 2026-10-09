@@ -7,10 +7,12 @@ import { api } from './http.js';
 export function BoardPanel({
   enabled,
   generation,
+  hosted = false,
   onOpen,
 }: {
   enabled: boolean;
   generation: number;
+  hosted?: boolean;
   onOpen(id: string): void;
 }) {
   const client = useQueryClient(),
@@ -59,7 +61,7 @@ export function BoardPanel({
           <p className="eyebrow">Fixed scope / fixed price</p>
           <h2 id="board-title">Pick work. Stand behind it.</h2>
         </div>
-        <span className="signal">SIMULATED BOARD</span>
+        <span className="signal">{hosted ? 'LIVE BOARD' : 'SIMULATED BOARD'}</span>
       </div>
       <p className="lede">
         Ordinary builder accounts use the same Board. A claim reserves a lease; funding and payment need their own
@@ -72,7 +74,7 @@ export function BoardPanel({
         onChange={(e) => setFilter(e.target.value)}
         placeholder="Name, profile or currency"
       />
-      {!enabled && <p role="status">Choose a simulated operator above to load the Board.</p>}
+      {!enabled && <p role="status">Sign in to load posted work.</p>}
       {board.isFetching && <p role="status">Loading posted work…</p>}
       {board.error && <p role="alert">{board.error.message}</p>}
       {claim.error && <p role="alert">{claim.error.message} No payment is implied by this acknowledgement.</p>}

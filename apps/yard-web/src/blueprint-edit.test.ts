@@ -40,3 +40,17 @@ it('splits real tests between distinct milestones without losing a cent or inven
   expect(() => splitMilestone(next, 1)).toThrow();
   expect(() => splitMilestone(original, -1)).toThrow();
 });
+it('refuses merges that would overflow the budget or mix tests that share an id but not a path (T-0275)', () => {
+  const huge = fixture();
+  huge.milestones[0]!.budgetMinor = Number.MAX_SAFE_INTEGER;
+  expect(() => mergeMilestones(huge, 0)).toThrow('Invalid milestone budget.');
+  const mixed = fixture();
+  mixed.milestones[1]!.tests[0]!.path = 'tests/renamed.test.ts';
+  expect(() => mergeMilestones(mixed, 0)).toThrow('Resolve conflicting tests before merging.');
+  expect(() => mergeMilestones(fixture(), 3)).toThrow('Keep at least three milestones.');
+});
+it('brings tests the first milestone lacks into a merge (T-0275)', () => {
+  const draft = fixture();
+  draft.milestones[1]!.tests.push({ id: 'c', path: 'tests/c.test.ts', content: 'expect(c()).toBe(true);' });
+  expect(mergeMilestones(draft, 0).milestones[0]?.tests.map((t) => t.id)).toEqual(['a', 'b', 'c']);
+});

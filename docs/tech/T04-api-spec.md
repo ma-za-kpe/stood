@@ -16,19 +16,34 @@ The lead example uses the actual DRAFT fields; bearer/HMAC and idempotency conve
   ], "window_days": 7, "max_resubmits": 2 }
 ```
 
-Response: DRAFT and PENDING tranche IDs, no approval URL. Params are unverified metadata, not a signed test contract or permission to omit usage proof. Yard is planned. Financial API contracts below are targets; the second allowance/package example is the EyeOnSite scenario.
+Response: DRAFT and PENDING tranche IDs, no approval URL. Params are unverified metadata, not a signed test contract or permission to omit usage proof. Yard sign-in, Board and private intake are deployed at <https://stood-yard-api.onrender.com/app/>; its Foreman/payment adapter remain next. The legacy endpoint contracts below are targets; the second allowance/package example is the EyeOnSite scenario.
 
 Future commit packages bind repository/base/new SHA, frozen manifest and authenticated runner/usage reports. Raw client check results cannot authorise capture. Demo fixtures are synthetic and execute no payments.
 
 The planned **OpenAPI 3.1** document will be the source of truth (`openapi/stood.yaml`, generated from Zod route schemas under T-0053; neither is implemented yet). APIMatic generates the TypeScript SDK, docs portal and MCP server from it ([S13](../stood/S13-sponsor-integration.md)). This page is the human summary.
 
-## Implemented local subset (T-0028, partial)
+## Implemented draft and package API (T-0028, partial)
 
-The API currently exposes signed DRAFT creation plus tenant-scoped allowance/tranche reads. Draft creation accepts `payee_ref`, `cap`, `milestones[]{name,amount,profile,params}`, `window_days` and `max_resubmits`, then returns DRAFT plus PENDING tranche IDs and the validated fields. It never returns a provider approval URL. Params are draft metadata, not trusted assessment input. Financial dispatch, signing/versions and package/upload processing below remain planned (T-0154 / T-0156).
+The API currently exposes signed DRAFT creation plus tenant-scoped allowance/tranche reads. Draft creation accepts `payee_ref`, `cap`, `milestones[]{name,amount,profile,params}`, `window_days` and `max_resubmits`, then returns DRAFT plus PENDING tranche IDs and the validated fields. It never returns a provider approval URL. Params are draft metadata, not trusted assessment input. Saved-account signing and funding intents are implemented as described below. Legacy dispatch, version amendments, report uploads and trusted runner processing remain planned. Commit-package reference intake and owned receipt reads are implemented; they do not execute a report or payment.
 
 Bearer and HMAC authentication follow the conventions below, including signed empty GET bodies and a five-minute skew window. Requests are capped at 64 KiB. Draft idempotency fingerprints method, versioned path and exact request bytes; the platform/key namespace is durable and serialised with a database advisory lock. Allowance, immutable ownership, initial tranche records and the original response commit atomically. Local keys remain retained indefinitely; identical requests replay the same response and changed bytes conflict. Missing and foreign reads both return 404. Read responses include recovered state, hold age/expiry, decision, settlement, pending effect/status/time and separate recipient sentences. See [ADR-0014](../adr/0014-platform-drafts-and-idempotency.md).
 
-The synthetic demo endpoints remain distinct and public when DEMO_MODE is on. The provider-status polling CLI is documented in [USAGE](../USAGE.md#local-reconciliation-worker-implemented-status-polling); HTTP does not execute money calls. The endpoints and examples below are the target full contract.
+Local fixture endpoints remain distinct and public when DEMO_MODE is on. The worker is documented in [USAGE](../USAGE.md#local-reconciliation-worker-implemented-status-polling); HTTP records durable intents and the worker makes provider calls. The legacy endpoint tables and scenario examples below are the target full contract unless identified as implemented.
+
+## Implemented hosted signing and funding (T-0260)
+
+Base: <https://stood-api.onrender.com/v1>. [Health](https://stood-api.onrender.com/health) earns `paymentReady` only with all keys, a ready PayPal sandbox and the saved-account path wired. Every route below uses the platform bearer/HMAC v2 conventions. POST requests require JSON and `Idempotency-Key`; keep that key for a lost-reply retry. The API reserves an intent; the reconciler's signing/funding step makes each PayPal call. No real money moves.
+
+| Method | Path (relative to `/v1`) | Implemented behavior |
+|---|---|---|
+| POST | `/allowances/{id}/mandate` | Reserve saved-PayPal signing for the owned allowance's current terms; send `{}` |
+| GET | `/allowances/{id}/mandate/{key}` | Read signing status and the buyer approval URL when awaiting approval |
+| POST | `/tranches/{id}/funding` | Reserve funding using `{"expected_version": 0, "nonce": "K7Q"}`; use the current tranche version, and a three-character nonce from `A-HJ-NP-Z2-9` |
+| GET | `/tranches/{id}/funding/{key}` | Read funding status, approval URL when required, and confirmed hold expiry |
+
+POST returns `202`; that records acceptance, not a completed signature or hold. Mandate views contain `key`, `status`, `approve_url` and `expires_at`. Funding views contain `key`, `status`, `approve_url` and `hold_expires_at`; hold expiry appears only in `HELD`. Views never return saved tokens, setup/customer/order/authorization IDs. Missing or foreign records return the same `404`; a stale funding version returns `409 stale_version`. A missing signing composition returns `503 signing_not_configured`. Source code and route contract tests: [`platform-api.ts`](../../services/api/src/http/platform-api.ts), [`signing-funding-http.test.ts`](../../services/api/src/http/signing-funding-http.test.ts).
+
+Yard's browser does not call these financial routes yet. Hosted Foreman, repository/preview and Yard-to-Stood adapters remain [#76](https://github.com/ma-za-kpe/stood/issues/76). [SETUP](../SETUP.md) records the actual deployment; [#108](https://github.com/ma-za-kpe/stood/issues/108) provides current progress and screenshot guidance.
 
 ## Conventions
 

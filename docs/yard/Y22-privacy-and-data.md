@@ -42,3 +42,5 @@ Status: hosted sandbox pilot. Owner-issued browser sessions protect buyer-owned 
 - **Automatic intake expiry** for abandoned drafts.
 - **Hosting region and processors.** Yard runs on Render in Frankfurt with its own restricted Neon schema and roles. Research discovery contacts StartupTribunal’s public feed; pasted JSON is reviewed in the browser, then only the confirmed intake excerpt is saved. Hosted model and email adapters remain unconnected; publish the full processor list before enabling them.
 - **Legal review** of the consent copy and of the lawful basis for keeping payment records.
+
+Copied public research is sanitized before schema validation: owner/viewer identifiers, private storage-pointer fields and named credential metadata are removed recursively, and the preview reports the removal without echoing values. Explicitly private reports, embedded credentials in research prose, unsafe URLs, prototype keys and oversized/deep input remain blocked. The original string remains local input; only sanitized source data and a buyer-confirmed bounded brief can proceed. No URL in pasted research is fetched.

@@ -10,10 +10,11 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_DEFAULT_TO_LATEST=0 COREPACK_HOME
 RUN corepack enable pnpm \
     && corepack prepare pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be --activate
 WORKDIR /workspace
+ARG YARD_UI_COVERAGE=0
 COPY . .
 RUN pnpm install --frozen-lockfile \
     && pnpm --filter "@stood/yard-api..." build \
-    && pnpm --filter @stood/yard-web build \
+    && YARD_UI_COVERAGE=$YARD_UI_COVERAGE pnpm --filter @stood/yard-web build \
     && pnpm --filter @stood/yard-api deploy --prod --offline /workspace/release \
     && cp -r apps/yard-web/dist /workspace/release/web
 

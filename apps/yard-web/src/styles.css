@@ -716,3 +716,204 @@ fieldset.board-grid {
   max-height: 18rem;
   overflow: auto;
 }
+
+/* The starting screen gives own-project intake and research discovery distinct places. */
+.compact-intro {
+  align-items: center;
+  margin-bottom: 28px;
+}
+.compact-intro h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.1;
+}
+.compact-intro .operator-card {
+  padding: 16px;
+}
+.project-start {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 2.2fr);
+  gap: 28px;
+  align-items: start;
+  margin-top: 28px;
+}
+.own-project {
+  padding: 22px;
+  background: var(--bg);
+  border: 1px solid var(--y-steel);
+}
+.own-project h3 {
+  font-size: 1.35rem;
+}
+.resume-project,
+.report-import {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--y-steel);
+}
+summary {
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 10px 0;
+}
+.resume-project input,
+.tribunal-import input,
+.report-import textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 8px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--y-steel);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.tribunal-import {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.ideas-heading {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.ideas-heading h3,
+.ideas-heading h4 {
+  margin: 0;
+}
+.idea-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.idea-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--y-steel);
+}
+.idea-card h4 {
+  margin: 12px 0;
+}
+.idea-title {
+  text-align: left;
+  font-size: 1.1rem;
+  line-height: 1.45;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  padding: 0;
+  width: 100%;
+}
+.idea-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+.idea-card > button {
+  margin-top: auto;
+  align-self: start;
+}
+.secondary-button {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--y-steel);
+}
+.research-badge {
+  font: 0.75rem var(--mono);
+  color: var(--accent);
+}
+.idea-detail {
+  padding: 24px;
+  border: 2px solid var(--accent);
+  background: var(--bg);
+  scroll-margin: 24px;
+}
+.research-caveat {
+  padding: 16px;
+  border-left: 3px solid var(--y-hivis);
+  background: var(--surface);
+}
+@media (max-width: 900px) {
+  .project-start {
+    grid-template-columns: 1fr;
+  }
+  .own-project {
+    order: 0;
+  }
+}
+@media (max-width: 560px) {
+  .idea-grid {
+    grid-template-columns: 1fr;
+  }
+  .ideas-heading {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .idea-detail {
+    padding: 16px;
+  }
+}
+
+.section-link {
+  padding: 8px;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  text-align: left;
+  font-weight: 400;
+  width: 100%;
+}
+.optional-field {
+  padding: 8px 0;
+  border-top: 1px solid var(--y-steel);
+}
+.optional-field summary {
+  display: list-item;
+}
+.optional-field summary .fine {
+  margin-left: 12px;
+}
+.intake-field:has(#intake-idea__description) textarea {
+  min-height: 200px;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.compact-intro .operator-card {
+  min-height: 0;
+  background: transparent;
+  border: 0;
+}
+.compact-intro .operator-card form {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.intake-panel:has(.project-start) {
+  padding: 24px;
+  border-top: 1px solid var(--y-steel);
+}
+.intake-panel:has(.project-start) .project-start {
+  margin-top: 0;
+}
+.intake-panel h2 {
+  font-size: 2rem;
+}
+.brief-sections {
+  margin: 20px 0;
+  border-block: 1px solid var(--y-steel);
+}
+.brief-sections .intake-rail {
+  margin: 12px 0;
+}

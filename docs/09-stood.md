@@ -16,7 +16,7 @@ Stood is a release gate for code milestones and staged payments. Adaeze, or her 
 
 ## Money model
 
-The buyer's allowance freezes the operator, currency, milestones and cap: examples use **$4,000** total and a **$1,200** build milestone. PayPal Vault approval stores a payment method; it does not itself sign the acceptance-test contract. Binding that contract and provider approval durably is planned funding work.
+The buyer's allowance freezes the operator, currency, milestones and cap: examples use **$4,000** total and a **$1,200** build milestone. PayPal Vault approval stores a payment method; it does not itself sign the acceptance-test contract. Saved-account approval and bounded allowance terms are stored durably; authentic frozen-test/usage binding remains planned runner work.
 
 PayPal authorises on dispatch. RELEASE reserves a capture; REFUSE reserves a void; WAIT retains review. Only matching provider confirmation records a settlement. Ambiguous outcomes stay pending for reconciliation. Expiry never authorises a capture, and the five-minute safety margin is rechecked immediately before submission. Stood never pools funds or pays operators locally; the calling platform owns onward payout.
 
@@ -24,7 +24,7 @@ PayPal authorises on dispatch. RELEASE reserves a capture; REFUSE reserves a voi
 
 A commit package binds repository, base and new commit, frozen test hashes, actual test identities/counts, runner signature, mutation scope/score and mandate budget. Required usage proof must identify an independent outside authority and cannot be signed by the builder. Model opinions cannot substitute for rule evidence or hold payment credentials. Missing or incompatible proof means WAIT.
 
-The code profile is unit-tested over synthetic findings. Trusted runner ingestion, the isolated runner, GitHub read-only adapter, usage receipts, Yard and A2A/AP2 surfaces remain planned. Funding and financial HTTP are disabled pending qualification; the local API creates DRAFTs and reads state. No real sandbox evidence is claimed.
+The deterministic code profile is tested; trusted runner ingestion, isolated execution and outside usage receipts remain planned. Stood’s hosted signing/funding intents, verified webhooks and reconciliation are qualified on the real PayPal sandbox. [Hosted Yard](https://stood-yard-api.onrender.com/app/) provides operator sign-in, Board and private StartupTribunal intake. Its Foreman/payment adapters and A2A/AP2 remain next. No real money moves. [SETUP](SETUP.md) and [#108](https://github.com/ma-za-kpe/stood/issues/108) record deployed evidence and screenshot guidance.
 
 ## Scenario: site visits
 

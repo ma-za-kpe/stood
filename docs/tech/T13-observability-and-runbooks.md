@@ -8,7 +8,7 @@
 | Traces | OpenTelemetry → Grafana Cloud Tempo (free) | Spans for each pipeline step and each PayPal call |
 | Errors | Sentry (free developer plan) | Release-tagged with the release-please version |
 | Business metrics | Postgres views → **AG Studio** reviewer dashboard | Decisions by outcome and field, **false-refusal rate**, median hold age, money held now, capture failures, reconciliation mismatches |
-| Uptime | Postman monitor (15 min) + Render health checks | — |
+| Service health | Render health checks + GitHub Actions keep-warm and attention checks (10 min, best-effort schedule) | Postman is deferred; no external uptime monitor or SLA is claimed |
 
 ## Alerts (to the maintainer by email / Slack via the notifier)
 

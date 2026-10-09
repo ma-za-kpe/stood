@@ -1,8 +1,8 @@
 # Credential handoff: key inventory and deferred tests
 
-**Hosted sandbox (2026-10-08):** the PayPal sandbox app, Neon (Frankfurt) and both Render services exist. What was set up, where each value lives and how to repeat it are in [`SETUP.md`](SETUP.md).
+**Hosted sandbox (2026-10-08):** the PayPal sandbox app, Neon (Frankfurt) and all three Render services are deployed. What was set up, where each value lives and how to repeat it are in [`SETUP.md`](SETUP.md).
 
-**Status (2026-10-08):** Stood is deployed and qualified on the real PayPal sandbox; saved-account signing, funding, verified webhooks and hourly reconciliation are connected. Yard's Board, events and site log are hosted; private sign-in and intake ship in the C2 web/import batch. Local simulated tests remain separate evidence. The tables below retain the credential inventory and original qualification checklist; completed evidence is in TASKS.md and SETUP.md.
+**Status (2026-10-08):** Stood is deployed and qualified on the real PayPal sandbox; saved-account signing, funding, verified webhooks and hourly reconciliation are connected. Yard's Board, events, site log, operator sign-in and private StartupTribunal intake are deployed at <https://stood-yard-api.onrender.com/app/>. Its current capabilities are reported at <https://stood-yard-api.onrender.com/health>. Hosted Foreman and Yard payment adapters continue in [#76](https://github.com/ma-za-kpe/stood/issues/76); C2 UX and app coverage follow-up stays in [#75](https://github.com/ma-za-kpe/stood/issues/75). Local simulated tests remain separate evidence. The tables below retain the credential inventory and original qualification checklist; completed evidence is in TASKS.md and SETUP.md.
 
 This page lists:
 
@@ -46,14 +46,14 @@ This page lists:
 
 | Account | Needed for | Notes |
 |---|---|---|
-| Render | Deploying the Blueprint, preview services | Frankfurt. `stood-api` free; `stood-reconciler` Starter (paid, no free workers). Secrets set through the Render API ([SETUP](SETUP.md#5-render)) |
+| Render | Deploying the Blueprint, preview services | Frankfurt. `stood-api` free; `stood-reconciler` and `stood-yard-api` Starter (paid; Yard stays on for its jobs). Secrets set through the Render API ([SETUP](SETUP.md#5-render)) |
 | Neon | Postgres | Free tier does not expire |
 | Kernel | Driving the sandbox buyer approval in a cloud browser | Sandbox buyer accounts only |
 | APIMatic, Postman, AG Studio, Bryntum | Partner integrations | Check licence and trial terms before adopting |
 
 ## 2. Tests deferred until credentials exist
 
-Each item is written as a task. None of them is claimed today.
+This is the original credential-dependent checklist. Completed slices include real sandbox recordings and drift checks (T-0224), PayPal error/idempotency qualification (T-0222), saved-account holds (T-0154), verified webhook ingestion (T-0033), all three Render services (T-0214/T-0220), and nightly PayPal release/refusal checks (partial T-0234). See [SETUP](SETUP.md) and the append-only [ledger](../TASKS.md) for evidence. The full cross-provider journey, trusted runner, hosted Foreman, Yard payment adapter, GitHub/preview qualification and Crew integration remain open; possession of a key does not complete them.
 
 | Area | Deferred test | Task |
 |---|---|---|
