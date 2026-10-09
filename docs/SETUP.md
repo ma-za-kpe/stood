@@ -184,6 +184,16 @@ Stood sends platforms no notifications, so `stood-yard-api` reads Stood's signed
 
 Not yet: Yard submits no packages while hosted (the log says `Packages off`), because a package must carry a real test report and the runner that produces one is C4 (T-0159/T-0164). Until then, captures and refusals are proven in `scripts/mock-network`, which reads the same real tranche view.
 
+### Yard previews on Render (T-0196)
+
+A buyer can preview a submitted milestone: Yard runs the exact image, pinned by digest, as a free-plan Render web service with only the buyer's TEST/DEV keys (each decrypted for that deploy and audited) and `YARD_PREVIEW=simulated-test-data`. Previews expire after 30 days, or 7 after payment; an hourly sweep deletes them, and closing a project deletes the rest. Only the buyer can start one (`POST /yard/v1/blueprints/:id/work-orders/:wo/preview` with `{ "image": "...@sha256:..." }`), because the preview receives their keys; asking again returns the live preview.
+
+Render has no spend cap, so Yard keeps its own: at most three live `yard-preview-*` services, free plan only, and it deletes nothing that is not a Yard preview. A Render API key reaches a whole workspace, so give hosted Yard a key from a **separate workspace** made for previews: set `RENDER_PREVIEW_API_KEY` and `RENDER_PREVIEW_OWNER_ID` (`tea-...`, from `GET /v1/owners`) on `stood-yard-api`. Without them, `/health` stays the same and the log says `Previews off`.
+
+```bash
+scripts/dev preview-check   # one free-plan preview from a digest-pinned public image; waits for https, deletes it, checks it is gone
+```
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.

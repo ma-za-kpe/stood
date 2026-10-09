@@ -9,10 +9,12 @@ import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
+import { RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, type Operator } from './application/board.js';
 import { IntakePlanner } from './application/intake-planner.js';
+import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
 import { StoodWatch } from './application/stood-watch.js';
@@ -44,6 +46,7 @@ export function yardRuntime(env: Env) {
   else if (!keys) notes.push('Board off: YARD_SECRET_KEYS is not a valid key list.');
   const planner = plannerConfig(env, notes);
   const stood = stoodClient(env, notes);
+  const previewHost = renderPreviews(env, notes);
   if (notes.some((n) => n.startsWith('Board off')) || !operators || !keys)
     return { config: { environment } as Config, notes, start: async () => {}, stop: async () => {} };
 
@@ -71,6 +74,8 @@ export function yardRuntime(env: Env) {
         new PostgresForemanCoordinator(pool),
       )
     : null;
+  const vault = new SecretVault(new PostgresSecretRows(pool), new LocalKeyWrapper(keys.keys, keys.current));
+  const previews = previewHost ? new Previews(board, vault, previewHost) : null;
   const config: Config = {
     environment,
     research: new TribunalCatalog(),
@@ -84,14 +89,16 @@ export function yardRuntime(env: Env) {
         : {}),
       clock,
       operators,
-      secrets: new SecretVault(new PostgresSecretRows(pool), new LocalKeyWrapper(keys.keys, keys.current)),
+      secrets: vault,
       siteLog: new SiteLog(logs, board, scanner),
       // T-0189: allowance drafts through Stood's signed API. Packages wait for a runner's real test report.
+      ...(previews ? { previews } : {}),
       ...(stood ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
     },
   };
   const watch = stood ? new StoodWatch(board, new StoodTrancheProofs(stood)) : null;
   let watching: ReturnType<typeof setInterval> | null = null;
+  let sweeping: ReturnType<typeof setInterval> | null = null;
   return {
     config,
     notes,
@@ -99,6 +106,17 @@ export function yardRuntime(env: Env) {
       await scanner.ready();
       retention = startLogRetention(logs, clock, (code) => process.stderr.write(`${JSON.stringify({ code })}\n`));
       await retention.run();
+      // Expired previews are deleted from Render every hour.
+      if (previews) {
+        sweeping = setInterval(
+          () =>
+            previews
+              .sweep(Date.now())
+              .catch(() => process.stderr.write(`${JSON.stringify({ code: 'PREVIEW_SWEEP_FAILED' })}\n`)),
+          3_600_000,
+        );
+        sweeping.unref();
+      }
       // Stood sends platforms no notifications: read every tranche Yard waits on, once a minute.
       if (watch) {
         const tick = () =>
@@ -111,6 +129,7 @@ export function yardRuntime(env: Env) {
     async stop() {
       retention?.stop();
       if (watching) clearInterval(watching);
+      if (sweeping) clearInterval(sweeping);
       await pool.end();
     },
   };
@@ -154,6 +173,21 @@ export function plannerConfig(env: Env, notes: string[]) {
       },
     },
   };
+}
+
+// T-0196: previews live in a Render workspace of their own, so this key cannot touch Stood's services.
+function renderPreviews(env: Env, notes: string[]) {
+  const apiKey = env.RENDER_PREVIEW_API_KEY?.trim() ?? '';
+  if (!apiKey) {
+    notes.push('Previews off: RENDER_PREVIEW_API_KEY is missing.');
+    return null;
+  }
+  try {
+    return new RenderPreviewHost({ apiKey, ownerId: env.RENDER_PREVIEW_OWNER_ID?.trim() ?? '' });
+  } catch {
+    notes.push('Previews off: RENDER_PREVIEW_API_KEY and RENDER_PREVIEW_OWNER_ID are not both valid.');
+    return null;
+  }
 }
 
 // T-0189: Yard reaches Stood with the platform's own signed API credentials, over https only.

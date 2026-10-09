@@ -125,3 +125,8 @@ services:
         sync: false
       - key: STOOD_HMAC_SECRET
         sync: false
+      # T-0196: previews in a separate Render workspace, so this key cannot reach Stood's services.
+      - key: RENDER_PREVIEW_API_KEY
+        sync: false
+      - key: RENDER_PREVIEW_OWNER_ID
+        sync: false

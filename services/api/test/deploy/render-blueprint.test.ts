@@ -64,6 +64,8 @@ const reads: Record<string, readonly string[]> = {
     'STOOD_API_URL',
     'STOOD_API_KEY',
     'STOOD_HMAC_SECRET',
+    'RENDER_PREVIEW_API_KEY',
+    'RENDER_PREVIEW_OWNER_ID',
   ],
 };
 const stood = (s: Service) => s.name.startsWith('stood-') && s.name !== 'stood-yard-api';

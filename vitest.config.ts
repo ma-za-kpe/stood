@@ -29,6 +29,7 @@ export default defineConfig({
         '**/vault-keys-cli.ts',
         '**/yard-api/src/db-cli.ts',
         '**/yard-api/src/github-check-cli.ts',
+        '**/yard-api/src/preview-check-cli.ts',
         '**/yard-api/src/server.ts',
         '**/adapters/db-postgres/**',
       ],

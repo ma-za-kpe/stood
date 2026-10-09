@@ -30,6 +30,7 @@ it('wires the Board, site log and secrets from configuration, and says why the r
   expect(runtime.notes).toEqual([
     'Foreman off: GROK_PLANNER_API_KEY is missing.',
     'Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.',
+    'Previews off: RENDER_PREVIEW_API_KEY is missing.',
   ]);
   await runtime.stop();
 });
@@ -116,7 +117,10 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
   ]);
   expect(plannerConfig({ ...planner, GROK_DAILY_BUDGET_USD: '' }, [])?.dailyMicros).toBe(500_000);
   const on = yardRuntime(planner);
-  expect(on.notes).toEqual(['Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.']);
+  expect(on.notes).toEqual([
+    'Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.',
+    'Previews off: RENDER_PREVIEW_API_KEY is missing.',
+  ]);
   expect(await capabilities(planner)).toMatchObject({ board: true, intake: true, foreman: true });
   await on.stop();
   for (const [change, note] of [
@@ -152,4 +156,22 @@ it('connects to Stood only with platform credentials over https, and says what i
   expect(JSON.stringify(off.notes)).not.toMatch(/platform-key|hhhh/);
   expect(await capabilities(plain)).toMatchObject({ payments: false });
   await off.stop();
+});
+
+// T-0196: previews run in a Render workspace of their own, with a capped number of free-plan services.
+it('turns on previews only with a Render preview key and owner, and sweeps expired ones', async () => {
+  const on = yardRuntime({
+    ...hosted,
+    RENDER_PREVIEW_API_KEY: 'rnd_not_real',
+    RENDER_PREVIEW_OWNER_ID: 'tea-previews',
+  });
+  expect(on.config.board?.previews).toBeDefined();
+  expect(on.notes.some((n) => n.startsWith('Previews off'))).toBe(false);
+  await on.stop();
+  const off = yardRuntime({ ...hosted, RENDER_PREVIEW_API_KEY: 'rnd_not_real', RENDER_PREVIEW_OWNER_ID: 'Not An Id' });
+  expect(off.config.board?.previews).toBeUndefined();
+  expect(off.notes).toContain('Previews off: RENDER_PREVIEW_API_KEY and RENDER_PREVIEW_OWNER_ID are not both valid.');
+  expect(JSON.stringify(off.notes)).not.toMatch(/rnd_not_real|Not An Id/);
+  await off.stop();
+  expect(yardRuntime(hosted).notes).toContain('Previews off: RENDER_PREVIEW_API_KEY is missing.');
 });
