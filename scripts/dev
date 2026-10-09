@@ -51,6 +51,14 @@ with os.fdopen(fd, "w") as handle:
 print(f"Access codes set for {len(operators)} operators. Read them in {codes_path} (owner only).")
 PY
     ;;
+  runner-check)
+    # T-0164: qualify the isolated runner on real Vercel Sandbox (ADR-0026). Only the caller's Vercel settings reach
+    # this container; none of them enter the microVM.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(VERCEL_TOKEN|VERCEL_TEAM_ID|VERCEL_PROJECT_ID)=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/runner-check-cli.js' ;;
   preview-check)
     # T-0196: qualify live previews on Render: one free-plan service from a digest-pinned public image, always deleted.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
