@@ -72,6 +72,9 @@ try {
               title: 'Another project idea',
               url: 'https://startuptribunal.com/catalog/second-idea',
               blueprint_url: 'https://startuptribunal.com/catalog/second-idea',
+              country: ['KE'],
+              category: ['agriculture'],
+              consensus_score: null,
             },
           ].map((row) => ({
             title: row.title,
@@ -83,6 +86,10 @@ try {
             catalog_reason_codes: row.catalog_reason_codes,
             url: `https://startuptribunal.com/catalog/${row.slug}`,
             blueprint_url: `https://startuptribunal.com/catalog/${row.slug}`,
+            // T-0282: card display facts, as the public catalog sends them.
+            country: row.country ?? ['SG'],
+            category: row.category ?? ['health', 'real-estate'],
+            consensus_score: row.consensus_score === null ? null : Number(row.consensus_score ?? 6.3),
           })),
           attribution: {
             required: true,
@@ -110,7 +117,18 @@ try {
     await page.getByLabel('Search ideas').fill('not-a-match');
     await page.getByText('No ideas match this search.', { exact: true }).waitFor();
     await page.getByLabel('Search ideas').fill('');
-    await page.getByRole('button', { name: 'View idea →' }).first().click();
+    // T-0282: visual cards with one action each; a score bar only where the source supplies a score.
+    assert.equal(await page.locator('.idea-card').first().getByRole('button').count(), 1);
+    assert.equal(await page.locator('.idea-card').first().getByRole('meter').count(), 1);
+    assert.equal(await page.locator('.idea-card').nth(1).getByRole('meter').count(), 0);
+    assert.equal(await page.locator('.idea-card a').count(), 0, 'research links live inside the opened idea');
+    await page.locator('.idea-card').first().hover();
+    await accessible(page, `${name}: idea cards`);
+    await page.locator('.idea-grid').screenshot({ path: `/out/yard-idea-cards-${name}.png` });
+    await page
+      .getByRole('button', { name: /^View idea: / })
+      .first()
+      .click();
     await page.locator('.idea-detail').waitFor();
     assert.match(await page.locator('.idea-detail').innerText(), /Source decision: rejected/);
     assert.equal(await page.getByLabel('What are we building?').count(), 0, 'viewing an idea creates no intake');

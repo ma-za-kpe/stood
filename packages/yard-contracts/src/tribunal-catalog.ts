@@ -23,6 +23,21 @@ const item = z.object({
   catalog_reason_codes: z.array(text).max(32),
   url: link,
   blueprint_url: link,
+  // T-0282: display facts for the idea cards, when the source supplies them (ISO country codes, category slugs).
+  country: z
+    .array(z.string().regex(/^[A-Z]{2}$/))
+    .max(8)
+    .default([]),
+  category: z
+    .array(
+      z
+        .string()
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+        .max(40),
+    )
+    .max(8)
+    .default([]),
+  consensus_score: z.number().min(0).max(10).nullable().default(null),
 });
 export const catalogSchema = z.object({
   items: z.array(item).max(10),
