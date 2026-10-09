@@ -18,6 +18,8 @@ export function SiteLogPanel({
     [connection, setConnection] = useState('Disconnected'),
     [reconnect, setReconnect] = useState(0);
   const viewport = useRef<HTMLElement>(null);
+  // Why the stream is being rebuilt, kept until it reconnects so the reason stays visible.
+  const reason = useRef<string | null>(null);
   const path = `/blueprints/${encodeURIComponent(projectId)}/work-orders/${encodeURIComponent(workOrderId)}/log`;
   const query = useQuery({
     queryKey: ['site-log', projectId, workOrderId, generation],
@@ -28,7 +30,7 @@ export function SiteLogPanel({
   const ready = open && !!query.data && !query.error;
   useEffect(() => {
     if (!ready) {
-      setConnection('Disconnected');
+      setConnection(reason.current ?? 'Disconnected');
       return;
     }
     const key = ['site-log', projectId, workOrderId, generation],
@@ -38,18 +40,20 @@ export function SiteLogPanel({
       lastReceived = performance.now(),
       refreshing = false;
     const source = new EventSource(`/app/api${path}/events?since=${current.version}&connection=${reconnect}`);
-    setConnection('Connecting');
-    const refresh = (reset = false) => {
+    setConnection(reason.current ?? 'Connecting');
+    const refresh = (reset = false, why = 'Refreshing record') => {
       if (refreshing || disposed) return;
       refreshing = true;
       source.close();
-      setConnection('Refreshing record');
+      reason.current = why;
+      setConnection(why);
       void (reset ? client.resetQueries({ queryKey: key }) : client.invalidateQueries({ queryKey: key })).then(() => {
         if (!disposed) setReconnect((v) => v + 1);
       });
     };
     source.onopen = () => {
       lastReceived = performance.now();
+      reason.current = null;
       setConnection('Connected');
     };
     source.onerror = () => {
@@ -59,10 +63,7 @@ export function SiteLogPanel({
       lastReceived = performance.now();
     });
     source.addEventListener('snapshot.required', () => refresh(true));
-    source.addEventListener('authorization.required', () => {
-      setConnection('Access needs checking');
-      refresh(true);
-    });
+    source.addEventListener('authorization.required', () => refresh(true, 'Access needs checking'));
     source.addEventListener('site_log.line', (raw) => {
       if (disposed || refreshing) return;
       lastReceived = performance.now();
