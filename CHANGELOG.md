@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/ma-za-kpe/stood/compare/v0.8.0...v0.9.0) (2026-10-09)
+
+
+### Features
+
+* host Yard sign-in and import StartupTribunal research ([b2c8389](https://github.com/ma-za-kpe/stood/commit/b2c8389fbd926377cb0aa4e89ce6659d3b6968d8))
+* **yard:** close C2 — smoother idea intake, 98% app coverage enforced, two UI bugs fixed ([#109](https://github.com/ma-za-kpe/stood/issues/109)) ([3cbc906](https://github.com/ma-za-kpe/stood/commit/3cbc906a090980a80633863f8ad28b3168e9e5fe))
+
 ## [0.8.0](https://github.com/ma-za-kpe/stood/compare/v0.7.0...v0.8.0) (2026-10-08)
 
 
