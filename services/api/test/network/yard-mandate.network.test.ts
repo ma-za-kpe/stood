@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { expect, it } from 'vitest';
 
 const clock = async () =>
@@ -42,6 +42,7 @@ const yard = async (path: string, method: string, value: unknown, version: numbe
 };
 it('Yard network: signed blueprint → real Stood allowance draft → milestones bound to Stood tranches (T-0184)', async () => {
   const at = await clock();
+  const manifest = [{ id: 'booking-works', path: 'tests/booking.test.js' }];
   const milestones = ['one', 'two'].map((id, i) => ({
     id,
     name: i ? 'Buyer uses the app' : 'Build the booking app',
@@ -49,8 +50,10 @@ it('Yard network: signed blueprint → real Stood allowance draft → milestones
     budgetMinor: 1000,
     deadline: at + 7 * 86400000,
     testBundleHash: 'b'.repeat(64),
-    manifestHash: 'c'.repeat(64),
+    // T-0159: the frozen manifest and its hash, as the Foreman computes it; Stood refuses code terms without them.
+    manifestHash: createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),
     testIds: ['booking-works'],
+    tests: manifest,
   }));
   const project = 'yard-mandate-project';
   const create = {

@@ -84,7 +84,14 @@ export type MandateRequest = Readonly<{
     name: string;
     amount: Readonly<{ minor: number; currency: string }>;
     profile: string;
-    params: Readonly<{ testBundleHash: string; manifestHash: string; testIds: readonly string[] }>;
+    params: Readonly<{
+      repository: string;
+      baseCommit: string;
+      testBundleHash: string;
+      manifestHash: string;
+      testIds: readonly string[];
+      tests?: readonly Readonly<{ id: string; path: string }>[];
+    }>;
   }>[];
   window_days: number;
   max_resubmits: number;
@@ -643,7 +650,15 @@ export class Board {
             name: m.name,
             amount: { minor: m.budgetMinor, currency: d.blueprint.currency },
             profile: m.profileId,
-            params: { testBundleHash: m.testBundleHash, manifestHash: m.manifestHash, testIds: [...m.testIds] },
+            // T-0159: the frozen code terms Stood checks and later binds the runner and verifier to.
+            params: {
+              repository: d.blueprint.repository,
+              baseCommit: d.blueprint.baseCommit,
+              testBundleHash: m.testBundleHash,
+              manifestHash: m.manifestHash,
+              testIds: [...m.testIds],
+              ...(m.tests ? { tests: m.tests.map((t) => ({ id: t.id, path: t.path })) } : {}),
+            },
           })),
           window_days: days,
           max_resubmits: 1,

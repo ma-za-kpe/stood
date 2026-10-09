@@ -6,6 +6,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { FaultController } from '../../../../simulators/src/faults.js';
 import { simulatorServer } from '../../../test/contracts/paypal-simulator.js';
+import { codeParams } from '../../../test/fixtures/code-terms.js';
 import { advanceMandate } from '../../application/mandate-signing.js';
 import { ServerSdkTransport } from '../payments-paypal/sdk.js';
 import { PayPalVaultAdapter } from '../payments-paypal/vault.js';
@@ -41,7 +42,9 @@ async function setup() {
   const draft = await new PostgresPlatformApi(db).create('buyer', randomUUID(), 'a'.repeat(64), {
     payee_ref: 'sandbox-payee',
     cap: { minor: 1000, currency: 'USD' },
-    milestones: [{ name: 'Build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: {} }],
+    milestones: [
+      { name: 'Build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: codeParams },
+    ],
     window_days: 7,
     max_resubmits: 1,
   });

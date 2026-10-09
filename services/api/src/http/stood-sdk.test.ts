@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { StoodClient, StoodClientError } from '../../../../packages/stood-sdk/src/client.js';
+import { codeParams } from '../../test/fixtures/code-terms.js';
 import { CommitPackageError } from '../ports/commit-package-store.js';
 import { createApp } from './app.js';
 
@@ -7,7 +8,9 @@ const at = 1790985600000;
 const draft = {
   payee_ref: 'builder',
   cap: { minor: 120000, currency: 'USD' },
-  milestones: [{ name: 'handover', amount: { minor: 120000, currency: 'USD' }, profile: 'code.final@1', params: {} }],
+  milestones: [
+    { name: 'handover', amount: { minor: 120000, currency: 'USD' }, profile: 'code.final@1', params: codeParams },
+  ],
   window_days: 7,
   max_resubmits: 1,
 };
@@ -89,7 +92,17 @@ describe('Public SDK against the actual local Stood HTTP router (T-0179)', () =>
     const created = await client.createDraft(draft, 'same_key');
     expect(created).toMatchObject({ id: 'alw_1', status: 'DRAFT', tranches: [{ id: 'trn_1', name: 'handover' }] });
     expect(await client.getDraft('alw_1')).toEqual(created);
-    expect(store.create).toHaveBeenCalledWith('platform_a', 'same_key', expect.stringMatching(/^[a-f0-9]{64}$/), draft);
+    // Code terms are stored as checked, with the mutation floor made explicit (T-0159).
+    const stored = {
+      ...draft,
+      milestones: draft.milestones.map((m) => ({ ...m, params: { ...m.params, minMutation: 0 } })),
+    };
+    expect(store.create).toHaveBeenCalledWith(
+      'platform_a',
+      'same_key',
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+      stored,
+    );
   });
   it('submits signed references and retrieves only QUEUED intake receipts', async () => {
     const { client, packages } = contract();

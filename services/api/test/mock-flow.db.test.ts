@@ -24,6 +24,7 @@ import { type CheckResult, decide, getProfile } from '../src/domain/decision.js'
 import { restoreTrancheRecord, type TrancheCommand } from '../src/domain/tranche-record.js';
 import { createApp } from '../src/http/app.js';
 import { simulatorServer } from './contracts/paypal-simulator.js';
+import { codeParams } from './fixtures/code-terms.js';
 import {
   attemptAssessment,
   runScenario,
@@ -146,7 +147,12 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
                 payee_ref: 'sim-builder',
                 cap: { minor: 1000, currency: 'USD' },
                 milestones: [
-                  { name: 'build', amount: { minor: 1000, currency: 'USD' }, profile: scenario.profile, params: {} },
+                  {
+                    name: 'build',
+                    amount: { minor: 1000, currency: 'USD' },
+                    profile: scenario.profile,
+                    params: scenario.profile.startsWith('code.') ? codeParams : {},
+                  },
                 ],
                 window_days: 7,
                 max_resubmits: 1,

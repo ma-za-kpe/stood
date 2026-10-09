@@ -13,6 +13,7 @@ import { reconcile } from '../../src/application/reconcile.js';
 import { retryCapture } from '../../src/application/retry-capture.js';
 import { type CheckResult, decide, getProfile } from '../../src/domain/decision.js';
 import { restoreTrancheRecord, type TrancheCommand } from '../../src/domain/tranche-record.js';
+import { codeParams } from '../fixtures/code-terms.js';
 import {
   attemptAssessment,
   type Scenario,
@@ -88,7 +89,12 @@ export class NetworkFlow {
             payee_ref: 'sim-builder',
             cap: { minor: 1000, currency: 'USD' },
             milestones: [
-              { name: 'build', amount: { minor: 1000, currency: 'USD' }, profile: this.scenario.profile, params: {} },
+              {
+                name: 'build',
+                amount: { minor: 1000, currency: 'USD' },
+                profile: this.scenario.profile,
+                params: this.scenario.profile.startsWith('code.') ? codeParams : {},
+              },
             ],
             window_days: 7,
             max_resubmits: 1,
