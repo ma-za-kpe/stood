@@ -106,7 +106,7 @@ describe('runCodeJob', () => {
     expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
     const t = await h.state();
     expect(t.state).toBe('VOID_PENDING');
-    expect(t.decisions.at(-1)?.decision).toMatchObject({ outcome: 'REFUSE', namedField: 'tests_skipped' });
+    expect(t.decisions.at(-1)?.decision).toMatchObject({ outcome: 'REFUSE', namedField: 'tests_failed' });
   });
 
   it('refuses a commit that changed the buyer tests, even when the run passes', async () => {

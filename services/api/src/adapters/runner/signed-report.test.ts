@@ -87,6 +87,17 @@ describe('Bound signed runner reports, with no submitted code execution (T-0171)
       'tests_skipped',
     ],
     [{ tests: [] }, 'REFUSE', 'tests_skipped'],
+    // A test that ran and failed is named as failed, not skipped (live runner, 2026-10-09).
+    [
+      {
+        tests: [
+          { id: 'acceptance:booking', status: 'PASS' },
+          { id: 'acceptance:reminder', status: 'FAIL' },
+        ],
+      },
+      'REFUSE',
+      'tests_failed',
+    ],
     [{ mutationScore: 0.3 }, 'WAIT', null],
     [{ spentMinor: 120001 }, 'REFUSE', 'budget_mandate'],
   ])('derives a conservative assessment for %j', (patch, outcome, namedField) => {

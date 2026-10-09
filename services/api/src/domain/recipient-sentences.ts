@@ -20,6 +20,9 @@ export function recipientAssessment(decision: Decision, matchedDate?: string): R
       case 'tests_skipped':
         inspector = 'Run every frozen test without skips or selective execution.';
         break;
+      case 'tests_failed':
+        inspector = 'Make every frozen test pass on a new commit, then submit again.';
+        break;
       // Site-visit scenario instructions.
       case 'plot': {
         const distance = decision.detail?.distance_m;
