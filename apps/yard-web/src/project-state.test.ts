@@ -169,3 +169,78 @@ it('advances past private placeholders and secret metadata without reloading, bu
     expect(applyEvent(room, { seq: 6, type, actor: '', payload: {} })).toBe(room);
   }
 });
+
+// T-0275: snapshots with an impossible clock, attempt or refusal record are refused, never shown.
+it('refuses impossible clocks, attempts and refusal history in a room snapshot', () => {
+  const base = {
+    id: 'p',
+    version: 1,
+    summary: 's',
+    currency: 'USD',
+    simulated: true,
+    orders: [
+      {
+        id: 'o',
+        name: 'm',
+        state: 'BUILDING',
+        budgetMinor: 100,
+        trancheId: 't',
+        payment: null,
+        submission: null,
+        leasedUntil: null,
+      },
+    ],
+  };
+  expect(() => roomChecked({ ...base, clock: -1 })).toThrow('Invalid server clock');
+  expect(() => roomChecked({ ...base, orders: [{ ...base.orders[0], attempt: 0 }] })).toThrow('Invalid attempt');
+  expect(() => roomChecked({ ...base, orders: [{ ...base.orders[0], refusals: [{ packageId: 'p' }] }] })).toThrow(
+    'Invalid refusal history',
+  );
+});
+
+// T-0275: room events either apply exactly or force a reload; they never guess.
+it('reloads on invalid positions, unknown milestones and submissions, and keeps leases from events', () => {
+  const room = roomChecked({
+    id: 'p',
+    version: 6,
+    summary: 's',
+    currency: 'USD',
+    simulated: true,
+    orders: [
+      {
+        id: 'one',
+        name: 'm',
+        state: 'CLAIMED',
+        budgetMinor: 100,
+        trancheId: 't',
+        payment: null,
+        submission: null,
+        leasedUntil: null,
+      },
+    ],
+  });
+  const building = {
+    seq: 7,
+    type: 'wo.building',
+    actor: 'builder',
+    payload: { wo: 'one', state: 'BUILDING', leasedUntil: 99 },
+  };
+  for (const seq of [0, -1, 1.5]) expect(applyEvent(room, { ...building, seq })).toBe('GAP');
+  expect(applyEvent(room, { ...building, payload: { wo: 'missing', state: 'BUILDING' } })).toBe('GAP');
+  expect(applyEvent(room, { ...building, payload: { wo: 'one', state: 'PAID' } })).toBe('GAP');
+  const next = applyEvent(room, building);
+  if (next === 'GAP') throw new Error('Expected building');
+  expect(next.orders[0]).toMatchObject({ state: 'BUILDING', leasedUntil: 99 });
+  const unchangedLease = applyEvent(room, { ...building, payload: { wo: 'one' } });
+  if (unchangedLease === 'GAP') throw new Error('Expected building');
+  expect(unchangedLease.orders[0]?.leasedUntil).toBeNull();
+  expect(applyEvent(next, { seq: 8, type: 'wo.submitted', actor: 'builder', payload: { wo: 'one' } })).toBe('GAP');
+  expect(() =>
+    roomChecked({ ...room, orders: [{ ...room.orders[0], state: 'BUILDING', payment: { effect: 'CAPTURE' } }] }),
+  ).toThrow('Unknown money state');
+});
+it('refuses a signing flag that is not a boolean', () => {
+  expect(() =>
+    roomChecked({ id: 'p', version: 1, summary: 's', currency: 'USD', simulated: true, orders: [], signed: 'yes' }),
+  ).toThrow('Invalid signing state');
+});

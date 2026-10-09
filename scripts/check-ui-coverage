@@ -1,10 +1,8 @@
 #!/bin/sh
-# C2 closure gate. Collect complete unit inventory, add source-mapped hosted browser coverage, enforce 98%.
+# C2 closure gate (T-0275): the whole Yard web app must reach 98% statements, lines, functions and branches.
+# One instrumentation (Vitest V8 over unit and jsdom component tests) measures every app source file; the
+# browser journeys (scripts/check-hosted-yard, scripts/mock-network) remain behaviour gates, not coverage.
+# Also runs on every push and PR through `pnpm validate`.
 set -eu
 cd "$(dirname "$0")/.."
-docker compose run --rm app pnpm exec vitest run --config vitest.ui.config.ts --coverage \
-  --coverage.thresholds.statements=0 --coverage.thresholds.lines=0 \
-  --coverage.thresholds.functions=0 --coverage.thresholds.branches=0
-YARD_UI_COVERAGE=1 scripts/check-hosted-yard
-YARD_UI_COVERAGE=1 scripts/mock-network
-exec docker compose run --rm app node tools/site/ui-coverage.mjs
+exec docker compose run --rm app pnpm test:ui

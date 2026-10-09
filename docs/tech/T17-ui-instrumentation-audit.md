@@ -1,6 +1,6 @@
 # T17: Yard UI instrumentation audit
 
-C2 remains open. The owner requires a smoother discovery/intake experience and 98% coverage for the app and its state management before closure (2026-10-08).
+The owner required a smoother discovery/intake experience and 98% coverage for the app and its state management before C2 closes (2026-10-08). The coverage requirement is now met and enforced (T-0275, 2026-10-09).
 
 ## Verified deployed behavior
 
@@ -10,17 +10,19 @@ The supplied saved intake link restored step 8, ownership/handover. The previous
 
 The copied Kenyan coffee payload includes `owner_user_id: null`; the deployed importer rejected that key. The regression proved the failure before sanitization. Known private metadata is now removed before validation, with a visible notice; source rejection, veto caveat and scores remain intact. Embedded secrets and explicitly private reports remain blocked.
 
-## Coverage diagnosis
+## Coverage: how it is measured now (T-0275)
 
-The standard unit report's 91.36% overall branch result includes only `project-state.ts` from Yard web. It excludes React screens, HTTP/session helpers and most other app helpers. That percentage does not describe full app coverage.
+**Result, every Yard web source file, unexecuted screens counted as zero: statements 98.88%, branches 98.06%, functions 100%, lines 99.78%** (79 tests in 22 files; identical on repeated runs). Before: 24.19% statements, 32.73% branches, 18.53% functions.
 
-A separate full-source app unit audit includes every `apps/yard-web/src/**/*.{ts,tsx}` file and excludes only tests. Before the UX revision it measured 32.73% branches, 24.19% lines/statements and 18.53% functions. React components and `http.ts` had no unit instrumentation; helper gaps included intake conversion, session notice paths, claim retry keys and project snapshot validation. Browser journeys exercise many of these components, but those executions were not merged into source coverage. Zero unit instrumentation does not mean a component never ran in a browser.
+**One instrumentation.** `vitest.ui.config.ts` measures all of `apps/yard-web/src/**/*.{ts,tsx}` with Vitest's V8 provider over unit tests and React component tests in jsdom (Testing Library). Component tests drive the real screens against a scripted API (`apps/yard-web/test/harness.tsx`, `intake-server.ts`): sign-in and sign-out, the Board, the project room and its live stream, intake (local and hosted), import, blueprint review and edits, keys, site log and handover, including double clicks, version conflicts, lost replies, late replies after leaving the page, and other tabs changing the same brief. Thresholds are 98% in all four metrics with no override.
 
-`scripts/check-ui-coverage` now collects the full unit inventory, builds an audit-only source-mapped production image, runs desktop/mobile hosted browser journeys, converts their V8 results using the exact converter already pinned by Vitest, merges app-owned source coverage and enforces 98% in all four metrics. Dependencies do not enter the app summary. Empty instrumentation, missing source files or missing app source maps fail the gate. Reports go to `artifacts/ui-audit/`; browser records go to `artifacts/hosted-yard/`.
+**Required.** `pnpm test:ui` runs inside `pnpm validate`, so the pre-push hook and CI enforce it on every push and PR. `scripts/check-ui-coverage` runs the same gate on its own.
 
-The combined gate currently fails the 98% requirement; this is recorded evidence, not a disabled threshold. Production Render builds keep source maps off; only the audit image uses `YARD_UI_COVERAGE=1`. Integration of connected-room browser source coverage, raising the remaining metrics and making this a required CI app gate remain T-0275. Existing CI and money-domain gates cannot waive the C2 closure requirement.
+**Why the combined unit-plus-browser merge was retired.** Istanbul merges coverage by source location. The unit report and the browser report came from differently compiled code (a test transform versus a minified production bundle mapped back), so the same statement got different locations and was counted twice, once covered and once not. That made `project-state.ts` fall from 90% (unit) to 69% (combined), which is impossible for a real union, and made 98% unreachable however many tests were added. `tools/site/ui-coverage.mjs` is removed. The browser journeys stay as behaviour gates, and their V8 capture (`YARD_UI_COVERAGE=1`) remains an optional diagnostic only.
 
-Live Chromium V8 records were also captured in `artifacts/live-yard/yard-live-v8-{desktop,mobile}.json`. Those live bundles include dependencies and have no source maps; do not quote their byte percentages as app coverage.
+**Real bugs the new tests found:** the site log hid why it stopped after an access change (T-0280), and clearing a blueprint deadline silently set it to 1 January 2000 because V8 parses `':00Z'` as a date (T-0281). Both are fixed.
+
+**Still defensive, deliberately uncovered:** a few guards that cannot be reached through the page (for example, re-importing an idea the full-report check already validated).
 
 ## Existing E2E instrumentation
 
@@ -31,7 +33,7 @@ Live Chromium V8 records were also captured in `artifacts/live-yard/yard-live-v8
 | Hosted-image browser | Secure sign-in, Board, automatic gallery/search/detail, sanitized full import, private persistence, direct reload/overview/edit, logout, builder refusal, axe, overflow and zero CSP violations | Disposable Postgres; discovery response controlled for repeatability |
 | Actual hosted browser | Real operator sign-in, ten-item discovery, full import/reload, logout/privacy, desktop/mobile axe and CSP | Requires private owner codes; broad error/session-expiry paths are not all exercised |
 
-## Work required before C2 closure
+## Remaining before C2 closure
 
 - Integrate source-mapped app instrumentation for both hosted and connected journeys, merging with unit coverage against a complete source inventory.
 - Assert hosted session expiry/401 cleanup, 429/503/timeout/offline/recovery and cancellation races, including pending imports or saves during logout.
