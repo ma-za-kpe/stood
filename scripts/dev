@@ -107,7 +107,7 @@ PY
     # Only the sandbox app keys reach the container, from a private temporary file (T-0224).
     shift; [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
     keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
-    grep -E '^(PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|STOOD_SANDBOX_PAYEE_ID|PAYPAL_SANDBOX_VAULT_TOKEN_ID)=' .env >"$keys" || true
+    grep -E '^(PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|STOOD_SANDBOX_PAYEE_ID|PAYPAL_SANDBOX_VAULT_TOKEN_ID|KERNEL_API_KEY|PAYPAL_SANDBOX_BUYER_EMAIL|PAYPAL_SANDBOX_BUYER_PASSWORD)=' .env >"$keys" || true
     docker compose run --rm --env-from-file "$keys" app \
       sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/sandbox-run-cli.js "$@"' sandbox-run "$@"
     # vault-setup leaves the saved payment token in .sandbox/; move it into .env (never printed), then delete it.

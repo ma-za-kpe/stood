@@ -194,6 +194,10 @@ Render has no spend cap, so Yard keeps its own: at most three live `yard-preview
 scripts/dev preview-check   # one free-plan preview from a digest-pinned public image; waits for https, deletes it, checks it is gone
 ```
 
+### Unattended sandbox approval with Kernel (C3)
+
+`scripts/dev sandbox-run release|refuse|vault-setup` needs a buyer to approve on PayPal's sandbox page. With `KERNEL_API_KEY` (from kernel.sh) and the sandbox personal account's `PAYPAL_SANDBOX_BUYER_EMAIL` and `PAYPAL_SANDBOX_BUYER_PASSWORD` in `.env`, a Kernel cloud browser signs in and approves instead, so every outcome replays with nobody at the keyboard. It opens nothing but `https://www.sandbox.paypal.com`, never prints the password, and always ends the cloud browser (which also stops on its own after five idle minutes). Without them, the run prints the link for a person, as before.
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.
