@@ -10,6 +10,7 @@ import * as schema from './adapters/db-postgres/schema.js';
 import { PostgresTranches } from './adapters/db-postgres/tranches.js';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
 import { PayPalAdapter } from './adapters/payments-paypal/adapter.js';
+import { reportSigner } from './adapters/runner/report-signer.js';
 import { VercelSandboxRunner } from './adapters/runner/vercel-sandbox.js';
 import { vercelSandbox } from './adapters/runner/vercel-sdk.js';
 import { runCodeJob } from './application/code-run.js';
@@ -67,7 +68,7 @@ if (!missing.length && problem) {
           process.env.GITHUB_READ_TOKEN?.trim() ? { token: process.env.GITHUB_READ_TOKEN.trim() } : {},
         ),
         runner: new VercelSandboxRunner(vercelSandbox),
-        key: runner.key,
+        signer: reportSigner(runner.key),
         verifier: runner.verifier,
         runnerId: RUNNER_ID,
         imageDigest: RUNNER_IMAGE,

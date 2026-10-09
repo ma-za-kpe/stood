@@ -1,6 +1,7 @@
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { MemoryTranches } from '../../test/fakes/tranche-store.js';
+import { reportSigner } from '../adapters/runner/report-signer.js';
 import { SignedReportVerifier } from '../adapters/runner/signed-report.js';
 import { createTrancheRecord, restoreTrancheRecord } from '../domain/tranche-record.js';
 import { bundleHash } from './code-evidence.js';
@@ -84,7 +85,16 @@ async function harness(o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; chan
       };
     },
   };
-  const deps = { store, reader, runner, key, verifier, runnerId, imageDigest: 'e'.repeat(64), clock: () => now };
+  const deps = {
+    store,
+    reader,
+    runner,
+    signer: reportSigner(key),
+    verifier,
+    runnerId,
+    imageDigest: 'e'.repeat(64),
+    clock: () => now,
+  };
   const state = async () => restoreTrancheRecord((await store.load('trn')).record);
   return { deps, runs, state, store };
 }

@@ -1,3 +1,4 @@
+import type { CodeRunner, RunJob, RunResult } from '../../ports/code-runner.js';
 // The slice of a Vercel Sandbox session the runner uses; the CLI and worker wire the real SDK to it (ADR-0026).
 export type SandboxSession = Readonly<{
   writeFiles(files: readonly Readonly<{ path: string; content: Buffer }>[]): Promise<void>;
@@ -16,19 +17,8 @@ export type SandboxOptions = Readonly<{
   persistent: false;
   networkPolicy: NetworkPolicy;
 }>;
-export type RunJob = Readonly<{
-  // The builder's repository at the exact commit, as text files.
-  source: readonly Readonly<{ path: string; content: string }>[];
-  // The buyer's frozen tests: written last, so they replace anything the builder put at those paths.
-  frozenTests: readonly Readonly<{ id: string; path: string; content: string }>[];
-}>;
-export type RunResult = Readonly<{
-  tests: readonly Readonly<{ id: string; status: 'PASS' | 'FAIL' }>[];
-  installExitCode: number | null;
-}>;
+export type { RunJob, RunResult } from '../../ports/code-runner.js';
 
-// The node:24 image's writable home is /vercel (user ubuntu); the run gets its own directory, written and run by
-// absolute path so files and commands always meet (qualified live, 2026-10-09).
 const ROOT = '/vercel/run';
 const TEST_SECONDS = 120;
 const safe = (path: string) =>
@@ -43,7 +33,7 @@ const safe = (path: string) =>
 // only the npm registry while dependencies install (scripts off) and nothing at all while the buyer's tests run.
 // Each frozen test file passes only on exit 0 within its time limit. A VM that cannot start or dies mid-run is
 // RUNNER_UNAVAILABLE: the package waits, it never passes or fails on a missing run.
-export class VercelSandboxRunner {
+export class VercelSandboxRunner implements CodeRunner {
   constructor(private readonly sandbox: Readonly<{ create(options: SandboxOptions): Promise<SandboxSession> }>) {}
 
   async run(job: RunJob): Promise<RunResult> {

@@ -1,11 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { RunnerKey } from '../adapters/runner/report-signer.js';
-import { signRunnerReport } from '../adapters/runner/report-signer.js';
-import type { RunJob, RunResult } from '../adapters/runner/vercel-sandbox.js';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
+import type { CodeRunner } from '../ports/code-runner.js';
 import type { RepositoryReader } from '../ports/repository-reader.js';
-import type { FrozenCodeContract, RunnerReportVerifier } from '../ports/runner-report.js';
+import type { FrozenCodeContract, ReportSigner, RunnerReportVerifier } from '../ports/runner-report.js';
 import type { TrancheStore } from '../ports/tranche-store.js';
 import { bundleHash, repositoryChecks } from './code-evidence.js';
 import type { CodeTerms } from './code-terms.js';
@@ -30,8 +28,8 @@ type Deps = Readonly<{
     Readonly<{
       source(repository: string, commit: string): Promise<readonly Readonly<{ path: string; content: string }>[]>;
     }>;
-  runner: Readonly<{ run(job: RunJob): Promise<RunResult> }>;
-  key: RunnerKey;
+  runner: CodeRunner;
+  signer: ReportSigner;
   verifier: RunnerReportVerifier;
   runnerId: string;
   imageDigest: string;
@@ -107,7 +105,7 @@ export async function runCodeJob(job: RunnerJob, deps: Deps): Promise<'DECIDED' 
         profileId: job.profileId,
         priorDiffHashes: job.priorCommits.map((c) => diffHash(t.baseCommit, c)),
       };
-      const report = signRunnerReport(deps.key, {
+      const report = deps.signer.sign({
         contract,
         tests: run.tests,
         diffHash: diffHash(t.baseCommit, job.package.commit),
