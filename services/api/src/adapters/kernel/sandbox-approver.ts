@@ -7,6 +7,8 @@ export type ApprovalPage = Readonly<{
   click(selector: string): Promise<void>;
   url(): string;
   waitForURL(test: (url: URL) => boolean, options?: { timeout?: number }): Promise<void>;
+  // Optional evidence: a screenshot of the current step, with the buyer's login masked by the caller.
+  capture?(step: string): Promise<void>;
 }>;
 type Config = Readonly<{
   apiKey: string;
@@ -59,20 +61,26 @@ export class KernelSandboxApprover {
         english.searchParams.set('locale.x', 'en_US');
         await page.goto(english.href);
         await page.waitForSelector(`${EMAIL}, ${APPROVE}`, { timeout: 60_000 });
+        // Screenshots are evidence only: a failed capture never stops an approval.
+        const capture = (step: string) => page.capture?.(step).catch(() => undefined);
         if (await page.isVisible(EMAIL)) {
+          await capture('1-sign-in');
           await page.fill(EMAIL, this.config.buyerEmail);
           await page.click(NEXT);
           await page.waitForSelector(PASSWORD, { timeout: 30_000 });
+          await capture('2-password');
           await page.fill(PASSWORD, this.config.buyerPassword);
           await page.click(LOGIN);
           await page.waitForSelector(APPROVE, { timeout: 60_000 });
         }
+        await capture('3-approve');
         await page.click(APPROVE);
         // With a return URL PayPal hands the buyer back; without one (plain funding orders) it stays put. Either way
         // the caller confirms approval from PayPal's API (the sandbox run polls for APPROVED), never from the page.
         await page
           .waitForURL((u) => u.hostname !== 'paypal.com' && !u.hostname.endsWith('.paypal.com'), { timeout: 15_000 })
           .catch(() => undefined);
+        await capture('4-approved');
       } finally {
         await browser.close();
       }

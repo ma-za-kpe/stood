@@ -23,6 +23,9 @@ function harness(over: { returnTo?: string; loginShown?: boolean } = {}) {
       if (s.includes('Review Order')) url = over.returnTo ?? 'https://stood-api.onrender.com/v1/approved?token=x';
     },
     url: () => url,
+    capture: async (step) => {
+      calls.push(`capture ${step}`);
+    },
     waitForURL: async (test) => {
       if (!test(new URL(url))) throw new Error('timeout');
     },
@@ -61,13 +64,17 @@ describe('KernelSandboxApprover', () => {
     expect(h.calls).toEqual([
       `goto ${english}`,
       `wait input[type=email], #email, ${approve}`,
+      'capture 1-sign-in',
       'fill input[type=email], #email buyer@personal.example.com',
       'click #btnNext, button:has-text("Next")',
       'wait #password, input[type=password]',
+      'capture 2-password',
       'fill #password, input[type=password] <hidden>',
       'click #btnLogin, button:has-text("Log In")',
       `wait ${approve}`,
+      'capture 3-approve',
       `click ${approve}`,
+      'capture 4-approved',
       'close',
     ]);
     expect(h.kernel).toEqual(['POST /browsers Bearer kernel-key', 'DELETE /browsers/ses_1 Bearer kernel-key']);
