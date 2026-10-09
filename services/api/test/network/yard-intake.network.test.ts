@@ -95,5 +95,6 @@ it('Yard network: private resumable autosave with metadata-only events and no cr
   expect((await request(`${path}/plan`, 'POST', {}, 2, 'stale-plan')).status).toBe(409);
   expect((await request(`${path}/plan`, 'POST', {}, 3, 'builder-plan', 'builder')).status).toBe(403);
   const health = await (await fetch('http://yard-api:3001/health')).json();
-  expect(health.capabilities).toMatchObject({ intake: true, credentials: false, payments: false });
+  // T-0189: payments means connected to Stood (simulated here); no credential intake either way.
+  expect(health.capabilities).toMatchObject({ intake: true, credentials: false, payments: true });
 });
