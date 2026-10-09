@@ -154,6 +154,9 @@ importers:
       '@stood/yard-domain':
         specifier: workspace:*
         version: link:../../packages/yard-domain
+      '@stood/yard-foreman':
+        specifier: workspace:*
+        version: link:../yard-foreman
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/pg@8.23.1)(pg@8.23.1)
