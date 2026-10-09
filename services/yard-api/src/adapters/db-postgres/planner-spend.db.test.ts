@@ -45,4 +45,7 @@ it('reserves atomically against a daily budget, settles real costs and starts ag
   now += 86_400_000;
   expect(await guard.reserve(10_000)).toBe(true);
   await expect(runtime.query('DROP TABLE yard.planner_spend')).rejects.toThrow(/must be owner|permission denied/);
+  // The Foreman's checkpoint tables come with every release, usable by the runtime role and nothing more.
+  expect((await runtime.query('SELECT count(*)::int AS n FROM yard.checkpoints')).rows[0].n).toBe(0);
+  await expect(runtime.query('DROP TABLE yard.checkpoints')).rejects.toThrow(/must be owner|permission denied/);
 });

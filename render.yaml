@@ -103,3 +103,18 @@ services:
         sync: false
       - key: YARD_SECRET_KEYS
         sync: false
+      # T-0181: the hosted Foreman. Only the xAI key and the App's private key are secrets; the rest is public.
+      - key: GROK_PLANNER_API_KEY
+        sync: false
+      - key: GROK_PLANNER_MODEL
+        value: grok-build-0.1
+      - key: GROK_DAILY_BUDGET_USD
+        value: "0.50"
+      - key: GITHUB_APP_ID
+        value: "5230872"
+      - key: GITHUB_APP_PRIVATE_KEY_BASE64
+        sync: false
+      - key: GITHUB_APP_INSTALLATION_ID
+        value: "169056228"
+      - key: YARD_SANDBOX_REPOSITORY
+        value: ma-za-kpe/yard-sandbox

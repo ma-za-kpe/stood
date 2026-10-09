@@ -1,16 +1,21 @@
+import { Foreman, GrokPlannerModel, PostgresForemanCoordinator, PostgresSaver } from '@stood/yard-foreman';
 import pg from 'pg';
 import { LocalKeyWrapper } from './adapters/crypto/local-key-wrapper.js';
 import { PostgresYardEvents } from './adapters/db-postgres/events.js';
 import { PostgresIntakes } from './adapters/db-postgres/intakes.js';
+import { PostgresPlannerSpend } from './adapters/db-postgres/planner-spend.js';
 import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
+import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, type Operator } from './application/board.js';
+import { IntakePlanner } from './application/intake-planner.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
 import type { createYardApp } from './http/app.js';
 import { startLogRetention } from './jobs/site-log-retention.js';
+import { YardError } from './ports/events.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
 type Config = Parameters<typeof createYardApp>[0];
@@ -34,7 +39,7 @@ export function yardRuntime(env: Env) {
   else if (!operators) notes.push('Board off: YARD_OPERATORS is not a valid operator list.');
   if (!env.YARD_SECRET_KEYS?.trim()) notes.push('Board off: YARD_SECRET_KEYS is missing.');
   else if (!keys) notes.push('Board off: YARD_SECRET_KEYS is not a valid key list.');
-  notes.push('Foreman off: the hosted planner is not connected yet.');
+  const planner = plannerConfig(env, notes);
   notes.push('Payments off: Yard is not connected to Stood yet.');
   if (notes.some((n) => n.startsWith('Board off')) || !operators || !keys)
     return { config: { environment } as Config, notes, start: async () => {}, stop: async () => {} };
@@ -48,6 +53,21 @@ export function yardRuntime(env: Env) {
   let retention: ReturnType<typeof startLogRetention> | null = null;
   // T-0266/T-0267: hosted sign-in when the owner issued access codes, and the page when it is built into the image.
   const signIn = operators.some((o) => o.accessCode);
+  const intakes = new PostgresIntakes(pool, events);
+  const foreman = planner
+    ? new Foreman(
+        new GrokPlannerModel({
+          apiKey: planner.apiKey,
+          ...(planner.model ? { model: planner.model } : {}),
+          guard: new PostgresPlannerSpend(pool, planner.dailyMicros),
+          // Token counts and cost only: never the prompt, the draft or the key.
+          log: (usage) => process.stderr.write(`${JSON.stringify({ code: 'PLANNER_USAGE', ...usage })}\n`),
+        }),
+        new PostgresSaver(pool, undefined, { schema: 'yard' }),
+        false,
+        new PostgresForemanCoordinator(pool),
+      )
+    : null;
   const config: Config = {
     environment,
     research: new TribunalCatalog(),
@@ -55,7 +75,10 @@ export function yardRuntime(env: Env) {
     ...(env.YARD_WEB_DIR ? { web: { root: env.YARD_WEB_DIR } } : {}),
     board: {
       board,
-      intakes: new PostgresIntakes(pool, events),
+      intakes,
+      ...(foreman && planner
+        ? { foreman, intakePlanner: new IntakePlanner(intakes, foreman, planner.repositories) }
+        : {}),
       clock,
       operators,
       secrets: new SecretVault(new PostgresSecretRows(pool), new LocalKeyWrapper(keys.keys, keys.current)),
@@ -73,6 +96,46 @@ export function yardRuntime(env: Env) {
     async stop() {
       retention?.stop();
       await pool.end();
+    },
+  };
+}
+
+// T-0181: the hosted Foreman needs a planner key, a sane daily cap and the GitHub App, which pins every plan to the
+// sandbox repository's real main. Yard plans against that one repository; anything else is refused.
+export function plannerConfig(env: Env, notes: string[]) {
+  const apiKey = env.GROK_PLANNER_API_KEY?.trim() ?? '';
+  const budget = env.GROK_DAILY_BUDGET_USD?.trim() || '0.50';
+  const dollars = /^\d{1,2}(\.\d{1,2})?$/.test(budget) ? Number(budget) : Number.NaN;
+  const repository = env.YARD_SANDBOX_REPOSITORY?.trim() ?? '';
+  const installation = env.GITHUB_APP_INSTALLATION_ID?.trim() ?? '';
+  let github: GitHubRepositories | null = null;
+  try {
+    if (/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/.test(repository) && /^\d+$/.test(installation))
+      github = new GitHubRepositories({
+        appId: env.GITHUB_APP_ID?.trim() ?? '',
+        privateKey: Buffer.from(env.GITHUB_APP_PRIVATE_KEY_BASE64 ?? '', 'base64').toString('utf8'),
+        installations: [{ id: installation, owner: repository.split('/')[0] as string }],
+        allowed: [repository],
+      });
+  } catch {
+    github = null;
+  }
+  if (!apiKey) notes.push('Foreman off: GROK_PLANNER_API_KEY is missing.');
+  else if (!(dollars >= 0.01 && dollars <= 5))
+    notes.push('Foreman off: GROK_DAILY_BUDGET_USD must be a dollar amount from 0.01 to 5.');
+  else if (!github) notes.push('Foreman off: the GitHub App is not configured.');
+  if (!apiKey || !(dollars >= 0.01 && dollars <= 5) || !github) return null;
+  const app = github;
+  return {
+    apiKey,
+    model: env.GROK_PLANNER_MODEL?.trim() || undefined,
+    dailyMicros: Math.round(dollars * 1_000_000),
+    repositories: {
+      async resolve(_buyer: string, requested: string) {
+        if (requested !== repository) throw new YardError('FORBIDDEN');
+        const read = await app.issue(installation, repository, 'READ');
+        return { repository, baseCommit: await app.head(read.value, repository, 'main') };
+      },
     },
   };
 }

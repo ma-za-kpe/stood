@@ -1,7 +1,7 @@
-import { randomBytes } from 'node:crypto';
-import { expect, it } from 'vitest';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { expect, it, vi } from 'vitest';
 import { createYardApp } from './http/app.js';
-import { yardRuntime } from './runtime.js';
+import { plannerConfig, yardRuntime } from './runtime.js';
 
 const secret = 's'.repeat(40);
 const operators = JSON.stringify([
@@ -28,7 +28,7 @@ it('wires the Board, site log and secrets from configuration, and says why the r
     payments: false,
   });
   expect(runtime.notes).toEqual([
-    'Foreman off: the hosted planner is not connected yet.',
+    'Foreman off: GROK_PLANNER_API_KEY is missing.',
     'Payments off: Yard is not connected to Stood yet.',
   ]);
   await runtime.stop();
@@ -80,4 +80,57 @@ it('connects private durable intake independently from the planner', async () =>
   expect(await capabilities(hosted)).toMatchObject({ intake: true, foreman: false, payments: false });
   expect(runtime.notes).not.toContain('Intake and Foreman off: the hosted planner is not connected yet.');
   await runtime.stop();
+});
+
+// T-0181: the hosted Foreman runs only with a planner key, a sane daily cap and the GitHub App that pins each
+// plan to the sandbox repository's real head. Anything missing is a named note; no value is ever echoed.
+it('turns on the Foreman only when the planner, its budget and the GitHub App are all configured', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const planner = {
+    ...hosted,
+    GROK_PLANNER_API_KEY: 'xai-not-a-real-key-0000',
+    GITHUB_APP_ID: '123456',
+    GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from(privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+    GITHUB_APP_INSTALLATION_ID: '987654',
+    YARD_SANDBOX_REPOSITORY: 'owner/sandbox',
+  };
+  // Plans pin the sandbox's real main through a read-only token; any other repository is refused before GitHub.
+  const calls: string[] = [];
+  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+    calls.push(`${init.method} ${new URL(url).pathname}`);
+    return url.endsWith('/access_tokens')
+      ? Response.json({ token: 'ghs_read', expires_at: new Date(Date.now() + 600_000).toISOString() })
+      : Response.json({ object: { sha: 'a'.repeat(40) } });
+  });
+  const resolver = plannerConfig(planner, [])?.repositories;
+  vi.unstubAllGlobals();
+  await expect(resolver?.resolve('buyer', 'owner/other')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  expect(calls).toEqual([]);
+  expect(await resolver?.resolve('buyer', 'owner/sandbox')).toEqual({
+    repository: 'owner/sandbox',
+    baseCommit: 'a'.repeat(40),
+  });
+  expect(calls).toEqual([
+    'POST /app/installations/987654/access_tokens',
+    'GET /repos/owner/sandbox/git/ref/heads/main',
+  ]);
+  expect(plannerConfig({ ...planner, GROK_DAILY_BUDGET_USD: '' }, [])?.dailyMicros).toBe(500_000);
+  const on = yardRuntime(planner);
+  expect(on.notes).toEqual(['Payments off: Yard is not connected to Stood yet.']);
+  expect(await capabilities(planner)).toMatchObject({ board: true, intake: true, foreman: true });
+  await on.stop();
+  for (const [change, note] of [
+    [{ GROK_PLANNER_API_KEY: ' ' }, 'Foreman off: GROK_PLANNER_API_KEY is missing.'],
+    [{ GROK_DAILY_BUDGET_USD: 'lots' }, 'Foreman off: GROK_DAILY_BUDGET_USD must be a dollar amount from 0.01 to 5.'],
+    [{ GROK_DAILY_BUDGET_USD: '50' }, 'Foreman off: GROK_DAILY_BUDGET_USD must be a dollar amount from 0.01 to 5.'],
+    [{ GITHUB_APP_PRIVATE_KEY_BASE64: '' }, 'Foreman off: the GitHub App is not configured.'],
+    [{ YARD_SANDBOX_REPOSITORY: 'not a repository' }, 'Foreman off: the GitHub App is not configured.'],
+  ] as const) {
+    const env = { ...planner, ...change };
+    const runtime = yardRuntime(env);
+    expect(runtime.notes).toContain(note);
+    expect(JSON.stringify(runtime.notes)).not.toMatch(/xai-not|987654|owner\/sandbox|lots/);
+    expect(await capabilities(env)).toMatchObject({ foreman: false });
+    await runtime.stop();
+  }
 });

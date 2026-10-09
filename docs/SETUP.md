@@ -165,6 +165,19 @@ The Foreman drafts blueprints with xAI's Grok through `GrokPlannerModel`. It use
 scripts/dev planner-check   # five live drafts against the shared contract; about $0.01 in total
 ```
 
+**Hosted (T-0181).** `stood-yard-api` turns the Foreman on only when all of these are set. `render.yaml` commits the public ones; Render prompts for the two secrets, `GROK_PLANNER_API_KEY` and `GITHUB_APP_PRIVATE_KEY_BASE64`. Otherwise `/health` reports `foreman: false` and the log names what is missing (never a value):
+
+| Variable | Value |
+| --- | --- |
+| `GROK_PLANNER_API_KEY` | the xAI key |
+| `GROK_DAILY_BUDGET_USD` | daily cap, $0.01 to $5; empty means $0.50 |
+| `GROK_PLANNER_MODEL` | optional; empty means `grok-build-0.1` |
+| `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` | from the Yard Builder App |
+| `GITHUB_APP_PRIVATE_KEY_BASE64` | `base64 < key.pem \| tr -d '\n'` |
+| `YARD_SANDBOX_REPOSITORY` | the one repository Yard plans against, `owner/name` |
+
+The spend cap is kept in Postgres (`yard.planner_spend`), so restarts and extra instances share one daily budget. Plans are pinned to the repository's real `main` through a read-only token. The pre-deploy migration also creates the Foreman's checkpoint tables.
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.

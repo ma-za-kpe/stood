@@ -1,5 +1,5 @@
-import type { SpendGuard } from '@stood/yard-foreman';
-import type pg from 'pg';
+import { PostgresSaver, type SpendGuard } from '@stood/yard-foreman';
+import pg from 'pg';
 
 const DAY = 86_400_000;
 
@@ -21,6 +21,20 @@ export async function migrateYardPlannerSpend(pool: pg.Pool, owner: string): Pro
     throw error;
   } finally {
     c.release();
+  }
+}
+
+// Every release: the Foreman's LangGraph checkpoint tables, created as the owner so the runtime role only gets the
+// rights Yard's default privileges grant. LangGraph's own migration table makes this idempotent.
+export async function migrateYardCheckpoints(pool: pg.Pool, owner: string): Promise<void> {
+  if (!/^[a-z][a-z0-9_]{0,62}$/.test(owner)) throw new RangeError('Invalid Yard owner');
+  const { rows } = await pool.query<{ db: string }>('SELECT current_database() AS db');
+  await pool.query(`GRANT CREATE ON DATABASE "${String(rows[0]?.db).replaceAll('"', '""')}" TO ${owner}`);
+  const asOwner = new pg.Pool({ connectionString: pool.options.connectionString, options: `-c role=${owner}`, max: 1 });
+  try {
+    await new PostgresSaver(asOwner, undefined, { schema: 'yard' }).setup();
+  } finally {
+    await asOwner.end();
   }
 }
 
