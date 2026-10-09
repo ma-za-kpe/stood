@@ -3,6 +3,6 @@
   "globalPassThroughEnv": ["DATABASE_URL", "STOOD_TEST_TIMEOUT_MS"],
   "tasks": {
     "typecheck": { "dependsOn": ["^typecheck"], "outputs": [] },
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] }
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"], "env": ["YARD_UI_COVERAGE"] }
   }
 }

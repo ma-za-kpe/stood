@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,16 +22,25 @@ export function staticServer(directory, publicPrefix = '') {
       const url = new URL(req.url, 'http://localhost');
       let file = resolve(root, `.${decodeURIComponent(url.pathname)}`);
       if (!file.startsWith(`${root}/`) && file !== root) throw new Error('Outside site');
-      if (statSync(file).isDirectory()) {
-        if (!url.pathname.endsWith('/')) {
-          res
-            .writeHead(308, { Location: `${publicPrefix}${url.pathname}/${url.search}`, 'Cache-Control': 'no-store' })
-            .end();
-          return;
+      // Open once and use that handle to check and read, so the file cannot change between the two.
+      let fd = openSync(file, 'r');
+      let content;
+      try {
+        if (fstatSync(fd).isDirectory()) {
+          if (!url.pathname.endsWith('/')) {
+            res
+              .writeHead(308, { Location: `${publicPrefix}${url.pathname}/${url.search}`, 'Cache-Control': 'no-store' })
+              .end();
+            return;
+          }
+          closeSync(fd);
+          fd = openSync(resolve(file, 'index.html'), 'r');
+          file = resolve(file, 'index.html');
         }
-        file = resolve(file, 'index.html');
+        content = readFileSync(fd);
+      } finally {
+        closeSync(fd);
       }
-      const content = readFileSync(file);
       res.writeHead(200, {
         'Content-Type': mime[extname(file)] ?? 'application/octet-stream',
         'Cache-Control': 'no-store',

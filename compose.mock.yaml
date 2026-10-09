@@ -13,6 +13,7 @@ x-node: &node
   environment:
     APP_ENV: ci
     NETWORK_MOCK: "true"
+    YARD_UI_COVERAGE: ${YARD_UI_COVERAGE:-0}
   networks: [mock]
 services:
   runner:
@@ -88,6 +89,8 @@ services:
     shm_size: 256m
     working_dir: /workspace
     command: [node, tools/site/mock-room-smoke.mjs]
+    environment:
+      YARD_UI_COVERAGE: ${YARD_UI_COVERAGE:-0}
     volumes:
       - ./tools/site/mock-room-smoke.mjs:/workspace/tools/site/mock-room-smoke.mjs:ro
       - ./artifacts/mock-network:/workspace/artifacts/mock-network

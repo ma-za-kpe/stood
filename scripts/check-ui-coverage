@@ -1,0 +1,8 @@
+#!/bin/sh
+# C2 closure gate (T-0275): the whole Yard web app must reach 98% statements, lines, functions and branches.
+# One instrumentation (Vitest V8 over unit and jsdom component tests) measures every app source file; the
+# browser journeys (scripts/check-hosted-yard, scripts/mock-network) remain behaviour gates, not coverage.
+# Also runs on every push and PR through `pnpm validate`.
+set -eu
+cd "$(dirname "$0")/.."
+exec docker compose run --rm app pnpm test:ui

@@ -190,3 +190,9 @@ The form currently uses labelled text/list/service inputs; feature-specific ques
 The hosted app now uses operator access-code sessions and the existing private Postgres intake store. Buyers can start or resume drafts; builders cannot read them. Saving a draft is independent of planning: the hosted Foreman remains off until the live adapter is connected.
 
 Startup Tribunal imports use the shared `startup-tribunal@1` parser and the full public fixture from issue #99. Buyer-confirmed imports fill only research fields, country choices and stack preferences. They preserve attribution, the tribunal decision/caveat and source quality signals; budget, consent, ownership and sign-off remain buyer decisions. No URL in research is fetched, no HTML is rendered, and no model or payment is called. Reports over the intake field limits produce a visible excerpt warning. The public feed is for discovery; its blueprint link leads to Copy JSON for the full research.
+
+### C2 owner UX revision and coverage closure requirement
+
+The start screen loads a searchable idea gallery beside the own-project action. Selecting a card opens focused review; confirming saves only its reviewed catalog summary. Full Copy JSON import is secondary, sanitizes private metadata and retains source decision/caveat/quality. Saved intake links open the brief overview directly, with optional first-step details and direct section navigation; editing retains the saved step. Reviewing an incomplete hosted brief is allowed, while actual planning still requires complete buyer choices.
+
+C2 remains open until full app-owned TS/TSX source coverage reaches 98% statements, lines, functions and branches with combined source-mapped unit/browser instrumentation. The combined unit/hosted-browser closure check `scripts/check-ui-coverage` currently fails; passing browser journeys do not establish that coverage. See [the audit](../tech/T17-ui-instrumentation-audit.md).

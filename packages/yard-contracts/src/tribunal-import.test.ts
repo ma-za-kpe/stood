@@ -33,8 +33,7 @@ it('refuses malformed, oversized, deeply nested, private-pointer, credential and
     '{}',
     ' '.repeat(131073),
     JSON.stringify({ ...fixture, extra: 'gs://bucket/private' }),
-    JSON.stringify({ ...fixture, owner_user_id: 'someone' }),
-    JSON.stringify({ ...fixture, extra: { api_key: 'sk_test_do_not_save_this' } }),
+    JSON.stringify({ ...fixture, extra: 'Embedded secret: sk_test_do_not_save_this' }),
     JSON.stringify({
       ...fixture,
       ideas_generated: [{ ...fixture.ideas_generated[0], competitors: [{ url: 'javascript:alert(1)' }] }],
@@ -71,4 +70,32 @@ it('keeps hostile instructions as quoted data and warns when the intake excerpt 
     'The intake uses a shortened research excerpt. Review and add any missing requirements before planning.',
   );
   expect(result.source.extra).toEqual({ unknown: 'preserved' });
+});
+
+it('sanitizes copied public-report metadata, preserves veto evidence and never returns private fields', () => {
+  const report = {
+    ...fixture,
+    title: 'Kenyan Coffee Lovers Lack Authentic Italian Espresso',
+    owner_user_id: null,
+    is_public: true,
+    isUnlocked: false,
+    catalog_decision: 'rejected',
+    catalog_caveat: 'A founder_fit tribunal veto prevents this report from being sold.',
+    consensus_score: '6.1',
+    extra: {
+      owner_user_id: 'private-owner',
+      report_gcs_url: 'gs://private/report',
+      access_token: 'private-token-not-to-retain',
+      useful: 'public research',
+    },
+  };
+  const result = tribunalImport(JSON.stringify(report));
+  expect(result.source).not.toHaveProperty('owner_user_id');
+  expect(result.source).not.toHaveProperty('isUnlocked');
+  expect(result.source.extra).toEqual({ useful: 'public research' });
+  expect(result.quality).toMatchObject({ decision: 'rejected', consensus: 6.1, caveat: report.catalog_caveat });
+  expect(result.warnings).toContain('Private metadata was removed from this research before review.');
+  expect(JSON.stringify(result)).not.toContain('private-token-not-to-retain');
+  expect(JSON.stringify(report)).toContain('private-owner');
+  expect(() => tribunalImport(JSON.stringify({ ...report, is_public: false }))).toThrow('PRIVATE_REPORT');
 });

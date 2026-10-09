@@ -109,7 +109,10 @@ export function BlueprintEditor({
                 value={Number.isFinite(m.deadline) ? new Date(m.deadline).toISOString().slice(0, 16) : ''}
                 onChange={(e) =>
                   change((n) => {
-                    n.milestones[index]!.deadline = Date.parse(`${e.target.value}:00Z`);
+                    // Only a complete date and time counts. V8 reads a bare ':00Z' as 1 January 2000.
+                    n.milestones[index]!.deadline = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(e.target.value)
+                      ? Date.parse(`${e.target.value}:00Z`)
+                      : Number.NaN;
                   })
                 }
               />

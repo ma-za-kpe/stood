@@ -11,6 +11,12 @@ Yard ships in phases. **Each phase is useful without the next one.** The Crew (b
 | **Y3b: real Crew** | A LangGraph + vLLM agent on Vast.ai with one open-weight coding model, on small work orders | Y2, the sandbox, a GPU budget |
 | **Y4: A2A economy** | Agent card + A2A tasks, buyer agents, subcontracting, operator dashboard, reputation | Y3b |
 
+## Current deployed checkpoint (2026-10-08)
+
+The [public companion page](https://ma-za-kpe.github.io/stood/yard/) and [hosted Yard app](https://stood-yard-api.onrender.com/app/) are live. Hosted operator sign-in, Postgres Board/events/site log, private intake and StartupTribunal browse/import are deployed; [#99](https://github.com/ma-za-kpe/stood/issues/99) is complete for C2. Stood signing/funding is qualified on PayPal sandbox. Hosted Foreman, repository/preview and Yard payment adapters continue in [#76](https://github.com/ma-za-kpe/stood/issues/76); Crew comes last. [#108](https://github.com/ma-za-kpe/stood/issues/108) records progress and screenshots.
+
+The rounds below preserve the original roadmap, not the current completion ledger. Use [TASKS.md](../../TASKS.md) and the batch issues for the tested/deployed status of each slice.
+
 ## Task list for the engineer
 
 Allocated IDs are in [TASKS.md](../../TASKS.md), T-0174–T-0192. Delivered in the usual ≥ 5-task rounds. ADR and import boundaries are implemented at the designed/tested tier; the remaining runtime tasks below are planned.

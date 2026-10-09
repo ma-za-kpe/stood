@@ -74,7 +74,7 @@ Work is grouped into **batch issues** (for example #74 C1 PayPal sandbox qualifi
 ### Rules
 
 - **Every bug starts as a failing test** that reproduces it. The fix PR contains that test.
-- **Acceptance tests come from the specs.** Each outcome in [S04](stood/S04-job-story-and-outcomes.md) and each state in [S06](stood/S06-voice-and-states.md) is a Given / When / Then scenario, using the shared **fixtures**: code-good, signed-tests-changed, tests-skipped, weak-tests, usage-pending. The same fixtures power the demo, the Postman collection and CI.
+- **Acceptance tests come from the specs.** Each outcome in [S04](stood/S04-job-story-and-outcomes.md) and each state in [S06](stood/S06-voice-and-states.md) is a Given / When / Then scenario, using the shared **fixtures**: code-good, signed-tests-changed, tests-skipped, weak-tests, usage-pending. The same fixtures power local scenarios and CI. Postman integration is deferred by the owner; no active collection or monitor is claimed.
 - **Property-based tests** for invariants: money never goes negative or changes currency silently, `captured ≤ allowance cap`, frozen test hashes cannot be replaced by a builder report, a tranche can never be both released and refused.
 - **The test pyramid:**
 
@@ -86,6 +86,8 @@ Work is grouped into **batch issues** (for example #74 C1 PayPal sandbox qualifi
   | End-to-end | s–min | Hosted demo, Kernel-driven approval | A handful (the judge path) |
 
 - **Coverage floor:** 85% branch coverage overall. **100% branch coverage for the decision rules and the Money / tranche state machine.** Coverage is a floor, not a goal. Tests must assert behaviour, not lines.
+- **App completeness rule (owner, 2026-10-08):** C2 stays open until Yard app statements, lines, functions and branches each reach **98%**, measured against all application-owned `.ts` and `.tsx` source, including screens, HTTP/session behavior and state management. Retain 100% for pure money domains. Merge source-mapped unit and browser instrumentation; dependency bundles, test fixtures, raw byte coverage and journey counts cannot stand in for source coverage. A missing report or omitted app source is a failed closure check.
+- **UI behavior evidence:** desktop/mobile journeys must assert loading/empty/success/error states, session expiry/logout and operator isolation, cancellation/lost replies, stale versions, autosave/reload, Board pagination/filter/claim, SSE gap/reconnect and handover/proof state. Run axe, overflow and CSP checks. Green existing CI proves its covered journeys; it does not waive the 98% app requirement. Known coverage gaps remain explicit in C2 and the ledger until the app gate is integrated and passing.
 - **Mutation testing** on the decision module before a release, with surviving mutants in money logic blocking the release. **Planned, not yet running**: it is added before the 1.0.0 submission release.
 - Tests never use real credentials, real accounts or real personal data. Sandbox only, through isolated test config.
 - No `sleep` in tests. Inject a `Clock`.
