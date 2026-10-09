@@ -157,6 +157,14 @@ scripts/dev vault-rotate   # re-seal every saved token under it
 
 Then copy `VAULT_TOKEN_KEYS` to Render, and drop the old key only after rotation reports it re-sealed everything. A store missing a key fails closed: it refuses to open the token rather than guess.
 
+### The Foreman's live planner (T-0221)
+
+The Foreman drafts blueprints with xAI's Grok through `GrokPlannerModel`. It uses the cheapest listed model (`grok-build-0.1`, $1.00 per million input tokens and $2.00 per million output tokens on 2026-10-09) unless `GROK_PLANNER_MODEL` says otherwise, makes one call per draft with at most 4,000 output tokens, and never retries blindly. A daily spend guard (`GROK_DAILY_BUDGET_USD`) reserves the worst case before each call; when the day's budget is used, planning pauses until the next UTC day. Each call logs only the model, token counts and cost. The model proposes the work; budgets and deadlines are always computed from the buyer's fixed terms.
+
+```bash
+scripts/dev planner-check   # five live drafts against the shared contract; about $0.01 in total
+```
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.
