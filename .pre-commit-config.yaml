@@ -131,13 +131,19 @@ repos:
         entry: scripts/check-docker
         pass_filenames: false
         files: (^Dockerfile$|^tools/site/Dockerfile\.test$|^scripts/check-docker$)
-      - id: product-validation
-        name: strict types, money boundary, unit/Postgres tests, coverage and build (Docker)
+      - id: hooks-installed
+        name: pre-commit, commit-msg and pre-push hooks are installed (T-0286)
         language: system
-        entry: scripts/check-product
+        entry: scripts/check-hooks-installed
         pass_filenames: false
-        stages: [pre-push]   # minutes long: runs before push, and CI runs it on every PR (ADR-0023)
-        files: ^(services/|packages/|scripts/check-product$|scripts/check-migrations$|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|drizzle.config.ts|tsconfig|vitest|turbo|Dockerfile|compose.yaml|\.dependency-cruiser)
+        always_run: true
+      - id: ci-local
+        name: every CI job, locally, before anything is pushed (T-0286; about 25 minutes)
+        language: system
+        entry: scripts/ci-local
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]   # includes scripts/check-product; CI skips this hook and runs the jobs itself (ADR-0023)
 
   # ---------- commit message ----------
   - repo: local

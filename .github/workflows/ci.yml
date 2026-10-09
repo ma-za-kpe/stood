@@ -73,10 +73,12 @@ jobs:
         env:
           SKIP: no-commit-to-branch,branch-name
         run: pre-commit run --all-files --show-diff-on-failure
-      - name: Run the pre-push product gate (Docker validation and Postgres tests)
+      - name: Run the pre-push hooks (CI runs the local CI replica's jobs itself)
         env:
-          SKIP: no-commit-to-branch,branch-name
+          SKIP: no-commit-to-branch,branch-name,ci-local
         run: pre-commit run --all-files --hook-stage pre-push --show-diff-on-failure
+      - name: Run the product gate (Docker validation and Postgres tests)
+        run: scripts/check-product
 
   pr-title:
     if: github.event_name == 'pull_request'

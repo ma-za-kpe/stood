@@ -38,3 +38,7 @@ The pre-commit gate ([WoW §8](../WAYS_OF_WORKING.md#8-validation-before-commit-
 ## Reversal condition
 
 Revisit if CI stops running the `pre-push` stage, if Dependabot's pre-commit support stops working, or if a hermetic node-language hook becomes reliable with the npm versions contributors use.
+
+## Amendment (2026-10-09, T-0286): the whole CI runs before push
+
+CI failed on GitHub three times in one day after the local hooks had passed: Docker Hub's anonymous pull limit (429), a Docker Hub auth outage (504) and two timing-sensitive tests. None of these were reachable from the pre-commit stage, because they live in CI jobs the hooks did not run. The owner's rule is that CI must not fail. The pre-push stage now runs [`scripts/ci-local`](../../scripts/ci-local), a replica of every CI job in CI's order, which includes the product check this ADR placed at pre-push. CI skips that hook and runs the same jobs directly, so nothing runs twice there and nothing recurses.

@@ -18,3 +18,4 @@ artifacts/
 # Python bytecode caches (never commit binaries)
 __pycache__/
 *.pyc
+.ci-local/
