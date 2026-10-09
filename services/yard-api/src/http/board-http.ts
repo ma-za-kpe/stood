@@ -16,6 +16,7 @@ import {
 import type { IntakePlanner } from '../application/intake-planner.js';
 import { type DraftGateway, MandateBridge } from '../application/mandate-bridge.js';
 import { type NudgeConfig, Nudges } from '../application/nudges.js';
+import type { Previews } from '../application/previews.js';
 import type { SecretVault } from '../application/secret-vault.js';
 import type { SiteLog } from '../application/site-log.js';
 import { type PackageGateway, SubmissionBridge } from '../application/submission-bridge.js';
@@ -49,6 +50,8 @@ export type BoardConfig = Readonly<{
   intakePlanner?: Pick<IntakePlanner, 'create'>;
   secrets?: SecretVault;
   mandates?: DraftGateway;
+  // T-0196: buyer-requested previews of a submitted milestone (Render, test keys only, expiring).
+  previews?: Pick<Previews, 'deploy'>;
   nudges?: NudgeConfig;
   boardStreamMs?: number;
   stood?: Readonly<{ mode: 'sim'; secret: string; read(trancheId: string): Promise<StoodProof> }>;
@@ -354,6 +357,17 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       body(c, []);
       return c.json(ack(await config.board[method](c.req.param('id'), c.req.param('wo'), actor, version, key, now)));
     });
+  app.post('/yard/v1/blueprints/:id/work-orders/:wo/preview', async (c) => {
+    if (!config.previews) return c.json({ code: 'previews_not_configured' }, 503);
+    const { actor, now } = command(c),
+      id = c.req.param('id');
+    const input = body(c, ['image']);
+    // The preview receives the buyer's TEST keys, so only that buyer chooses what runs with them.
+    const snapshot = await config.board.read(id, actor);
+    if (actor.kind !== 'BUYER' || snapshot.owner !== actor.id) throw new YardError('FORBIDDEN');
+    if (typeof input.image !== 'string') throw new YardError('INVALID');
+    return c.json(await config.previews.deploy(id, c.req.param('wo'), input.image, now));
+  });
   app.get('/yard/v1/operators/:root/reputation', async (c) =>
     c.json({ ...(await config.board.reputation(c.req.param('root'))), simulated: true }),
   );

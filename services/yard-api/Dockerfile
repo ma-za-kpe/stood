@@ -15,7 +15,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile \
     && pnpm --filter "@stood/yard-api..." build \
     && YARD_UI_COVERAGE=$YARD_UI_COVERAGE pnpm --filter @stood/yard-web build \
-    && pnpm --filter @stood/yard-api deploy --prod --offline /workspace/release \
+    && pnpm --filter @stood/yard-api deploy --legacy --prod /workspace/release \
     && cp -r apps/yard-web/dist /workspace/release/web
 
 FROM gcr.io/distroless/nodejs24-debian12:nonroot@sha256:14d42e2511532589a7c7e01a753667a74fcc96266e137e8125006b87b0c32d0a AS yard-api

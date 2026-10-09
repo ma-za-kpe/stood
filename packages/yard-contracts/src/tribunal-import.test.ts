@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import fixture from '../test/fakes/startup-tribunal.json' with { type: 'json' };
+import { catalogSchema } from './tribunal-catalog.js';
 import { tribunalImport } from './tribunal-import.js';
 
 it('maps the real full UTF-8 payload, preserves rejected research and numeric signals, and never invents authority', () => {
@@ -98,4 +99,33 @@ it('sanitizes copied public-report metadata, preserves veto evidence and never r
   expect(JSON.stringify(result)).not.toContain('private-token-not-to-retain');
   expect(JSON.stringify(report)).toContain('private-owner');
   expect(() => tribunalImport(JSON.stringify({ ...report, is_public: false }))).toThrow('PRIVATE_REPORT');
+});
+
+// T-0282: the catalog's display facts are kept when well-formed, defaulted when absent and refused when malformed.
+it('keeps country, category and consensus score from the public catalog, strictly', () => {
+  const base = {
+    title: 'Idea',
+    slug: 'idea',
+    problem_statement: 'A problem',
+    target_customer: null,
+    catalog_decision: 'rejected',
+    catalog_caveat: null,
+    catalog_reason_codes: [],
+    url: 'https://startuptribunal.com/catalog/idea',
+    blueprint_url: 'https://startuptribunal.com/catalog/idea',
+  };
+  const attribution = {
+    required: true,
+    text: 'Research by StartupTribunal',
+    url: 'https://startuptribunal.com/catalog',
+  };
+  const parse = (over: object) => catalogSchema.parse({ items: [{ ...base, ...over }], attribution }).items[0];
+  expect(parse({ country: ['SG'], category: ['real-estate'], consensus_score: 6.3 })).toMatchObject({
+    country: ['SG'],
+    category: ['real-estate'],
+    consensus_score: 6.3,
+  });
+  expect(parse({})).toMatchObject({ country: [], category: [], consensus_score: null });
+  for (const bad of [{ country: ['Singapore'] }, { category: ['<b>x</b>'] }, { consensus_score: 11 }])
+    expect(() => parse(bad)).toThrow();
 });

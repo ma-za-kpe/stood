@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { commitPackage } from '../../application/commit-package.js';
 import { restoreTrancheRecord } from '../../domain/tranche-record.js';
@@ -91,5 +91,14 @@ export class PostgresCommitPackages implements CommitPackageStore {
     if (!stream?.record) return result(row);
     const tranche = restoreTrancheRecord(stream.record);
     return Object.freeze({ ...result(row), waitingFor: currentWait(tranche.state, tranche.attempts.length) });
+  }
+  async latest(platformId: string, trancheId: string): Promise<StoredCommitPackage | null> {
+    const [row] = await this.db
+      .select({ id: packages.id })
+      .from(packages)
+      .where(and(eq(packages.platformId, platformId), eq(packages.trancheId, trancheId)))
+      .orderBy(desc(packages.createdAt), desc(packages.id))
+      .limit(1);
+    return row ? this.get(platformId, trancheId, row.id) : null;
   }
 }

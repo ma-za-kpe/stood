@@ -23,6 +23,9 @@ PUBLIC = {
     "RECONCILIATION_OWNER",
     "GITHUB_APP_ID",
     "GITHUB_APP_PRIVATE_KEY_PATH",
+    # T-0188: an installation id and a public repository name grant nothing without the App's private key.
+    "GITHUB_APP_INSTALLATION_ID",
+    "YARD_SANDBOX_REPOSITORY",
     "S3_BUCKET",
     "S3_PREFIX",
 }

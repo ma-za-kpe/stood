@@ -54,6 +54,18 @@ const reads: Record<string, readonly string[]> = {
     'YARD_MIGRATION_DATABASE_URL',
     'YARD_OPERATORS',
     'YARD_SECRET_KEYS',
+    'GROK_PLANNER_API_KEY',
+    'GROK_PLANNER_MODEL',
+    'GROK_DAILY_BUDGET_USD',
+    'GITHUB_APP_ID',
+    'GITHUB_APP_PRIVATE_KEY_BASE64',
+    'GITHUB_APP_INSTALLATION_ID',
+    'YARD_SANDBOX_REPOSITORY',
+    'STOOD_API_URL',
+    'STOOD_API_KEY',
+    'STOOD_HMAC_SECRET',
+    'RENDER_PREVIEW_API_KEY',
+    'RENDER_PREVIEW_OWNER_ID',
   ],
 };
 const stood = (s: Service) => s.name.startsWith('stood-') && s.name !== 'stood-yard-api';

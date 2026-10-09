@@ -240,6 +240,10 @@ export function platformApi(config: PlatformApiConfig): Hono {
           }
         : null,
       sentences: trancheSentences(tranche, config.clock()),
+      // T-0189: enough for a platform to act on a fresh read alone. Stood only ever talks to the PayPal sandbox.
+      package_id: (await config.packages?.latest(config.platformId, tranche.id))?.id ?? null,
+      resubmissions_left: Math.max(0, tranche.maxResubmits + 1 - tranche.attempts.length),
+      provider: config.signing?.mode === 'live' ? 'paypal-sandbox' : 'simulator',
     });
   });
   return app;

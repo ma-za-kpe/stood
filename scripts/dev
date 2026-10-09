@@ -51,6 +51,32 @@ with os.fdopen(fd, "w") as handle:
 print(f"Access codes set for {len(operators)} operators. Read them in {codes_path} (owner only).")
 PY
     ;;
+  preview-check)
+    # T-0196: qualify live previews on Render: one free-plan service from a digest-pinned public image, always deleted.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(RENDER_API_KEY|RENDER_OWNER_ID)=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter "@stood/yard-api..." build >/dev/null && node services/yard-api/dist/preview-check-cli.js' ;;
+  github-check)
+    # T-0188: qualify the Yard Builder GitHub App on the sandbox repository (throwaway branch, main untouched).
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keyfile=$(grep -E '^GITHUB_APP_PRIVATE_KEY_PATH=' .env | cut -d= -f2-)
+    [ -f "$keyfile" ] || { echo "GITHUB_APP_PRIVATE_KEY_PATH does not point to a file" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(GITHUB_APP_ID|GITHUB_APP_INSTALLATION_ID|YARD_SANDBOX_REPOSITORY)=' .env >"$keys" || true
+    printf 'GITHUB_APP_PRIVATE_KEY_BASE64=%s\n' "$(base64 <"$keyfile" | tr -d '\n')" >>"$keys"
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter "@stood/yard-api..." build >/dev/null && node services/yard-api/dist/github-check-cli.js' ;;
+  planner-check)
+    # T-0221: qualify the live Grok planner against the shared contract (five drafts, about $0.05; capped at $0.20).
+    # Only GROK_PLANNER_API_KEY (and an optional GROK_PLANNER_MODEL) reach the container.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(GROK_PLANNER_API_KEY|GROK_PLANNER_MODEL)=' .env >"$keys" || true
+    printf 'GROK_PLANNER_LIVE=1\n' >>"$keys"
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      pnpm exec vitest run services/yard-foreman/src/planner-contract.test.ts -t 'grok live' ;;
   vault-key)
     # T-0227: put a new saved-token key first in VAULT_TOKEN_KEYS in .env. The key is never printed.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
@@ -81,7 +107,7 @@ PY
     # Only the sandbox app keys reach the container, from a private temporary file (T-0224).
     shift; [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
     keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
-    grep -E '^(PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|STOOD_SANDBOX_PAYEE_ID|PAYPAL_SANDBOX_VAULT_TOKEN_ID)=' .env >"$keys" || true
+    grep -E '^(PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|STOOD_SANDBOX_PAYEE_ID|PAYPAL_SANDBOX_VAULT_TOKEN_ID|KERNEL_API_KEY|PAYPAL_SANDBOX_BUYER_EMAIL|PAYPAL_SANDBOX_BUYER_PASSWORD)=' .env >"$keys" || true
     docker compose run --rm --env-from-file "$keys" app \
       sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/sandbox-run-cli.js "$@"' sandbox-run "$@"
     # vault-setup leaves the saved payment token in .sandbox/; move it into .env (never printed), then delete it.

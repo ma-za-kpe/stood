@@ -17,5 +17,11 @@
   },
   "devDependencies": {
     "@types/pg": "8.23.1"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   }
 }

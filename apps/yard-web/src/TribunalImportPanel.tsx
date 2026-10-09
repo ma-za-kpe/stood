@@ -115,18 +115,7 @@ export function TribunalImportPanel({
       {!card && (
         <div className="idea-grid">
           {cards.map((item) => (
-            <article className="idea-card" key={item.slug}>
-              <span className="research-badge">Source decision: rejected</span>
-              <h4>
-                <button type="button" className="idea-title" disabled={busy} onClick={() => selectCard(item)}>
-                  {item.title}
-                </button>
-              </h4>
-              <p className="idea-excerpt">{item.problem_statement}</p>
-              <button type="button" className="secondary-button" disabled={busy} onClick={() => selectCard(item)}>
-                View idea →
-              </button>
-            </article>
+            <IdeaCard key={item.slug} item={item} busy={busy} onOpen={() => selectCard(item)} />
           ))}
         </div>
       )}
@@ -264,5 +253,63 @@ export function TribunalImportPanel({
         )}
       </details>
     </section>
+  );
+}
+
+const regions = new Intl.DisplayNames(['en'], { type: 'region' });
+// The contract admits only two-letter ISO codes, which always have a display name.
+const region = (code: string) => String(regions.of(code));
+const label = (slug: string) => {
+  const words = slug.replaceAll('-', ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+// T-0282: one card per idea. The only action is "View idea"; it stretches over the card so the whole card is the
+// target, and research links appear only inside the opened idea.
+function IdeaCard({ item, busy, onOpen }: { item: Catalog['items'][number]; busy: boolean; onOpen(): void }) {
+  const score = item.consensus_score;
+  return (
+    <article className="idea-card">
+      <div className="idea-chips">
+        <span className="decision-badge">Rejected by source</span>
+        {item.country.map((code) => (
+          <span className="chip chip-country" key={code}>
+            {region(code)}
+          </span>
+        ))}
+      </div>
+      <h4>{item.title}</h4>
+      <p className="idea-excerpt">{item.problem_statement}</p>
+      {item.category.length > 0 && (
+        <div className="idea-chips">
+          {item.category.map((slug) => (
+            <span className="chip" key={slug}>
+              {label(slug)}
+            </span>
+          ))}
+        </div>
+      )}
+      {score !== null && (
+        <div className="idea-score">
+          <meter
+            className="score-bar"
+            min={0}
+            max={10}
+            value={score}
+            aria-label={`Consensus score ${score} out of 10`}
+          />
+          <span className="score-value">{score} / 10 consensus</span>
+        </div>
+      )}
+      <button
+        type="button"
+        className="idea-open"
+        aria-label={`View idea: ${item.title}`}
+        disabled={busy}
+        onClick={onOpen}
+      >
+        View idea
+      </button>
+    </article>
   );
 }

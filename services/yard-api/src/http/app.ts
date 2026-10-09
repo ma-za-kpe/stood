@@ -35,7 +35,7 @@ export function createYardApp(
         credentials: false,
         siteLog: !!config.board?.siteLog,
         events: !!config.eventFeed || !!config.board,
-        payments: false,
+        payments: !!config.board?.mandates,
       },
     }),
   );
