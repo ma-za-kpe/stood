@@ -115,7 +115,7 @@ function useRoomStream(id: string, version: number, ready: boolean, generation: 
 export function App() {
   const client = useQueryClient();
   const [pane, setPane] = useState<'room' | 'board' | 'intake'>(
-    new URLSearchParams(window.location.search).has('intake') ? 'intake' : 'room',
+    new URLSearchParams(window.location.search).has('project') ? 'room' : 'intake',
   );
   const [selected, setSelected] = useState(new URLSearchParams(window.location.search).get('project') ?? '');
   const [session, setSession] = useState({ ready: false, generation: 0, switching: false });
@@ -281,18 +281,30 @@ export function App() {
         <span className="signal">{said.signal}</span> {said.text}
       </aside>
       <main id="main">
-        <div className="room-intro">
+        <div className={`room-intro ${pane !== 'room' ? 'compact-intro' : ''}`}>
           <div>
-            <p className="eyebrow">Yard / project room</p>
+            <p className="eyebrow">
+              Yard / {pane === 'intake' ? 'start a project' : pane === 'board' ? 'posted work' : 'project room'}
+            </p>
             <h1>
-              Work in motion.
-              <br />
-              <em>Money with proof.</em>
+              {pane === 'intake'
+                ? 'What will you build?'
+                : pane === 'board'
+                  ? 'Find your next work order.'
+                  : 'Work in motion.'}
+              {pane === 'room' && (
+                <>
+                  <br />
+                  <em>Money with proof.</em>
+                </>
+              )}
             </h1>
             <p className="lede">
-              {mode === 'mock'
-                ? 'A real service stream, with simulated providers. Stood decides the payment; Yard shows the build.'
-                : 'A live Board and event stream. Stood decides the payment; Yard shows the build.'}
+              {pane === 'intake'
+                ? 'Choose an idea or describe your own project. Keep your brief in one place.'
+                : mode === 'mock'
+                  ? 'A real service stream, with simulated providers. Stood decides the payment; Yard shows the build.'
+                  : 'A live Board and event stream. Stood decides the payment; Yard shows the build.'}
             </p>
           </div>
           <div className="operator-card">
@@ -327,7 +339,7 @@ export function App() {
                     </button>
                   </>
                 )}
-                <p className="fine">The project owner issues access codes. Operator keys stay on the server.</p>
+                {!role && <p className="fine">Use the private access code from the project owner.</p>}
                 {session.switching && <p role="status">Signing in…</p>}
                 {sessionError && <p role="alert">{sessionError}</p>}
               </form>
@@ -362,6 +374,7 @@ export function App() {
           <BoardPanel
             key={session.generation}
             generation={session.generation}
+            hosted={mode === 'hosted'}
             enabled={session.ready}
             onOpen={(id) => {
               if (session.generation !== generation.current) return;
@@ -408,7 +421,11 @@ export function App() {
                   Y
                 </div>
                 <h2>Your build belongs here.</h2>
-                <p>Choose a simulated operator, then open a project created by the mock journey.</p>
+                <p>
+                  {mode === 'hosted'
+                    ? 'Open a project from the Board when work is posted. Start with an idea or your own project brief.'
+                    : 'Choose a simulated operator, then open a project created by the local journey.'}
+                </p>
                 <p className="fine">This screen does not invent progress or payment.</p>
               </section>
             )}

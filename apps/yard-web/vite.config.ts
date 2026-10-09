@@ -6,5 +6,5 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: { '/app/api': { target: 'http://yard-api:3001', changeOrigin: true } },
   },
-  build: { outDir: 'dist', sourcemap: false },
+  build: { outDir: 'dist', sourcemap: process.env.YARD_UI_COVERAGE === '1' ? 'hidden' : false },
 });

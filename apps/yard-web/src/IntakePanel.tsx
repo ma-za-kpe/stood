@@ -187,7 +187,8 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
         ),
       );
       if (live.current) {
-        if (create && recordRef.current)
+        if (!create && hosted) actorRef.current?.send({ type: 'SUMMARY' });
+        if (create && recordRef.current && !hosted)
           setValue(
             'timing__deadline',
             new Date(recordRef.current.createdAt + 21 * 86400000).toISOString().slice(0, 16),
@@ -202,6 +203,15 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       if (live.current) setBusy(false);
     }
   };
+  const initialResume = useRef(new URLSearchParams(window.location.search).get('intake'));
+  const openSaved = useRef(open);
+  openSaved.current = open;
+  useEffect(() => {
+    if (enabled && initialResume.current) {
+      initialResume.current = null;
+      void openSaved.current(false);
+    }
+  }, [enabled]);
   const save = useCallback(async () => {
     const current = recordRef.current;
     if (!current || pending.current || !enabled || externalStale) return false;
@@ -266,10 +276,12 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       const current = recordRef.current;
       if (!current) return;
       const draft = formDraft(decoded(getValues()));
-      completeIntakeChecked(
-        { ...draft, handover: { ...draft.handover, baseCommit: '0'.repeat(40) } },
-        current.updatedAt,
-      );
+      // A hosted brief can be reviewed while incomplete. Actual planning still requires complete buyer choices.
+      if (!hosted)
+        completeIntakeChecked(
+          { ...draft, handover: { ...draft.handover, baseCommit: '0'.repeat(40) } },
+          current.updatedAt,
+        );
       actorRef.current?.send({ type: 'SUMMARY' });
       setError('');
     } catch (e) {
@@ -407,13 +419,11 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     );
   return (
     <section className="intake-panel" aria-labelledby="intake-title">
-      <p className="eyebrow">Yard / the Foreman</p>
-      <h2 id="intake-title">Your idea. A clear blueprint.</h2>
-      <p>
-        {hosted
-          ? 'Choices first, keys later. Private intake is live. The Foreman connection is next; saving a brief does not sign an allowance or authorise payment.'
-          : 'Choices first, keys later. The pilot is free; a future platform fee will be shown before agreement. This local run uses a scripted planner and executes no payment.'}
-      </p>
+      {record && <p className="eyebrow">Your saved project</p>}
+      <h2 id="intake-title" className={!record ? 'visually-hidden' : ''}>
+        {record ? 'Your project brief.' : 'Start a project'}
+      </h2>
+      {!hosted && <p>This local run uses a scripted planner and executes no payment.</p>}
       {error && (
         <p role="alert">
           {error === 'CREDENTIAL_IN_INTAKE'
@@ -421,24 +431,28 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
             : error}
         </p>
       )}
-      {hosted && (
-        <p role="note">
-          Complete the missing choices and save your brief. Planning will be available when the hosted Foreman is
-          connected.
-        </p>
+      {hosted && record && (
+        <p className="fine">Saved privately. Planning is coming next; nothing is signed or funded.</p>
       )}
       <p role="status">{busy ? 'Working…' : status}</p>
       {!record ? (
-        <div className="intake-start">
+        <div className="project-start">
+          <aside className="own-project" aria-labelledby="own-project-title">
+            <h3 id="own-project-title">Have your own idea?</h3>
+            <p>Describe what you want to build. Add your scope, budget and requirements one step at a time.</p>
+            <button type="button" disabled={busy} onClick={() => void open(true)}>
+              Start a private intake
+            </button>
+            <details open={!!resumeId} className="resume-project">
+              <summary>Resume a saved brief</summary>
+              <label htmlFor="resume-intake">Resume intake ID</label>
+              <input id="resume-intake" value={resumeId} onChange={(e) => setResumeId(e.target.value)} />
+              <button type="button" disabled={busy} onClick={() => void open(false)}>
+                Resume saved intake
+              </button>
+            </details>
+          </aside>
           <TribunalImportPanel busy={busy} onConfirm={(draft) => open(true, draft)} />
-          <button type="button" disabled={busy} onClick={() => void open(true)}>
-            Start a private intake
-          </button>
-          <label htmlFor="resume-intake">Resume intake ID</label>
-          <input id="resume-intake" value={resumeId} onChange={(e) => setResumeId(e.target.value)} />
-          <button type="button" disabled={busy} onClick={() => void open(false)}>
-            Resume saved intake
-          </button>
         </div>
       ) : (
         <>
@@ -454,13 +468,25 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
           </button>
           {state.view === 'editing' && (
             <>
-              <ol className="intake-rail" aria-label="Intake progress">
-                {stepNames.map((name, i) => (
-                  <li key={name} aria-current={state.step === i ? 'step' : undefined}>
-                    <span>{i + 1}</span> {name}
-                  </li>
-                ))}
-              </ol>
+              <details className="brief-sections" open={state.step !== 0}>
+                <summary>
+                  Project details <span className="fine">Add or edit when you are ready</span>
+                </summary>
+                <ol className="intake-rail" aria-label="Intake progress">
+                  {stepNames.map((name, i) => (
+                    <li key={name} aria-current={state.step === i ? 'step' : undefined}>
+                      <button
+                        type="button"
+                        className="section-link"
+                        disabled={busy}
+                        onClick={() => actorRef.current?.send({ type: 'RESTORE', step: i })}
+                      >
+                        <span>{i + 1}</span> {name}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </details>
               <h3>
                 {state.step + 1}. {stepNames[state.step]}
               </h3>
@@ -476,10 +502,10 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
               >
                 <fieldset disabled={busy}>
                   <legend className="sr-only">{stepNames[state.step]}</legend>
-                  {(formFields[state.step] ?? []).map((item) => {
+                  {(formFields[state.step] ?? []).map((item, fieldIndex) => {
                     const name = item.path.replace('.', '__'),
                       id = `intake-${name}`;
-                    return (
+                    const control = (
                       <div className="intake-field" key={item.path}>
                         <label htmlFor={id}>{item.label}</label>
                         <p id={`${id}-why`} className="fine">
@@ -520,6 +546,16 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                         )}
                       </div>
                     );
+                    return state.step === 0 && fieldIndex > 0 ? (
+                      <details className="optional-field" key={item.path}>
+                        <summary>
+                          {item.label} <span className="fine">Optional for now</span>
+                        </summary>
+                        {control}
+                      </details>
+                    ) : (
+                      <div key={item.path}>{control}</div>
+                    );
                   })}
                 </fieldset>
                 <div className="intake-actions">
@@ -540,6 +576,11 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                   >
                     Back
                   </button>
+                  {hosted && (
+                    <button type="submit" disabled={busy}>
+                      Review my brief
+                    </button>
+                  )}
                   {state.step < 7 ? (
                     <button type="button" disabled={busy} onClick={() => actorRef.current?.send({ type: 'NEXT' })}>
                       Next step
@@ -558,16 +599,31 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
           )}
           {(state.view === 'summary' || state.view === 'planning') && (
             <>
-              <h3>Read your choices.</h3>
-              <p>Nothing is signed. The Foreman will propose tests and milestones within this budget and deadline.</p>
+              <h3>Review your project brief.</h3>
+              <p>
+                Your brief is saved privately. You can return to it and add details at any time. Nothing is signed or
+                funded.
+              </p>
               {stepNames.map((name, i) => (
-                <details key={name} open>
+                <details key={name} open={i === 0}>
                   <summary>{name}</summary>
                   <dl>
                     {(formFields[i] ?? []).map((field) => (
                       <div key={field.path}>
                         <dt>{field.label}</dt>
-                        <dd>{decoded(getValues())[field.path] || 'None'}</dd>
+                        <dd>
+                          {field.kind === 'long' && decoded(getValues())[field.path] ? (
+                            <textarea
+                              className="research-text"
+                              readOnly
+                              aria-label={`Saved ${field.label.toLowerCase()}`}
+                              value={decoded(getValues())[field.path]}
+                              rows={6}
+                            />
+                          ) : (
+                            decoded(getValues())[field.path] || 'Not chosen yet'
+                          )}
+                        </dd>
                       </div>
                     ))}
                   </dl>
@@ -576,9 +632,15 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
               <button type="button" disabled={busy} onClick={() => actorRef.current?.send({ type: 'EDIT' })}>
                 Edit choices
               </button>
-              <button type="button" disabled={busy || hosted} onClick={() => void planWork()}>
-                Ask the Foreman for a blueprint
-              </button>
+              {hosted ? (
+                <p role="note">
+                  Planning is the next connection. Your saved brief is ready to continue when it is available.
+                </p>
+              ) : (
+                <button type="button" disabled={busy} onClick={() => void planWork()}>
+                  Ask the Foreman for a blueprint
+                </button>
+              )}
             </>
           )}
           {state.view === 'review' && plan && (

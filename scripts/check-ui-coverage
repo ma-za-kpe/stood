@@ -1,0 +1,10 @@
+#!/bin/sh
+# C2 closure gate. Collect complete unit inventory, add source-mapped hosted browser coverage, enforce 98%.
+set -eu
+cd "$(dirname "$0")/.."
+docker compose run --rm app pnpm exec vitest run --config vitest.ui.config.ts --coverage \
+  --coverage.thresholds.statements=0 --coverage.thresholds.lines=0 \
+  --coverage.thresholds.functions=0 --coverage.thresholds.branches=0
+YARD_UI_COVERAGE=1 scripts/check-hosted-yard
+YARD_UI_COVERAGE=1 scripts/mock-network
+exec docker compose run --rm app node tools/site/ui-coverage.mjs

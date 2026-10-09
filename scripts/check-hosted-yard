@@ -11,7 +11,7 @@ finish() {
   exit "$result"
 }
 trap finish EXIT INT TERM
-docker build -f services/yard-api/Dockerfile -t stood-yard-hosted-check .
+docker build -f services/yard-api/Dockerfile --build-arg YARD_UI_COVERAGE="${YARD_UI_COVERAGE:-0}" -t stood-yard-hosted-check .
 docker build -f tools/site/Dockerfile.test -t stood-site-browser .
 docker network create "$project" >/dev/null
 docker run -d --name "$project-db" --network "$project" --network-alias db \
@@ -46,4 +46,5 @@ docker run --rm --init --shm-size=256m --network "container:$project-api" \
   --mount "type=bind,src=$(pwd)/tools/site/hosted-yard-smoke.mjs,dst=/workspace/tools/site/hosted-yard-smoke.mjs,readonly" \
   --mount "type=bind,src=$(pwd)/packages/yard-contracts/test/fakes/startup-tribunal.json,dst=/fixture.json,readonly" \
   --mount "type=bind,src=$(pwd)/artifacts/hosted-yard,dst=/out" \
+  -e YARD_UI_COVERAGE="${YARD_UI_COVERAGE:-0}" \
   stood-site-browser node tools/site/hosted-yard-smoke.mjs
