@@ -49,7 +49,7 @@ Planned, not live yet: Yard's `BrowserQa` port ([`services/yard-api/src/ports/br
 ## 3. Use cases
 
 1. **Replay every sandbox outcome for judges.** `release` (captured), `refuse` (voided) and `vault-setup` (saved PayPal) all need a buyer; Kernel makes each one a single command.
-2. **Regression-test PayPal integrations.** PayPal changes its checkout pages; an unattended run catches it the day it happens (ours did, see section 9).
+2. **Regression-test PayPal integrations.** PayPal changes its checkout pages; an unattended run catches it the day it happens (ours did, see section 10).
 3. **Save PayPal once, then test later holds without a browser.** `vault-setup` approves the saved-payment agreement through Kernel; `vault-release` and `vault-refuse` then run with no buyer at all.
 4. **Record evidence.** Each run writes a JSON recording (ids, statuses, amounts) that tests and reviewers can read, plus a second-witness command to check it against PayPal.
 5. **Demos without a live login on screen.** The buyer step happens in the cloud; nobody types a password in front of an audience.
@@ -120,7 +120,45 @@ Without the three Kernel values, the run prints the approval link for a person i
 
 **Side effect of `vault-setup`.** It saves a new `PAYPAL_SANDBOX_VAULT_TOKEN_ID` into `.env` (never printed), replacing the previous one. Only the sandbox runs use it.
 
-## 7. How it works
+## 7. What the run looks like, step by step
+
+These screenshots come from the Kernel browser itself, taken by Playwright during our real unattended runs on 9 October 2026 (`scripts/dev sandbox-run` saves one per step in the gitignored `.sandbox/kernel/<scenario>/`). The sandbox buyer's email is masked in every image (`page.screenshot({ mask: [...] })`); the password field only ever shows dots. The names, address, bank and card shown are PayPal's own sandbox test data, not real people or accounts.
+
+### 7.1 Checkout order (`release`, `refuse`)
+
+**Step 1: sign-in.** Kernel opens the approval link in English (`locale.x=en_US`). PayPal asks for the buyer's email; the approver fills it and clicks **Next**.
+
+![PayPal sandbox sign-in, email masked](images/kernel/checkout/1-sign-in.png)
+
+**Step 2: password.** PayPal shows the email it remembered (masked here) and asks for the password; the approver fills it and clicks **Log In**.
+
+![PayPal sandbox password step, email masked](images/kernel/checkout/2-password.png)
+
+**Step 3: approve.** The checkout page shows the amount and the sandbox buyer's test bank account. The approver clicks **Review Order** (`#one-time-cta`).
+
+![PayPal sandbox checkout with the Review Order button](images/kernel/checkout/3-approve.png)
+
+**Step 4: approved.** PayPal processes the approval. This order was created without a return URL, so PayPal stays on its own page; the sandbox run then confirms `APPROVED` from PayPal's API, authorizes and captures (or voids, for `refuse`).
+
+![PayPal processing the approval](images/kernel/checkout/4-approved.png)
+
+### 7.2 Save PayPal for later payments (`vault-setup`)
+
+**Step 1 and 2** are the same sign-in and password screens.
+
+![Sign-in for saving PayPal, email masked](images/kernel/save-paypal/1-sign-in.png)
+
+![Password for saving PayPal, email masked](images/kernel/save-paypal/2-password.png)
+
+**Step 3: agree.** "Set up once. Pay faster next time." The approver clicks **Agree and Continue** (`#consentButton`). Note the word "and": our first selector looked for "&" and missed it.
+
+![PayPal sandbox consent with the Agree and Continue button](images/kernel/save-paypal/3-approve.png)
+
+**Step 4: back at the merchant.** This flow has a return URL, so PayPal hands the buyer back to it: here, Stood's own page. Stood then turns the approved setup token into a saved payment token (`VAULTED`), and later holds need no browser at all.
+
+![PayPal returned the buyer to Stood's page](images/kernel/save-paypal/4-approved.png)
+
+## 8. How it works
 
 1. **Check the link.** Anything but `https://www.sandbox.paypal.com` is refused before Kernel is called.
 2. **Create a browser.** `POST https://api.onkernel.com/browsers` with `{ "headless": true, "timeout_seconds": 300 }` returns `session_id` and `cdp_ws_url`.
@@ -132,7 +170,7 @@ Without the three Kernel values, the run prints the approval link for a person i
 8. **Close and delete.** The CDP connection closes, then `DELETE https://api.onkernel.com/browsers/{session_id}` ends the session (it answered **204**). The 300-second idle timeout is a backstop.
 9. **Confirm from PayPal, not the page.** The sandbox run polls PayPal's API until the order is `APPROVED`, then authorizes. A page that looks approved never counts.
 
-## 8. Safety rules
+## 9. Safety rules
 
 - **Sandbox only.** Exact protocol and host check on the link; look-alike hosts such as `https://www.sandbox.paypal.com.evil.example` are refused, with tests.
 - **Exact host checks everywhere.** CodeQL flagged our first version, `hostname.endsWith('paypal.com')`, which `notpaypal.com` also satisfies. We now match `paypal.com` or a real `.paypal.com` subdomain.
@@ -140,7 +178,7 @@ Without the three Kernel values, the run prints the approval link for a person i
 - **Always end the browser**, even when a step fails (`finally`).
 - **Approval proof comes from PayPal's API**, so a misread page cannot cause a capture.
 
-## 9. What PayPal's sandbox pages look like (October 2026)
+## 10. What PayPal's sandbox pages look like (October 2026)
 
 We probed the real pages through Kernel before writing selectors. A one-off script printed each screen's URL, visible buttons and inputs, and saved a screenshot. That was much faster than guessing.
 
@@ -154,7 +192,7 @@ We probed the real pages through Kernel before writing selectors. A one-off scri
 
 Stood's selectors accept both the new and the older layout.
 
-## 10. Mistakes we made, and the fixes
+## 11. Mistakes we made, and the fixes
 
 | # | What happened | Fix |
 | --- | --- | --- |
@@ -165,16 +203,16 @@ Stood's selectors accept both the new and the older layout.
 | 5 | **A loose host check.** `endsWith('paypal.com')` also accepts `notpaypal.com` (found by CodeQL). | Exact host or a real subdomain, with a look-alike test. |
 | 6 | **A fake value that looked like a secret.** A made-up checkout token in a test (`token=5O19…`) was flagged by GitGuardian as a high-entropy secret. | Use plainly fake values such as `EC-TEST-TOKEN`. |
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom | Likely cause | What to do |
 | --- | --- | --- |
 | `NOT_SANDBOX` | The link is not the PayPal sandbox | Check the PayPal app and base URL are sandbox |
 | `KERNEL_UNAVAILABLE 401` | Wrong or expired `KERNEL_API_KEY` | Create a new key |
-| Timeout waiting for an email or approve button | PayPal changed its page | Probe the page as in section 9 and add the new selector, keeping the old ones |
+| Timeout waiting for an email or approve button | PayPal changed its page | Probe the page as in section 10 and add the new selector, keeping the old ones |
 | Approved in the sandbox, then `NOT_APPROVED` | PayPal did not record the approval | Rerun; check the buyer account is a US **Personal** account |
 | `Kernel is approving` never appears | One of the three values is empty | Fill `KERNEL_API_KEY`, `PAYPAL_SANDBOX_BUYER_EMAIL` and `PAYPAL_SANDBOX_BUYER_PASSWORD` |
 
-## 12. Cost
+## 13. Cost
 
 Each approval opens one headless browser for under a minute and deletes it. The whole qualification (three runs plus four probes) used a handful of browser-minutes. Set a usage cap in the Kernel dashboard if it offers one.
