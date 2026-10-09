@@ -174,6 +174,14 @@ Yard reads and writes the buyer's repository through a GitHub App, never a perso
 
 The live adapter that uses the app (one-repository tokens, `wo/*` branches, pull requests and attack cases) is T-0188 in batch C3.
 
+### What the App may do (T-0188)
+
+Yard talks to GitHub only through the Yard Builder App (`GitHubRepositories`). GitHub limits each token to one repository and to the permission needed: reading, building on a branch, or maintaining `main`. On top of that, Yard refuses before any write: repositories outside `YARD_SANDBOX_REPOSITORY`, branches other than the work order's own `wo/*` branch, any change under `tests/` or `.github/`, and any move of `main` that is not a fast-forward to exactly the checked commit. Merges go through an open pull request. Qualify it on the sandbox repository (a throwaway branch; `main` is never touched):
+
+```bash
+scripts/dev github-check
+```
+
 ## 8. Developer tooling
 
 | Tool | Use | Record |
