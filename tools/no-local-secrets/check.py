@@ -26,6 +26,9 @@ PUBLIC = {
     # T-0188: an installation id and a public repository name grant nothing without the App's private key.
     "GITHUB_APP_INSTALLATION_ID",
     "YARD_SANDBOX_REPOSITORY",
+    # T-0159: Vercel team and project ids identify where the runner runs; they grant nothing without VERCEL_TOKEN.
+    "VERCEL_TEAM_ID",
+    "VERCEL_PROJECT_ID",
     "S3_BUCKET",
     "S3_PREFIX",
 }

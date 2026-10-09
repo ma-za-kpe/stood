@@ -5,13 +5,19 @@ import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js'
 import { confirmedCaptures } from './adapters/db-postgres/ledger-captures.js';
 import { PostgresReconciliationFindings } from './adapters/db-postgres/reconciliation-findings.js';
 import { PostgresReconciliationQueue } from './adapters/db-postgres/reconciliation-queue.js';
+import { PostgresRunnerJobs } from './adapters/db-postgres/runner-jobs.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { PostgresTranches } from './adapters/db-postgres/tranches.js';
+import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
 import { PayPalAdapter } from './adapters/payments-paypal/adapter.js';
+import { VercelSandboxRunner } from './adapters/runner/vercel-sandbox.js';
+import { vercelSandbox } from './adapters/runner/vercel-sdk.js';
+import { runCodeJob } from './application/code-run.js';
 import { runReconciliationAudit } from './application/reconciliation-audit-run.js';
 import { reconciliationTick } from './application/reconciliation-worker.js';
 import type { ProviderTransactions } from './ports/provider-transactions.js';
 import { reconciliationRuntime } from './reconciliation-runtime.js';
+import { RUNNER_ID, RUNNER_IMAGE, runnerSettings } from './runner-runtime.js';
 import { signingWorker } from './signing-worker.js';
 
 const required = ['DATABASE_URL', 'PROVIDER_PAYPAL', 'RECONCILIATION_OWNER'] as const;
@@ -49,12 +55,47 @@ if (!missing.length && problem) {
     } catch {
       process.stderr.write('Signing and funding off: VAULT_TOKEN_KEYS is missing or invalid. See docs/SETUP.md.\n');
     }
+    // T-0159 (ADR-0026): the code runner and settlement execution are explicit switches; the log names what is off.
+    const settings = runnerSettings(process.env);
+    for (const note of settings.notes) process.stdout.write(`${note}\n`);
+    const runner = settings.runner;
+    if (runner) {
+      const jobs = new PostgresRunnerJobs(db);
+      const deps = {
+        store,
+        reader: new GitHubRepositoryReader(
+          process.env.GITHUB_READ_TOKEN?.trim() ? { token: process.env.GITHUB_READ_TOKEN.trim() } : {},
+        ),
+        runner: new VercelSandboxRunner(vercelSandbox),
+        key: runner.key,
+        verifier: runner.verifier,
+        runnerId: RUNNER_ID,
+        imageDigest: RUNNER_IMAGE,
+        clock: () => Date.now(),
+      };
+      // A run takes minutes, so it has its own loop beside reconciliation instead of stalling the 15-second tick.
+      void (async () => {
+        while (!abort.signal.aborted) {
+          try {
+            for (const job of await jobs.pending(2)) {
+              const outcome = await runCodeJob(job, deps).catch(() => 'FAILED');
+              process.stdout.write(`Code runner: package ${job.packageId} ${outcome}.\n`);
+            }
+          } catch {
+            process.stdout.write('Code runner: queue unavailable.\n');
+          }
+          await setTimeout(60_000, undefined, { signal: abort.signal }).catch(() => undefined);
+        }
+      })();
+    }
     let lastAudit = 0;
     while (!abort.signal.aborted) {
       const now = await providers.clock();
       const result = await reconciliationTick(store, reader, queue, {
         owner: process.env.RECONCILIATION_OWNER ?? '',
         clock: () => now,
+        // Captures or voids a decided tranche only when the owner switched settlement on.
+        ...(settings.settle ? { executor: reader } : {}),
       });
       process.stdout.write(
         `Reconciliation: ${result.processed} processed, ${result.waiting} waiting, ${result.failed} failed.\n`,

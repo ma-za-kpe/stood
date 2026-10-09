@@ -51,6 +51,24 @@ with os.fdopen(fd, "w") as handle:
 print(f"Access codes set for {len(operators)} operators. Read them in {codes_path} (owner only).")
 PY
     ;;
+  runner-key)
+    # T-0159: create the code runner's Ed25519 signing key straight into .env, never printed. Refuses to replace an
+    # existing key unless asked: `scripts/dev runner-key --rotate` (reports signed with the old key stop verifying).
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    if grep -qE '^RUNNER_SIGNING_KEY=.+' .env && [ "${2:-}" != "--rotate" ]; then
+      echo "RUNNER_SIGNING_KEY already exists. Use: scripts/dev runner-key --rotate" >&2; exit 2
+    fi
+    key=$(docker compose run --rm --no-deps -T app node -e "const { generateKeyPairSync } = require('node:crypto'); process.stdout.write(Buffer.from(generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64'))")
+    [ -n "$key" ] || { echo "Key generation failed" >&2; exit 1; }
+    id="runner-$(date +%Y-%m-%d)"
+    for f in .env "$HOME/.config/stood/.env"; do
+      [ -f "$f" ] || continue
+      next=$(mktemp); chmod 600 "$next"
+      grep -vE '^RUNNER_(KEY_ID|SIGNING_KEY)=' "$f" >"$next" || true
+      printf 'RUNNER_KEY_ID=%s\nRUNNER_SIGNING_KEY=%s\n' "$id" "$key" >>"$next"
+      cat "$next" >"$f" && rm -f "$next" && chmod 600 "$f"   # writes through a symlinked .env
+    done
+    echo "Saved RUNNER_KEY_ID=$id and RUNNER_SIGNING_KEY to .env (not printed)." ;;
   runner-check)
     # T-0164: qualify the isolated runner on real Vercel Sandbox (ADR-0026). Only the caller's Vercel settings reach
     # this container; none of them enter the microVM.
