@@ -59,14 +59,22 @@ Infrastructure as code: `render.yaml` (a Blueprint) is committed. Every service 
 | **Workers AI** | Account API token scoped to Workers AI only. Lives with the evidence agent, never in `stood-api` |
 | **Astropods** | `evidence-agent/astropods.yml`, deployed with the Astro CLI from CI on release tags |
 | **Elastic** | Serverless project (trial / credits), API key scoped to the `evidence-*` index. After the trial, switch `EVIDENCE_INDEX=pgvector` (data re-indexed by a script) |
-| **Postman** | Workspace/monitors remain open on [#75](https://github.com/ma-za-kpe/stood/issues/75); no configured Postman key is claimed |
+| **Postman** | Deferred by owner on 2026-10-09; no workspace or monitors in use, no paid upgrade and no key provisioning required for C2 |
 | **Kernel** | API key in `stood-api` (demo mode only) for `/demo/approve`, and in CI for E2E |
+
+## Postman deferred
+
+**Owner decision (2026-10-09):** We are not using Postman for this phase. Defer the public workspace, collection and cloud monitors; do not purchase an upgrade or provision a Postman API key. This work is outside C2 closure requirements. Keep the existing Render health checks and GitHub Actions keep-warm/attention workflow in use; GitHub schedules are best-effort, not an uptime SLA.
+
+The “Postman Keys — Enterprise” screen concerns organization-wide key governance: inventory, generation/expiration policies and exposed-key revocation. It does not mean every personal API key requires Enterprise. [Postman’s authentication documentation](https://learning.postman.com/docs/reference/postman-api/authentication) distinguishes personal key generation from Enterprise administration. Cloud monitoring has separate plan availability; [current pricing](https://www.postman.com/pricing/) lists monitoring under paid plans. We are deferring adoption rather than treating a subscription as a project prerequisite.
+
+Any existing private `POSTMAN_API_KEY` entry is optional and unused; leave it blank when unset. No key is required for the app, health checks, browser tests or C2 coverage gate. Reconsider Postman only after an explicit owner decision on scope and cost.
 
 ## Free-tier risks and mitigations
 
 | Risk | Mitigation |
 |---|---|
-| Render web service sleeps after 15 min → the first judge request takes ~1 min | Existing GitHub Actions keep-warm job reads `/health` and `/ops/attention` every ten minutes. Public pages report unavailable health until the service answers; Postman remains pending |
+| Render web service sleeps after 15 min → the first judge request takes ~1 min | Existing GitHub Actions keep-warm job reads `/health` and `/ops/attention` every ten minutes. Public pages report unavailable health until the service answers; Postman is deferred |
 | 750 free instance-hours per workspace (one always-warm service ≈ 744 h) | Only `stood-api` uses free web-service hours. Yard is Starter and includes its web app. Public companion sites are on GitHub Pages; evidence-agent hosting remains a target |
 | PayPal webhooks hit a sleeping service | PayPal retries delivery. The Starter reconciler polls unresolved operations independently |
 | Render free Postgres expires after 30 days | **We don't use it.** Neon free doesn't expire |

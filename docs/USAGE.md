@@ -481,13 +481,13 @@ Open <https://stood-yard-api.onrender.com/app/>. Enter the operator access code 
 
 To reuse Startup Tribunal research:
 
-1. Choose **Browse free research ideas**, or open <https://startuptribunal.com/catalog>. Each discovery card preserves the tribunal's rejection caveat and links to the full blueprint. Approved research is available through Startup Tribunal's own catalog.
-2. On an accessible report choose **Copy JSON**, then paste it into **Startup Tribunal JSON** in Yard. No provider key or account connection is required.
+1. Open **Describe a project**. The research cards load automatically beside **Have your own idea?**. Search and choose **View idea** to read the problem, audience and source caveat. Choose **Use this idea in a private intake** to save a reviewed catalog summary, or open its full source blueprint. Approved research is available through <https://startuptribunal.com/catalog>.
+2. For full-report import, choose **Copy JSON** on the source report and expand **Import a full research report** in Yard. Paste it into **Startup Tribunal JSON**; no provider key or account connection is required. Owner/viewer/storage/credential metadata is removed automatically before review.
 3. Choose **Review imported idea**. Read the problem, users, features, constraints, source decision and numeric quality signals. For a multi-idea report, explicitly choose one idea. Source scores are research, not Yard approval or payment evidence.
 4. Choose **Use this idea in a private intake**. The buyer owns the saved brief. Complete the missing budget, deadline, proof flow, repository, human sign-off and consent; no research field can authorise these decisions. Long reports show an explicit shortened-excerpt warning.
-5. Keep the saved intake link. Reload and choose **Resume saved intake** to recover it. Sign out before sharing a device. Sessions expire after eight hours and on a service restart. The hosted Foreman is not connected yet; saving research creates no mandate, work order or payment.
+5. Keep the saved intake link. Opening the saved link automatically loads its brief overview; **Edit choices** returns to the saved section. Sign out before sharing a device. Sessions expire after eight hours and on a service restart. The hosted Foreman is not connected yet; saving research creates no mandate, work order or payment.
 
-The page refuses malformed JSON, inputs over 128 KiB UTF-8, excessive nesting, recognised credentials, private storage pointers and viewer identifiers. Unknown report fields are retained only as in-memory research data and ignored by intake mapping. Links in pasted research are never fetched.
+The page removes known owner/viewer identifiers, private-storage fields and named credential metadata before validation, with a visible removal notice. It refuses reports marked private, malformed JSON, inputs over 128 KiB UTF-8, excessive nesting, unsafe URLs and credentials embedded in research text. Unknown report fields are retained only as in-memory research data and ignored by intake mapping. Links in pasted research are never fetched.
 
 For a production-image browser check against disposable Postgres and isolated test operator codes, run `scripts/check-hosted-yard`. It uses the existing Chromium/axe tooling and saves screenshots to `artifacts/hosted-yard/`.
 

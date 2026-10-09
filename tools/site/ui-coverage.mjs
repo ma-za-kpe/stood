@@ -40,6 +40,11 @@ for (const report of [
   assert(entries.length > 0, 'browser instrumentation must not be empty');
   for (const entry of entries) {
     const bundle = resolve('apps/yard-web/dist/assets', new URL(entry.url).pathname.split('/').at(-1));
+    // Restarting Chromium coverage can report an already parsed script without its source text.
+    // Recover from the exact hash-named build artifact and require captured bytes to match it.
+    const builtSource = readFileSync(bundle, 'utf8');
+    const source = entry.source ?? builtSource;
+    assert(source === builtSource, 'browser script must match the exact local build artifact');
     const sourceMap = {
       ...entry.sourceMap,
       sources: entry.sourceMap.sources.map((source) => resolve(dirname(bundle), source)),
@@ -51,9 +56,9 @@ for (const report of [
     }
     const url = pathToFileURL(bundle).href;
     const previous = scripts.get(url);
-    if (previous) assert.equal(previous.source, entry.source, 'coverage bundles must match');
+    if (previous) assert(previous.source === source, 'coverage bundles must match');
     scripts.set(url, {
-      source: entry.source,
+      source,
       sourceMap,
       coverage: mergeScriptCovs([
         ...(previous ? [previous.coverage] : []),

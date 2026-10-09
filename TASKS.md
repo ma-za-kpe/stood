@@ -823,3 +823,22 @@ T-0270 evidence: regression failed before the fix, all five catalog tests now pa
 - `[x]` T-0272 Reconcile README and current operational docs with deployed C2 URLs, signing/funding routes, qualification evidence and remaining C3/Postman work. Preserve historical research and isolated-test evidence labels.
 
 T-0272 evidence: README, docs indices, SETUP, HANDOFF, USAGE and Y12 now link the actual hosted URLs and C2 evidence; T04 describes the implemented signing/funding routes directly from their router and contract tests. Removed stale claims that qualification, hosting, webhook ingestion or funding HTTP are pending. Historical ledger/research and isolated-test evidence are preserved; hosted Foreman/Yard payments and Postman remain explicitly open. Required documentation/secret/lint hooks and release CI qualify this update.
+
+## C2 UI instrumentation audit (owner requirement, 2026-10-08)
+
+- `[~]` T-0273 Verify actual hosted discovery/Board contents and audit full app coverage, browser instrumentation and state-transition evidence. Keep #75/C2 open.
+- `[~]` T-0274 Correct hosted Board/empty-room copy and prove it with production-image browser assertions.
+- `[ ]` T-0275 Reach and enforce 98% statements/lines/functions/branches across Yard app source, including React screens, HTTP/session helpers and state management, using source-mapped combined unit/browser coverage. Keep the existing 100% pure money-domain gate. No dependency code, excluded screens or passing journey counts may inflate the claim. C2 closure is blocked until this evidence passes.
+
+- `[~]` T-0276 Make idea discovery automatic and visible, with searchable clickable cards and focused detail review beside the own-project option; put Copy JSON import in secondary disclosure.
+- `[~]` T-0277 Sanitize owner/viewer/storage/credential metadata from copied research before validation; accept the owner-null Kenyan coffee report shape, preserve source veto and numeric quality, and report removal/error reasons without echoing secrets.
+
+- `[~]` T-0278 Smooth saved intake: auto-open owner-scoped links, show the project brief first, disclose optional detail fields, allow direct section navigation and partial-brief review while keeping complete-intake validation before actual planning. Verify autosave/reload and both viewport sizes.
+
+## Owner decision: Postman deferred (2026-10-09)
+
+Postman is not in use for this phase. Defer T-0083 and the Postman portions of T-0029, T-0039, T-0089 and T-0215; retain completed GitHub keep-warm and attention work. No paid upgrade or API-key provisioning is authorized or required. The Enterprise key-governance dashboard is distinct from ordinary personal API keys; cloud monitoring has separate paid-plan availability. See [T10](docs/tech/T10-deployment.md#postman-deferred) for official sources and current monitoring.
+
+This decision supersedes earlier references to an unconfigured Postman key as an open C2 dependency. Postman is outside C2 closure; T-0275 and the 98% full-app coverage requirement remain open.
+
+- `[x]` T-0279 Fix CodeQL `js/file-system-race` (high) in `tools/site/serve.mjs`, the static server behind the site and Pages browser checks: it checked a path with `statSync` and then read it, so the file could change in between. It now opens the file once and checks (`fstatSync`) and reads through that handle. Evidence: both server tests (directory redirect with query and prefix; traversal refusal) pass.

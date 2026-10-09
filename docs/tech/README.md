@@ -22,3 +22,4 @@ Live entry points: [Stood website](https://ma-za-kpe.github.io/stood/), [Yard co
 | T14 | [Feature breakdown and milestones](T14-feature-breakdown-and-milestones.md) | Epics → features → FRs, versions 0.2.0 → 1.0.0 |
 | T15 | [Docker and local development](T15-docker-and-local-dev.md) | Docker-only dev, images, compose stack, CI and Render parity |
 | T16 | [PayPal AI Toolkit and MCP](T16-paypal-ai-toolkit.md) | How the Toolkit skill, commands and sandbox MCP server are used, and why they never move Stood's money |
+| T17 | [Yard UI instrumentation audit](T17-ui-instrumentation-audit.md) | Full app source inventory, browser coverage, UX evidence and open C2 acceptance criteria |

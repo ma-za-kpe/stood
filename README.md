@@ -47,7 +47,7 @@
 | Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake is connected; the Foreman and Yard payments remain off until their adapters are connected |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |
-| Current work | [#75 remaining deployment/Postman work](https://github.com/ma-za-kpe/stood/issues/75) · [#76 hosted Foreman and Yard adapters](https://github.com/ma-za-kpe/stood/issues/76) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | Hosted sign-in and StartupTribunal import are deployed; [#99](https://github.com/ma-za-kpe/stood/issues/99) is complete for C2 |
+| Current work | [#75 UX and app coverage](https://github.com/ma-za-kpe/stood/issues/75) · [#76 hosted Foreman and Yard adapters](https://github.com/ma-za-kpe/stood/issues/76) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | Hosted sign-in and import are deployed; C2 stays open for the UX/98% app audit, with [#99](https://github.com/ma-za-kpe/stood/issues/99) tracking import sanitization |
 | Latest progress | [Discord-ready update and screenshots (#108)](https://github.com/ma-za-kpe/stood/issues/108) | Verified against the deployed desktop/mobile app and public pages |
 | Hackathon | <https://paypalaihackathon.devpost.com/> | |
 | Yard GitHub App | <https://github.com/apps/yard-builder> | Installed only on [`yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox) ([setup](docs/SETUP.md#7-yard-github-app)) |
@@ -55,7 +55,7 @@
 | Guide for PayPal developers | [Authorize, capture and void on the PayPal sandbox, step by step](docs/guides/paypal-sandbox-authorize-capture-void.md) | Written from our own setup, with every error we hit |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
-**Browse ideas:** open [hosted Yard](https://stood-yard-api.onrender.com/app/), sign in with the buyer code from the private `~/.config/stood/yard-access-codes` file, then choose **Describe a project → Browse free research ideas**. No StartupTribunal API key is needed for public discovery. Codes are already configured as `accessCode` entries in the private `.env` `YARD_OPERATORS`; never paste them into issues or screenshots.
+**Browse ideas:** open [hosted Yard](https://stood-yard-api.onrender.com/app/), sign in with the buyer code from the private `~/.config/stood/yard-access-codes` file, then open **Describe a project**. Ideas load automatically; search and click **View idea** to review a card. No StartupTribunal API key is needed for public discovery. Codes are already configured as `accessCode` entries in the private `.env` `YARD_OPERATORS`; never paste them into issues or screenshots.
 
 ## The problem
 
@@ -173,7 +173,7 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 | Astropods | Runs the evidence agent, with no PayPal credentials |
 | Elastic | Evidence memory: reused and internet photo detection |
 | Kernel | Automates the sandbox buyer approval so judges can replay every outcome |
-| Postman | Public workspace, fixtures, uptime monitors |
+| Postman | Deferred by owner (2026-10-09); no paid upgrade, workspace or monitors in use. See [operational decision](docs/tech/T10-deployment.md#postman-deferred). |
 | Zapier | Delivers the one-line reason by email / SMS / Slack |
 
 **Target free-tier deployment:** Render · Neon Postgres · Cloudflare R2 · Cloudflare Workers AI (Llama 3.2 Vision, open weights) · GitHub Actions / Pages. Everything else is open source ([T09](docs/tech/T09-tech-stack.md), [T10](docs/tech/T10-deployment.md)).
@@ -188,7 +188,7 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 │  ├─ USAGE.md           Usage manual: keys, quickstart, webhooks, profiles
 │  ├─ WAYS_OF_WORKING.md TDD · DDD · OOP · GitFlow · pre-commit · Definition of Done
 │  ├─ stood/             Product specs S01–S17
-│  ├─ tech/              Technical docs T01–T15
+│  ├─ tech/              Technical docs T01–T17
 │  ├─ adr/               Architecture decisions
 │  ├─ brand/             Logo, app icons, social, verdict chips (Volt)
 │  └─ 01–13 *.md         Research, hackathon, PayPal landscape, judges, checklist
@@ -205,7 +205,7 @@ Implemented core: `services/api`. Planned additional services: `apps/web`, `serv
 |---|---|
 | **Use it** | [Usage manual](docs/USAGE.md) · [Setup record (hosted sandbox)](docs/SETUP.md) · [Key handoff](docs/HANDOFF.md) |
 | **Product** | [Overview](docs/09-stood.md) · [S01 Problem](docs/stood/S01-problem-statement.md) · [S02 Boundary](docs/stood/S02-product-boundary.md) · [S03 Personas](docs/stood/S03-personas.md) · [S04 Outcomes](docs/stood/S04-job-story-and-outcomes.md) · [S05 Features](docs/stood/S05-feature-list.md) · [S06 Voice](docs/stood/S06-voice-and-states.md) · [S08 Screens](docs/stood/S08-screens.md) · [S11 Evidence integrity](docs/stood/S11-evidence-integrity.md) · [S16 Use cases](docs/stood/S16-use-cases-and-evidence-profiles.md) |
-| **Technical** | [T01 Requirements](docs/tech/T01-requirements.md) · [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) · [T05 Data](docs/tech/T05-data-model.md) · [T06 PayPal](docs/tech/T06-paypal-integration.md) · [T07 Evidence](docs/tech/T07-evidence-pipeline.md) · [T08 EyeOnSite](docs/tech/T08-eyeonsite-integration.md) · [T09 Stack](docs/tech/T09-tech-stack.md) · [T10 Deployment](docs/tech/T10-deployment.md) · [T11 Security](docs/tech/T11-security-privacy.md) · [T12 Testing](docs/tech/T12-testing-and-quality.md) · [T13 Runbooks](docs/tech/T13-observability-and-runbooks.md) · [T14 Milestones](docs/tech/T14-feature-breakdown-and-milestones.md) · [T15 Docker](docs/tech/T15-docker-and-local-dev.md) · [T16 PayPal AI Toolkit](docs/tech/T16-paypal-ai-toolkit.md) |
+| **Technical** | [T01 Requirements](docs/tech/T01-requirements.md) · [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) · [T05 Data](docs/tech/T05-data-model.md) · [T06 PayPal](docs/tech/T06-paypal-integration.md) · [T07 Evidence](docs/tech/T07-evidence-pipeline.md) · [T08 EyeOnSite](docs/tech/T08-eyeonsite-integration.md) · [T09 Stack](docs/tech/T09-tech-stack.md) · [T10 Deployment](docs/tech/T10-deployment.md) · [T11 Security](docs/tech/T11-security-privacy.md) · [T12 Testing](docs/tech/T12-testing-and-quality.md) · [T13 Runbooks](docs/tech/T13-observability-and-runbooks.md) · [T14 Milestones](docs/tech/T14-feature-breakdown-and-milestones.md) · [T15 Docker](docs/tech/T15-docker-and-local-dev.md) · [T16 PayPal AI Toolkit](docs/tech/T16-paypal-ai-toolkit.md) · [T17 UI audit](docs/tech/T17-ui-instrumentation-audit.md) |
 | **Design** | [S15 Design system "Volt"](docs/stood/S15-design-system.md) · [Brand assets](docs/brand/) |
 | **Hackathon** | [Rules and prizes](docs/06-paypal-hackathon.md) · [Partner map](docs/stood/S13-sponsor-integration.md) · [Plan](docs/stood/S12-hackathon-plan.md) · [Demo script](docs/stood/S09-demo-script.md) · [Submission checklist](docs/13-submission-checklist.md) |
 | **Decisions** | [Architecture decisions](docs/adr/) · [Audit log](docs/audit-log.md) · [Sources](docs/sources.md) |
