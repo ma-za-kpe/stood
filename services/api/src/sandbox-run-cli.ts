@@ -98,6 +98,16 @@ const kernel =
               click: (s) => page.click(s),
               url: () => page.url(),
               waitForURL: (test, o) => page.waitForURL(test, o),
+              // Evidence for reviewers: one screenshot per step in .sandbox/kernel/<scenario>/ (gitignored), with the
+              // buyer's email masked wherever it appears. The password field only ever shows dots.
+              capture: async (step) => {
+                mkdirSync(`.sandbox/kernel/${scenario}`, { recursive: true });
+                await page.screenshot({
+                  path: `.sandbox/kernel/${scenario}/${step}.png`,
+                  mask: [page.locator('input[type=email], #email'), page.getByText(buyerEmail)],
+                  maskColor: '#0b2545',
+                });
+              },
             },
             close: () => browser.close(),
           };

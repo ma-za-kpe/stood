@@ -105,7 +105,7 @@ repos:
       - id: markdownlint-cli2
         name: markdownlint-cli2 (auto-fix)
         language: docker_image
-        entry: davidanson/markdownlint-cli2@sha256:d5f3f3f04b2e285dcbcdcd13b4454d119e273e3c393a9dabd163dba4abad526d --fix  # v0.23.3
+        entry: mirror.gcr.io/davidanson/markdownlint-cli2@sha256:d5f3f3f04b2e285dcbcdcd13b4454d119e273e3c393a9dabd163dba4abad526d --fix  # v0.23.3
         types: [markdown]
         require_serial: true   # --fix rewrites files; parallel containers would race
   - repo: https://github.com/crate-ci/typos

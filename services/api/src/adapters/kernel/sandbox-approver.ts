@@ -7,6 +7,8 @@ export type ApprovalPage = Readonly<{
   click(selector: string): Promise<void>;
   url(): string;
   waitForURL(test: (url: URL) => boolean, options?: { timeout?: number }): Promise<void>;
+  // Optional evidence: a screenshot of the current step, with the buyer's login masked by the caller.
+  capture?(step: string): Promise<void>;
 }>;
 type Config = Readonly<{
   apiKey: string;
@@ -16,7 +18,15 @@ type Config = Readonly<{
   fetch?: typeof globalThis.fetch;
   connect?: (cdpUrl: string) => Promise<Readonly<{ page: ApprovalPage; close(): Promise<void> }>>;
 }>;
-const APPROVE = '#payment-submit-btn, button:has-text("Agree & Continue")';
+// PayPal's sandbox checkout (2026-10, the /pay flow, forced to English with locale.x): email, Next, password,
+// Log In, then "Review Order" (#one-time-cta), or "Agree and Continue" (#consentButton) when saving PayPal for later
+// payments. The older layout's ids and "Agree & Continue" still match. Kernel's browser may otherwise get a Portuguese page.
+const EMAIL = 'input[type=email], #email';
+const NEXT = '#btnNext, button:has-text("Next")';
+const PASSWORD = '#password, input[type=password]';
+const LOGIN = '#btnLogin, button:has-text("Log In")';
+const APPROVE =
+  '#one-time-cta, button:has-text("Review Order"), #consentButton, button:has-text("Agree and Continue"), #payment-submit-btn, button:has-text("Agree & Continue")';
 
 // C3: approves a PayPal SANDBOX link as the sandbox buyer in a Kernel cloud browser, so every sandbox outcome can
 // be replayed without a person at the keyboard. It opens nothing but www.sandbox.paypal.com, never logs the
@@ -47,20 +57,30 @@ export class KernelSandboxApprover {
       const browser = await this.config.connect(session.cdp_ws_url);
       try {
         const page = browser.page;
-        await page.goto(target.href);
-        await page.waitForSelector(`#email, ${APPROVE}`, { timeout: 60_000 });
-        if (await page.isVisible('#email')) {
-          await page.fill('#email', this.config.buyerEmail);
-          await page.click('#btnNext');
-          await page.waitForSelector('#password', { timeout: 30_000 });
-          await page.fill('#password', this.config.buyerPassword);
-          await page.click('#btnLogin');
+        const english = new URL(target.href);
+        english.searchParams.set('locale.x', 'en_US');
+        await page.goto(english.href);
+        await page.waitForSelector(`${EMAIL}, ${APPROVE}`, { timeout: 60_000 });
+        // Screenshots are evidence only: a failed capture never stops an approval.
+        const capture = (step: string) => page.capture?.(step).catch(() => undefined);
+        if (await page.isVisible(EMAIL)) {
+          await capture('1-sign-in');
+          await page.fill(EMAIL, this.config.buyerEmail);
+          await page.click(NEXT);
+          await page.waitForSelector(PASSWORD, { timeout: 30_000 });
+          await capture('2-password');
+          await page.fill(PASSWORD, this.config.buyerPassword);
+          await page.click(LOGIN);
+          await page.waitForSelector(APPROVE, { timeout: 60_000 });
         }
+        await capture('3-approve');
         await page.click(APPROVE);
-        // Approved once PayPal hands the buyer back to the merchant's return URL.
-        await page.waitForURL((u) => u.hostname !== 'paypal.com' && !u.hostname.endsWith('.paypal.com'), {
-          timeout: 60_000,
-        });
+        // With a return URL PayPal hands the buyer back; without one (plain funding orders) it stays put. Either way
+        // the caller confirms approval from PayPal's API (the sandbox run polls for APPROVED), never from the page.
+        await page
+          .waitForURL((u) => u.hostname !== 'paypal.com' && !u.hostname.endsWith('.paypal.com'), { timeout: 15_000 })
+          .catch(() => undefined);
+        await capture('4-approved');
       } finally {
         await browser.close();
       }
