@@ -1,0 +1,76 @@
+{
+  "scenario": "release",
+  "mode": "live",
+  "runId": "sandbox-release-2026-10-09T20-58-24-018Z",
+  "outcome": "CAPTURED",
+  "steps": [
+    {
+      "step": "CREATE_ORDER",
+      "httpStatus": 201,
+      "status": "CREATED",
+      "ids": {
+        "order": "31355630EC108705A"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_FUNDING_ORDER",
+      "httpStatus": 200,
+      "status": "APPROVED",
+      "ids": {
+        "order": "31355630EC108705A"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "AUTHORIZE_ORDER",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "order": "31355630EC108705A",
+        "hold": "29H64387S3374021H"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "CAPTURE",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "capture": "1U791055FG399131X"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "CAPTURE_REPLAY",
+      "httpStatus": 200,
+      "status": "COMPLETED",
+      "ids": {
+        "capture": "1U791055FG399131X"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_AUTHORIZATION",
+      "httpStatus": 200,
+      "status": "CAPTURED",
+      "ids": {
+        "hold": "29H64387S3374021H"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-09T20:59:34.253Z"
+}

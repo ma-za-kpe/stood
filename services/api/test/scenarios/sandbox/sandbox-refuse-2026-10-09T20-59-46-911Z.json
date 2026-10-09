@@ -1,0 +1,76 @@
+{
+  "scenario": "refuse",
+  "mode": "live",
+  "runId": "sandbox-refuse-2026-10-09T20-59-46-911Z",
+  "outcome": "VOIDED",
+  "steps": [
+    {
+      "step": "CREATE_ORDER",
+      "httpStatus": 201,
+      "status": "CREATED",
+      "ids": {
+        "order": "8JB07511MW6019502"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_FUNDING_ORDER",
+      "httpStatus": 200,
+      "status": "APPROVED",
+      "ids": {
+        "order": "8JB07511MW6019502"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "AUTHORIZE_ORDER",
+      "httpStatus": 201,
+      "status": "COMPLETED",
+      "ids": {
+        "order": "8JB07511MW6019502",
+        "hold": "2VT58823JF7915318"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "VOID",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "2VT58823JF7915318"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "VOID_REPLAY",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "2VT58823JF7915318"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    },
+    {
+      "step": "GET_AUTHORIZATION",
+      "httpStatus": 200,
+      "status": "VOIDED",
+      "ids": {
+        "hold": "2VT58823JF7915318"
+      },
+      "amount": "10.00 USD",
+      "issue": null,
+      "debugId": null
+    }
+  ],
+  "recordedAt": "2026-10-09T21:01:03.744Z"
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type ApprovalPage, KernelSandboxApprover } from './sandbox-approver.js';
 
 const link = 'https://www.sandbox.paypal.com/checkoutnow?token=EC-TEST-TOKEN';
+const english = `${link}&locale.x=en_US`;
 function harness(over: { returnTo?: string; loginShown?: boolean } = {}) {
   const calls: string[] = [];
   let url = '';
@@ -13,13 +14,13 @@ function harness(over: { returnTo?: string; loginShown?: boolean } = {}) {
     waitForSelector: async (s) => {
       calls.push(`wait ${s}`);
     },
-    isVisible: async (s) => (s === '#email' ? over.loginShown !== false : true),
+    isVisible: async (s) => (s.includes('email') ? over.loginShown !== false : true),
     fill: async (s, v) => {
-      calls.push(`fill ${s} ${s === '#password' ? '<hidden>' : v}`);
+      calls.push(`fill ${s} ${s.includes('password') ? '<hidden>' : v}`);
     },
     click: async (s) => {
       calls.push(`click ${s}`);
-      if (s.includes('Agree')) url = over.returnTo ?? 'https://stood-api.onrender.com/v1/approved?token=x';
+      if (s.includes('Review Order')) url = over.returnTo ?? 'https://stood-api.onrender.com/v1/approved?token=x';
     },
     url: () => url,
     waitForURL: async (test) => {
@@ -55,15 +56,18 @@ describe('KernelSandboxApprover', () => {
     const h = harness();
     await h.approver.approve(link);
     expect(h.connected).toEqual(['wss://cdp.kernel.test/ses_1']);
+    const approve =
+      '#one-time-cta, button:has-text("Review Order"), #consentButton, button:has-text("Agree and Continue"), #payment-submit-btn, button:has-text("Agree & Continue")';
     expect(h.calls).toEqual([
-      `goto ${link}`,
-      'wait #email, #payment-submit-btn, button:has-text("Agree & Continue")',
-      'fill #email buyer@personal.example.com',
-      'click #btnNext',
-      'wait #password',
-      'fill #password <hidden>',
-      'click #btnLogin',
-      'click #payment-submit-btn, button:has-text("Agree & Continue")',
+      `goto ${english}`,
+      `wait input[type=email], #email, ${approve}`,
+      'fill input[type=email], #email buyer@personal.example.com',
+      'click #btnNext, button:has-text("Next")',
+      'wait #password, input[type=password]',
+      'fill #password, input[type=password] <hidden>',
+      'click #btnLogin, button:has-text("Log In")',
+      `wait ${approve}`,
+      `click ${approve}`,
       'close',
     ]);
     expect(h.kernel).toEqual(['POST /browsers Bearer kernel-key', 'DELETE /browsers/ses_1 Bearer kernel-key']);
@@ -75,7 +79,7 @@ describe('KernelSandboxApprover', () => {
     expect(h.calls.some((c) => c.startsWith('fill'))).toBe(false);
   });
 
-  it('refuses any link but the PayPal sandbox and still closes the browser when approval fails', async () => {
+  it('refuses any link but the PayPal sandbox, and always closes the browser', async () => {
     for (const bad of [
       'https://www.paypal.com/checkoutnow?token=x',
       'http://www.sandbox.paypal.com/checkoutnow?token=x',
@@ -85,12 +89,14 @@ describe('KernelSandboxApprover', () => {
       await expect(h.approver.approve(bad)).rejects.toThrow('NOT_SANDBOX');
       expect(h.kernel).toEqual([]);
     }
-    const stuck = harness({ returnTo: 'https://www.sandbox.paypal.com/still-here' });
+    // Without a return URL PayPal keeps the buyer on its page; the approver still finishes and closes the browser,
+    // and the caller confirms approval from PayPal's API.
+    const stays = harness({ returnTo: 'https://www.sandbox.paypal.com/pay/checkout' });
+    await stays.approver.approve(link);
+    expect(stays.calls.at(-1)).toBe('close');
+    expect(stays.kernel.at(-1)).toBe('DELETE /browsers/ses_1 Bearer kernel-key');
     const lookalike = harness({ returnTo: 'https://notpaypal.com/return' });
     await lookalike.approver.approve(link);
-    await expect(stuck.approver.approve(link)).rejects.toThrow();
-    expect(stuck.calls.at(-1)).toBe('close');
-    expect(stuck.kernel.at(-1)).toBe('DELETE /browsers/ses_1 Bearer kernel-key');
     expect(() => new KernelSandboxApprover({ apiKey: '', buyerEmail: 'b@x.co', buyerPassword: 'p' })).toThrow();
   });
 });
