@@ -118,3 +118,10 @@ services:
         value: "169056228"
       - key: YARD_SANDBOX_REPOSITORY
         value: ma-za-kpe/yard-sandbox
+      # T-0189: Yard reaches Stood with the platform's signed API credentials (the same pair stood-api holds).
+      - key: STOOD_API_URL
+        value: https://stood-api.onrender.com
+      - key: STOOD_API_KEY
+        sync: false
+      - key: STOOD_HMAC_SECRET
+        sync: false

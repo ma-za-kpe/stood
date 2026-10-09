@@ -61,6 +61,9 @@ const reads: Record<string, readonly string[]> = {
     'GITHUB_APP_PRIVATE_KEY_BASE64',
     'GITHUB_APP_INSTALLATION_ID',
     'YARD_SANDBOX_REPOSITORY',
+    'STOOD_API_URL',
+    'STOOD_API_KEY',
+    'STOOD_HMAC_SECRET',
   ],
 };
 const stood = (s: Service) => s.name.startsWith('stood-') && s.name !== 'stood-yard-api';

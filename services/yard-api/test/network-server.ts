@@ -12,7 +12,7 @@ import { PostgresIntakes } from '../src/adapters/db-postgres/intakes.js';
 import { PostgresSecretRows } from '../src/adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from '../src/adapters/db-postgres/site-log.js';
 import { GitleaksScanner } from '../src/adapters/log-scanner/gitleaks.js';
-import type { SettlementProof } from '../src/application/board.js';
+import { StoodTrancheProofs } from '../src/adapters/stood/tranche-proofs.js';
 import { Board } from '../src/application/board.js';
 import { IntakePlanner } from '../src/application/intake-planner.js';
 import { SecretVault } from '../src/application/secret-vault.js';
@@ -133,13 +133,20 @@ const app = createYardApp({
     stood: {
       mode: 'sim',
       secret: 'sim-stood-webhook-secret',
+      // T-0189: the decision comes from Stood's real signed public tranche view, not a mock-only proof.
       read: async (id) => {
-        const response = await fetch(`http://api:3000/__mock/proof/${encodeURIComponent(id)}`, {
-          headers: { Authorization: 'Bearer sim-control-key' },
-          signal: AbortSignal.timeout(3000),
-        });
-        if (!response.ok) throw new Error('Stood proof unavailable');
-        return response.json() as Promise<Omit<SettlementProof, 'eventId'>>;
+        const now = await clock();
+        const proof = await new StoodTrancheProofs(
+          new StoodClient({
+            baseUrl: 'https://stood.mock.invalid',
+            key: 'mock-key',
+            secret: 'mock-secret',
+            clock: () => now,
+            transport: (request) => fetch(new Request(`http://api:3000${new URL(request.url).pathname}`, request)),
+          }),
+        ).read(id);
+        if (!proof) throw new Error('Stood has not decided yet');
+        return proof;
       },
     },
   },

@@ -29,7 +29,7 @@ it('wires the Board, site log and secrets from configuration, and says why the r
   });
   expect(runtime.notes).toEqual([
     'Foreman off: GROK_PLANNER_API_KEY is missing.',
-    'Payments off: Yard is not connected to Stood yet.',
+    'Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.',
   ]);
   await runtime.stop();
 });
@@ -116,7 +116,7 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
   ]);
   expect(plannerConfig({ ...planner, GROK_DAILY_BUDGET_USD: '' }, [])?.dailyMicros).toBe(500_000);
   const on = yardRuntime(planner);
-  expect(on.notes).toEqual(['Payments off: Yard is not connected to Stood yet.']);
+  expect(on.notes).toEqual(['Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.']);
   expect(await capabilities(planner)).toMatchObject({ board: true, intake: true, foreman: true });
   await on.stop();
   for (const [change, note] of [
@@ -133,4 +133,23 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
     expect(await capabilities(env)).toMatchObject({ foreman: false });
     await runtime.stop();
   }
+});
+
+// T-0189: with Stood's platform credentials, Yard creates allowance drafts through the signed API and reads every
+// tranche it waits on. Packages stay off until a runner supplies a real test report; nothing is invented for them.
+it('connects to Stood only with platform credentials over https, and says what is still off', async () => {
+  const stood = { ...hosted, STOOD_API_KEY: 'platform-key-not-real', STOOD_HMAC_SECRET: 'h'.repeat(40) };
+  const on = yardRuntime(stood);
+  expect(on.notes).toContain('Packages off: Stood needs a runner test report before Yard can submit work.');
+  expect(on.notes.some((n) => n.startsWith('Payments off'))).toBe(false);
+  expect(on.config.board?.mandates).toBeDefined();
+  expect(on.config.board?.packages).toBeUndefined();
+  expect(await capabilities(stood)).toMatchObject({ payments: true });
+  await on.stop();
+  const plain = { ...stood, STOOD_API_URL: 'http://stood.example.com' };
+  const off = yardRuntime(plain);
+  expect(off.notes).toContain('Payments off: STOOD_API_URL must be an https URL.');
+  expect(JSON.stringify(off.notes)).not.toMatch(/platform-key|hhhh/);
+  expect(await capabilities(plain)).toMatchObject({ payments: false });
+  await off.stop();
 });

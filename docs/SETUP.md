@@ -178,6 +178,12 @@ scripts/dev planner-check   # five live drafts against the shared contract; abou
 
 The spend cap is kept in Postgres (`yard.planner_spend`), so restarts and extra instances share one daily budget. Plans are pinned to the repository's real `main` through a read-only token. The pre-deploy migration also creates the Foreman's checkpoint tables.
 
+### Yard reads Stood (T-0189)
+
+Stood sends platforms no notifications, so `stood-yard-api` reads Stood's signed tranche view (`GET /v1/tranches/:id`) for every work order it waits on, once a minute, and applies only what that read shows: a hold for a claimed attempt, or a capture or refusal of the exact package it submitted. Set the platform's own credentials on `stood-yard-api` in Render, the same `STOOD_API_KEY` and `STOOD_HMAC_SECRET` that `stood-api` holds; `STOOD_API_URL` is committed as `https://stood-api.onrender.com`. With them, Yard creates allowance drafts through Stood and `/health` reports `payments: true`. Stood only ever talks to the PayPal sandbox, and Yard refuses any other provider.
+
+Not yet: Yard submits no packages while hosted (the log says `Packages off`), because a package must carry a real test report and the runner that produces one is C4 (T-0159/T-0164). Until then, captures and refusals are proven in `scripts/mock-network`, which reads the same real tranche view.
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.

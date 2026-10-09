@@ -15,7 +15,8 @@
     "hono": "4.13.12",
     "pg": "8.23.1",
     "@stood/yard-contracts": "workspace:*",
-    "@stood/yard-foreman": "workspace:*"
+    "@stood/yard-foreman": "workspace:*",
+    "@stood/stood-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "8.23.1"

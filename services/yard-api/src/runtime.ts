@@ -1,3 +1,4 @@
+import { StoodClient } from '@stood/stood-sdk';
 import { Foreman, GrokPlannerModel, PostgresForemanCoordinator, PostgresSaver } from '@stood/yard-foreman';
 import pg from 'pg';
 import { LocalKeyWrapper } from './adapters/crypto/local-key-wrapper.js';
@@ -8,11 +9,13 @@ import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
+import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, type Operator } from './application/board.js';
 import { IntakePlanner } from './application/intake-planner.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
+import { StoodWatch } from './application/stood-watch.js';
 import type { createYardApp } from './http/app.js';
 import { startLogRetention } from './jobs/site-log-retention.js';
 import { YardError } from './ports/events.js';
@@ -40,7 +43,7 @@ export function yardRuntime(env: Env) {
   if (!env.YARD_SECRET_KEYS?.trim()) notes.push('Board off: YARD_SECRET_KEYS is missing.');
   else if (!keys) notes.push('Board off: YARD_SECRET_KEYS is not a valid key list.');
   const planner = plannerConfig(env, notes);
-  notes.push('Payments off: Yard is not connected to Stood yet.');
+  const stood = stoodClient(env, notes);
   if (notes.some((n) => n.startsWith('Board off')) || !operators || !keys)
     return { config: { environment } as Config, notes, start: async () => {}, stop: async () => {} };
 
@@ -83,8 +86,12 @@ export function yardRuntime(env: Env) {
       operators,
       secrets: new SecretVault(new PostgresSecretRows(pool), new LocalKeyWrapper(keys.keys, keys.current)),
       siteLog: new SiteLog(logs, board, scanner),
+      // T-0189: allowance drafts through Stood's signed API. Packages wait for a runner's real test report.
+      ...(stood ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
     },
   };
+  const watch = stood ? new StoodWatch(board, new StoodTrancheProofs(stood)) : null;
+  let watching: ReturnType<typeof setInterval> | null = null;
   return {
     config,
     notes,
@@ -92,9 +99,18 @@ export function yardRuntime(env: Env) {
       await scanner.ready();
       retention = startLogRetention(logs, clock, (code) => process.stderr.write(`${JSON.stringify({ code })}\n`));
       await retention.run();
+      // Stood sends platforms no notifications: read every tranche Yard waits on, once a minute.
+      if (watch) {
+        const tick = () =>
+          watch.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'STOOD_WATCH_FAILED' })}\n`));
+        watching = setInterval(tick, 60_000);
+        watching.unref();
+        await tick();
+      }
     },
     async stop() {
       retention?.stop();
+      if (watching) clearInterval(watching);
       await pool.end();
     },
   };
@@ -138,6 +154,21 @@ export function plannerConfig(env: Env, notes: string[]) {
       },
     },
   };
+}
+
+// T-0189: Yard reaches Stood with the platform's own signed API credentials, over https only.
+function stoodClient(env: Env, notes: string[]) {
+  const key = env.STOOD_API_KEY?.trim() ?? '';
+  const secret = env.STOOD_HMAC_SECRET?.trim() ?? '';
+  const baseUrl = env.STOOD_API_URL?.trim() || 'https://stood-api.onrender.com';
+  if (!key || !secret) notes.push('Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.');
+  else if (!URL.canParse(baseUrl) || new URL(baseUrl).protocol !== 'https:')
+    notes.push('Payments off: STOOD_API_URL must be an https URL.');
+  else {
+    notes.push('Packages off: Stood needs a runner test report before Yard can submit work.');
+    return new StoodClient({ baseUrl, key, secret, clock: Date.now });
+  }
+  return null;
 }
 
 // [{ key, secret (≥ 32 chars), actor: { id, root, kind: BUYER|BUILDER }, payeeRef? }]

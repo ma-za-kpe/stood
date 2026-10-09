@@ -30,6 +30,10 @@ export type HoldProof = Readonly<{
   expiresAt: number;
   simulated: true;
 }>;
+export type AwaitingStood = Readonly<
+  | { projectId: string; wo: string; trancheId: string; waitingFor: 'DECISION'; packageId: string }
+  | { projectId: string; wo: string; trancheId: string; waitingFor: 'HOLD' }
+>;
 export type StoodProof = Omit<SettlementProof, 'eventId'> | Omit<RefusalProof, 'eventId'> | Omit<HoldProof, 'eventId'>;
 type Refusal = Readonly<{
   eventId: string;
@@ -999,6 +1003,33 @@ export class Board {
         };
       }),
     };
+  }
+  // T-0189: work orders waiting on Stood: a hold for a claimed attempt, or a decision on a submitted package.
+  async awaitingStood(after = '') {
+    const projects = await this.events.list(after),
+      page = projects.slice(0, 100);
+    const items = page.flatMap((project) => {
+      const d = data(project.data);
+      return Object.keys(d.orders).flatMap((wo): AwaitingStood[] => {
+        const { work, order } = workOrder(d, wo);
+        const s = work.snapshot;
+        if (order.payment || order.closed || !order.trancheId) return [];
+        if (s.state === 'CHECKING' && s.submission?.packageId)
+          return [
+            {
+              projectId: project.id,
+              wo,
+              trancheId: order.trancheId,
+              waitingFor: 'DECISION',
+              packageId: s.submission.packageId,
+            },
+          ];
+        if (['CLAIMED', 'REWORK'].includes(s.state) && s.currentClaim && !currentHold(order, work))
+          return [{ projectId: project.id, wo, trancheId: order.trancheId, waitingFor: 'HOLD' }];
+        return [];
+      });
+    });
+    return { items, nextCursor: projects.length > 100 ? (page.at(-1)?.id ?? null) : null };
   }
   async pendingSubmissions(after = '') {
     const projects = await this.events.list(after),
