@@ -25,7 +25,12 @@ export { ApiError } from './core.js';
 export * from './errors/problemError.js';
 export type { Allowance } from './models/allowance.js';
 export type { AllowanceDraft } from './models/allowanceDraft.js';
+export type { Baseline } from './models/baseline.js';
+export { BaselineStatus } from './models/baselineStatus.js';
+export type { BaselineTest } from './models/baselineTest.js';
+export { BaselineTestStatus } from './models/baselineTestStatus.js';
 export type { CodeTerms } from './models/codeTerms.js';
+export type { CodeTermsInput } from './models/codeTermsInput.js';
 export type { CommitPackage } from './models/commitPackage.js';
 export type { CommitPackageInput } from './models/commitPackageInput.js';
 export type { Decision } from './models/decision.js';
@@ -47,6 +52,10 @@ export type { Tranche } from './models/tranche.js';
 export type { TrancheHold } from './models/trancheHold.js';
 export type { TrancheRef } from './models/trancheRef.js';
 export { TrancheState } from './models/trancheState.js';
+export type { UsageAcceptance } from './models/usageAcceptance.js';
+export type { UsageAuthority } from './models/usageAuthority.js';
+export type { UsageReceipt } from './models/usageReceipt.js';
+export { UsageStatus } from './models/usageStatus.js';
 export * from './models/containers/milestoneParams.js';
 
 // Stood customization (not generated): signed requests.

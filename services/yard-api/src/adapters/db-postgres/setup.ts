@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import { migrateYardEvents, migrateYardSearch } from './events.js';
-import { migrateYardIntakes } from './intakes.js';
+import { migrateYardIntakeErasure, migrateYardIntakes } from './intakes.js';
 import { migrateYardNotices } from './notices.js';
 import { migrateYardCheckpoints, migrateYardPlannerSpend } from './planner-spend.js';
 import { provisionYard } from './schema.js';
@@ -52,4 +52,5 @@ export async function migrateYard(pool: pg.Pool, roles: Roles): Promise<void> {
   await migrateYardNotices(pool, roles.owner);
   await migrateYardPlannerSpend(pool, roles.owner);
   await migrateYardCheckpoints(pool, roles.owner);
+  await migrateYardIntakeErasure(pool, roles.owner);
 }

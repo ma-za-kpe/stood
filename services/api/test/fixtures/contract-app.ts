@@ -1,7 +1,9 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { vi } from 'vitest';
+import { usageAuthorities } from '../../src/application/usage-intake.js';
 import { decide, getProfile } from '../../src/domain/decision.js';
 import { createTrancheRecord } from '../../src/domain/tranche-record.js';
+import { receiptPayload } from '../../src/domain/usage-receipt.js';
 import { createApp } from '../../src/http/app.js';
 import { MemoryTranches } from '../fakes/tranche-store.js';
 import { codeParams } from './code-terms.js';
@@ -42,6 +44,32 @@ export function signed(method: string, path: string, body = '', idempotency = ''
     },
   };
 }
+const usageKeys = generateKeyPairSync('ed25519');
+const authorities = usageAuthorities(
+  JSON.stringify([
+    {
+      keyId: 'yard-usage-1',
+      root: 'yard-buyers',
+      publicKey: Buffer.from(usageKeys.publicKey.export({ type: 'spki', format: 'pem' }).toString()).toString('base64'),
+    },
+  ]),
+);
+// A usage receipt for the fixture's final package, signed by the configured authority.
+export function usageReceipt(nonce = 'nonce-contract-000001') {
+  const unsigned = {
+    version: 1 as const,
+    allowanceId: 'alw_1',
+    trancheId: 'trn_1',
+    commit: pkg.commit_sha,
+    authority: { keyId: 'yard-usage-1', root: 'yard-buyers' },
+    observedAt: now - 1000,
+    nonce,
+  };
+  return {
+    ...unsigned,
+    signature: sign(null, Buffer.from(receiptPayload(unsigned)), usageKeys.privateKey).toString('base64'),
+  };
+}
 export async function harness() {
   const tranches = new MemoryTranches();
   await tranches.create(
@@ -76,6 +104,17 @@ export async function harness() {
     metadata: pkg,
     createdAt: new Date(now).toISOString(),
   };
+  const baselineView = {
+    id: 'bl_1',
+    status: 'DONE' as const,
+    terms: codeParams,
+    result: {
+      tests: codeParams.testIds.map((id) => ({ id, status: 'FAIL' as const })),
+      evidence: { key: `baselines/platform_a/bl_1/${'e'.repeat(64)}`, sha256: 'e'.repeat(64) },
+    },
+    createdAt: new Date(now).toISOString(),
+    finishedAt: new Date(now + 60000).toISOString(),
+  };
   const app = createApp({
     appEnv: 'ci',
     paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
@@ -85,6 +124,26 @@ export async function harness() {
         create: vi.fn(async () => stored),
         allowance: vi.fn(async (_p: string, id: string) => (id === 'alw_1' ? stored : null)),
         tranche: vi.fn(async (_p: string, id: string) => (id === 'trn_1' ? tranches.load('trn_1') : null)),
+      },
+      usage: {
+        authorities,
+        store: {
+          target: vi.fn(async (_p: string, id: string) =>
+            id === 'trn_1' ? { allowanceId: 'alw_1', commit: pkg.commit_sha } : null,
+          ),
+          byNonce: vi.fn(async () => null),
+          record: vi.fn(async (_p: string, r: { trancheId: string; commit: string; nonce: string }) => ({
+            trancheId: r.trancheId,
+            commit: r.commit,
+            nonce: r.nonce,
+            acceptedAt: new Date(now).toISOString(),
+          })),
+          find: vi.fn(async () => null),
+        },
+      },
+      baselines: {
+        request: vi.fn(async () => baselineView),
+        get: vi.fn(async (_p: string, id: string) => (id === 'bl_1' ? baselineView : null)),
       },
       packages: {
         submit: vi.fn(async () => packageView),

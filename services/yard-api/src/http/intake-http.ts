@@ -1,8 +1,10 @@
 import { intakeChecked } from '@stood/yard-contracts';
 import type { Context, Hono } from 'hono';
 import type { Operator } from '../application/board.js';
+import { eraseIntake } from '../application/intake-erasure.js';
 import type { IntakePlanner } from '../application/intake-planner.js';
-import { YardError } from '../ports/events.js';
+import { YardError, type YardEvents } from '../ports/events.js';
+import type { ForemanPlans } from '../ports/foreman.js';
 import type { IntakeStore } from '../ports/intakes.js';
 import { eventFeed } from './event-feed.js';
 export function intakeHttp(
@@ -12,6 +14,8 @@ export function intakeHttp(
     planner?: Pick<IntakePlanner, 'create'>;
     request(c: Context): Readonly<{ actor: Operator; body: string; now: number }>;
     authorize(headers: Headers, id: string, target: string): Promise<boolean>;
+    // T-0217: what erasing an intake must also check and clean up.
+    erasure?: Readonly<{ projects: Pick<YardEvents, 'load'>; foreman?: Pick<ForemanPlans, 'forget'> }>;
   }>,
 ) {
   const buyer = (c: Context) => {
@@ -90,5 +94,19 @@ export function intakeHttp(
     c.header('Cache-Control', 'private, no-store');
     return c.json(record);
   });
+  // T-0217: the owning buyer erases their draft and the planner's copy. A draft that became a project is refused (409).
+  const { erase, idle } = config.store;
+  if (config.erasure && erase && idle) {
+    const erasure = config.erasure;
+    app.delete('/yard/v1/intakes/:id', async (c) => {
+      const owner = buyer(c);
+      const result = await eraseIntake(c.req.param('id'), owner, config.request(c).now, {
+        intakes: { erase: erase.bind(config.store), idle: idle.bind(config.store) },
+        ...erasure,
+      });
+      c.header('Cache-Control', 'private, no-store');
+      return c.json({ id: c.req.param('id'), erased: true, already: result === 'ALREADY' });
+    });
+  }
   eventFeed(app, { store: config.store, route: '/yard/v1/intakes/:id/events', authorize: config.authorize });
 }

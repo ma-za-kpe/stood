@@ -35,6 +35,7 @@ const reads: Record<string, readonly string[]> = {
     'PROVIDER_PAYPAL',
     'STOOD_PLATFORM_ID',
     'VAULT_TOKEN_KEYS',
+    'USAGE_AUTHORITY_KEYS',
     ...PAYMENT_KEYS,
   ],
   'stood-reconciler': [
@@ -62,6 +63,8 @@ const reads: Record<string, readonly string[]> = {
   'stood-yard-api': [
     'YARD_ENV',
     'PORT',
+    'YARD_USAGE_KEY_ID',
+    'YARD_USAGE_SIGNING_KEY',
     'YARD_DATABASE_URL',
     'YARD_MIGRATION_DATABASE_URL',
     'YARD_OPERATORS',

@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { BaselineInput, BaselineView } from '@stood/stood-sdk';
 import { handoverConfirmation, IntakeError, RETENTION } from '@stood/yard-contracts';
 import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
@@ -23,6 +24,7 @@ import { type PackageGateway, SubmissionBridge } from '../application/submission
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
 import type { IntakeStore } from '../ports/intakes.js';
+import type { Repositories } from '../ports/repositories.js';
 import { SecretError } from '../ports/secrets.js';
 import { SiteLogError } from '../ports/site-log.js';
 import { eventFeed } from './event-feed.js';
@@ -46,6 +48,12 @@ export type BoardConfig = Readonly<{
   packages?: PackageGateway;
   siteLog?: SiteLog;
   foreman?: ForemanPlans;
+  // C4 (#77): what turning an accepted plan into a frozen blueprint needs beyond the Foreman and the Board.
+  planBlueprints?: Readonly<{
+    repositories: Pick<Repositories, 'issue' | 'seedTests'>;
+    installation: string;
+    stood: Readonly<{ requestBaseline(input: BaselineInput, key: string): Promise<BaselineView> }>;
+  }>;
   intakes?: IntakeStore;
   intakePlanner?: Pick<IntakePlanner, 'create'>;
   secrets?: SecretVault;
@@ -148,12 +156,18 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       return c.json({ code: 'invalid_request' }, 422);
     return c.json({ code: 'yard_unavailable' }, 503);
   });
-  if (config.foreman) foremanHttp(app, { foreman: config.foreman, request });
+  if (config.foreman)
+    foremanHttp(app, {
+      foreman: config.foreman,
+      request,
+      ...(config.planBlueprints ? { blueprints: { ...config.planBlueprints, board: config.board } } : {}),
+    });
   if (config.intakes) {
     const store = config.intakes;
     intakeHttp(app, {
       store,
       ...(config.intakePlanner ? { planner: config.intakePlanner } : {}),
+      erasure: { projects: config.board.events, ...(config.foreman ? { foreman: config.foreman } : {}) },
       request,
       authorize: async (headers, id, target) => {
         const actor = identify(headers, 'GET', target, '', await config.clock());

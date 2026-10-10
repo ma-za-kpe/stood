@@ -337,3 +337,12 @@ it('refuses foreign, stale, invalid and competing manual edits without losing th
   expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   await expect(f.edit('plan', 'buyer', 1, 'a', { ...draft(), summary: 'Different' })).rejects.toThrow('CONFLICT');
 });
+
+// T-0217: an erased intake leaves nothing in the planner's checkpoints.
+it('forgets everything it kept for an intake', async () => {
+  const foreman = new Foreman({ draft: async () => draft() }, new MemorySaver());
+  expect((await foreman.draft(intake)).status).toBe('BUYER_REVIEW');
+  await foreman.forget('plan');
+  await expect(foreman.read('plan')).rejects.toThrow('NOT_FOUND');
+  await expect(foreman.forget('not valid!')).rejects.toThrow('INVALID');
+});

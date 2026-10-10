@@ -107,4 +107,36 @@ describe('GitHubRepositories (T-0188)', () => {
     });
     await expect(github.create('42', 'new', {})).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
+
+  // C4 (#77): Yard itself freezes the buyer's acceptance tests onto main before any work is posted.
+  it('seeds the frozen tests onto main as a fast-forward, once, and only with a maintain token and tests/ paths', async () => {
+    const { github, api } = make();
+    const read = await github.issue('42', 'buyer/project', 'READ');
+    const base = await github.head(read.value, 'buyer/project', 'main');
+    const maintain = await github.issue('42', 'buyer/project', 'MAINTAIN');
+    const tests = { 'tests/frozen/one.test.js': 'buyer test one', 'tests/frozen/two.test.js': 'buyer test two' };
+    const seeded = await github.seedTests(maintain.value, 'buyer/project', base, tests);
+    expect(seeded).toMatchObject({ repository: 'buyer/project', simulated: false });
+    expect(await github.head(read.value, 'buyer/project', 'main')).toBe(seeded.commit);
+    expect(await github.read(read.value, 'buyer/project', seeded.commit, 'tests/frozen/one.test.js')).toBe(
+      'buyer test one',
+    );
+    expect(api.calls.find((c) => c.method === 'PATCH')?.body).toMatchObject({ force: false });
+    // A retry after a lost reply returns the same commit and writes nothing.
+    const writes = api.calls.filter((c) => c.method !== 'GET').length;
+    expect(await github.seedTests(maintain.value, 'buyer/project', base, tests)).toEqual(seeded);
+    expect(api.calls.filter((c) => c.method !== 'GET').length).toBe(writes);
+    // Different tests, or a base main has moved past, are conflicts.
+    await expect(
+      github.seedTests(maintain.value, 'buyer/project', base, { 'tests/frozen/one.test.js': 'weaker' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    const build = await github.issue('42', 'buyer/project', 'BUILD', 'wo/x');
+    await expect(github.seedTests(build.value, 'buyer/project', seeded.commit, tests)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    for (const files of [{}, { 'src/app.ts': 'not a test' }, { 'tests/../x.js': 'x' }])
+      await expect(github.seedTests(maintain.value, 'buyer/project', seeded.commit, files)).rejects.toMatchObject({
+        code: 'INVALID_INPUT',
+      });
+  });
 });

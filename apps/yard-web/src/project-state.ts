@@ -25,6 +25,9 @@ export type OrderView = Readonly<{
   tests?: Readonly<{ ids: readonly string[]; bundleHash: string }>;
   punchList?: readonly PunchItem[] | null;
   refusals?: readonly RefusalView[];
+  // C4 (#77): the final milestone, and the buyer's usage confirmation as Stood has answered it.
+  final?: boolean;
+  usage?: Readonly<{ confirmedAt: number; status: 'CONFIRMED' | 'ACCEPTED' | 'REFUSED' }> | null;
 }>;
 export type Handover = Readonly<{ status: 'CLOSED'; closedAt: number; confirmed: readonly string[] }>;
 export type ProjectRoom = Readonly<{
@@ -194,6 +197,15 @@ export function roomChecked(value: unknown): ProjectRoom {
       throw new Error('Invalid lease');
     if (o.attempt !== undefined && (!Number.isSafeInteger(o.attempt) || Number(o.attempt) < 1))
       throw new Error('Invalid attempt');
+    if (o.final !== undefined && typeof o.final !== 'boolean') throw new Error('Invalid final flag');
+    if (
+      o.usage !== undefined &&
+      o.usage !== null &&
+      (!object(o.usage) ||
+        !Number.isSafeInteger(o.usage.confirmedAt) ||
+        !['CONFIRMED', 'ACCEPTED', 'REFUSED'].includes(String(o.usage.status)))
+    )
+      throw new Error('Invalid usage');
     if (o.punchList !== undefined && o.punchList !== null && !punchList(o.punchList))
       throw new Error('Invalid punch list');
     const refusals = o.refusals === undefined ? [] : o.refusals;

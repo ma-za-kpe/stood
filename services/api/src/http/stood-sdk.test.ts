@@ -271,3 +271,147 @@ it('reads a held tranche through the public view and rejects malformed views (T-
   });
   await expect(forged.getTranche('trn_1')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
 });
+
+// C4 (#77): a platform asks Stood for a baseline and reads it back; the SDK refuses a result Stood did not record.
+describe('Public SDK baselines against the actual local Stood HTTP router', () => {
+  const view = (over: object = {}) => ({
+    id: 'bl_1',
+    status: 'DONE' as const,
+    terms: { ...codeParams, minMutation: 0 },
+    result: {
+      tests: codeParams.testIds.map((id) => ({ id, status: 'FAIL' as const })),
+      evidence: { key: `baselines/platform_a/bl_1/${'e'.repeat(64)}`, sha256: 'e'.repeat(64) },
+    },
+    createdAt: new Date(at).toISOString(),
+    finishedAt: new Date(at).toISOString(),
+    ...over,
+  });
+  const client = (stored: ReturnType<typeof view>) => {
+    const baselines = { request: vi.fn(async () => stored), get: vi.fn(async () => stored) };
+    const app = createApp({
+      appEnv: 'ci',
+      paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
+      demoMode: false,
+      api: {
+        store: { create: vi.fn(), allowance: vi.fn(), tranche: vi.fn() },
+        baselines,
+        platformId: 'platform_a',
+        key: 'fixture_key',
+        secret: 'fixture_secret',
+        clock: () => at,
+      },
+    });
+    return {
+      baselines,
+      sdk: new StoodClient({
+        baseUrl: 'https://stood.fixture',
+        key: 'fixture_key',
+        secret: 'fixture_secret',
+        clock: () => at,
+        transport: async (r: Request) => app.fetch(r),
+      }),
+    };
+  };
+
+  it('requests a baseline and reads every frozen test as it ran on the base commit', async () => {
+    const { sdk, baselines } = client(view());
+    const requested = await sdk.requestBaseline(codeParams, 'bl-key');
+    expect(requested).toMatchObject({
+      id: 'bl_1',
+      status: 'DONE',
+      baseCommit: codeParams.baseCommit,
+      evidenceSha256: 'e'.repeat(64),
+    });
+    expect(requested.tests?.every((t) => t.status === 'FAIL')).toBe(true);
+    expect(baselines.request).toHaveBeenCalledWith(
+      'platform_a',
+      'bl-key',
+      expect.any(String),
+      expect.objectContaining({ testIds: codeParams.testIds }),
+    );
+    expect(await sdk.getBaseline('bl_1')).toEqual(requested);
+    const queued = client(view({ status: 'QUEUED', result: null, finishedAt: null }));
+    expect(await queued.sdk.getBaseline('bl_1')).toMatchObject({ status: 'QUEUED', tests: null, evidenceSha256: null });
+  });
+
+  it('refuses a baseline response whose result does not match its status', async () => {
+    for (const body of [
+      {
+        id: 'bl_1',
+        status: 'DONE',
+        repository: 'a/b',
+        base_commit: 'a'.repeat(40),
+        test_bundle_hash: 'b'.repeat(64),
+        tests: null,
+        evidence_sha256: null,
+      },
+      {
+        id: 'bl_1',
+        status: 'QUEUED',
+        repository: 'a/b',
+        base_commit: 'a'.repeat(40),
+        test_bundle_hash: 'b'.repeat(64),
+        tests: [{ id: 't', status: 'PASS' }],
+        evidence_sha256: 'e'.repeat(64),
+      },
+      {
+        id: 'bl_1',
+        status: 'DONE',
+        repository: 'a/b',
+        base_commit: 'a'.repeat(40),
+        test_bundle_hash: 'b'.repeat(64),
+        tests: [{ id: 't', status: 'SKIP' }],
+        evidence_sha256: 'e'.repeat(64),
+      },
+      {
+        id: 'bl_other',
+        status: 'QUEUED',
+        repository: 'a/b',
+        base_commit: 'a'.repeat(40),
+        test_bundle_hash: 'b'.repeat(64),
+        tests: null,
+        evidence_sha256: null,
+      },
+    ]) {
+      const sdk = new StoodClient({
+        baseUrl: 'https://stood.fixture',
+        key: 'fixture_key',
+        secret: 'fixture_secret',
+        clock: () => at,
+        transport: async () => Response.json(body),
+      });
+      await expect(sdk.getBaseline('bl_1')).rejects.toBeInstanceOf(StoodClientError);
+    }
+  });
+});
+
+// C4 (#77): the platform forwards a usage receipt; Stood's refusal reaches the caller as a typed error.
+describe('Public SDK usage confirmation against the actual local Stood HTTP router', () => {
+  it('confirms use with a signed receipt and refuses a forged one', async () => {
+    const { harness, usageReceipt, key, secret, now } = await import('../../test/fixtures/contract-app.js');
+    const app = await harness();
+    const sdk = new StoodClient({
+      baseUrl: 'https://stood.fixture',
+      key,
+      secret,
+      clock: () => now,
+      transport: async (r: Request) => app.fetch(r),
+    });
+    expect(await sdk.confirmUsage('trn_1', usageReceipt())).toMatchObject({
+      trancheId: 'trn_1',
+      commit: 'b'.repeat(40),
+    });
+    await expect(sdk.confirmUsage('trn_1', { ...usageReceipt(), signature: 'Zm9yZ2Vk' })).rejects.toBeInstanceOf(
+      StoodClientError,
+    );
+    const lying = new StoodClient({
+      baseUrl: 'https://stood.fixture',
+      key,
+      secret,
+      clock: () => now,
+      transport: async () =>
+        Response.json({ tranche_id: 'other', commit: 'b'.repeat(40), status: 'ACCEPTED', accepted_at: 'x' }),
+    });
+    await expect(lying.confirmUsage('trn_1', usageReceipt())).rejects.toBeInstanceOf(StoodClientError);
+  });
+});

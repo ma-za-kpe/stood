@@ -33,6 +33,14 @@ export const plan = (status = 'BUYER_REVIEW', version = 1) => ({
   risks: ['Payments are simulated until qualified'],
 });
 
+// C4 (#77): a blueprint progress reply for the accepted plan bp1.
+export const progress = (status: string, milestones: { baseline: string; passing?: string[] }[]) => ({
+  blueprintId: 'bp1',
+  baseCommit: 'c0ffee'.padEnd(40, '0'),
+  status,
+  milestones: milestones.map((m, i) => ({ id: `m${i + 1}`, passing: [], ...m })),
+});
+
 export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
   const state = {
     record: null as null | {
@@ -47,6 +55,9 @@ export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
     plan: plan(),
     failPut: 0 as number,
     failPlan: false,
+    // C4 (#77): what successive blueprint calls return; empty means the service is unavailable.
+    baselines: [] as unknown[],
+    eraseStatus: 0 as number,
   };
   const reply = (call: Call) => {
     if (call.path === '/research/ideas')
@@ -104,6 +115,16 @@ export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
       const { decision } = JSON.parse(call.body);
       state.plan = plan(decision === 'ACCEPT' ? 'READY_FOR_BASELINE' : 'REVISION_REQUESTED', state.plan.version + 1);
       return { body: state.plan };
+    }
+    // T-0217: the owner erases the intake; a project made from it is kept (409).
+    if (intake && call.method === 'DELETE') {
+      if (state.eraseStatus) return { status: state.eraseStatus };
+      state.record = null;
+      return { body: { id: intake[1], erased: true, already: false } };
+    }
+    if (call.path === '/plans/bp1/blueprint' && call.method === 'POST') {
+      const next = state.baselines.shift();
+      return next ? { body: next } : { status: 503 };
     }
     if (call.path === '/plans/bp1/revisions') {
       state.plan = plan('BUYER_REVIEW', state.plan.version + 1);

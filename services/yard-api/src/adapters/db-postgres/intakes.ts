@@ -69,6 +69,45 @@ export async function migrateYardIntakes(pool: pg.Pool, owner: string): Promise<
     c.release();
   }
 }
+// T-0217: a buyer can erase an intake, and abandoned drafts expire. Intake history stays append-only except inside an
+// erase transaction for that one intake (SET LOCAL yard.erase_intake); each erasure leaves only its id, reason and time.
+export async function migrateYardIntakeErasure(pool: pg.Pool, owner: string): Promise<void> {
+  if (!/^[a-z][a-z0-9_]{0,62}$/.test(owner)) throw new RangeError('Invalid Yard owner');
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(`SET LOCAL ROLE ${owner}`);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended('yard-intake-erasure-migration',0))");
+    if ((await c.query('SELECT 1 FROM yard.schema_migrations WHERE version=9')).rowCount) {
+      await c.query('COMMIT');
+      return;
+    }
+    await c.query(`CREATE FUNCTION yard.intake_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF TG_OP='DELETE' AND current_setting('yard.erase_intake', true) = OLD.intake_id THEN RETURN OLD; END IF;
+        RAISE EXCEPTION 'Intake history is append-only';
+      END $$;
+      DROP TRIGGER intake_event_immutable ON yard.intake_events;
+      CREATE TRIGGER intake_event_immutable BEFORE UPDATE OR DELETE ON yard.intake_events
+        FOR EACH ROW EXECUTE FUNCTION yard.intake_append_only();
+      DROP TRIGGER intake_command_immutable ON yard.intake_commands;
+      CREATE TRIGGER intake_command_immutable BEFORE UPDATE OR DELETE ON yard.intake_commands
+        FOR EACH ROW EXECUTE FUNCTION yard.intake_append_only();
+      CREATE TABLE yard.intake_erasures (
+        intake_id text PRIMARY KEY CHECK(intake_id ~ '^[A-Za-z0-9_-]{1,100}$'),
+        reason text NOT NULL CHECK(reason IN ('BUYER_REQUEST','EXPIRED')),
+        erased_at timestamptz NOT NULL CHECK(isfinite(erased_at)));
+      CREATE TRIGGER intake_erasure_immutable BEFORE UPDATE OR DELETE ON yard.intake_erasures
+        FOR EACH ROW EXECUTE FUNCTION yard.immutable_event();
+      INSERT INTO yard.schema_migrations(version) VALUES(9);`);
+    await c.query('COMMIT');
+  } catch (error) {
+    await c.query('ROLLBACK');
+    throw error;
+  } finally {
+    c.release();
+  }
+}
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object')
@@ -209,5 +248,49 @@ export class PostgresIntakes implements IntakeStore {
     } finally {
       c.release();
     }
+  }
+  // T-0217: erases the intake, its history and its idempotency receipts in one transaction; a repeat is a no-op.
+  async erase(
+    id: string,
+    owner: string,
+    reason: 'BUYER_REQUEST' | 'EXPIRED',
+    now: number,
+  ): Promise<'ERASED' | 'ALREADY'> {
+    const c = await this.pool.connect();
+    try {
+      await c.query('BEGIN');
+      const current = await c.query('SELECT owner FROM yard.intakes WHERE id=$1 FOR UPDATE', [id]);
+      if (!current.rowCount) {
+        const done = await c.query('SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1', [id]);
+        await c.query('COMMIT');
+        if (done.rowCount) return 'ALREADY';
+        throw new YardError('NOT_FOUND');
+      }
+      if (current.rows[0].owner !== owner) throw new YardError('FORBIDDEN');
+      await c.query("SELECT set_config('yard.erase_intake', $1, true)", [id]);
+      await c.query('DELETE FROM yard.intake_commands WHERE intake_id=$1', [id]);
+      await c.query('DELETE FROM yard.intake_events WHERE intake_id=$1', [id]);
+      await c.query('DELETE FROM yard.intakes WHERE id=$1', [id]);
+      await c.query('INSERT INTO yard.intake_erasures(intake_id,reason,erased_at) VALUES($1,$2,$3)', [
+        id,
+        reason,
+        new Date(now).toISOString(),
+      ]);
+      await c.query('COMMIT');
+      return 'ERASED';
+    } catch (error) {
+      await c.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      c.release();
+    }
+  }
+  // T-0217: drafts nobody has touched since `before`, with their owners, oldest first.
+  async idle(before: number, limit = 100): Promise<readonly Readonly<{ id: string; owner: string }>[]> {
+    const result = await this.pool.query(
+      'SELECT id,owner FROM yard.intakes WHERE updated_at < $1 ORDER BY updated_at, id LIMIT $2',
+      [new Date(before).toISOString(), Math.max(1, Math.min(limit, 500))],
+    );
+    return result.rows.map((r) => ({ id: String(r.id), owner: String(r.owner) }));
   }
 }
