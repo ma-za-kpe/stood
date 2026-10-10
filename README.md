@@ -53,6 +53,7 @@
 | Yard GitHub App | <https://github.com/apps/yard-builder> | Installed only on [`yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox) ([setup](docs/SETUP.md#7-yard-github-app)) |
 | Yard test repository | <https://github.com/ma-za-kpe/yard-sandbox> | Throwaway: where Yard's `wo/*` branches and pull requests appear in demos |
 | Guide for PayPal developers | [Authorize, capture and void on the PayPal sandbox, step by step](docs/guides/paypal-sandbox-authorize-capture-void.md) | Written from our own setup, with every error we hit |
+| Guide for Kernel developers | [Approve PayPal sandbox payments unattended with a Kernel cloud browser, step by step](docs/guides/kernel-paypal-sandbox-approval.md) | Written from our own runs: CAPTURED, VOIDED and VAULTED with nobody at the keyboard, and every selector mistake we fixed |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
 **Browse ideas:** open [hosted Yard](https://stood-yard-api.onrender.com/app/), sign in with the buyer code from the private `~/.config/stood/yard-access-codes` file, then open **Describe a project**. Ideas load automatically; search and click **View idea** to review a card. No StartupTribunal API key is needed for public discovery. Codes are already configured as `accessCode` entries in the private `.env` `YARD_OPERATORS`; never paste them into issues or screenshots.
@@ -223,7 +224,7 @@ pre-commit install                 # installs pre-commit, commit-msg and pre-pus
 pre-commit run --all-files         # must pass before you push
 ```
 
-Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push` should list all three. Fast checks run on every commit; the Docker product gate (types, money boundary, all tests, build) runs before every push ([ADR-0023](docs/adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md)). Docker must be running, because some hooks run in pinned containers. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
+Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push` should list all three. Fast checks run on every commit; before every push, `scripts/ci-local` runs every CI job locally (clean image build, all hooks, the Docker product gate, the site, mock network and hosted Yard checks), about 25 minutes, so CI never fails first ([ADR-0023](docs/adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md)). Docker must be running, because some hooks run in pinned containers. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
 
 **There's no way around the gate:**
 

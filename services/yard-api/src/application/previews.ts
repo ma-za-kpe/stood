@@ -15,6 +15,9 @@ export class Previews {
   async deploy(id: string, wo: string, image: string, now: number) {
     if (!DIGEST.test(image)) throw new YardError('INVALID');
     const target = await this.board.previewTarget(id, wo, now);
+    // A retry, or a second click, returns the live preview instead of starting another service.
+    const live = (await this.board.previewList(id)).find((p) => p.wo === wo && p.expiresAt > now);
+    if (live) return { url: live.url, expiresAt: live.expiresAt };
     const deployId = `preview-${randomUUID()}`;
     const env: Record<string, string> = {};
     // Each key is decrypted for this named deploy only, and the vault audits it before returning.

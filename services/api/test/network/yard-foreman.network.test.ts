@@ -71,6 +71,7 @@ it('network Foreman: signed draft, owner review, revision and baseline wait with
   expect(await (await request('/board')).json()).toEqual(before);
   expect((await (await fetch('http://yard-api:3001/health')).json()).capabilities).toMatchObject({
     foreman: true,
-    payments: false,
+    // T-0189: connected to the (simulated) Stood API; money still moves only on a Stood decision.
+    payments: true,
   });
 });

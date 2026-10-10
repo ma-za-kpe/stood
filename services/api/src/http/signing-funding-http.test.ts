@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
+import { codeParams } from '../../test/fixtures/code-terms.js';
 import { mandateTermsHash } from '../application/mandate-terms.js';
 import { FundingStoreError } from '../ports/funding-store.js';
 import type { Mandate } from '../ports/mandate-store.js';
@@ -14,7 +15,9 @@ const draft = {
   status: 'DRAFT' as const,
   payee_ref: 'builder_1',
   cap: { minor: 1000, currency: 'USD' },
-  milestones: [{ name: 'build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: {} }],
+  milestones: [
+    { name: 'build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: codeParams },
+  ],
   window_days: 7,
   max_resubmits: 1,
   tranches: [{ id: 'trn_1', name: 'build' }],

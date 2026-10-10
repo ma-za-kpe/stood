@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
+import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
 import { ServerSdkTransport } from './adapters/payments-paypal/sdk.js';
 import { runSandboxScenario, runVaultSetup, type SandboxRecording } from './application/sandbox-run.js';
 
@@ -73,7 +74,53 @@ const transport = new ServerSdkTransport({
   vaultReturnUrl: 'https://ma-za-kpe.github.io/stood/?vault=saved',
   vaultCancelUrl: 'https://ma-za-kpe.github.io/stood/?vault=cancelled',
 });
+// With KERNEL_API_KEY and the sandbox buyer login, a Kernel cloud browser approves unattended; otherwise a person does.
+const kernelKey = process.env.KERNEL_API_KEY?.trim() ?? '';
+const buyerEmail = process.env.PAYPAL_SANDBOX_BUYER_EMAIL?.trim() ?? '';
+const buyerPassword = process.env.PAYPAL_SANDBOX_BUYER_PASSWORD ?? '';
+const kernel =
+  kernelKey && buyerEmail && buyerPassword
+    ? new KernelSandboxApprover({
+        apiKey: kernelKey,
+        buyerEmail,
+        buyerPassword,
+        connect: async (cdp) => {
+          const { chromium } = await import('playwright-core');
+          const browser = await chromium.connectOverCDP(cdp);
+          const context = browser.contexts()[0] ?? (await browser.newContext());
+          const page = context.pages()[0] ?? (await context.newPage());
+          return {
+            page: {
+              goto: (u) => page.goto(u),
+              waitForSelector: (s, o) => page.waitForSelector(s, o),
+              isVisible: (s) => page.isVisible(s),
+              fill: (s, v) => page.fill(s, v),
+              click: (s) => page.click(s),
+              url: () => page.url(),
+              waitForURL: (test, o) => page.waitForURL(test, o),
+              // Evidence for reviewers: one screenshot per step in .sandbox/kernel/<scenario>/ (gitignored), with the
+              // buyer's email masked wherever it appears. The password field only ever shows dots.
+              capture: async (step) => {
+                mkdirSync(`.sandbox/kernel/${scenario}`, { recursive: true });
+                await page.screenshot({
+                  path: `.sandbox/kernel/${scenario}/${step}.png`,
+                  mask: [page.locator('input[type=email], #email'), page.getByText(buyerEmail)],
+                  maskColor: '#0b2545',
+                });
+              },
+            },
+            close: () => browser.close(),
+          };
+        },
+      })
+    : null;
 const approve = async (link: string) => {
+  if (kernel) {
+    process.stdout.write('\nKernel is approving as the SANDBOX buyer in a cloud browser...\n');
+    await kernel.approve(link);
+    process.stdout.write('Approved in the sandbox.\n');
+    return;
+  }
   process.stdout.write(
     `\nOpen this link and approve as your SANDBOX PERSONAL (buyer) account:\n\n  ${link}\n\nWaiting up to 15 minutes...\n`,
   );

@@ -5,6 +5,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['apps/yard-web/src/**/*.test.{ts,tsx}'],
+    // Whole jsdom user flows under coverage instrumentation: 5 seconds timed out in Docker on a busy machine.
+    testTimeout: Number(process.env.STOOD_TEST_TIMEOUT_MS) || 15000,
     coverage: {
       provider: 'v8',
       include: ['apps/yard-web/src/**/*.{ts,tsx}'],

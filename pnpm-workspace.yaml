@@ -4,9 +4,6 @@ packages:
   - apps/*
 onlyBuiltDependencies:
   - esbuild
-injectWorkspacePackages: true
-syncInjectedDepsAfterScripts:
-  - build
 patchedDependencies:
   '@langchain/langgraph-checkpoint@1.1.5': patches/langgraph-checkpoint-1.1.5.patch
 overrides:

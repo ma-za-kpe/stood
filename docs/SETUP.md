@@ -157,6 +157,68 @@ scripts/dev vault-rotate   # re-seal every saved token under it
 
 Then copy `VAULT_TOKEN_KEYS` to Render, and drop the old key only after rotation reports it re-sealed everything. A store missing a key fails closed: it refuses to open the token rather than guess.
 
+### The Foreman's live planner (T-0221)
+
+The Foreman drafts blueprints with xAI's Grok through `GrokPlannerModel`. It uses the cheapest listed model (`grok-build-0.1`, $1.00 per million input tokens and $2.00 per million output tokens on 2026-10-09) unless `GROK_PLANNER_MODEL` says otherwise, makes one call per draft with at most 4,000 output tokens, and never retries blindly. A daily spend guard (`GROK_DAILY_BUDGET_USD`) reserves the worst case before each call; when the day's budget is used, planning pauses until the next UTC day. Each call logs only the model, token counts and cost. The model proposes the work; budgets and deadlines are always computed from the buyer's fixed terms.
+
+```bash
+scripts/dev planner-check   # five live drafts against the shared contract; about $0.01 in total
+```
+
+**Hosted (T-0181).** `stood-yard-api` turns the Foreman on only when all of these are set. `render.yaml` commits the public ones; Render prompts for the two secrets, `GROK_PLANNER_API_KEY` and `GITHUB_APP_PRIVATE_KEY_BASE64`. Otherwise `/health` reports `foreman: false` and the log names what is missing (never a value):
+
+| Variable | Value |
+| --- | --- |
+| `GROK_PLANNER_API_KEY` | the xAI key |
+| `GROK_DAILY_BUDGET_USD` | daily cap, $0.01 to $5; empty means $0.50 |
+| `GROK_PLANNER_MODEL` | optional; empty means `grok-build-0.1` |
+| `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` | from the Yard Builder App |
+| `GITHUB_APP_PRIVATE_KEY_BASE64` | `base64 < key.pem \| tr -d '\n'` |
+| `YARD_SANDBOX_REPOSITORY` | the one repository Yard plans against, `owner/name` |
+
+The spend cap is kept in Postgres (`yard.planner_spend`), so restarts and extra instances share one daily budget. Plans are pinned to the repository's real `main` through a read-only token. The pre-deploy migration also creates the Foreman's checkpoint tables.
+
+### Code runner and settlement (T-0159, T-0164, ADR-0026)
+
+`stood-reconciler` decides code milestones itself. Every minute it takes the latest undecided package of each held code tranche and runs the buyer's frozen tests, read at the signed base commit and checked against the signed bundle hash, on the builder's exact commit in a disposable [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) microVM: no credentials inside, only the npm registry while dependencies install, no network at all while the tests run. The worker signs the result with its own Ed25519 key outside the VM, verifies it like any report, merges the read-only repository checks, and records one decision on the tranche.
+
+Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler then captures a released tranche or voids a refused one on the PayPal sandbox. Leave it unset and decisions are recorded but no money moves.
+
+| Variable | On `stood-reconciler` |
+| --- | --- |
+| `VERCEL_TOKEN` | A token scoped to the runner's team (prompted) |
+| `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Committed in `render.yaml` (the `stood-runner` project) |
+| `RUNNER_KEY_ID`, `RUNNER_SIGNING_KEY` | From `scripts/dev runner-key`, which writes them to `.env` without printing; copy both to Render |
+| `GITHUB_READ_TOKEN` | Optional, read-only, for private repositories |
+| `SETTLEMENT_EXECUTOR` | `on` to capture or void decided tranches; anything else keeps settlement off |
+
+```bash
+scripts/dev runner-check   # qualify the runner on real Vercel Sandbox: pass, fail, no network, no credentials, non-root, runaway stopped
+scripts/dev runner-key     # create the signing key (refuses to replace one; --rotate to replace)
+```
+
+Final milestones (`code.final@1`) also require the buyer's usage confirmation (`usage_release`), which is not yet wired from Yard, so they wait after passing their tests.
+
+### Yard reads Stood (T-0189)
+
+Stood sends platforms no notifications, so `stood-yard-api` reads Stood's signed tranche view (`GET /v1/tranches/:id`) for every work order it waits on, once a minute, and applies only what that read shows: a hold for a claimed attempt, or a capture or refusal of the exact package it submitted. Set the platform's own credentials on `stood-yard-api` in Render, the same `STOOD_API_KEY` and `STOOD_HMAC_SECRET` that `stood-api` holds; `STOOD_API_URL` is committed as `https://stood-api.onrender.com`. With them, Yard creates allowance drafts through Stood and `/health` reports `payments: true`. Stood only ever talks to the PayPal sandbox, and Yard refuses any other provider.
+
+Not yet: Yard submits no packages while hosted (the log says `Packages off`), because a package must carry a real test report and the runner that produces one is C4 (T-0159/T-0164). Until then, captures and refusals are proven in `scripts/mock-network`, which reads the same real tranche view.
+
+### Yard previews on Render (T-0196)
+
+A buyer can preview a submitted milestone: Yard runs the exact image, pinned by digest, as a free-plan Render web service with only the buyer's TEST/DEV keys (each decrypted for that deploy and audited) and `YARD_PREVIEW=simulated-test-data`. Previews expire after 30 days, or 7 after payment; an hourly sweep deletes them, and closing a project deletes the rest. Only the buyer can start one (`POST /yard/v1/blueprints/:id/work-orders/:wo/preview` with `{ "image": "...@sha256:..." }`), because the preview receives their keys; asking again returns the live preview.
+
+Render has no spend cap, so Yard keeps its own: at most three live `yard-preview-*` services, free plan only, and it deletes nothing that is not a Yard preview. A Render API key reaches a whole workspace, so give hosted Yard a key from a **separate workspace** made for previews: set `RENDER_PREVIEW_API_KEY` and `RENDER_PREVIEW_OWNER_ID` (`tea-...`, from `GET /v1/owners`) on `stood-yard-api`. Without them, `/health` stays the same and the log says `Previews off`.
+
+```bash
+scripts/dev preview-check   # one free-plan preview from a digest-pinned public image; waits for https, deletes it, checks it is gone
+```
+
+### Unattended sandbox approval with Kernel (C3)
+
+`scripts/dev sandbox-run release|refuse|vault-setup` needs a buyer to approve on PayPal's sandbox page. With `KERNEL_API_KEY` (from kernel.sh) and the sandbox personal account's `PAYPAL_SANDBOX_BUYER_EMAIL` and `PAYPAL_SANDBOX_BUYER_PASSWORD` in `.env`, a Kernel cloud browser signs in and approves instead, so every outcome replays with nobody at the keyboard. It opens nothing but `https://www.sandbox.paypal.com`, never prints the password, and always ends the cloud browser (which also stops on its own after five idle minutes). Without them, the run prints the link for a person, as before.
+
 ## 7. Yard GitHub App
 
 Yard reads and writes the buyer's repository through a GitHub App, never a personal token. Public page: <https://github.com/apps/yard-builder>.
@@ -173,6 +235,14 @@ Yard reads and writes the buyer's repository through a GitHub App, never a perso
 5. Check without printing secrets: sign a 9-minute JWT with the private key (`iss` = App ID, RS256), call `GET /app` (expect slug `yard-builder` and exactly the three permissions), then `POST /app/installations/{id}/access_tokens` and `GET /installation/repositories` (expect only the test repository). The installation token expires within an hour and is never stored.
 
 The live adapter that uses the app (one-repository tokens, `wo/*` branches, pull requests and attack cases) is T-0188 in batch C3.
+
+### What the App may do (T-0188)
+
+Yard talks to GitHub only through the Yard Builder App (`GitHubRepositories`). GitHub limits each token to one repository and to the permission needed: reading, building on a branch, or maintaining `main`. On top of that, Yard refuses before any write: repositories outside `YARD_SANDBOX_REPOSITORY`, branches other than the work order's own `wo/*` branch, any change under `tests/` or `.github/`, and any move of `main` that is not a fast-forward to exactly the checked commit. Merges go through an open pull request. Qualify it on the sandbox repository (a throwaway branch; `main` is never touched):
+
+```bash
+scripts/dev github-check
+```
 
 ## 8. Developer tooling
 

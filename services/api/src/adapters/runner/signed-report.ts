@@ -172,7 +172,10 @@ export class SignedReportVerifier implements RunnerReportVerifier {
           'signed_tests_changed',
           'signed_tests_changed',
         ),
-        check('test_execution', execution, 'tests_skipped', 'tests_skipped'),
+        // A frozen test that ran and failed is named as failed; one skipped or missing as skipped.
+        tests.some((t) => t.status === 'FAIL' && contract.testIds.includes(t.id as string))
+          ? check('test_execution', execution, 'tests_failed', 'tests_failed')
+          : check('test_execution', execution, 'tests_skipped', 'tests_skipped'),
         check(
           'new_commit',
           contract.commit !== contract.baseCommit && !contract.priorDiffHashes.includes(p.diffHash),

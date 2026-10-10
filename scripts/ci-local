@@ -1,0 +1,50 @@
+#!/bin/sh
+# T-0286: run every CI job locally, in CI's order, before anything reaches GitHub. CI must never fail on a push.
+# Installed as the pre-push hook (ci-local); CI itself skips that hook because it runs these jobs directly.
+#   scripts/ci-local          the full replica (about 25 minutes)
+# Output goes to .ci-local/ (gitignored); the summary lists each job and its exit code.
+set -u
+cd "$(dirname "$0")/.." || exit 2
+mkdir -p .ci-local
+log=.ci-local/ci-local.log
+: >"$log"
+failed=0
+step() {
+  name=$1
+  shift
+  printf '%-8s ' "$name"
+  start=$(date +%s)
+  if "$@" >>"$log" 2>&1; then
+    printf 'ok    %4ss\n' "$(($(date +%s) - start))"
+  else
+    printf 'FAIL  %4ss  (see %s)\n' "$(($(date +%s) - start))" "$log"
+    failed=1
+  fi
+}
+echo "Running every CI job locally (log: $log)"
+# The product gate's Postgres binds 127.0.0.1:5432. Another checkout's database there fails the run after minutes,
+# so say so up front, with the container to stop.
+project=$(basename "$PWD" | tr -cd 'a-z0-9_-')
+holder=$(docker ps --format '{{.Names}} {{.Ports}}' | grep '127.0.0.1:5432->' | awk '{print $1}' | grep -vx "${project}-db-1" || true)
+if [ -n "$holder" ]; then
+  echo "FAIL  port 5432 is held by $holder (another checkout). Stop it first: docker stop $holder"
+  exit 1
+fi
+# A clean image build, as CI has no cache. Any remote Docker Hub pull fails the run (rate limits, outages).
+step build docker compose build --no-cache --progress=plain app
+step install docker compose run --rm -T app pnpm install --frozen-lockfile
+step hooks env SKIP=ci-local pre-commit run --all-files --show-diff-on-failure
+step product scripts/check-product
+step site scripts/check-site
+step mock scripts/dev mock
+step hosted scripts/check-hosted-yard
+pulls=$(grep -E 'docker\.io/' "$log" | grep -Evc 'naming to|unpacking to')
+if [ "$pulls" -gt 0 ]; then
+  echo "FAIL  $pulls remote Docker Hub reference(s) in the build log; pull from a named registry instead"
+  failed=1
+fi
+if [ "$failed" -ne 0 ]; then
+  echo "Local CI failed: fix it before pushing."
+  exit 1
+fi
+echo "Every CI job passed locally."

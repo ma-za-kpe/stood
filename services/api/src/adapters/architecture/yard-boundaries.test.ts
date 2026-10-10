@@ -47,7 +47,8 @@ function violations(from: string, to: string): string[] {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-describe('Real Yard dependency graph boundaries (T-0174)', () => {
+// Each case runs the real dependency-cruiser over the workspace, several seconds each on a busy runner.
+describe('Real Yard dependency graph boundaries (T-0174)', { timeout: 60_000 }, () => {
   it.each([
     ['services/yard-api/src/index.js', '../../api/src/index.js', 'yard-calls-stood-over-http'],
     ['apps/yard-web/src/index.js', '../../../services/api/src/index.js', 'yard-calls-stood-over-http'],

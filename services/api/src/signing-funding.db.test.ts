@@ -5,6 +5,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { simulatorServer } from '../test/contracts/paypal-simulator.js';
+import { codeParams } from '../test/fixtures/code-terms.js';
 import { PostgresFunding } from './adapters/db-postgres/funding.js';
 import { PostgresMandates } from './adapters/db-postgres/mandates.js';
 import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
@@ -57,7 +58,7 @@ it('signs a saved-PayPal mandate and funds a tranche through the API, the worker
       payee_ref: 'sandbox-payee',
       cap: { minor: 1000, currency: 'USD' },
       milestones: [
-        { name: 'Build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: {} },
+        { name: 'Build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: codeParams },
       ],
       window_days: 7,
       max_resubmits: 1,

@@ -34,6 +34,18 @@ export function renderApiFake(config: Readonly<{ apiKey: string; maxServices: nu
       201,
     );
   });
+  // Render's list shape: [{ service, cursor }], newest last here; only this owner's services.
+  app.get('/v1/services', (c) =>
+    c.json(
+      [...services.values()]
+        .filter((s) => !c.req.query('ownerId') || s.ownerId === c.req.query('ownerId'))
+        .map((s) => ({ service: { id: s.id, name: s.name, suspended: 'not_suspended' }, cursor: s.id })),
+    ),
+  );
+  app.get('/v1/services/:id', (c) => {
+    const s = services.get(c.req.param('id'));
+    return s ? c.json({ id: s.id, name: s.name }) : c.json({ message: 'not found' }, 404);
+  });
   app.delete('/v1/services/:id', (c) =>
     services.delete(c.req.param('id')) ? c.body(null, 204) : c.json({ message: 'not found' }, 404),
   );

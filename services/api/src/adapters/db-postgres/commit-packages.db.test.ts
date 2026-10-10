@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { codeParams } from '../../../test/fixtures/code-terms.js';
 import { CommitPackageError } from '../../ports/commit-package-store.js';
 import { PostgresCommitPackages } from './commit-packages.js';
 import { PostgresPlatformApi } from './platform-api.js';
@@ -28,7 +29,14 @@ async function tranche(profile = 'code.milestone@1') {
   const draft = await new PostgresPlatformApi(db).create('platform_a', randomUUID(), 'd'.repeat(64), {
     payee_ref: 'operator',
     cap: { minor: 120000, currency: 'USD' },
-    milestones: [{ name: 'build', amount: { minor: 120000, currency: 'USD' }, profile, params: {} }],
+    milestones: [
+      {
+        name: 'build',
+        amount: { minor: 120000, currency: 'USD' },
+        profile,
+        params: profile.startsWith('code.') ? codeParams : {},
+      },
+    ],
     window_days: 7,
     max_resubmits: 1,
   });
@@ -72,6 +80,18 @@ describe('Durable commit-package references without execution (T-0172)', () => {
         code: 'CONFLICT',
       });
     expect((await pool.query('SELECT * FROM commit_packages WHERE tranche_id=$1', [id])).rows).toHaveLength(1);
+  });
+  // T-0189: the tranche view names the package Stood is judging, the latest one submitted; never a foreign one.
+  it('reads the latest package for a tranche and nothing for another platform', async () => {
+    const id = await tranche();
+    expect(await store.latest('platform_a', id)).toBeNull();
+    await store.submit('platform_a', id, 'first', 'a'.repeat(64), metadata);
+    const second = await store.submit('platform_a', id, 'second', 'b'.repeat(64), {
+      ...metadata,
+      commit_sha: 'e'.repeat(40),
+    });
+    expect((await store.latest('platform_a', id))?.id).toBe(second.id);
+    expect(await store.latest('platform_b', id)).toBeNull();
   });
   it('hides absent and foreign tranches and packages without disclosing metadata', async () => {
     const id = await tranche();

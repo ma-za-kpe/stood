@@ -791,46 +791,117 @@ summary {
   margin: 20px 0;
 }
 .idea-card {
+  position: relative;
   display: flex;
   flex-direction: column;
+  gap: 12px;
   padding: 20px;
   min-width: 0;
-  background: var(--bg);
-  border: 1px solid var(--y-steel);
+  background: var(--surface);
+  border: 1px solid var(--grid);
+  border-top: 3px solid var(--accent);
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+.idea-card:hover,
+.idea-card:focus-within {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px #00000033;
 }
 .idea-card h4 {
-  margin: 12px 0;
-}
-.idea-title {
-  text-align: left;
+  margin: 0;
   font-size: 1.1rem;
-  line-height: 1.45;
-  background: transparent;
-  color: var(--text);
-  border: 0;
-  padding: 0;
-  width: 100%;
+  line-height: 1.4;
 }
 .idea-excerpt {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.6;
-  margin: 0 0 20px;
+  margin: 0;
+  color: var(--text-muted);
 }
-.idea-card > button {
+.idea-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip,
+.decision-badge {
+  font: 0.75rem / 1.2 var(--mono);
+  padding: 4px 8px;
+  border: 1px solid var(--grid);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.chip-country {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.decision-badge {
+  border-color: var(--blocker);
+  color: var(--blocker);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.idea-score {
+  display: grid;
+  gap: 6px;
+}
+.score-bar {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 6px;
+  border: 0;
+  background: var(--grid);
+}
+.score-bar::-webkit-meter-bar {
+  height: 6px;
+  border: 0;
+  border-radius: 0;
+  background: var(--grid);
+}
+.score-bar::-webkit-meter-optimum-value,
+.score-bar::-webkit-meter-suboptimum-value,
+.score-bar::-webkit-meter-even-less-good-value {
+  background: var(--amber);
+}
+.score-bar::-moz-meter-bar {
+  background: var(--amber);
+}
+.score-value {
+  font: 0.75rem var(--mono);
+  color: var(--text-muted);
+}
+/* The single action covers the whole card, so the card is the target; the focus ring still marks the button. */
+.idea-open {
   margin-top: auto;
   align-self: start;
+}
+.idea-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .idea-card {
+    transition: none;
+  }
+  .idea-card:hover,
+  .idea-card:focus-within {
+    transform: none;
+  }
 }
 .secondary-button {
   background: transparent;
   color: var(--text);
   border-color: var(--y-steel);
-}
-.research-badge {
-  font: 0.75rem var(--mono);
-  color: var(--accent);
 }
 .idea-detail {
   padding: 24px;

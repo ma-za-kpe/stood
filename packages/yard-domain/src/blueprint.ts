@@ -9,6 +9,8 @@ export type Milestone = Readonly<{
   testBundleHash: string;
   manifestHash: string;
   testIds: readonly string[];
+  // T-0159: the frozen manifest ({id, path}, sorted by path) that manifestHash covers, when the plan provides it.
+  tests?: readonly Readonly<{ id: string; path: string }>[];
 }>;
 export type BlueprintInput = Readonly<{
   id: string;
@@ -39,6 +41,31 @@ type Snapshot = BlueprintInput &
   Readonly<{ version: number; status: 'DRAFT' | 'FROZEN'; termsProof: FreezeProof | null }>;
 const text = (s: string) => typeof s === 'string' && s.trim().length > 0 && s.length <= 1024;
 const hash = (s: string) => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s);
+const safePath = (p: unknown) =>
+  typeof p === 'string' &&
+  p.length > 0 &&
+  p.length <= 400 &&
+  !p.startsWith('/') &&
+  !/[\\\0]/.test(p) &&
+  p.split('/').every((part) => part && part !== '.' && part !== '..');
+// The manifest must list exactly the test ids, in order, with safe, unique paths sorted as the Foreman froze them.
+function manifest(tests: unknown, ids: readonly string[]) {
+  if (
+    !Array.isArray(tests) ||
+    tests.length !== ids.length ||
+    !tests.every(
+      (t, i) =>
+        t &&
+        typeof t === 'object' &&
+        Object.keys(t).sort().join() === 'id,path' &&
+        t.id === ids[i] &&
+        safePath(t.path) &&
+        (i === 0 || tests[i - 1].path.localeCompare(t.path) < 0),
+    )
+  )
+    throw new RangeError('Invalid milestone');
+  return Object.freeze(tests.map((t: { id: string; path: string }) => Object.freeze({ id: t.id, path: t.path })));
+}
 function checked(input: BlueprintInput): BlueprintInput {
   if (
     !text(input.id) ||
@@ -79,6 +106,7 @@ function checked(input: BlueprintInput): BlueprintInput {
       testBundleHash: m.testBundleHash,
       manifestHash: m.manifestHash,
       testIds: Object.freeze([...m.testIds]),
+      ...(m.tests === undefined ? {} : { tests: manifest(m.tests, m.testIds) }),
     });
   });
   if (new Set(milestones.map((m) => m.id)).size !== milestones.length)

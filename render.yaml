@@ -77,6 +77,23 @@ services:
       # T-0227/T-0260: keys that seal saved PayPal tokens; signing and funding stay off without them.
       - key: VAULT_TOKEN_KEYS
         sync: false
+      # T-0159 (ADR-0026): the code runner on Vercel Sandbox and its own signing key; off without them.
+      - key: VERCEL_TOKEN
+        sync: false
+      - key: VERCEL_TEAM_ID
+        value: team_fwytuyzy5ee2wV6qo9Yy2oAh
+      - key: VERCEL_PROJECT_ID
+        value: prj_rWTnqhAZJ7fHXYDLexg4VtrGknlG
+      - key: RUNNER_KEY_ID
+        sync: false
+      - key: RUNNER_SIGNING_KEY
+        sync: false
+      # Optional read-only token for private repositories; public ones need none.
+      - key: GITHUB_READ_TOKEN
+        sync: false
+      # The owner's switch: captures or voids decided tranches only when set to "on".
+      - key: SETTLEMENT_EXECUTOR
+        sync: false
   - type: web
     name: stood-yard-api
     runtime: docker
@@ -102,4 +119,31 @@ services:
       - key: YARD_OPERATORS
         sync: false
       - key: YARD_SECRET_KEYS
+        sync: false
+      # T-0181: the hosted Foreman. Only the xAI key and the App's private key are secrets; the rest is public.
+      - key: GROK_PLANNER_API_KEY
+        sync: false
+      - key: GROK_PLANNER_MODEL
+        value: grok-build-0.1
+      - key: GROK_DAILY_BUDGET_USD
+        value: "0.50"
+      - key: GITHUB_APP_ID
+        value: "5230872"
+      - key: GITHUB_APP_PRIVATE_KEY_BASE64
+        sync: false
+      - key: GITHUB_APP_INSTALLATION_ID
+        value: "169056228"
+      - key: YARD_SANDBOX_REPOSITORY
+        value: ma-za-kpe/yard-sandbox
+      # T-0189: Yard reaches Stood with the platform's signed API credentials (the same pair stood-api holds).
+      - key: STOOD_API_URL
+        value: https://stood-api.onrender.com
+      - key: STOOD_API_KEY
+        sync: false
+      - key: STOOD_HMAC_SECRET
+        sync: false
+      # T-0196: previews in a separate Render workspace, so this key cannot reach Stood's services.
+      - key: RENDER_PREVIEW_API_KEY
+        sync: false
+      - key: RENDER_PREVIEW_OWNER_ID
         sync: false

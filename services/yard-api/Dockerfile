@@ -1,10 +1,9 @@
-# syntax=docker/dockerfile:1
 # T-0214: hosted Yard API (Render, Starter). Build from the repository root:
 #   docker build -f services/yard-api/Dockerfile .
 # CI has already run every test before Render deploys (autoDeployTrigger: checksPass), so this build only compiles.
 FROM ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f AS log-scanner
 
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
+FROM mirror.gcr.io/library/node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_DEFAULT_TO_LATEST=0 COREPACK_HOME=/usr/local/share/corepack \
     npm_config_store_dir=/workspace/.pnpm-store
 RUN corepack enable pnpm \
@@ -15,7 +14,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile \
     && pnpm --filter "@stood/yard-api..." build \
     && YARD_UI_COVERAGE=$YARD_UI_COVERAGE pnpm --filter @stood/yard-web build \
-    && pnpm --filter @stood/yard-api deploy --prod --offline /workspace/release \
+    && pnpm --filter @stood/yard-api deploy --legacy --prod /workspace/release \
     && cp -r apps/yard-web/dist /workspace/release/web
 
 FROM gcr.io/distroless/nodejs24-debian12:nonroot@sha256:14d42e2511532589a7c7e01a753667a74fcc96266e137e8125006b87b0c32d0a AS yard-api

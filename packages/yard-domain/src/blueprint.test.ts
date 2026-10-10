@@ -150,3 +150,53 @@ describe('Blueprint frozen terms, no payment signature (T-0177)', () => {
     );
   });
 });
+
+// T-0159: a milestone may carry its frozen test manifest ({id, path}, sorted by path) so Stood can bind the runner
+// to it. Yard checks its shape and agreement with the test ids; Stood checks it against the manifest hash.
+describe('Milestone test manifest', () => {
+  const withTests = (tests: unknown) => ({
+    ...input,
+    milestones: [{ ...milestone('m1', 'code.milestone@1'), tests }, milestone('m2', 'code.final@1')],
+  });
+  it('keeps a manifest that agrees with the test ids, and works without one', () => {
+    const tests = [{ id: 'accept_booking', path: 'tests/booking.test.js' }];
+    expect(Blueprint.create(withTests(tests) as BlueprintInput).snapshot.milestones[0]?.tests).toEqual(tests);
+    expect(Blueprint.create(input).snapshot.milestones[0]?.tests).toBeUndefined();
+  });
+  it('refuses a manifest that disagrees with the ids, is unsorted or unsafe, or repeats a path', () => {
+    for (const tests of [
+      [],
+      [{ id: 'other', path: 'tests/a.test.js' }],
+      [{ id: 'accept_booking', path: '../escape.js' }],
+      [{ id: 'accept_booking', path: '/abs.js' }],
+      [{ id: 'accept_booking', path: '' }],
+      [{ id: 'accept_booking', path: 'tests\\win.js' }],
+      [{ id: 'accept_booking', path: `tests/${'x'.repeat(400)}` }],
+      [{ id: 'accept_booking', path: 'tests/./a.js' }],
+      [{ id: 'accept_booking', path: 7 }],
+      [null],
+      [{ id: 'accept_booking', path: 'tests/a.test.js', extra: 1 }],
+      [
+        { id: 'accept_booking', path: 'tests/b.test.js' },
+        { id: 'second', path: 'tests/a.test.js' },
+      ],
+      'not a list',
+    ])
+      expect(() => Blueprint.create(withTests(tests) as BlueprintInput)).toThrow('Invalid milestone');
+    const two = {
+      ...input,
+      milestones: [
+        {
+          ...milestone('m1', 'code.milestone@1'),
+          testIds: ['a', 'b'],
+          tests: [
+            { id: 'a', path: 'tests/a.test.js' },
+            { id: 'b', path: 'tests/a.test.js' },
+          ],
+        },
+        milestone('m2', 'code.final@1'),
+      ],
+    };
+    expect(() => Blueprint.create(two as BlueprintInput)).toThrow('Invalid milestone');
+  });
+});

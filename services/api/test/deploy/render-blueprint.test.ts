@@ -21,7 +21,7 @@ type Service = {
 };
 const blueprint = parse(readFileSync('render.yaml', 'utf8')) as { services: Service[] };
 const secretName = /SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|CLIENT_ID|WEBHOOK_ID|OWNER|OPERATORS/;
-const ownerChoice = ['PROVIDER_PAYPAL'];
+const ownerChoice = ['PROVIDER_PAYPAL', 'SETTLEMENT_EXECUTOR', 'RUNNER_KEY_ID'];
 const live = /sk_live|rk_live|api-m\.paypal\.com|FLWSECK-(?!TEST)/i;
 // Every variable each entry point reads must be declared, so the owner is prompted for all of them.
 const reads: Record<string, readonly string[]> = {
@@ -45,6 +45,13 @@ const reads: Record<string, readonly string[]> = {
     'PAYPAL_CLIENT_ID',
     'PAYPAL_CLIENT_SECRET',
     'VAULT_TOKEN_KEYS',
+    'VERCEL_TOKEN',
+    'VERCEL_TEAM_ID',
+    'VERCEL_PROJECT_ID',
+    'RUNNER_KEY_ID',
+    'RUNNER_SIGNING_KEY',
+    'GITHUB_READ_TOKEN',
+    'SETTLEMENT_EXECUTOR',
   ],
   // T-0214: yard-api reads its own restricted database URL; the owner-capable URL is used only by pre-deploy.
   'stood-yard-api': [
@@ -54,6 +61,18 @@ const reads: Record<string, readonly string[]> = {
     'YARD_MIGRATION_DATABASE_URL',
     'YARD_OPERATORS',
     'YARD_SECRET_KEYS',
+    'GROK_PLANNER_API_KEY',
+    'GROK_PLANNER_MODEL',
+    'GROK_DAILY_BUDGET_USD',
+    'GITHUB_APP_ID',
+    'GITHUB_APP_PRIVATE_KEY_BASE64',
+    'GITHUB_APP_INSTALLATION_ID',
+    'YARD_SANDBOX_REPOSITORY',
+    'STOOD_API_URL',
+    'STOOD_API_KEY',
+    'STOOD_HMAC_SECRET',
+    'RENDER_PREVIEW_API_KEY',
+    'RENDER_PREVIEW_OWNER_ID',
   ],
 };
 const stood = (s: Service) => s.name.startsWith('stood-') && s.name !== 'stood-yard-api';

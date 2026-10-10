@@ -1,7 +1,7 @@
-import { randomBytes } from 'node:crypto';
-import { expect, it } from 'vitest';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { expect, it, vi } from 'vitest';
 import { createYardApp } from './http/app.js';
-import { yardRuntime } from './runtime.js';
+import { plannerConfig, yardRuntime } from './runtime.js';
 
 const secret = 's'.repeat(40);
 const operators = JSON.stringify([
@@ -28,8 +28,9 @@ it('wires the Board, site log and secrets from configuration, and says why the r
     payments: false,
   });
   expect(runtime.notes).toEqual([
-    'Foreman off: the hosted planner is not connected yet.',
-    'Payments off: Yard is not connected to Stood yet.',
+    'Foreman off: GROK_PLANNER_API_KEY is missing.',
+    'Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.',
+    'Previews off: RENDER_PREVIEW_API_KEY is missing.',
   ]);
   await runtime.stop();
 });
@@ -80,4 +81,97 @@ it('connects private durable intake independently from the planner', async () =>
   expect(await capabilities(hosted)).toMatchObject({ intake: true, foreman: false, payments: false });
   expect(runtime.notes).not.toContain('Intake and Foreman off: the hosted planner is not connected yet.');
   await runtime.stop();
+});
+
+// T-0181: the hosted Foreman runs only with a planner key, a sane daily cap and the GitHub App that pins each
+// plan to the sandbox repository's real head. Anything missing is a named note; no value is ever echoed.
+it('turns on the Foreman only when the planner, its budget and the GitHub App are all configured', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const planner = {
+    ...hosted,
+    GROK_PLANNER_API_KEY: 'xai-test-key',
+    GITHUB_APP_ID: '123456',
+    GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from(privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+    GITHUB_APP_INSTALLATION_ID: '987654',
+    YARD_SANDBOX_REPOSITORY: 'owner/sandbox',
+  };
+  // Plans pin the sandbox's real main through a read-only token; any other repository is refused before GitHub.
+  const calls: string[] = [];
+  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+    calls.push(`${init.method} ${new URL(url).pathname}`);
+    return url.endsWith('/access_tokens')
+      ? Response.json({ token: 'ghs_read', expires_at: new Date(Date.now() + 600_000).toISOString() })
+      : Response.json({ object: { sha: 'a'.repeat(40) } });
+  });
+  const resolver = plannerConfig(planner, [])?.repositories;
+  vi.unstubAllGlobals();
+  await expect(resolver?.resolve('buyer', 'owner/other')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  expect(calls).toEqual([]);
+  expect(await resolver?.resolve('buyer', 'owner/sandbox')).toEqual({
+    repository: 'owner/sandbox',
+    baseCommit: 'a'.repeat(40),
+  });
+  expect(calls).toEqual([
+    'POST /app/installations/987654/access_tokens',
+    'GET /repos/owner/sandbox/git/ref/heads/main',
+  ]);
+  expect(plannerConfig({ ...planner, GROK_DAILY_BUDGET_USD: '' }, [])?.dailyMicros).toBe(500_000);
+  const on = yardRuntime(planner);
+  expect(on.notes).toEqual([
+    'Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.',
+    'Previews off: RENDER_PREVIEW_API_KEY is missing.',
+  ]);
+  expect(await capabilities(planner)).toMatchObject({ board: true, intake: true, foreman: true });
+  await on.stop();
+  for (const [change, note] of [
+    [{ GROK_PLANNER_API_KEY: ' ' }, 'Foreman off: GROK_PLANNER_API_KEY is missing.'],
+    [{ GROK_DAILY_BUDGET_USD: 'lots' }, 'Foreman off: GROK_DAILY_BUDGET_USD must be a dollar amount from 0.01 to 5.'],
+    [{ GROK_DAILY_BUDGET_USD: '50' }, 'Foreman off: GROK_DAILY_BUDGET_USD must be a dollar amount from 0.01 to 5.'],
+    [{ GITHUB_APP_PRIVATE_KEY_BASE64: '' }, 'Foreman off: the GitHub App is not configured.'],
+    [{ YARD_SANDBOX_REPOSITORY: 'not a repository' }, 'Foreman off: the GitHub App is not configured.'],
+  ] as const) {
+    const env = { ...planner, ...change };
+    const runtime = yardRuntime(env);
+    expect(runtime.notes).toContain(note);
+    expect(JSON.stringify(runtime.notes)).not.toMatch(/xai-test|987654|owner\/sandbox|lots/);
+    expect(await capabilities(env)).toMatchObject({ foreman: false });
+    await runtime.stop();
+  }
+});
+
+// T-0189: with Stood's platform credentials, Yard creates allowance drafts through the signed API and reads every
+// tranche it waits on. Packages stay off until a runner supplies a real test report; nothing is invented for them.
+it('connects to Stood only with platform credentials over https, and says what is still off', async () => {
+  const stood = { ...hosted, STOOD_API_KEY: 'platform-key-not-real', STOOD_HMAC_SECRET: 'h'.repeat(40) };
+  const on = yardRuntime(stood);
+  expect(on.notes).toContain('Packages off: Stood needs a runner test report before Yard can submit work.');
+  expect(on.notes.some((n) => n.startsWith('Payments off'))).toBe(false);
+  expect(on.config.board?.mandates).toBeDefined();
+  expect(on.config.board?.packages).toBeUndefined();
+  expect(await capabilities(stood)).toMatchObject({ payments: true });
+  await on.stop();
+  const plain = { ...stood, STOOD_API_URL: 'http://stood.example.com' };
+  const off = yardRuntime(plain);
+  expect(off.notes).toContain('Payments off: STOOD_API_URL must be an https URL.');
+  expect(JSON.stringify(off.notes)).not.toMatch(/platform-key|hhhh/);
+  expect(await capabilities(plain)).toMatchObject({ payments: false });
+  await off.stop();
+});
+
+// T-0196: previews run in a Render workspace of their own, with a capped number of free-plan services.
+it('turns on previews only with a Render preview key and owner, and sweeps expired ones', async () => {
+  const on = yardRuntime({
+    ...hosted,
+    RENDER_PREVIEW_API_KEY: 'rnd_not_real',
+    RENDER_PREVIEW_OWNER_ID: 'tea-previews',
+  });
+  expect(on.config.board?.previews).toBeDefined();
+  expect(on.notes.some((n) => n.startsWith('Previews off'))).toBe(false);
+  await on.stop();
+  const off = yardRuntime({ ...hosted, RENDER_PREVIEW_API_KEY: 'rnd_not_real', RENDER_PREVIEW_OWNER_ID: 'Not An Id' });
+  expect(off.config.board?.previews).toBeUndefined();
+  expect(off.notes).toContain('Previews off: RENDER_PREVIEW_API_KEY and RENDER_PREVIEW_OWNER_ID are not both valid.');
+  expect(JSON.stringify(off.notes)).not.toMatch(/rnd_not_real|Not An Id/);
+  await off.stop();
+  expect(yardRuntime(hosted).notes).toContain('Previews off: RENDER_PREVIEW_API_KEY is missing.');
 });
