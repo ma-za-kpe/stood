@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  provedPass,
+  BUILDER,
+  HARNESS,
   type RunJob,
   RunnerUnavailable,
   type SandboxSession,
@@ -18,19 +19,7 @@ const job: RunJob = {
     { id: 't2', path: 'tests/refund.test.js', content: 'buyer test two' },
   ],
 };
-// What Node's TAP reporter prints for a file whose test really ran: a named subtest and matching counts.
-const realPass =
-  'TAP version 13\n# Subtest: books\nok 1 - books\n  ---\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
-// What it prints when the code under test calls process.exit(0) before or during the assertions, or declares none.
-const fileOnly = (file: string) =>
-  `TAP version 13\n# Subtest: ${file}\nok 1 - ${file}\n  ---\n  ...\n1..1\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n`;
-
-function fakeSandbox(
-  exits: Record<string, number> = {},
-  fail?: 'create' | 'install',
-  installOutput = '',
-  taps: Record<string, string> = {},
-) {
+function fakeSandbox(exits: Record<string, number> = {}, fail?: 'create' | 'install', installOutput = '') {
   const log: string[] = [];
   let files: Record<string, string> = {};
   const session: SandboxSession = {
@@ -47,9 +36,7 @@ function fakeSandbox(
       if (fail === 'install' && args.includes('install')) throw new Error('session died');
       const key = Object.keys(exits).find((k) => line.includes(k));
       const exitCode = key ? (exits[key] as number) : 0;
-      const tap =
-        Object.entries(taps).find(([k]) => line.includes(k))?.[1] ?? (line.includes('--test') ? realPass : '');
-      return { exitCode, stdout: async () => tap, stderr: async () => (cmd === 'npm' ? installOutput : '') };
+      return { exitCode, stdout: async () => '', stderr: async () => (cmd === 'npm' ? installOutput : '') };
     },
     stop: async () => {
       log.push('stop');
@@ -70,14 +57,18 @@ function fakeSandbox(
 // T-0164 (ADR-0026): untrusted code runs only in a disposable microVM, with the buyer's tests, no credentials, the
 // registry only during install and no network at all while tests run.
 describe('VercelSandboxRunner', () => {
-  it('runs each frozen test file with the network off, after writing the buyer tests over the builder ones', async () => {
-    const h = fakeSandbox({ 'tests/refund.test.js': 1 });
+  // Owner decision 2026-10-10: the tests run in the judge's own process; the builder's code only in processes the
+  // harness starts as the builder. The frozen tests never enter the builder's workspace.
+  it("runs each frozen test in the judge's own process, with the network off, apart from the builder's code", async () => {
+    const h = fakeSandbox({ 'node --test /vercel/judge/tests/refund.test.js': 1 });
     const result = await h.runner.run(job);
     expect(result.tests).toEqual([
       { id: 't1', status: 'PASS' },
       { id: 't2', status: 'FAIL' },
     ]);
-    expect(h.files()['/vercel/run/tests/booking.test.js']).toContain('buyer test');
+    expect(h.files()['/vercel/judge/tests/booking.test.js']).toContain('buyer test');
+    expect(h.files()['/vercel/run/tests/booking.test.js']).toBe('builder tried to weaken this test');
+    expect(h.files()['/vercel/judge/node_modules/stood-harness/index.mjs']).toBe(HARNESS);
     expect(h.options).toEqual([
       {
         image: 'vercel/sandbox/node:24',
@@ -87,44 +78,31 @@ describe('VercelSandboxRunner', () => {
         networkPolicy: { allow: ['registry.npmjs.org'] },
       },
     ]);
-    const probe = `touch /vercel/run/.stood-probe 2>/dev/null && exit 1; (: >> "$0") 2>/dev/null && exit 1; exit 0`;
+    const builder = `setpriv ${BUILDER.join(' ')}`;
+    const judge =
+      'setpriv --reuid=65533 --regid=65533 --clear-groups --inh-caps=-all,+setuid,+setgid,+setpcap --ambient-caps=-all,+setuid,+setgid,+setpcap --bounding-set=-all,+setuid,+setgid,+setpcap -- env -i -C /vercel/judge PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp';
     expect(h.log).toEqual([
       'write /vercel/run/package.json,/vercel/run/src/book.js,/vercel/run/tests/booking.test.js',
-      'write /vercel/run/tests/booking.test.js,/vercel/run/tests/refund.test.js',
+      'write /vercel/judge/tests/booking.test.js,/vercel/judge/tests/refund.test.js,/vercel/judge/node_modules/stood-harness/package.json,/vercel/judge/node_modules/stood-harness/index.mjs',
       'run npm install --ignore-scripts --no-audit --no-fund',
-      'run sudo chown -R root:root /vercel/run',
-      'run sudo chmod -R a-w /vercel/run',
-      `run sudo setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs -- env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp sh -c ${probe} /vercel/run/tests/booking.test.js`,
+      'run sudo chown -R root:65534 /vercel/run',
+      'run sudo chmod -R u=rX,g=rX,o= /vercel/run',
+      'run sudo chown -R root:root /vercel/judge',
+      'run sudo chmod -R a=rX /vercel/judge',
+      expect.stringMatching(
+        /^run sudo setpriv --reuid=65534 .* sh -c .* probe \/vercel\/run \/vercel\/judge \/vercel\/run\/package.json \/vercel\/judge\/tests\/booking.test.js$/,
+      ),
+      expect.stringMatching(/^run sudo setpriv --reuid=65533 .* sh -c .* probe \/vercel\/run \/vercel\/judge$/),
       'network "deny-all"',
-      // As nobody, with every capability dropped: the sandbox's default user holds all of them.
-      'run sudo setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs -- env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp timeout 120 node --test --test-reporter=tap /vercel/run/tests/booking.test.js',
-      'run sudo setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs -- env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp timeout 120 node --test --test-reporter=tap /vercel/run/tests/refund.test.js',
+      `run sudo ${judge} timeout 120 node --test /vercel/judge/tests/booking.test.js`,
+      `run sudo ${judge} timeout 120 node --test /vercel/judge/tests/refund.test.js`,
       'stop',
     ]);
-  });
-
-  // Audit 2026-10-10: exit code 0 alone let code under test pass by calling process.exit(0) before its assertions.
-  it('passes a test only on real named results from the test runner, never on a clean exit alone', async () => {
-    const file = '/vercel/run/tests/booking.test.js';
-    const cases: Record<string, string> = {
-      'exit before or during the assertions': fileOnly(file),
-      'no output': '',
-      'a skipped test': realPass.replace('ok 1 - books', 'ok 1 - books # SKIP').replace('# skipped 0', '# skipped 1'),
-      'a failing subtest beside a passing one': `${realPass}not ok 2 - refunds\n`,
-      'counts that do not match the results': realPass.replace('# pass 1', '# pass 2'),
-    };
-    for (const [why, tap] of Object.entries(cases)) {
-      const h = fakeSandbox({}, undefined, '', { 'booking.test.js': tap });
-      const result = await h.runner.run(job);
-      expect(result.tests[0], why).toEqual({ id: 't1', status: 'FAIL' });
-      expect(result.tests[1], why).toEqual({ id: 't2', status: 'PASS' });
-    }
-    expect(provedPass(fileOnly('tests/booking.test.js'), file)).toBe(false);
-    expect(provedPass(realPass, file)).toBe(true);
+    expect(builder).toContain('--bounding-set=-all --no-new-privs -- env -i -C /vercel/run');
   });
 
   it('skips install without a package.json, and fails a test that times out', async () => {
-    const h = fakeSandbox({ 'node --test --test-reporter=tap /vercel/run/tests/booking.test.js': 124 });
+    const h = fakeSandbox({ 'node --test /vercel/judge/tests/booking.test.js': 124 });
     const result = await h.runner.run({ ...job, source: job.source.filter((f) => f.path !== 'package.json') });
     expect(result.tests[0]).toEqual({ id: 't1', status: 'FAIL' });
     expect(h.log.some((l) => l.includes('npm install'))).toBe(false);
@@ -150,8 +128,13 @@ describe('VercelSandboxRunner', () => {
     }
   });
 
-  it('runs nothing unless the workspace, frozen tests included, is locked read-only for the code under test', async () => {
-    for (const exits of [{ chown: 1 }, { chmod: 1 }, { 'stood-probe': 1 }]) {
+  it('runs nothing unless the builder can write nothing and the judge cannot read the builder code', async () => {
+    for (const exits of [
+      { 'chown -R root:65534': 1 },
+      { 'chmod -R a=rX': 1 },
+      { '--reuid=65534': 1 },
+      { 'probe /vercel/run /vercel/judge': 3 },
+    ]) {
       const h = fakeSandbox(exits);
       const error = await h.runner.run(job).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(RunnerUnavailable);

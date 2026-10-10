@@ -22,7 +22,10 @@ export type { RunJob, RunResult } from '../../ports/code-runner.js';
 // The managed image every run boots. Vercel names it by tag, not digest, so the image itself can change under it.
 export const SANDBOX_IMAGE = 'vercel/sandbox/node:24';
 
+// The builder's code, readable only by the builder's identity.
 const ROOT = '/vercel/run';
+// The buyer's frozen tests and Stood's harness, run by the judge's identity; nobody can write here once locked.
+const JUDGE = '/vercel/judge';
 // Audit 2026-10-10: npm errors that mean the submission itself is broken. Anything else (registry, DNS, throttling,
 // an error npm does not name) is the runner's problem: the package waits instead of being refused.
 const SUBMISSION_INSTALL_ERRORS = new Set([
@@ -34,28 +37,6 @@ const SUBMISSION_INSTALL_ERRORS = new Set([
   'EINVALIDTAGNAME',
   'ERESOLVE',
 ]);
-// Audit 2026-10-10: exit code 0 is not proof. Node's test runner (the parent process, outside the code under test)
-// must report real, named test results, all ok, with nothing failed or cancelled. When the test process exits early
-// (process.exit before or during the assertions), or declares no tests, Node can only report one result named after
-// the file itself: that is a FAIL, never a PASS. Residual risk: code in the test process could still forge the
-// runner's messages or disable assertions; ADR-0026 records it.
-export function provedPass(tap: string, file: string): boolean {
-  const results = [...tap.matchAll(/^(not )?ok \d+ - (.*?)(?: # (SKIP|TODO).*)?$/gm)].map((m) => ({
-    ok: !m[1],
-    name: (m[2] ?? '').trim(),
-    skipped: !!m[3],
-  }));
-  const count = (name: string) => Number(new RegExp(`^# ${name} (\\d+)$`, 'm').exec(tap)?.[1] ?? Number.NaN);
-  return (
-    results.length > 0 &&
-    results.every((r) => r.ok && !r.skipped && r.name !== file && !file.endsWith(`/${r.name}`) && r.name !== '') &&
-    count('pass') === results.length &&
-    count('fail') === 0 &&
-    count('cancelled') === 0 &&
-    count('skipped') === 0 &&
-    count('todo') === 0
-  );
-}
 // A failure that decides nothing, named by the stage it happened in, so an operator can tell them apart.
 export class RunnerUnavailable extends Error {
   constructor(readonly stage: 'CREATE' | 'WRITE' | 'INSTALL' | 'LOCK' | 'NETWORK' | 'TEST') {
@@ -63,10 +44,12 @@ export class RunnerUnavailable extends Error {
   }
 }
 const TEST_SECONDS = 120;
-// Live qualification 2026-10-10: the sandbox's default user (uid 1000) holds every Linux capability, so file
-// permissions do not bind it. Tests run as nobody with every capability dropped, no way to regain one (no sudo), and
-// an empty environment.
-const UNPRIVILEGED = [
+const ENV = ['env', '-i', 'PATH=/usr/local/bin:/usr/bin:/bin', 'HOME=/tmp'];
+// Owner decision 2026-10-10 (ADR-0026 amendment): same-process tests are not evidence, so the code under test and
+// the tests run as two processes under two identities. The sandbox's default user holds every Linux capability, so
+// both are set explicitly through setpriv.
+// The builder: nobody, every capability dropped, no way to regain one, its own workspace as its directory.
+export const BUILDER = [
   '--reuid=65534',
   '--regid=65534',
   '--clear-groups',
@@ -75,14 +58,47 @@ const UNPRIVILEGED = [
   '--bounding-set=-all',
   '--no-new-privs',
   '--',
-  'env',
-  '-i',
-  'PATH=/usr/local/bin:/usr/bin:/bin',
-  'HOME=/tmp',
+  ...ENV.slice(0, 2),
+  '-C',
+  ROOT,
+  ...ENV.slice(2),
 ];
-// Succeeds only when that identity can neither create a file in the workspace nor open a frozen test for writing.
-// The append runs in a subshell: in dash a failed redirection on a builtin ends the whole shell.
-const WRITE_PROBE = `touch ${ROOT}/.stood-probe 2>/dev/null && exit 1; (: >> "$0") 2>/dev/null && exit 1; exit 0`;
+// The judge: its own user, outside the builder's group, so it cannot read (and so cannot import) the builder's code.
+// It keeps only the capabilities needed to start the builder's process as the builder.
+const JUDGE_IDENTITY = [
+  '--reuid=65533',
+  '--regid=65533',
+  '--clear-groups',
+  '--inh-caps=-all,+setuid,+setgid,+setpcap',
+  '--ambient-caps=-all,+setuid,+setgid,+setpcap',
+  '--bounding-set=-all,+setuid,+setgid,+setpcap',
+  '--',
+  ...ENV.slice(0, 2),
+  '-C',
+  JUDGE,
+  ...ENV.slice(2),
+];
+// Stood's harness, the only way a frozen test reaches the builder's code: it runs a command as the builder and returns
+// what the process did. Tests import it as "stood-harness".
+export const HARNESS = `import { spawnSync } from 'node:child_process';
+const BUILDER = ${JSON.stringify(BUILDER)};
+// Runs one command as the builder, in the builder's workspace, and returns its exit status and output.
+export function runBuilder(command, { input = '', timeoutMs = 20000 } = {}) {
+  if (!Array.isArray(command) || !command.length || !command.every((a) => typeof a === 'string'))
+    throw new TypeError('runBuilder takes the command as an array of strings');
+  const r = spawnSync('setpriv', [...BUILDER, ...command], {
+    input, encoding: 'utf8', timeout: timeoutMs, cwd: '/', maxBuffer: 8 * 1024 * 1024,
+  });
+  if (r.error) throw r.error;
+  return { status: r.status, signal: r.signal, stdout: r.stdout, stderr: r.stderr };
+}
+`;
+// Locked means: the builder can create nothing in either directory and write neither its code nor a test; the judge
+// cannot read the builder's code or write its own tests. Each probe exits 0 only when every attempt is refused.
+// Writes run in subshells: in dash a failed redirection on a builtin ends the whole shell.
+const BUILDER_PROBE = `for d in "$1" "$2"; do touch "$d/.stood-probe" 2>/dev/null && exit 1; done; (: >> "$3") 2>/dev/null && exit 1; (: >> "$4") 2>/dev/null && exit 1; exit 0`;
+const HARNESS_PACKAGE = JSON.stringify({ name: 'stood-harness', type: 'module', exports: './index.mjs' });
+const JUDGE_PROBE = `ls "$1" >/dev/null 2>&1 && exit 1; touch "$2/.stood-probe" 2>/dev/null && exit 1; exit 0`;
 const safe = (path: string) =>
   typeof path === 'string' &&
   path.length > 0 &&
@@ -93,7 +109,8 @@ const safe = (path: string) =>
 
 // T-0164 (ADR-0026): runs untrusted code only in a disposable microVM. No credentials enter it; the network reaches
 // only the npm registry while dependencies install (scripts off) and nothing at all while the buyer's tests run.
-// Each frozen test file passes only on exit 0 within its time limit. A VM that cannot start or dies mid-run, or an
+// Each frozen test file runs in the judge's own process, apart from the builder's code, and passes only when that
+// process exits 0 within its time limit. A VM that cannot start or dies mid-run, or an
 // install that fails for any reason but a broken submission, is RunnerUnavailable (with its stage): the package
 // waits, it never passes or fails on a missing run.
 export class VercelSandboxRunner implements CodeRunner {
@@ -126,14 +143,19 @@ export class VercelSandboxRunner implements CodeRunner {
     }
     let stage: RunnerUnavailable['stage'] = 'WRITE';
     try {
-      const write = (files: readonly { path: string; content: string }[]) =>
+      const write = (dir: string, files: readonly { path: string; content: string }[]) =>
         files.length
           ? session.writeFiles(
-              files.map((f) => ({ path: `${ROOT}/${f.path}`, content: Buffer.from(f.content, 'utf8') })),
+              files.map((f) => ({ path: `${dir}/${f.path}`, content: Buffer.from(f.content, 'utf8') })),
             )
           : Promise.resolve();
-      await write(job.source);
-      await write(job.frozenTests);
+      await write(ROOT, job.source);
+      // The frozen tests and the harness go only to the judge's directory, never into the builder's workspace.
+      await write(JUDGE, [
+        ...job.frozenTests,
+        { path: 'node_modules/stood-harness/package.json', content: HARNESS_PACKAGE },
+        { path: 'node_modules/stood-harness/index.mjs', content: HARNESS },
+      ]);
       let installExitCode: number | null = null;
       if (job.source.some((f) => f.path === 'package.json')) {
         stage = 'INSTALL';
@@ -150,18 +172,33 @@ export class VercelSandboxRunner implements CodeRunner {
           if (!code || !SUBMISSION_INSTALL_ERRORS.has(code)) throw new RunnerUnavailable('INSTALL');
         }
       }
-      // Audit 2026-10-10: the code under test must not be able to change what judges it. The whole workspace,
-      // frozen tests included, becomes root-owned and read-only before anything runs, and the identity the tests run
-      // as must really be refused a write (a permission check alone was fooled by the default user's capabilities).
+      // The builder's workspace becomes root-owned, readable only by the builder's group, writable by nobody; the
+      // judge's directory root-owned and read-only. Then both identities must really be refused (permissions alone
+      // were fooled once by the default user's capabilities).
       stage = 'LOCK';
-      const owned = await session.runCommand({ cmd: 'chown', args: ['-R', 'root:root', ROOT], sudo: true });
-      const frozen = await session.runCommand({ cmd: 'chmod', args: ['-R', 'a-w', ROOT], sudo: true });
-      const probe = await session.runCommand({
-        cmd: 'setpriv',
-        args: [...UNPRIVILEGED, 'sh', '-c', WRITE_PROBE, `${ROOT}/${job.frozenTests[0]?.path ?? 'package.json'}`],
-        sudo: true,
-      });
-      if (owned.exitCode !== 0 || frozen.exitCode !== 0 || probe.exitCode !== 0) throw new RunnerUnavailable('LOCK');
+      const steps = [
+        { cmd: 'chown', args: ['-R', 'root:65534', ROOT] },
+        { cmd: 'chmod', args: ['-R', 'u=rX,g=rX,o=', ROOT] },
+        { cmd: 'chown', args: ['-R', 'root:root', JUDGE] },
+        { cmd: 'chmod', args: ['-R', 'a=rX', JUDGE] },
+        {
+          cmd: 'setpriv',
+          args: [
+            ...BUILDER,
+            'sh',
+            '-c',
+            BUILDER_PROBE,
+            'probe',
+            ROOT,
+            JUDGE,
+            `${ROOT}/${job.source[0]?.path ?? 'package.json'}`,
+            `${JUDGE}/${job.frozenTests[0]?.path}`,
+          ],
+        },
+        { cmd: 'setpriv', args: [...JUDGE_IDENTITY, 'sh', '-c', JUDGE_PROBE, 'probe', ROOT, JUDGE] },
+      ];
+      for (const step of steps)
+        if ((await session.runCommand({ ...step, sudo: true })).exitCode !== 0) throw new RunnerUnavailable('LOCK');
       // From here on the code under test is untrusted: no network at all, not even DNS.
       stage = 'NETWORK';
       await session.update({ networkPolicy: 'deny-all' });
@@ -172,15 +209,14 @@ export class VercelSandboxRunner implements CodeRunner {
           tests.push({ id: test.id, status: 'FAIL' });
           continue;
         }
-        const file = `${ROOT}/${test.path}`;
+        // The verdict is the judge's own process: a clean Node invocation on the exact frozen file, which exits 0 or
+        // does not. The builder's code runs only in the processes the harness starts, so it cannot reach this one.
         const run = await session.runCommand({
           cmd: 'setpriv',
-          args: [...UNPRIVILEGED, 'timeout', String(TEST_SECONDS), 'node', '--test', '--test-reporter=tap', file],
-          cwd: ROOT,
+          args: [...JUDGE_IDENTITY, 'timeout', String(TEST_SECONDS), 'node', '--test', `${JUDGE}/${test.path}`],
           sudo: true,
         });
-        const passed = run.exitCode === 0 && provedPass(await run.stdout(), file);
-        tests.push({ id: test.id, status: passed ? 'PASS' : 'FAIL' });
+        tests.push({ id: test.id, status: run.exitCode === 0 ? 'PASS' : 'FAIL' });
       }
       return { tests, installExitCode };
     } catch (error) {
