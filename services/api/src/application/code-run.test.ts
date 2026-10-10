@@ -140,10 +140,10 @@ describe('runCodeJob', () => {
     expect((await h.state()).decisions).toEqual([]);
     h.store.latestPackage.set('trn', 'pkg_1');
     const held = await h.store.load('trn');
-    await h.store.apply('trn', held.version, 'run:pkg_1:start', { method: 'startDeciding', args: [] });
+    await h.store.apply('trn', held.version, 'judge:pkg_1:start', { method: 'startDeciding', args: [] });
     expect((await h.state()).state).toBe('DECIDING');
     expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
-    expect((await h.state()).decisions.at(-1)?.id).toBe('run:pkg_1');
+    expect((await h.state()).decisions.at(-1)?.id).toBe('judge:pkg_1');
   });
 
   it('refuses when a frozen test fails, naming what failed', async () => {
@@ -214,7 +214,7 @@ describe('runCodeJob', () => {
     expect(await runCodeJob(confirmed, h.deps)).toBe('DECIDED');
     const released = restoreTrancheRecord((await h.store.load('fin')).record);
     expect(released.state).toBe('CAPTURE_PENDING');
-    expect(released.decisions.at(-1)).toMatchObject({ id: 'usage:pkg_1', decision: { outcome: 'RELEASE' } });
+    expect(released.decisions.at(-1)).toMatchObject({ id: 'judge-usage:pkg_1', decision: { outcome: 'RELEASE' } });
     expect(await runCodeJob(confirmed, h.deps)).toBe('ALREADY_DECIDED');
   });
 });

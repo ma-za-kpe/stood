@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { RunnerJob } from '../../application/code-run.js';
 import { codeTerms } from '../../application/code-terms.js';
+import { JUDGE_DECISION } from '../../domain/judged-release.js';
 import { restoreTrancheRecord } from '../../domain/tranche-record.js';
 import * as schema from './schema.js';
 
@@ -45,14 +46,14 @@ export class PostgresRunnerJobs {
       // DECIDING: a run stopped between starting and recording its decision, so it is run again.
       if (!['HELD', 'DECIDING', 'WAITING'].includes(tranche.state)) continue;
       // C4 (#77): a final milestone that waited only for usage runs again once a verified receipt for its commit exists.
-      const run = tranche.decisions.find((d) => d.id === `run:${latest.packageId}`);
+      const run = tranche.decisions.find((d) => d.id === `${JUDGE_DECISION.run}${latest.packageId}`);
       let confirmed = false;
       if (run) {
         if (
           tranche.state !== 'WAITING' ||
           run.decision.outcome !== 'WAIT' ||
           !run.decision.reason.includes('usage_release') ||
-          tranche.decisions.some((d) => d.id === `usage:${latest.packageId}`)
+          tranche.decisions.some((d) => d.id === `${JUDGE_DECISION.usage}${latest.packageId}`)
         )
           continue;
         const [receipt] = await this.db

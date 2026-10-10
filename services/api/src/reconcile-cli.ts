@@ -89,7 +89,7 @@ if (!missing.length && problem) {
               claims,
               'package',
               await jobs.pending(50),
-              (job) => `${job.usageConfirmed ? 'usage' : 'run'}:${job.packageId}`,
+              (job) => `${job.usageConfirmed ? 'judge-usage' : 'judge'}:${job.packageId}`,
               2,
               (job) => runCodeJob(job, deps),
             );

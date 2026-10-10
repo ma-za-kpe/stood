@@ -2,17 +2,20 @@ import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import { S3EvidenceStore } from './adapters/evidence/s3-evidence-store.js';
 import type { RunnerKey } from './adapters/runner/report-signer.js';
 import { SignedReportVerifier } from './adapters/runner/signed-report.js';
-import { SANDBOX_IMAGE } from './adapters/runner/vercel-sandbox.js';
+import { HARNESS, SANDBOX_IMAGE } from './adapters/runner/vercel-sandbox.js';
 import type { EvidenceStore } from './ports/evidence-store.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
 // The runner's identity, bound into every signed report.
-export const RUNNER_ID = 'stood-vercel-sandbox';
-// Audit 2026-10-10: this is the SHA-256 of a label (the managed image's tag and the pinned SDK version), not a
+// Owner decision 2026-10-10: the out-of-process runner (the judge) has its own identity, so its reports can never be
+// mistaken for the earlier in-process runner's.
+export const RUNNER_ID = 'stood-vercel-sandbox-judge';
+// Audit 2026-10-10: this is the SHA-256 of a label (the managed image's tag, the pinned SDK version and the harness), not a
 // content digest of the image. Vercel's managed images are named by tag, so it says which configuration ran, not
 // exactly which bytes. The signed report keeps the field name imageDigest so stored reports still verify; ADR-0026
 // records the limit.
-export const RUNNER_LABEL = `${SANDBOX_IMAGE} @vercel/sandbox@3.5.0`;
+// It also covers Stood's harness, the only bridge from the frozen tests to the builder's code.
+export const RUNNER_LABEL = `${SANDBOX_IMAGE} @vercel/sandbox@3.5.0 stood-harness:${createHash('sha256').update(HARNESS).digest('hex')}`;
 export const RUNNER_LABEL_HASH = createHash('sha256').update(RUNNER_LABEL).digest('hex');
 
 // T-0159 (ADR-0026): two explicit switches on the reconciler. The code runner needs the Vercel settings, its own

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
+import { JUDGE_DECISION } from '../domain/judged-release.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
 import type { CodeRunner } from '../ports/code-runner.js';
 import type { EvidenceStore } from '../ports/evidence-store.js';
@@ -66,7 +67,7 @@ export async function runCodeJob(
   deps: Deps,
 ): Promise<'DECIDED' | 'ALREADY_DECIDED' | 'SUPERSEDED' | Waiting> {
   // A final milestone is decided again, once, when its use is confirmed.
-  const decisionId = job.usageConfirmed ? `usage:${job.packageId}` : `run:${job.packageId}`;
+  const decisionId = `${job.usageConfirmed ? JUDGE_DECISION.usage : JUDGE_DECISION.run}${job.packageId}`;
   const current = await deps.store.load(job.trancheId);
   const tranche = restoreTrancheRecord(current.record);
   if (tranche.decisions.some((d) => d.id === decisionId)) return 'ALREADY_DECIDED';

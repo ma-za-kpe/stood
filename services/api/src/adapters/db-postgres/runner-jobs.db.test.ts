@@ -86,8 +86,8 @@ it('lists the latest package of each held code tranche with its signed terms, un
   await tranches.applyIfLatest(
     one,
     started.version,
-    `run:${latest.id}`,
-    { method: 'beginSettlement', args: [decide('code.milestone@1', []), `run:${latest.id}`, at + 1] },
+    `judge:${latest.id}`,
+    { method: 'beginSettlement', args: [decide('code.milestone@1', []), `judge:${latest.id}`, at + 1] },
     latest.id,
   );
   expect(await jobs.pending()).toEqual([]);
@@ -120,9 +120,9 @@ it('queues a waiting final milestone again once its use is confirmed for that co
   const passing = getProfile('code.final@1')
     .checks.filter(({ code }) => code !== 'usage_release')
     .map(({ code }) => ({ code, source: 'RULE' as const, status: 'PASS' as const, reason: 'ok' }));
-  await tranches.apply(final, started.version, `run:${pkg.id}`, {
+  await tranches.apply(final, started.version, `judge:${pkg.id}`, {
     method: 'beginSettlement',
-    args: [decide('code.final@1', passing), `run:${pkg.id}`, at + 1],
+    args: [decide('code.final@1', passing), `judge:${pkg.id}`, at + 1],
   });
   const jobs = new PostgresRunnerJobs(db);
   const mine = async () => (await jobs.pending(50)).filter((j) => j.trancheId === final);
@@ -144,11 +144,11 @@ it('queues a waiting final milestone again once its use is confirmed for that co
   await usage.record('platform_u', { ...receipt, commit: 'e'.repeat(40), nonce: `nonce-${randomUUID()}` });
   expect(await mine()).toEqual([expect.objectContaining({ packageId: pkg.id, usageConfirmed: true })]);
   const waiting = await tranches.load(final);
-  await tranches.apply(final, waiting.version, `usage:${pkg.id}`, {
+  await tranches.apply(final, waiting.version, `judge-usage:${pkg.id}`, {
     method: 'beginSettlement',
     args: [
       decide('code.final@1', [...passing, { code: 'usage_release', source: 'RULE', status: 'PASS', reason: 'ok' }]),
-      `usage:${pkg.id}`,
+      `judge-usage:${pkg.id}`,
       at + 2,
     ],
   });
