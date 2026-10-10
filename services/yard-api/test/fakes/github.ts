@@ -118,6 +118,23 @@ export class FakeRepositories implements Repositories {
     repo.branches.set(branch, { head: commit, base: previous?.base ?? base });
     return { repository, commit, simulated: true };
   }
+  async seedTests(value: string, repository: string, base: string, files: RepositoryFiles) {
+    const { token, repo } = this.authorize(value, repository);
+    if (token.permission !== 'MAINTAIN') throw new RepositoryError('FORBIDDEN');
+    const changes = tree(files);
+    const paths = Object.keys(changes);
+    if (!paths.length || paths.some((p) => !p.startsWith('tests/')) || !/^[a-f0-9]{40}$/.test(base))
+      throw new RepositoryError('INVALID_INPUT');
+    const contents = repo.commits.get(base);
+    if (!contents) throw new RepositoryError('NOT_FOUND');
+    const next = tree(Object.fromEntries([...Object.entries(contents), ...Object.entries(changes)]));
+    const commit = this.commit(repository, base, next);
+    if (repo.main === commit) return { repository, commit, simulated: true };
+    if (repo.main !== base) throw new RepositoryError('CONFLICT');
+    repo.commits.set(commit, next);
+    repo.main = commit;
+    return { repository, commit, simulated: true };
+  }
   async read(value: string, repository: string, commit: string, path: string) {
     const { repo } = this.authorize(value, repository);
     if (!/^[a-f0-9]{40}$/.test(commit) || !pathName(path)) throw new RepositoryError('INVALID_INPUT');

@@ -22,6 +22,16 @@ const recordSchema = z.object({
   updatedAt: z.number().int(),
 });
 type Record = z.infer<typeof recordSchema>;
+// C4 (#77): the accepted plan on its way to a frozen blueprint. Stood runs the frozen tests on the base commit.
+const progressSchema = z.object({
+  blueprintId: z.string(),
+  baseCommit: z.string().regex(/^[a-f0-9]{40}$/),
+  status: z.enum(['BASELINE_RUNNING', 'FROZEN', 'NEEDS_REVISION']),
+  milestones: z.array(
+    z.object({ id: z.string(), baseline: z.enum(['QUEUED', 'DONE', 'INVALID']), passing: z.array(z.string()) }),
+  ),
+});
+type Progress = z.infer<typeof progressSchema>;
 const planSchema = z.object({
   status: z.enum(['BUYER_REVIEW', 'READY_FOR_BASELINE', 'REVISION_REQUESTED']),
   version: z.number().int().positive(),
@@ -79,6 +89,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
   const [revision, setRevision] = useState(0),
     [plan, setPlan] = useState<Plan | null>(null);
   const [editingPlan, setEditingPlan] = useState(false);
+  const [progress, setProgress] = useState<Progress | null>(null);
   const editButton = useRef<HTMLButtonElement>(null),
     returnToReview = useRef(false);
   useEffect(() => {
@@ -382,6 +393,30 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     } finally {
       pending.current = false;
       if (live.current) setBusy(false);
+    }
+  };
+  // Seeds the accepted plan's tests, then asks Stood to show they fail on the base commit. The server reads the plan
+  // itself and every step is idempotent, so a repeat (or a stale view) only reads progress again.
+  const freeze = async (accepted: Plan) => {
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      setProgress(
+        progressSchema.parse(
+          await request(`/plans/${accepted.blueprint.id}/blueprint`, {
+            method: 'POST',
+            headers: { 'If-Match': String(accepted.version), 'Idempotency-Key': browserRequestKey() },
+            body: '{}',
+          }),
+        ),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   };
   const revise = async () => {
@@ -725,12 +760,10 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                     Request a revision
                   </button>
                 </>
+              ) : plan.status === 'READY_FOR_BASELINE' ? (
+                <BaselineStep progress={progress} busy={busy} run={() => void freeze(plan)} />
               ) : (
-                <p role="status">
-                  {plan.status === 'READY_FOR_BASELINE'
-                    ? 'Draft accepted. Baseline checks are required before signing.'
-                    : 'Revision requested. No work order or payment was created.'}
-                </p>
+                <p role="status">Revision requested. No work order or payment was created.</p>
               )}
             </>
           )}
@@ -741,5 +774,60 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
         </>
       )}
     </section>
+  );
+}
+
+// C4 (#77): what the buyer sees between accepting a plan and posting work.
+function BaselineStep({ progress, busy, run }: { progress: Progress | null; busy: boolean; run: () => void }) {
+  if (!progress)
+    return (
+      <>
+        <p role="status">Draft accepted. Baseline checks are required before signing.</p>
+        <p>
+          Yard adds the accepted tests to your repository. Stood then runs them on that commit: they must all fail, so
+          that passing them later proves new work.
+        </p>
+        <button type="button" disabled={busy} onClick={run}>
+          Freeze the tests and run the baseline
+        </button>
+      </>
+    );
+  const short = progress.baseCommit.slice(0, 7);
+  if (progress.status === 'FROZEN')
+    return (
+      <p role="status">
+        Blueprint frozen at commit {short}. Every accepted test failed there, as it should before any work.
+      </p>
+    );
+  if (progress.status === 'NEEDS_REVISION')
+    return (
+      <>
+        <p role="alert">These tests cannot prove new work, so the blueprint was not frozen:</p>
+        <ul>
+          {progress.milestones
+            .filter((m) => m.baseline === 'INVALID' || m.passing.length)
+            .map((m) => (
+              <li key={m.id}>
+                {m.id}:{' '}
+                {m.baseline === 'INVALID'
+                  ? 'the tests are not at the base commit as accepted'
+                  : `already passing (${m.passing.join(', ')})`}
+              </li>
+            ))}
+        </ul>
+        <p>Request a revision of the plan to replace them.</p>
+      </>
+    );
+  return (
+    <>
+      <p role="status">
+        Stood is running the accepted tests on commit {short}:{' '}
+        {progress.milestones.filter((m) => m.baseline === 'DONE').length} of {progress.milestones.length} milestones
+        checked.
+      </p>
+      <button type="button" disabled={busy} onClick={run}>
+        Check progress
+      </button>
+    </>
   );
 }

@@ -2,7 +2,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { api, render, streams } from '../test/harness.js';
-import { completeDraft, intakeServer, plan } from '../test/intake-server.js';
+import { completeDraft, intakeServer, plan, progress } from '../test/intake-server.js';
 import { IntakePanel } from './IntakePanel.js';
 
 afterEach(() => window.history.replaceState(null, '', '/'));
@@ -101,6 +101,58 @@ describe('IntakePanel (T-0275)', () => {
       'REVISE',
       'ACCEPT',
     ]);
+  });
+
+  // C4 (#77): after accepting, the buyer freezes the tests and Stood shows them failing on the base commit.
+  const accepted = async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    const calls = api(server.reply);
+    render(<IntakePanel enabled />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    await click('Ask the Foreman for a blueprint');
+    await click('Accept draft for baseline checks');
+    expect(await screen.findByText('Draft accepted. Baseline checks are required before signing.')).toBeTruthy();
+    return { server, calls };
+  };
+
+  it('freezes the accepted tests once Stood shows every one failing on the base commit', async () => {
+    const { server, calls } = await accepted();
+    server.state.baselines = [
+      progress('BASELINE_RUNNING', [{ baseline: 'DONE' }, { baseline: 'QUEUED' }, { baseline: 'QUEUED' }]),
+      progress('FROZEN', [{ baseline: 'DONE' }, { baseline: 'DONE' }, { baseline: 'DONE' }]),
+    ];
+    // A double click sends one request.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Freeze the tests and run the baseline' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Freeze the tests and run the baseline' }));
+    });
+    expect(
+      await screen.findByText('Stood is running the accepted tests on commit c0ffee0: 1 of 3 milestones checked.'),
+    ).toBeTruthy();
+    await click('Check progress');
+    expect(
+      await screen.findByText(
+        'Blueprint frozen at commit c0ffee0. Every accepted test failed there, as it should before any work.',
+      ),
+    ).toBeTruthy();
+    expect(calls.filter((c) => c.path === '/plans/bp1/blueprint').map((c) => c.body)).toEqual(['{}', '{}']);
+  });
+
+  it('names the tests that cannot prove new work, and reports an unavailable service', async () => {
+    const { server } = await accepted();
+    await click('Freeze the tests and run the baseline');
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    server.state.baselines = [
+      progress('NEEDS_REVISION', [{ baseline: 'DONE', passing: ['a'] }, { baseline: 'INVALID' }, { baseline: 'DONE' }]),
+    ];
+    await click('Freeze the tests and run the baseline');
+    expect(await screen.findByText('These tests cannot prove new work, so the blueprint was not frozen:')).toBeTruthy();
+    expect(screen.getByText('m1: already passing (a)')).toBeTruthy();
+    expect(screen.getByText('m2: the tests are not at the base commit as accepted')).toBeTruthy();
+    expect(screen.queryByText(/^m3:/)).toBeNull();
   });
 
   it('refuses an incomplete local brief, a bad saved link and a pasted credential', async () => {

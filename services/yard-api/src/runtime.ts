@@ -87,6 +87,8 @@ export function yardRuntime(env: Env) {
       ...(foreman && planner
         ? { foreman, intakePlanner: new IntakePlanner(intakes, foreman, planner.repositories) }
         : {}),
+      // C4 (#77): accepted plans become frozen blueprints once Stood's runner shows every frozen test red.
+      ...(foreman && planner && stood ? { planBlueprints: { ...planner.seed, stood } } : {}),
       clock,
       operators,
       secrets: vault,
@@ -165,6 +167,8 @@ export function plannerConfig(env: Env, notes: string[]) {
     apiKey,
     model: env.GROK_PLANNER_MODEL?.trim() || undefined,
     dailyMicros: Math.round(dollars * 1_000_000),
+    // C4 (#77): the same App seeds the buyer's frozen tests when a plan becomes a blueprint.
+    seed: { repositories: app, installation },
     repositories: {
       async resolve(_buyer: string, requested: string) {
         if (requested !== repository) throw new YardError('FORBIDDEN');

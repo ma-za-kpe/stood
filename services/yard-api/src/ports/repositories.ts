@@ -18,6 +18,10 @@ export interface Repositories {
     base: string,
     files: RepositoryFiles,
   ): Promise<RepositoryView>;
+  // C4 (#77): Yard's own trusted write of a buyer's frozen tests. A MAINTAIN token fast-forwards main from `base` to a
+  // commit that adds only files under tests/. Repeating it with the same files returns the same commit; main having
+  // moved, or different tests already there, is a CONFLICT.
+  seedTests(token: string, repository: string, base: string, files: RepositoryFiles): Promise<RepositoryView>;
   read(token: string, repository: string, commit: string, path: string): Promise<string>;
   archive(
     token: string,

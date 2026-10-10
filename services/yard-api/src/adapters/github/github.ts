@@ -176,6 +176,60 @@ export class GitHubRepositories implements Repositories {
     return { repository, commit: next, simulated: false };
   }
 
+  async seedTests(token: string, repository: string, base: string, files: RepositoryFiles) {
+    const grant = this.grant(token, repository);
+    if (grant.permission !== 'MAINTAIN') throw new RepositoryError('FORBIDDEN');
+    const entries = Object.entries(files ?? {});
+    if (
+      !entries.length ||
+      entries.length > 200 ||
+      !sha(base) ||
+      entries.some(
+        ([path, value]) =>
+          !pathName(path) ||
+          !path.startsWith('tests/') ||
+          typeof value !== 'string' ||
+          Buffer.byteLength(value) > 65536,
+      )
+    )
+      throw new RepositoryError('INVALID_INPUT');
+    const auth = `token ${token}`;
+    const main = await this.ref(token, repository, 'main');
+    if (main !== base) {
+      // A retry after a lost reply: main is already the seeded commit when its parent is `base` and it holds these tests.
+      const head = main
+        ? await this.json(await this.call(auth, 'GET', `/repos/${repository}/git/commits/${main}`))
+        : null;
+      const parents = (head?.parents as { sha: string }[] | undefined) ?? [];
+      if (!main || parents.length !== 1 || parents[0]?.sha !== base) throw new RepositoryError('CONFLICT');
+      for (const [path, content] of entries)
+        if ((await this.read(token, repository, main, path).catch(() => null)) !== content)
+          throw new RepositoryError('CONFLICT');
+      return { repository, commit: main, simulated: false };
+    }
+    const parent = await this.json(await this.call(auth, 'GET', `/repos/${repository}/git/commits/${base}`));
+    const tree = await this.json(
+      await this.call(auth, 'POST', `/repos/${repository}/git/trees`, {
+        base_tree: (parent.tree as { sha: string }).sha,
+        tree: entries.map(([path, content]) => ({ path, mode: '100644', type: 'blob', content })),
+      }),
+    );
+    const commit = await this.json(
+      await this.call(auth, 'POST', `/repos/${repository}/git/commits`, {
+        message: "yard: freeze the buyer's acceptance tests",
+        tree: tree.sha,
+        parents: [base],
+      }),
+    );
+    const next = String(commit.sha);
+    // A fast-forward only: if main moved after the check above, GitHub refuses and nothing changes.
+    await this.json(
+      await this.call(auth, 'PATCH', `/repos/${repository}/git/refs/heads/main`, { sha: next, force: false }),
+      'CONFLICT',
+    );
+    return { repository, commit: next, simulated: false };
+  }
+
   async read(token: string, repository: string, commit: string, path: string) {
     this.grant(token, repository);
     if (!sha(commit) || !pathName(path)) throw new RepositoryError('INVALID_INPUT');
