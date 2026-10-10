@@ -175,7 +175,7 @@ You **don't** give Stood your users' PayPal passwords or card details. Payers ap
 | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | ✓ | From a **sandbox** app at developer.paypal.com (merchant = the platform's business account) |
 | `PAYPAL_WEBHOOK_ID` | ✓ | From the sandbox app's webhook settings (used to verify PayPal webhooks) |
 | `DATABASE_URL` | ✓ | Postgres 17 (local: the `db` container. Demo: Neon) |
-| `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | ✓ | Local: SeaweedFS. Demo: Cloudflare R2 (a bucket-scoped token) |
+| `STOOD_EVIDENCE_S3_ENDPOINT` / `STOOD_EVIDENCE_S3_BUCKET` / `STOOD_EVIDENCE_S3_ACCESS_KEY_ID` / `STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY` | ✓ | Where the code runner stores signed run reports. Demo: Cloudflare R2 bucket `stood-evidence` (a bucket-scoped token) |
 | `RECEIPT_SIGNING_KEY` | ✓ | Random 32+ bytes. Signs public receipt links |
 | `PLATFORM_KEYS_JSON` | ✓ | Platform id → hashed API key, HMAC secret ref, webhook URL |
 | `EVIDENCE_AGENT_URL` / `EVIDENCE_AGENT_TOKEN` | ✓ | The evidence agent (Astropods or a separate container). **The agent itself gets no PayPal keys** |

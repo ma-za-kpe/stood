@@ -36,7 +36,7 @@ def run(
         )
 
 
-SECRET = "EM9pyVfakeSecretValue0123456789abcdef"
+SECRET = "fakeSecretValueForTheHookTestOnlyxyz"
 # Built at runtime so the repository never holds a literal private-key header (detect-private-key).
 KIND = "RSA " + "PRIVATE" + " KEY"
 
