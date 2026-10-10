@@ -21,7 +21,8 @@ type Service = {
 };
 const blueprint = parse(readFileSync('render.yaml', 'utf8')) as { services: Service[] };
 const secretName = /SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|CLIENT_ID|WEBHOOK_ID|OWNER|OPERATORS/;
-const ownerChoice = ['PROVIDER_PAYPAL', 'SETTLEMENT_EXECUTOR', 'RUNNER_KEY_ID'];
+// The evidence endpoint names the owner's Cloudflare account, so it is prompted rather than committed (C4).
+const ownerChoice = ['PROVIDER_PAYPAL', 'SETTLEMENT_EXECUTOR', 'RUNNER_KEY_ID', 'STOOD_EVIDENCE_S3_ENDPOINT'];
 const live = /sk_live|rk_live|api-m\.paypal\.com|FLWSECK-(?!TEST)/i;
 // Every variable each entry point reads must be declared, so the owner is prompted for all of them.
 const reads: Record<string, readonly string[]> = {
@@ -50,6 +51,10 @@ const reads: Record<string, readonly string[]> = {
     'VERCEL_PROJECT_ID',
     'RUNNER_KEY_ID',
     'RUNNER_SIGNING_KEY',
+    'STOOD_EVIDENCE_S3_ENDPOINT',
+    'STOOD_EVIDENCE_S3_BUCKET',
+    'STOOD_EVIDENCE_S3_ACCESS_KEY_ID',
+    'STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY',
     'GITHUB_READ_TOKEN',
     'SETTLEMENT_EXECUTOR',
   ],
