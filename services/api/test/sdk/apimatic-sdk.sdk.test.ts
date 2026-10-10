@@ -5,11 +5,22 @@ import { draft, harness, key, now, pkg, secret } from '../fixtures/contract-app.
 
 // T-0053: the TypeScript SDK that APIMatic generates from openapi/stood.json, with Stood's saved request-signing
 // customization, against the real router over HTTP. Built by scripts/check-sdk before this runs.
+type Call = (...args: unknown[]) => Promise<{ statusCode: number; result: Record<string, unknown> }>;
+type StoodApi = Record<
+  | 'createAllowance'
+  | 'getAllowance'
+  | 'requestMandate'
+  | 'getMandate'
+  | 'getTranche'
+  | 'requestFunding'
+  | 'getFunding'
+  | 'submitPackage'
+  | 'getPackage',
+  Call
+>;
 type Sdk = {
   createStoodClient(options: object): unknown;
-  Api: new (
-    client: unknown,
-  ) => Record<string, (...args: unknown[]) => Promise<{ statusCode: number; result: Record<string, unknown> }>>;
+  Api: new (client: unknown) => StoodApi;
   ProblemError: new (...args: never[]) => Error;
 };
 let server: ReturnType<typeof serve>;

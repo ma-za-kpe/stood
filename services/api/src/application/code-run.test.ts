@@ -120,11 +120,13 @@ describe('runCodeJob', () => {
   it('stores the signed run in the evidence bucket before deciding, and decides nothing if it cannot', async () => {
     const h = await harness();
     expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
-    const [[key, body]] = [...h.evidence.objects];
+    const [stored] = [...h.evidence.objects];
+    expect(stored).toBeDefined();
+    const [key, body] = stored as [string, Buffer];
     expect(key).toMatch(/^runs\/platform\/trn\/pkg_1\/[a-f0-9]{64}$/);
-    const stored = JSON.parse(String(body));
-    expect(stored.contract).toMatchObject({ packageId: 'pkg_1', commit, runnerId });
-    expect(stored.report.signature).toEqual(expect.any(String));
+    const run = JSON.parse(String(body));
+    expect(run.contract).toMatchObject({ packageId: 'pkg_1', commit, runnerId });
+    expect(run.report.signature).toEqual(expect.any(String));
     const down = await harness({ evidence: 'down' });
     expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
     expect((await down.state()).state).toBe('HELD');
