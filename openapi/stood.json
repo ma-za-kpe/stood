@@ -1,0 +1,1441 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Stood platform API",
+    "version": "1.0.0",
+    "summary": "Milestone payments held on PayPal (sandbox) and released only on evidence",
+    "description": "Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Stood only talks to the PayPal sandbox.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://stood-api.onrender.com/v1",
+      "description": "Hosted (PayPal sandbox)"
+    }
+  ],
+  "paths": {
+    "/allowances": {
+      "post": {
+        "operationId": "createAllowance",
+        "summary": "Draft an allowance: a payment cap split into milestones, each with an evidence profile",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AllowanceDraft"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Allowance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/allowances/{id}": {
+      "get": {
+        "operationId": "getAllowance",
+        "summary": "Read an allowance this platform owns",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Allowance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/allowances/{id}/mandate": {
+      "post": {
+        "operationId": "requestMandate",
+        "summary": "Start saved-PayPal signing for the allowance's current terms (send {})",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (recorded, not yet done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/allowances/{id}/mandate/{key}": {
+      "get": {
+        "operationId": "getMandate",
+        "summary": "Read signing status and, while awaiting the buyer, the approval link",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tranches/{id}": {
+      "get": {
+        "operationId": "getTranche",
+        "summary": "Read a tranche: state, hold, latest decision and plain-language sentences",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tranche"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tranches/{id}/funding": {
+      "post": {
+        "operationId": "requestFunding",
+        "summary": "Reserve funding (a PayPal authorization hold) for a tranche at the version just read",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (recorded, not yet done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Funding"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tranches/{id}/funding/{key}": {
+      "get": {
+        "operationId": "getFunding",
+        "summary": "Read funding status, the approval link when required, and the hold expiry",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Funding"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tranches/{id}/packages": {
+      "post": {
+        "operationId": "submitPackage",
+        "summary": "Submit a commit package for Stood's runner to judge; returns QUEUED, never a result",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitPackageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (recorded, not yet done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitPackage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tranches/{id}/packages/{packageId}": {
+      "get": {
+        "operationId": "getPackage",
+        "summary": "Read a submitted commit package",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "packageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitPackage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Allowance": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "const": "DRAFT"
+          },
+          "payee_ref": {
+            "type": "string"
+          },
+          "cap": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Milestone"
+            }
+          },
+          "window_days": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "max_resubmits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "tranches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "payee_ref",
+          "cap",
+          "milestones",
+          "window_days",
+          "max_resubmits",
+          "tranches"
+        ],
+        "additionalProperties": false
+      },
+      "AllowanceDraft": {
+        "type": "object",
+        "properties": {
+          "payee_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "cap": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "milestones": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Milestone"
+            }
+          },
+          "window_days": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "max_resubmits": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "payee_ref",
+          "cap",
+          "milestones",
+          "window_days",
+          "max_resubmits"
+        ],
+        "additionalProperties": false
+      },
+      "CodeTerms": {
+        "type": "object",
+        "properties": {
+          "repository": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,39}\\/[A-Za-z0-9_.-]{1,100}$"
+          },
+          "baseCommit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "testBundleHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "manifestHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "testIds": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tests": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "minMutation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "repository",
+          "baseCommit",
+          "testBundleHash",
+          "manifestHash",
+          "testIds",
+          "tests",
+          "minMutation"
+        ],
+        "additionalProperties": false,
+        "description": "Frozen terms of a code milestone (profiles code.*), checked at draft time."
+      },
+      "CommitPackage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "trancheId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "const": "QUEUED"
+          },
+          "waitingFor": {
+            "type": "string",
+            "enum": [
+              "HOLD",
+              "RENEWAL",
+              "RUNNER"
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/CommitPackageInput"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "UTC ISO-8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "trancheId",
+          "status",
+          "waitingFor",
+          "metadata",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "CommitPackageInput": {
+        "type": "object",
+        "properties": {
+          "repository": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+\\/[A-Za-z0-9_.-]+$"
+          },
+          "base_commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "commit_sha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "report_ref": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9/_-]*\\.json$"
+          },
+          "report_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "repository",
+          "base_commit",
+          "commit_sha",
+          "report_ref",
+          "report_sha256"
+        ],
+        "additionalProperties": false
+      },
+      "Decision": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "RELEASE",
+              "REFUSE",
+              "WAIT"
+            ]
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "CAPTURE",
+              "VOID",
+              "NONE",
+              "REVIEW"
+            ]
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "ruleSetVersion": {
+            "type": "string"
+          },
+          "namedField": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "detail": {}
+        },
+        "required": [
+          "outcome",
+          "effect",
+          "profileId",
+          "ruleSetVersion",
+          "namedField",
+          "reason",
+          "detail"
+        ],
+        "additionalProperties": {}
+      },
+      "Funding": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RESERVED",
+              "CREATING",
+              "AWAITING_APPROVAL",
+              "AUTHORIZING",
+              "HELD",
+              "FAILED",
+              "EXPIRED"
+            ]
+          },
+          "approve_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only while HELD: when the hold lapses, Unix milliseconds"
+          }
+        },
+        "required": [
+          "key",
+          "status",
+          "approve_url",
+          "hold_expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "FundingRequest": {
+        "type": "object",
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "The tranche version just read"
+          },
+          "nonce": {
+            "type": "string",
+            "pattern": "^[A-HJ-NP-Z2-9]{3}$"
+          }
+        },
+        "required": [
+          "expected_version",
+          "nonce"
+        ],
+        "additionalProperties": false
+      },
+      "Mandate": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RESERVED",
+              "CREATING",
+              "AWAITING_APPROVAL",
+              "TOKENIZING",
+              "SIGNED",
+              "REVOKED"
+            ]
+          },
+          "approve_url": {
+            "description": "Only while AWAITING_APPROVAL: where the buyer approves",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires_at": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "When the signing request lapses, Unix milliseconds"
+          }
+        },
+        "required": [
+          "key",
+          "status",
+          "approve_url",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "Milestone": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Evidence profile, e.g. code.milestone@1 or code.final@1"
+          },
+          "params": {
+            "description": "CodeTerms for code.* profiles (checked); other profiles take their own parameters",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CodeTerms"
+              },
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "amount",
+          "profile"
+        ],
+        "additionalProperties": false
+      },
+      "Money": {
+        "type": "object",
+        "properties": {
+          "minor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Amount in minor units (cents)"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "additionalProperties": false
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "urn:stood:problem:<code>"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "detail"
+        ],
+        "additionalProperties": false,
+        "description": "RFC 9457 problem details"
+      },
+      "Tranche": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "WAIT_FUNDING",
+              "HELD",
+              "DECIDING",
+              "WAITING",
+              "CAPTURE_PENDING",
+              "VOID_PENDING",
+              "REAUTHORIZE_PENDING",
+              "RELEASED",
+              "REFUSED",
+              "EXPIRED",
+              "CANCELLED",
+              "DISPUTED"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Send as expected_version when funding"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Decision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hold": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "age_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "description": "UTC ISO-8601 timestamp"
+                  }
+                },
+                "required": [
+                  "age_seconds",
+                  "expires_at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settlement": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "effect": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "effect"
+                ],
+                "additionalProperties": {}
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "safe_recovery": {
+            "type": "boolean"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "effect": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "description": "UTC ISO-8601 timestamp"
+                  }
+                },
+                "required": [
+                  "effect",
+                  "status",
+                  "created_at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sentences": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "Plain-language status for the payer and the inspector"
+          },
+          "package_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resubmissions_left": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "paypal-sandbox",
+              "simulator"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "version",
+          "profile",
+          "amount",
+          "decision",
+          "hold",
+          "settlement",
+          "safe_recovery",
+          "pending",
+          "sentences",
+          "package_id",
+          "resubmissions_left",
+          "provider"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "platformKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The platform key"
+      },
+      "requestSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Stood-Signature",
+        "description": "t=<unix seconds>,v2=<hex HMAC-SHA256(secret, JSON [\"stood.request@2\", t, method, \"/v1\"+path+query, Idempotency-Key, If-Match, Content-Type, body])>"
+      }
+    }
+  }
+}

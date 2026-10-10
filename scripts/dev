@@ -77,6 +77,9 @@ PY
     grep -E '^(VERCEL_TOKEN|VERCEL_TEAM_ID|VERCEL_PROJECT_ID)=' .env >"$keys" || true
     docker compose run --rm --no-deps --env-from-file "$keys" app \
       sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/runner-check-cli.js' ;;
+  openapi)
+    # T-0053: regenerate openapi/stood.json from the Zod contract (services/api/src/http/contract.ts).
+    exec docker compose run --rm --no-deps app sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/openapi-cli.js' ;;
   evidence-check)
     # C4 (#77): qualify Stood's evidence bucket (Cloudflare R2) with the reconciler's settings. Prints no setting.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }

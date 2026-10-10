@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# T-0053: the published API contract (openapi/stood.json) must be valid OpenAPI 3.1 and must not break clients.
+# Redocly lints it; oasdiff compares it with the version on main and fails on any breaking change. A deliberate
+# break needs a new major API_VERSION and an ADR. Both tools run from pinned images (mirror.gcr.io, by digest).
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+redocly=mirror.gcr.io/redocly/cli:2.11.1@sha256:681bd61aa0c5a0bdc8860d482746dc02747118ef7a0488710cfae87f1b4848ca
+oasdiff=mirror.gcr.io/tufin/oasdiff:v1.11.7@sha256:d6f1e645251cc1da527311955347d8ce8bd2b7ed09bcce07176b2577b8daf19c
+docker run --rm -v "$PWD/openapi:/spec:ro" "$redocly" lint /spec/stood.json --extends recommended
+base="$(mktemp -d)"
+trap 'rm -rf "$base"' EXIT
+git fetch --quiet --depth=1 origin main 2>/dev/null || true
+if git show origin/main:openapi/stood.json >"$base/main.json" 2>/dev/null; then
+  docker run --rm -v "$base:/base:ro" -v "$PWD/openapi:/spec:ro" "$oasdiff" \
+    breaking /base/main.json /spec/stood.json --fail-on ERR
+  echo "OpenAPI: no breaking change against main."
+else
+  echo "OpenAPI: main has no published contract yet; nothing to compare."
+fi

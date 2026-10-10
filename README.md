@@ -158,7 +158,7 @@ flowchart LR
   WEB --> API
 ```
 
-Hexagonal domain core, pure decision rules, idempotent money commands, a transactional outbox. Details: [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) · [T06 PayPal](docs/tech/T06-paypal-integration.md).
+Hexagonal domain core, pure decision rules, idempotent money commands, a transactional outbox. Details: [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) ([OpenAPI 3.1](openapi/stood.json)) · [T06 PayPal](docs/tech/T06-paypal-integration.md).
 
 ## Built with
 
@@ -198,7 +198,7 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 └─ .github/              CI, Pages, release-please, back-merge, templates, rulesets
 ```
 
-Implemented core: `services/api`. Planned additional services: `apps/web`, `services/api`, `services/workflows`, `services/evidence-agent`, `openapi/`, `fixtures/` ([S14](docs/stood/S14-open-source-plan.md)).
+Implemented core: `services/api`. Planned additional services: `apps/web`, `services/api`, `services/workflows`, `services/evidence-agent`, `fixtures/` ([S14](docs/stood/S14-open-source-plan.md)).
 
 ## Documentation
 

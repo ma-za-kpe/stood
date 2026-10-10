@@ -5,4 +5,5 @@ docker compose run --rm app pnpm validate
 scripts/check-migrations
 docker compose run --rm app node --test tools/site/serve.test.mjs
 docker compose up -d --wait db
+scripts/check-openapi
 exec docker compose run --rm app pnpm test:db
