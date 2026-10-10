@@ -7,6 +7,9 @@ type Result = 'WAIT' | 'AWAITING_APPROVAL' | 'HELD' | 'FAILED' | 'EXPIRED';
 const object = (v: unknown): Record<string, unknown> | null =>
   v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 const text = (v: unknown): v is string => typeof v === 'string' && !!v.trim() && v.length <= 200;
+// T-0295: PayPal declined the payment method, or refused the request itself (an invalid payee, for example).
+const refused = (p: Record<string, unknown>) =>
+  (p.outcome === 'DECLINED' || p.outcome === 'REJECTED') && text(p.reference);
 function matching(value: unknown, operation: FundingOperation): Record<string, unknown> | null {
   const p = object(value);
   return p?.complete === true &&
@@ -14,7 +17,8 @@ function matching(value: unknown, operation: FundingOperation): Record<string, u
     p.trancheId === operation.trancheId &&
     p.createRequestId === operation.createRequestId &&
     p.authorizeRequestId === operation.authorizeRequestId &&
-    text(p.orderId) &&
+    // A definite refusal of a create has no order: PayPal made none.
+    (text(p.orderId) || (refused(p) && !operation.orderId && p.orderId == null)) &&
     (!operation.orderId || p.orderId === operation.orderId)
     ? p
     : null;
@@ -76,8 +80,8 @@ export async function advanceFunding(
     // T-0154: a saved PayPal account is authorized when the order is created; there is no approval step.
     const saved = operation.instruction.source === 'SAVED_PAYPAL';
     const settleSaved = async (proof: Record<string, unknown>): Promise<Result> => {
-      if (proof.outcome === 'DECLINED' && text(proof.reference)) {
-        await store.fail(key, proof.reference);
+      if (refused(proof)) {
+        await store.fail(key, proof.reference as string);
         return 'FAILED';
       }
       const now = await clock();
@@ -93,6 +97,10 @@ export async function advanceFunding(
       if (!(await permitted())) return 'WAIT';
       const proof = matching(await provider.create(structuredClone(operation)), operation);
       if (saved) return proof ? settleSaved(proof) : 'WAIT';
+      if (proof && refused(proof)) {
+        await store.fail(key, proof.reference as string);
+        return 'FAILED';
+      }
       if (!proof || proof.outcome !== 'CREATED' || typeof proof.approvalUrl !== 'string') return 'WAIT';
       await store.orderCreated(key, { orderId: proof.orderId as string, approvalUrl: proof.approvalUrl });
       return 'AWAITING_APPROVAL';

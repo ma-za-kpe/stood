@@ -60,6 +60,18 @@ export class PayPalFundingAdapter implements FundingProvider {
   ) {}
   async create(operation: FundingOperation) {
     if (operation.status !== 'CREATING' || operation.orderId) return unknown;
+    // T-0295: Stood sends payee_ref to PayPal as the payee merchant. One that cannot be a merchant id is refused here,
+    // before any call, instead of PayPal's refusal leaving the funding pending.
+    if (operation.instruction.mode === 'live' && !/^[A-Z0-9]{13}$/.test(operation.instruction.payeeRef))
+      return {
+        complete: true,
+        key: operation.key,
+        trancheId: operation.trancheId,
+        createRequestId: operation.createRequestId,
+        authorizeRequestId: operation.authorizeRequestId,
+        outcome: 'REJECTED',
+        reference: 'payee_not_a_paypal_merchant',
+      };
     if (operation.instruction.source !== 'SAVED_PAYPAL') return this.call('CREATE_ORDER', operation);
     // T-0154: no signed mandate token, no call. The token goes to PayPal and nowhere else.
     try {
@@ -114,6 +126,14 @@ export class PayPalFundingAdapter implements FundingProvider {
         body.details.every((d) => object(d)?.issue === 'INSTRUMENT_DECLINED')
       )
         return { ...identity, orderId, outcome: 'DECLINED', reference: body.debug_id };
+      // T-0295: PayPal refused the create itself (400/422 with its debug id): no order exists, so it is final.
+      if (
+        action === 'CREATE_ORDER' &&
+        !orderId &&
+        (response.status === 400 || response.status === 422) &&
+        text(body?.debug_id)
+      )
+        return { ...identity, outcome: 'REJECTED', reference: body.debug_id };
       if (
         !['CREATE_ORDER', 'AUTHORIZE_ORDER'].includes(action)
           ? response.status !== 200
@@ -130,7 +150,9 @@ export class PayPalFundingAdapter implements FundingProvider {
       )
         return unknown;
       const unit = object(body.purchase_units[0]),
-        payments = object(unit?.payments);
+        payments = object(unit?.payments),
+        // T-0295 (found live): PayPal leaves `captures` out when nothing is captured; an absent list is empty.
+        captures = payments && payments.captures === undefined ? [] : payments?.captures;
       if (
         unit?.reference_id !== operation.key ||
         unit.custom_id !== operation.trancheId ||
@@ -145,8 +167,8 @@ export class PayPalFundingAdapter implements FundingProvider {
           (payments &&
             (!Array.isArray(payments.authorizations) ||
               payments.authorizations.length ||
-              !Array.isArray(payments.captures) ||
-              payments.captures.length))
+              !Array.isArray(captures) ||
+              captures.length))
         )
           return unknown;
         const url = operation.approvalUrl ?? approval(body.links, operation, body.id);
@@ -158,8 +180,8 @@ export class PayPalFundingAdapter implements FundingProvider {
         body.status !== 'COMPLETED' ||
         !Array.isArray(payments?.authorizations) ||
         payments.authorizations.length !== 1 ||
-        !Array.isArray(payments.captures) ||
-        payments.captures.length
+        !Array.isArray(captures) ||
+        captures.length
       )
         return unknown;
       const authorization = object(payments.authorizations[0]);
@@ -168,7 +190,11 @@ export class PayPalFundingAdapter implements FundingProvider {
         !['CREATED', 'EXPIRED'].includes(String(authorization?.status)) ||
         (authorization?.status === 'EXPIRED' && action !== 'GET_FUNDING_ORDER') ||
         !amountMatches(authorization.amount, request) ||
-        object(object(authorization.supplementary_data)?.related_ids)?.order_id !== body.id ||
+        // The authorization sits in this order's own purchase unit; a related order id, when PayPal gives one, must
+        // be this order (PayPal omits it on a saved-account create).
+        ![undefined, body.id].includes(
+          object(object(authorization.supplementary_data)?.related_ids)?.order_id as string,
+        ) ||
         typeof authorization.create_time !== 'string' ||
         typeof authorization.expiration_time !== 'string'
       )

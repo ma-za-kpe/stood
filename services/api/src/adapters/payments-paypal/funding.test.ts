@@ -194,3 +194,82 @@ it('reads a saved-account create as an authorization, records a decline, and nev
   expect(await new PayPalFundingAdapter({ fund: untouched }, broken).create(saved)).toEqual({ complete: false });
   expect(untouched).not.toHaveBeenCalled();
 });
+// T-0295 (found live): a create PayPal refuses outright is final, and a live payee that cannot be a PayPal merchant
+// id is refused before any call.
+it('reports a refused create as REJECTED with PayPal’s debug id, and never sends a live order to a non-merchant payee', async () => {
+  const creating = { ...operation, status: 'CREATING' as const, orderId: null, approvalUrl: null };
+  const refused = {
+    fund: vi.fn(async () => ({
+      status: 422,
+      body: {
+        name: 'UNPROCESSABLE_ENTITY',
+        message: 'Payee account is invalid.',
+        debug_id: 'debug-7',
+        details: [{ issue: 'PAYEE_ACCOUNT_INVALID' }],
+      },
+    })),
+  };
+  expect(await new PayPalFundingAdapter(refused).create(creating)).toMatchObject({
+    complete: true,
+    outcome: 'REJECTED',
+    reference: 'debug-7',
+  });
+  const unclear = { fund: vi.fn(async () => ({ status: 422, body: { name: 'UNPROCESSABLE_ENTITY' } })) };
+  expect(await new PayPalFundingAdapter(unclear).create(creating)).toEqual({ complete: false });
+  const server = { fund: vi.fn(async () => ({ status: 500, body: { debug_id: 'debug-8' } })) };
+  expect(await new PayPalFundingAdapter(server).create(creating)).toEqual({ complete: false });
+  const never = { fund: vi.fn() };
+  const live = {
+    ...creating,
+    instruction: { ...creating.instruction, mode: 'live' as const, payeeRef: 'yard:project' },
+  };
+  expect(await new PayPalFundingAdapter(never).create(live)).toMatchObject({
+    outcome: 'REJECTED',
+    reference: 'payee_not_a_paypal_merchant',
+  });
+  expect(never.fund).not.toHaveBeenCalled();
+});
+// T-0295 (found live, 2026-10-10): PayPal's real answer to a saved-account create omits `captures` and the
+// authorization's related order id. That is still a matching hold; anything captured, or a different order, is not.
+it('reads PayPal’s real saved-account create (no captures list, no related order id) as a held authorization', async () => {
+  const saved = {
+    ...operation,
+    status: 'CREATING' as const,
+    orderId: null,
+    approvalUrl: null,
+    instruction: { ...operation.instruction, source: 'SAVED_PAYPAL' as const },
+  };
+  const real = () => {
+    const body = order();
+    const { captures: _none, ...payments } = body.purchase_units[0]?.payments ?? { authorizations: [] };
+    const { supplementary_data: _missing, ...authorization } = payments.authorizations[0] ?? {};
+    return { ...body, purchase_units: [{ ...body.purchase_units[0], payments: { authorizations: [authorization] } }] };
+  };
+  const tokens = { tokenFor: async () => 'vault-token' };
+  const live = new PayPalFundingAdapter({ fund: vi.fn(async () => ({ status: 201, body: real() })) }, tokens);
+  expect(await live.create(saved)).toMatchObject({
+    outcome: 'HELD',
+    orderId: 'ORDER',
+    hold: { authorizationId: 'AUTH' },
+  });
+  const otherOrder = real();
+  (otherOrder.purchase_units[0]?.payments.authorizations[0] as Record<string, unknown>).supplementary_data = {
+    related_ids: { order_id: 'ELSEWHERE' },
+  };
+  expect(
+    await new PayPalFundingAdapter({ fund: async () => ({ status: 201, body: otherOrder }) }, tokens).create(saved),
+  ).toEqual({
+    complete: false,
+  });
+  const captured = {
+    ...real(),
+    purchase_units: [
+      { ...real().purchase_units[0], payments: { ...real().purchase_units[0]?.payments, captures: [{ id: 'CAP' }] } },
+    ],
+  };
+  expect(
+    await new PayPalFundingAdapter({ fund: async () => ({ status: 201, body: captured }) }, tokens).create(saved),
+  ).toEqual({
+    complete: false,
+  });
+});

@@ -309,3 +309,27 @@ it('records a declined saved account, and recovers a lost create reply by readin
   );
   expect(await odd.run()).toBe('WAIT');
 });
+// T-0295 (found live): PayPal refusing a create makes no order. A definite refusal, declined or rejected, fails the
+// funding with PayPal's reference instead of leaving it pending, for saved accounts and buyer approvals alike.
+it('fails a funding whose create PayPal definitely refused, even though no order exists', async () => {
+  for (const [source, outcome] of [
+    ['SAVED_PAYPAL', 'DECLINED'],
+    ['SAVED_PAYPAL', 'REJECTED'],
+    [undefined, 'REJECTED'],
+  ] as const) {
+    const h = await harness(source);
+    vi.mocked(h.provider.create).mockImplementation(async () => {
+      const { orderId: _none, ...refusal } = h.proof(outcome, { reference: 'debug-9' });
+      return refusal;
+    });
+    expect(await h.run()).toBe('FAILED');
+    expect(h.row()).toMatchObject({ status: 'FAILED', reference: 'debug-9' });
+  }
+  // A refusal without PayPal's reference proves nothing: it waits.
+  const vague = await harness('SAVED_PAYPAL');
+  vi.mocked(vague.provider.create).mockImplementation(async () => {
+    const { orderId: _none, ...refusal } = vague.proof('REJECTED');
+    return refusal;
+  });
+  expect(await vague.run()).toBe('WAIT');
+});

@@ -139,15 +139,16 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
   }
 });
 
-// T-0189: with Stood's platform credentials, Yard creates allowance drafts through the signed API and reads every
-// tranche it waits on. Packages stay off until a runner supplies a real test report; nothing is invented for them.
+// T-0189: with Stood's platform credentials, Yard creates allowance drafts, submits packages (Stood's own runner judges
+// them) and reads every tranche it waits on. Usage forwarding needs Yard's usage key, and says so when it is missing.
 it('connects to Stood only with platform credentials over https, and says what is still off', async () => {
   const stood = { ...hosted, STOOD_API_KEY: 'platform-key-not-real', STOOD_HMAC_SECRET: 'h'.repeat(40) };
   const on = yardRuntime(stood);
-  expect(on.notes).toContain('Packages off: Stood needs a runner test report before Yard can submit work.');
+  expect(on.notes.some((n) => n.startsWith('Packages off'))).toBe(false);
+  expect(on.notes).toContain('Usage off: YARD_USAGE_KEY_ID and YARD_USAGE_SIGNING_KEY (Ed25519) are required.');
   expect(on.notes.some((n) => n.startsWith('Payments off'))).toBe(false);
   expect(on.config.board?.mandates).toBeDefined();
-  expect(on.config.board?.packages).toBeUndefined();
+  expect(on.config.board?.packages).toBeDefined();
   expect(await capabilities(stood)).toMatchObject({ payments: true });
   await on.stop();
   const plain = { ...stood, STOOD_API_URL: 'http://stood.example.com' };
