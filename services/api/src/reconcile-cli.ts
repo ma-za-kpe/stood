@@ -116,9 +116,9 @@ if (!missing.length && problem) {
       );
       if (pending) {
         const moved = await pending();
-        if (moved.mandates || moved.fundings || moved.failed)
+        if (moved.mandates || moved.fundings || moved.waiting || moved.failed)
           process.stdout.write(
-            `Signing and funding: ${moved.mandates} mandates and ${moved.fundings} fundings advanced, ${moved.failed} failed.\n`,
+            `Signing and funding: ${moved.mandates} mandates and ${moved.fundings} fundings advanced, ${moved.waiting} waiting, ${moved.failed} failed.\n`,
           );
       }
       if (search.captures && now - lastAudit >= 3600000) {
