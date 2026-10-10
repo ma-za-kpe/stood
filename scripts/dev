@@ -135,6 +135,15 @@ PY
     grep -E '^APIMATIC_API_KEY=' .env >"$keys" || true
     docker compose run --rm --no-deps --env-from-file "$keys" app sh -c \
       'npx -y @apimatic/cli@1.5.0 auth login --auth-key="$APIMATIC_API_KEY" >/dev/null && npx -y @apimatic/cli@1.5.0 sdk save-changes --input=apimatic --sdk=sdk/typescript --language=typescript' ;;
+  funding-recover) shift
+    # #77 operations: recover a funding stuck in CREATING from a PayPal order id. Stood reads the order from PayPal and
+    # accepts it only if it belongs to that funding; nothing is created or re-sent. Prints statuses only.
+    [ $# -eq 2 ] || { echo "Usage: scripts/dev funding-recover <funding key> <PayPal order id>" >&2; exit 2; }
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(DATABASE_URL|APP_ENV|PROVIDER_PAYPAL|PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|PAYPAL_BASE_URL|VAULT_TOKEN_KEYS)=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/funding-recover-cli.js "$0" "$1"' "$1" "$2" ;;
   release-review)
     # Owner decision 2026-10-10: list, read-only, every code decision the old in-process runner recorded. Prints ids and
     # outcomes only, never a setting. Run it against production before settlement is switched back on.
