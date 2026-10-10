@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { yardDatabase } from '../../../test/database.js';
 import { migrateYardEvents } from './events.js';
-import { migrateYardIntakes, PostgresIntakes } from './intakes.js';
+import { migrateYardIntakeErasure, migrateYardIntakes, PostgresIntakes } from './intakes.js';
 
 let f: Awaited<ReturnType<typeof yardDatabase>>;
 let store: PostgresIntakes;
@@ -18,6 +18,8 @@ beforeAll(async () => {
   f = await yardDatabase();
   await migrateYardEvents(f.pool, f.owner);
   await migrateYardIntakes(f.pool, f.owner);
+  await migrateYardIntakeErasure(f.pool, f.owner);
+  await migrateYardIntakeErasure(f.pool, f.owner);
   store = new PostgresIntakes(f.limited);
 });
 afterAll(async () => {
@@ -157,4 +159,27 @@ it('rejects audit metadata that does not match the current private draft version
       c.release();
     }
   }
+});
+
+// T-0217: the owning buyer erases an intake with its whole history; nothing else can delete intake history.
+it('erases an intake, its history and receipts for its owner only, once, and lists idle drafts', async () => {
+  const input = command('erase-me');
+  await store.save(input);
+  await store.save({ ...input, key: 'second', expectedVersion: 1, step: 1, now: input.now + 1000 });
+  await expect(f.limited.query("DELETE FROM yard.intake_events WHERE intake_id='erase-me'")).rejects.toThrow(
+    /append-only/,
+  );
+  expect((await store.idle(input.now + 2000)).map((d) => d.id)).toContain('erase-me');
+  expect(await store.idle(input.now)).not.toContainEqual(expect.objectContaining({ id: 'erase-me' }));
+  await expect(store.erase('erase-me', 'foreign', 'BUYER_REQUEST', input.now + 3000)).rejects.toThrow('FORBIDDEN');
+  expect(await store.erase('erase-me', 'buyer', 'BUYER_REQUEST', input.now + 3000)).toBe('ERASED');
+  await expect(store.load('erase-me')).rejects.toThrow('NOT_FOUND');
+  expect(await store.read('erase-me', 0)).toEqual([]);
+  const left = await f.limited.query("SELECT count(*)::int AS n FROM yard.intake_commands WHERE intake_id='erase-me'");
+  expect(left.rows[0].n).toBe(0);
+  const erasure = await f.limited.query("SELECT reason FROM yard.intake_erasures WHERE intake_id='erase-me'");
+  expect(erasure.rows).toEqual([{ reason: 'BUYER_REQUEST' }]);
+  expect(await store.erase('erase-me', 'buyer', 'BUYER_REQUEST', input.now + 4000)).toBe('ALREADY');
+  await expect(store.erase('never-existed', 'buyer', 'EXPIRED', input.now)).rejects.toThrow('NOT_FOUND');
+  await expect(f.limited.query("DELETE FROM yard.intake_erasures WHERE intake_id='erase-me'")).rejects.toThrow();
 });

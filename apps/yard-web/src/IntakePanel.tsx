@@ -501,6 +501,17 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
           <button type="button" disabled={busy} onClick={() => void open(false)}>
             Reload saved version
           </button>
+          <EraseIntake
+            busy={busy}
+            erase={() => request(`/intakes/${encodeURIComponent(record.id)}`, eraseRequest())}
+            erased={() => {
+              recordRef.current = null;
+              setRecord(null);
+              setPlan(null);
+              setProgress(null);
+              setStatus('Deleted. Your answers and the Foreman’s plan for this intake are erased.');
+            }}
+          />
           {state.view === 'editing' && (
             <>
               <details className="brief-sections" open={state.step !== 0}>
@@ -829,5 +840,50 @@ function BaselineStep({ progress, busy, run }: { progress: Progress | null; busy
         Check progress
       </button>
     </>
+  );
+}
+
+const eraseRequest = (): RequestInit => ({
+  method: 'DELETE',
+  headers: { 'If-Match': '0', 'Idempotency-Key': browserRequestKey() },
+});
+// T-0217: the buyer erases their intake. Two steps, because it cannot be undone.
+function EraseIntake({ busy, erase, erased }: { busy: boolean; erase: () => Promise<unknown>; erased: () => void }) {
+  const [asking, setAsking] = useState(false),
+    [working, setWorking] = useState(false),
+    [problem, setProblem] = useState('');
+  if (!asking)
+    return (
+      <button type="button" disabled={busy} onClick={() => setAsking(true)}>
+        Delete this intake
+      </button>
+    );
+  const confirm = async () => {
+    setWorking(true);
+    setProblem('');
+    try {
+      await erase();
+      erased();
+    } catch (e) {
+      setProblem(
+        e instanceof ApiError && e.status === 409
+          ? 'This intake is now a project, so it is kept. Export it from the project room.'
+          : (e as Error).message,
+      );
+      setWorking(false);
+    }
+  };
+  return (
+    <fieldset>
+      <legend>Delete this intake</legend>
+      <p>This erases your answers and the Foreman’s plan for this intake. It cannot be undone.</p>
+      <button type="button" disabled={working} onClick={() => void confirm()}>
+        Yes, delete it
+      </button>
+      <button type="button" disabled={working} onClick={() => setAsking(false)}>
+        Keep it
+      </button>
+      {problem && <p role="alert">{problem}</p>}
+    </fieldset>
   );
 }

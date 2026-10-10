@@ -14,6 +14,7 @@ import { RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, type Operator } from './application/board.js';
+import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
 import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
@@ -108,6 +109,7 @@ export function yardRuntime(env: Env) {
   let watching: ReturnType<typeof setInterval> | null = null;
   let sweeping: ReturnType<typeof setInterval> | null = null;
   let forwarding: ReturnType<typeof setInterval> | null = null;
+  let expiring: ReturnType<typeof setInterval> | null = null;
   return {
     config,
     notes,
@@ -134,6 +136,15 @@ export function yardRuntime(env: Env) {
         watching.unref();
         await tick();
       }
+      // T-0217: intake drafts nobody touched for 90 days are erased once a day, with the planner's copy.
+      const expire = () =>
+        expireIntakes(
+          Date.now(),
+          foreman ? { intakes, projects: events, foreman } : { intakes, projects: events },
+        ).catch(() => process.stderr.write(`${JSON.stringify({ code: 'INTAKE_EXPIRY_FAILED' })}\n`));
+      expiring = setInterval(expire, 86_400_000);
+      expiring.unref();
+      await expire();
       if (usage) {
         const forward = () =>
           usage.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'USAGE_FORWARD_FAILED' })}\n`));
@@ -147,6 +158,7 @@ export function yardRuntime(env: Env) {
       if (watching) clearInterval(watching);
       if (sweeping) clearInterval(sweeping);
       if (forwarding) clearInterval(forwarding);
+      if (expiring) clearInterval(expiring);
       await pool.end();
     },
   };

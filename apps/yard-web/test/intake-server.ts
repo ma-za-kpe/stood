@@ -57,6 +57,7 @@ export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
     failPlan: false,
     // C4 (#77): what successive blueprint calls return; empty means the service is unavailable.
     baselines: [] as unknown[],
+    eraseStatus: 0 as number,
   };
   const reply = (call: Call) => {
     if (call.path === '/research/ideas')
@@ -114,6 +115,12 @@ export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
       const { decision } = JSON.parse(call.body);
       state.plan = plan(decision === 'ACCEPT' ? 'READY_FOR_BASELINE' : 'REVISION_REQUESTED', state.plan.version + 1);
       return { body: state.plan };
+    }
+    // T-0217: the owner erases the intake; a project made from it is kept (409).
+    if (intake && call.method === 'DELETE') {
+      if (state.eraseStatus) return { status: state.eraseStatus };
+      state.record = null;
+      return { body: { id: intake[1], erased: true, already: false } };
     }
     if (call.path === '/plans/bp1/blueprint' && call.method === 'POST') {
       const next = state.baselines.shift();

@@ -167,6 +167,7 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     intakeHttp(app, {
       store,
       ...(config.intakePlanner ? { planner: config.intakePlanner } : {}),
+      erasure: { projects: config.board.events, ...(config.foreman ? { foreman: config.foreman } : {}) },
       request,
       authorize: async (headers, id, target) => {
         const actor = identify(headers, 'GET', target, '', await config.clock());

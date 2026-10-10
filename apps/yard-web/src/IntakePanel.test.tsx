@@ -155,6 +155,36 @@ describe('IntakePanel (T-0275)', () => {
     expect(screen.queryByText(/^m3:/)).toBeNull();
   });
 
+  // T-0217: the buyer erases their intake in two steps; a project made from it is kept.
+  it('deletes the intake only after confirmation, and explains when it is kept', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    const calls = api(server.reply);
+    render(<IntakePanel enabled />);
+    await click('Start a private intake');
+    await saved();
+    await click('Delete this intake');
+    expect(screen.getByText(/It cannot be undone/)).toBeTruthy();
+    await click('Keep it');
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+    await click('Delete this intake');
+    server.state.eraseStatus = 409;
+    await click('Yes, delete it');
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'This intake is now a project, so it is kept. Export it from the project room.',
+    );
+    server.state.eraseStatus = 503;
+    await click('Yes, delete it');
+    await waitFor(() => expect(screen.getByRole('alert').textContent).not.toMatch(/now a project/));
+    server.state.eraseStatus = 0;
+    await click('Yes, delete it');
+    expect(
+      await screen.findByText('Deleted. Your answers and the Foreman’s plan for this intake are erased.'),
+    ).toBeTruthy();
+    expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.path)).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: 'Delete this intake' })).toBeNull();
+  });
+
   it('refuses an incomplete local brief, a bad saved link and a pasted credential', async () => {
     streams();
     const server = intakeServer({ step: 7 });
