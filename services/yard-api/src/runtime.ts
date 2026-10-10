@@ -2,6 +2,7 @@ import { StoodClient } from '@stood/stood-sdk';
 import { Foreman, GrokPlannerModel, PostgresForemanCoordinator, PostgresSaver } from '@stood/yard-foreman';
 import pg from 'pg';
 import { LocalKeyWrapper } from './adapters/crypto/local-key-wrapper.js';
+import { usageSigner } from './adapters/crypto/usage-signer.js';
 import { PostgresYardEvents } from './adapters/db-postgres/events.js';
 import { PostgresIntakes } from './adapters/db-postgres/intakes.js';
 import { PostgresPlannerSpend } from './adapters/db-postgres/planner-spend.js';
@@ -18,6 +19,7 @@ import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
 import { StoodWatch } from './application/stood-watch.js';
+import { UsageForwarder } from './application/usage-forwarder.js';
 import type { createYardApp } from './http/app.js';
 import { startLogRetention } from './jobs/site-log-retention.js';
 import { YardError } from './ports/events.js';
@@ -99,8 +101,13 @@ export function yardRuntime(env: Env) {
     },
   };
   const watch = stood ? new StoodWatch(board, new StoodTrancheProofs(stood)) : null;
+  // C4 (#77): the buyer's usage confirmations go to Stood as receipts signed with Yard's usage key.
+  const signer = usageSigner(env.YARD_USAGE_KEY_ID, env.YARD_USAGE_SIGNING_KEY);
+  if (stood && !signer) notes.push('Usage off: YARD_USAGE_KEY_ID and YARD_USAGE_SIGNING_KEY (Ed25519) are required.');
+  const usage = stood && signer ? new UsageForwarder(board, stood, signer, Date.now) : null;
   let watching: ReturnType<typeof setInterval> | null = null;
   let sweeping: ReturnType<typeof setInterval> | null = null;
+  let forwarding: ReturnType<typeof setInterval> | null = null;
   return {
     config,
     notes,
@@ -127,11 +134,19 @@ export function yardRuntime(env: Env) {
         watching.unref();
         await tick();
       }
+      if (usage) {
+        const forward = () =>
+          usage.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'USAGE_FORWARD_FAILED' })}\n`));
+        forwarding = setInterval(forward, 60_000);
+        forwarding.unref();
+        await forward();
+      }
     },
     async stop() {
       retention?.stop();
       if (watching) clearInterval(watching);
       if (sweeping) clearInterval(sweeping);
+      if (forwarding) clearInterval(forwarding);
       await pool.end();
     },
   };

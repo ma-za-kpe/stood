@@ -75,7 +75,7 @@ type Order = {
   refusals?: Refusal[];
   closed?: 'REFUSED';
   holds?: { attempt: number; expiresAt: number; eventId: string }[];
-  usage?: { confirmedAt: number };
+  usage?: { confirmedAt: number; forwarded?: { at: number; status: 'ACCEPTED' | 'REFUSED'; reason: string | null } };
 };
 export type MandateRequest = Readonly<{
   payee_ref: string;
@@ -1015,6 +1015,11 @@ export class Board {
           payment: order.payment,
           submission: work.snapshot.submission,
           leasedUntil: work.snapshot.currentClaim?.leasedUntil ?? null,
+          // C4 (#77): the final milestone releases only once the buyer confirms use, which Yard forwards to Stood.
+          final: milestone.profileId === 'code.final@1',
+          usage: order.usage
+            ? { confirmedAt: order.usage.confirmedAt, status: order.usage.forwarded?.status ?? 'CONFIRMED' }
+            : null,
         };
       }),
     };
@@ -1045,6 +1050,48 @@ export class Board {
       });
     });
     return { items, nextCursor: projects.length > 100 ? (page.at(-1)?.id ?? null) : null };
+  }
+  // C4 (#77): final milestones whose use the buyer confirmed and Stood has not yet answered for, with what the signed
+  // receipt binds: the allowance, the tranche and the commit Stood is judging.
+  async pendingUsage(after = '') {
+    const projects = await this.events.list(after),
+      page = projects.slice(0, 100);
+    const items = page.flatMap((project) => {
+      const d = data(project.data);
+      const allowanceId = d.mandate?.allowanceId;
+      return Object.keys(d.orders).flatMap((wo) => {
+        const { order } = workOrder(d, wo);
+        const commit = order.submissionIntent?.status === 'CONFIRMED' ? order.submissionIntent.request.commit : null;
+        if (!order.usage || order.usage.forwarded || order.payment || order.closed || !allowanceId || !commit)
+          return [];
+        return [
+          {
+            projectId: project.id,
+            wo,
+            allowanceId,
+            trancheId: order.trancheId,
+            commit,
+            confirmedAt: order.usage.confirmedAt,
+          },
+        ];
+      });
+    });
+    return { items, nextCursor: projects.length > 100 ? (page.at(-1)?.id ?? null) : null };
+  }
+  // Records Stood's answer to a forwarded usage receipt, once.
+  usageForwarded(
+    id: string,
+    wo: string,
+    version: number,
+    answer: Readonly<{ at: number; status: 'ACCEPTED' | 'REFUSED'; reason: string | null }>,
+  ) {
+    return this.events.mutate(id, version, 'stood', `stood:usage:${wo}`, fingerprint({ wo, answer }), (raw) => {
+      const d = data(raw);
+      const { order } = workOrder(d, wo);
+      if (!order.usage || order.usage.forwarded) throw new YardError('CONFLICT');
+      order.usage = { ...order.usage, forwarded: { ...answer } };
+      return { data: d, type: 'usage.forwarded', payload: { wo, status: answer.status, reason: answer.reason } };
+    });
   }
   async pendingSubmissions(after = '') {
     const projects = await this.events.list(after),

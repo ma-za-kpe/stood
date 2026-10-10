@@ -154,6 +154,11 @@ services:
         sync: false
       - key: STOOD_HMAC_SECRET
         sync: false
+      # C4 (#77): Yard's Ed25519 usage key; Stood lists its public half in USAGE_AUTHORITY_KEYS.
+      - key: YARD_USAGE_KEY_ID
+        sync: false
+      - key: YARD_USAGE_SIGNING_KEY
+        sync: false
       # T-0196: previews in a separate Render workspace, so this key cannot reach Stood's services.
       - key: RENDER_PREVIEW_API_KEY
         sync: false

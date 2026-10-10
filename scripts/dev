@@ -69,6 +69,26 @@ PY
       cat "$next" >"$f" && rm -f "$next" && chmod 600 "$f"   # writes through a symlinked .env
     done
     echo "Saved RUNNER_KEY_ID=$id and RUNNER_SIGNING_KEY to .env (not printed)." ;;
+  usage-key)
+    # C4 (#77): Yard's Ed25519 usage key straight into .env (never printed), and the public USAGE_AUTHORITY_KEYS line
+    # for stood-api, which is safe to show. Refuses to replace an existing key unless asked: --rotate.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    if grep -qE '^YARD_USAGE_SIGNING_KEY=.+' .env && [ "${2:-}" != "--rotate" ]; then
+      echo "YARD_USAGE_SIGNING_KEY already exists. Use: scripts/dev usage-key --rotate" >&2; exit 2
+    fi
+    id="yard-usage-$(date +%Y-%m-%d)"
+    pair=$(docker compose run --rm --no-deps -T app node -e "const { generateKeyPairSync } = require('node:crypto'); const k = generateKeyPairSync('ed25519'); const b = (s) => Buffer.from(s).toString('base64'); process.stdout.write(b(k.privateKey.export({ type: 'pkcs8', format: 'pem' })) + ' ' + JSON.stringify([{ keyId: '$id', root: 'yard-buyers', publicKey: b(k.publicKey.export({ type: 'spki', format: 'pem' })) }]))")
+    key=${pair%% *}; authorities=${pair#* }
+    [ -n "$key" ] && [ -n "$authorities" ] || { echo "Key generation failed" >&2; exit 1; }
+    for f in .env "$HOME/.config/stood/.env"; do
+      [ -f "$f" ] || continue
+      next=$(mktemp); chmod 600 "$next"
+      grep -vE '^(YARD_USAGE_KEY_ID|YARD_USAGE_SIGNING_KEY|USAGE_AUTHORITY_KEYS)=' "$f" >"$next" || true
+      printf 'YARD_USAGE_KEY_ID=%s\nYARD_USAGE_SIGNING_KEY=%s\nUSAGE_AUTHORITY_KEYS=%s\n' "$id" "$key" "$authorities" >>"$next"
+      cat "$next" >"$f" && rm -f "$next" && chmod 600 "$f"
+    done
+    echo "Saved YARD_USAGE_KEY_ID=$id and YARD_USAGE_SIGNING_KEY to .env (not printed)."
+    echo "Public, for stood-api: USAGE_AUTHORITY_KEYS (also saved to .env)." ;;
   runner-check)
     # T-0164: qualify the isolated runner on real Vercel Sandbox (ADR-0026). Only the caller's Vercel settings reach
     # this container; none of them enter the microVM.

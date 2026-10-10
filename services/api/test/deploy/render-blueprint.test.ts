@@ -63,6 +63,8 @@ const reads: Record<string, readonly string[]> = {
   'stood-yard-api': [
     'YARD_ENV',
     'PORT',
+    'YARD_USAGE_KEY_ID',
+    'YARD_USAGE_SIGNING_KEY',
     'YARD_DATABASE_URL',
     'YARD_MIGRATION_DATABASE_URL',
     'YARD_OPERATORS',

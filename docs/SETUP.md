@@ -205,6 +205,12 @@ Baselines use the same runner: a platform asks `POST /v1/baselines` to run a mil
 
 Final milestones (`code.final@1`) also require the buyer's usage confirmation (`usage_release`). A platform forwards it to `POST /v1/tranches/{id}/usage` as a usage receipt: Ed25519-signed, bound to the allowance, the tranche and the latest package's commit, at most 24 hours old, and with a nonce used once. Stood accepts receipts only from keys listed in `USAGE_AUTHORITY_KEYS` on `stood-api` (`[{"keyId", "root", "publicKey": base64 of an Ed25519 SPKI PEM}]`). The runner then decides the waiting final milestone again, once, with usage confirmed (decision `usage:<package>`).
 
+```bash
+scripts/dev usage-key   # Yard's Ed25519 usage key into .env (not printed), plus the public USAGE_AUTHORITY_KEYS line
+```
+
+Set `YARD_USAGE_KEY_ID` and `YARD_USAGE_SIGNING_KEY` on `stood-yard-api`, and `USAGE_AUTHORITY_KEYS` on `stood-api`. In Yard's handover panel the buyer confirms use of a delivered final milestone; Yard forwards it within a minute and shows Stood's answer.
+
 **Trust note.** The usage authority is the platform's own key (Yard's), not a key any builder holds. Yard signs only when the authenticated buyer who owns the blueprint confirms use, so Stood relies on the platform for who the buyer is, as it already does for the allowance itself. Stood does not know builder identities, so it cannot check the builder's tree itself.
 
 ### Yard reads Stood (T-0189)

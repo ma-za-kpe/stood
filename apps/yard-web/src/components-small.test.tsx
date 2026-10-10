@@ -90,3 +90,65 @@ describe('HandoverPanel (T-0275)', () => {
     for (const box of screen.getAllByRole('checkbox')) expect(box).toHaveProperty('disabled', true);
   });
 });
+
+// C4 (#77): the final milestone is paid only after the buyer confirms use; Stood's answer is shown as it arrives.
+describe('HandoverPanel usage confirmation', () => {
+  const delivered = (usage: unknown = null) =>
+    roomChecked({
+      id: 'p1',
+      version: 9,
+      summary: 's',
+      currency: 'USD',
+      simulated: true,
+      handover: null,
+      orders: [
+        order('PAID', 0),
+        { ...order('CHECKING', 1), final: true, usage, submission: { packageId: 'p2', commit: 'b'.repeat(40) } },
+      ],
+    });
+  it('lets the buyer confirm use of the delivered final milestone, once', async () => {
+    const calls = api(() => ({ body: { ok: true } }));
+    render(<HandoverPanel room={delivered()} buyer />);
+    expect(screen.getByText(/Milestone 2 is delivered/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I’m using Milestone 2' })));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/blueprints/p1/work-orders/o1/usage', body: '{}' });
+    expect(calls[0]?.headers.get('If-Match')).toBe('9');
+    expect(calls[0]?.headers.get('Idempotency-Key')).toMatch(/^usage-/);
+  });
+  it('shows Stood’s answer, a failed confirmation, and a builder’s read-only view', async () => {
+    for (const [status, text] of [
+      ['CONFIRMED', /Yard is sending that to Stood/],
+      ['ACCEPTED', /Stood accepted your confirmation/],
+      ['REFUSED', /did not accept/],
+    ] as const) {
+      const { unmount } = render(<HandoverPanel room={delivered({ confirmedAt: 1, status })} buyer />);
+      expect(screen.getAllByRole('status').some((n) => text.test(n.textContent ?? ''))).toBe(true);
+      unmount();
+    }
+    let release: (v: { status: number }) => void = () => undefined;
+    api(() => new Promise((r) => (release = r)));
+    const { unmount } = render(<HandoverPanel room={delivered()} buyer />);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'I’m using Milestone 2' })));
+    expect(await screen.findByRole('button', { name: 'Confirming…' })).toHaveProperty('disabled', true);
+    await act(async () => release({ status: 409 }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    unmount();
+    render(<HandoverPanel room={delivered()} buyer={false} />);
+    expect(screen.getByText('Milestone 2: waiting for the buyer to confirm use.')).toBeTruthy();
+  });
+  it('refuses a room with an invalid final flag or usage', () => {
+    const bad = (o: object) => () =>
+      roomChecked({
+        id: 'p1',
+        version: 1,
+        summary: 's',
+        currency: 'USD',
+        simulated: true,
+        orders: [{ ...order('CHECKING', 0), ...o }],
+      });
+    expect(bad({ final: 'yes' })).toThrow('Invalid final flag');
+    expect(bad({ usage: { confirmedAt: 1, status: 'PAID' } })).toThrow('Invalid usage');
+    expect(bad({ usage: 'x' })).toThrow('Invalid usage');
+  });
+});

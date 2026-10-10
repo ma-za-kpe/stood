@@ -244,3 +244,28 @@ it('refuses a signing flag that is not a boolean', () => {
     roomChecked({ id: 'p', version: 1, summary: 's', currency: 'USD', simulated: true, orders: [], signed: 'yes' }),
   ).toThrow('Invalid signing state');
 });
+
+// C4 (#77): the final milestone's flag and the buyer's usage confirmation are checked like everything else in a room.
+it('accepts a final milestone with its usage answer and refuses malformed ones', () => {
+  const base = { id: 'p1', version: 1, summary: 's', currency: 'USD', simulated: true };
+  const o = {
+    id: 'o1',
+    name: 'Final',
+    state: 'CHECKING',
+    budgetMinor: 1000,
+    trancheId: 't1',
+    payment: null,
+    submission: null,
+    leasedUntil: null,
+  };
+  expect(
+    roomChecked({ ...base, orders: [{ ...o, final: true, usage: { confirmedAt: 1, status: 'ACCEPTED' } }] }).orders[0],
+  ).toMatchObject({
+    final: true,
+    usage: { status: 'ACCEPTED' },
+  });
+  expect(() => roomChecked({ ...base, orders: [{ ...o, final: 1 }] })).toThrow('Invalid final flag');
+  expect(() => roomChecked({ ...base, orders: [{ ...o, usage: { confirmedAt: 1.5, status: 'ACCEPTED' } }] })).toThrow(
+    'Invalid usage',
+  );
+});
