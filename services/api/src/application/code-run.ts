@@ -5,7 +5,7 @@ import type { CodeRunner } from '../ports/code-runner.js';
 import type { EvidenceStore } from '../ports/evidence-store.js';
 import type { RepositoryReader } from '../ports/repository-reader.js';
 import type { FrozenCodeContract, ReportSigner, RunnerReportVerifier } from '../ports/runner-report.js';
-import type { TrancheStore } from '../ports/tranche-store.js';
+import { type LatestPackageGuard, type TrancheStore, TrancheStoreError } from '../ports/tranche-store.js';
 import { bundleHash, repositoryChecks } from './code-evidence.js';
 import type { CodeTerms } from './code-terms.js';
 import { type Step, type Waiting, waitingOn } from './waiting.js';
@@ -27,7 +27,7 @@ export type RunnerJob = Readonly<{
   usageConfirmed?: boolean;
 }>;
 type Deps = Readonly<{
-  store: TrancheStore;
+  store: TrancheStore & LatestPackageGuard;
   reader: RepositoryReader &
     Readonly<{
       source(repository: string, commit: string): Promise<readonly Readonly<{ path: string; content: string }>[]>;
@@ -61,13 +61,17 @@ function merge(...sets: readonly (readonly CheckResult[])[]): CheckResult[] {
 // stored in Stood's evidence bucket; the read-only repository checks are merged in; and the decision rules decide.
 // The reconciler then captures or voids. Anything unavailable decides nothing (WAIT): the package is tried again
 // later and never passes by default.
-export async function runCodeJob(job: RunnerJob, deps: Deps): Promise<'DECIDED' | 'ALREADY_DECIDED' | Waiting> {
+export async function runCodeJob(
+  job: RunnerJob,
+  deps: Deps,
+): Promise<'DECIDED' | 'ALREADY_DECIDED' | 'SUPERSEDED' | Waiting> {
   // A final milestone is decided again, once, when its use is confirmed.
   const decisionId = job.usageConfirmed ? `usage:${job.packageId}` : `run:${job.packageId}`;
   const current = await deps.store.load(job.trancheId);
   const tranche = restoreTrancheRecord(current.record);
   if (tranche.decisions.some((d) => d.id === decisionId)) return 'ALREADY_DECIDED';
-  if (!['HELD', 'WAITING'].includes(tranche.state) || current.pending) return 'WAIT:TRANCHE_BUSY';
+  // DECIDING: an earlier run stopped between starting and recording its decision; it is decided again.
+  if (!['HELD', 'DECIDING', 'WAITING'].includes(tranche.state) || current.pending) return 'WAIT:TRANCHE_BUSY';
   const t = job.terms;
   let checks: CheckResult[];
   if (job.package.repository !== t.repository || job.package.baseCommit !== t.baseCommit) {
@@ -157,15 +161,27 @@ export async function runCodeJob(job: RunnerJob, deps: Deps): Promise<'DECIDED' 
     }
   }
   const decision = decide(job.profileId, checks);
-  let snapshot = await deps.store.load(job.trancheId);
-  if (restoreTrancheRecord(snapshot.record).state === 'HELD')
-    snapshot = await deps.store.apply(job.trancheId, snapshot.version, `${decisionId}:start`, {
-      method: 'startDeciding',
-      args: [],
-    });
-  await deps.store.apply(job.trancheId, snapshot.version, decisionId, {
-    method: 'beginSettlement',
-    args: [decision, decisionId, deps.clock()],
-  });
+  // A newer package arrived while this one ran: this run decides nothing, and the newer package is run instead.
+  try {
+    let snapshot = await deps.store.load(job.trancheId);
+    if (restoreTrancheRecord(snapshot.record).state === 'HELD')
+      snapshot = await deps.store.applyIfLatest(
+        job.trancheId,
+        snapshot.version,
+        `${decisionId}:start`,
+        { method: 'startDeciding', args: [] },
+        job.packageId,
+      );
+    await deps.store.applyIfLatest(
+      job.trancheId,
+      snapshot.version,
+      decisionId,
+      { method: 'beginSettlement', args: [decision, decisionId, deps.clock()] },
+      job.packageId,
+    );
+  } catch (error) {
+    if (error instanceof TrancheStoreError && error.code === 'STALE_PACKAGE') return 'SUPERSEDED';
+    throw error;
+  }
   return 'DECIDED';
 }

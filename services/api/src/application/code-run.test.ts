@@ -132,6 +132,20 @@ describe('runCodeJob', () => {
     expect((await down.state()).state).toBe('HELD');
   });
 
+  // Audit 2026-10-10, finding 5: a run that finished after a newer package arrived must not settle the stale one.
+  it('decides nothing for a package superseded while it ran, and finishes a decision an earlier run started', async () => {
+    const h = await harness();
+    h.store.latestPackage.set('trn', 'pkg_2');
+    expect(await runCodeJob(job(), h.deps)).toBe('SUPERSEDED');
+    expect((await h.state()).decisions).toEqual([]);
+    h.store.latestPackage.set('trn', 'pkg_1');
+    const held = await h.store.load('trn');
+    await h.store.apply('trn', held.version, 'run:pkg_1:start', { method: 'startDeciding', args: [] });
+    expect((await h.state()).state).toBe('DECIDING');
+    expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
+    expect((await h.state()).decisions.at(-1)?.id).toBe('run:pkg_1');
+  });
+
   it('refuses when a frozen test fails, naming what failed', async () => {
     const h = await harness({ results: ['PASS', 'FAIL'] });
     expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
