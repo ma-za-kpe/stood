@@ -6,6 +6,7 @@ import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js'
 import { confirmedCaptures } from './adapters/db-postgres/ledger-captures.js';
 import { PostgresReconciliationFindings } from './adapters/db-postgres/reconciliation-findings.js';
 import { PostgresReconciliationQueue } from './adapters/db-postgres/reconciliation-queue.js';
+import { PostgresRunClaims } from './adapters/db-postgres/run-claims.js';
 import { PostgresRunnerJobs } from './adapters/db-postgres/runner-jobs.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { PostgresTranches } from './adapters/db-postgres/tranches.js';
@@ -15,6 +16,7 @@ import { reportSigner } from './adapters/runner/report-signer.js';
 import { VercelSandboxRunner } from './adapters/runner/vercel-sandbox.js';
 import { vercelSandbox } from './adapters/runner/vercel-sdk.js';
 import { runBaseline } from './application/baseline-run.js';
+import { runClaimed } from './application/claimed-queue.js';
 import { runCodeJob } from './application/code-run.js';
 import { runReconciliationAudit } from './application/reconciliation-audit-run.js';
 import { reconciliationTick } from './application/reconciliation-worker.js';
@@ -65,6 +67,7 @@ if (!missing.length && problem) {
     if (runner) {
       const jobs = new PostgresRunnerJobs(db);
       const baselines = new PostgresBaselines(db);
+      const claims = new PostgresRunClaims(db);
       const deps = {
         store,
         reader: new GitHubRepositoryReader(
@@ -82,19 +85,29 @@ if (!missing.length && problem) {
       void (async () => {
         while (!abort.signal.aborted) {
           try {
-            for (const job of await jobs.pending(2)) {
-              const outcome = await runCodeJob(job, deps).catch(() => 'FAILED');
-              process.stdout.write(`Code runner: package ${job.packageId} ${outcome}.\n`);
-            }
+            const decided = await runClaimed(
+              claims,
+              'package',
+              await jobs.pending(50),
+              (job) => `${job.usageConfirmed ? 'usage' : 'run'}:${job.packageId}`,
+              2,
+              (job) => runCodeJob(job, deps),
+            );
+            for (const r of decided) process.stdout.write(`Code runner: package ${r.id} ${r.outcome}.\n`);
           } catch {
             process.stdout.write('Code runner: queue unavailable.\n');
           }
           // C4 (#77): baselines use the same runner, after the packages waiting on money.
           try {
-            for (const job of await baselines.pending(2)) {
-              const outcome = await runBaseline(job, { ...deps, store: baselines }).catch(() => 'FAILED');
-              process.stdout.write(`Code runner: baseline ${job.id} ${outcome}.\n`);
-            }
+            const ran = await runClaimed(
+              claims,
+              'baseline',
+              await baselines.pending(50),
+              (job) => job.id,
+              2,
+              (job) => runBaseline(job, { ...deps, store: baselines }),
+            );
+            for (const r of ran) process.stdout.write(`Code runner: baseline ${r.id} ${r.outcome}.\n`);
           } catch {
             process.stdout.write('Code runner: baseline queue unavailable.\n');
           }

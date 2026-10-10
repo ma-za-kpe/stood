@@ -169,6 +169,13 @@
       "when": 1791625467029,
       "tag": "0023_usage_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791646400682,
+      "tag": "0024_run_claims",
+      "breakpoints": true
     }
   ]
 }
