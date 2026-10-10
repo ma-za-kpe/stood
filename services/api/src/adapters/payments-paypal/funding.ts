@@ -60,6 +60,18 @@ export class PayPalFundingAdapter implements FundingProvider {
   ) {}
   async create(operation: FundingOperation) {
     if (operation.status !== 'CREATING' || operation.orderId) return unknown;
+    // T-0295: Stood sends payee_ref to PayPal as the payee merchant. One that cannot be a merchant id is refused here,
+    // before any call, instead of PayPal's refusal leaving the funding pending.
+    if (operation.instruction.mode === 'live' && !/^[A-Z0-9]{13}$/.test(operation.instruction.payeeRef))
+      return {
+        complete: true,
+        key: operation.key,
+        trancheId: operation.trancheId,
+        createRequestId: operation.createRequestId,
+        authorizeRequestId: operation.authorizeRequestId,
+        outcome: 'REJECTED',
+        reference: 'payee_not_a_paypal_merchant',
+      };
     if (operation.instruction.source !== 'SAVED_PAYPAL') return this.call('CREATE_ORDER', operation);
     // T-0154: no signed mandate token, no call. The token goes to PayPal and nowhere else.
     try {
@@ -114,6 +126,14 @@ export class PayPalFundingAdapter implements FundingProvider {
         body.details.every((d) => object(d)?.issue === 'INSTRUMENT_DECLINED')
       )
         return { ...identity, orderId, outcome: 'DECLINED', reference: body.debug_id };
+      // T-0295: PayPal refused the create itself (400/422 with its debug id): no order exists, so it is final.
+      if (
+        action === 'CREATE_ORDER' &&
+        !orderId &&
+        (response.status === 400 || response.status === 422) &&
+        text(body?.debug_id)
+      )
+        return { ...identity, outcome: 'REJECTED', reference: body.debug_id };
       if (
         !['CREATE_ORDER', 'AUTHORIZE_ORDER'].includes(action)
           ? response.status !== 200

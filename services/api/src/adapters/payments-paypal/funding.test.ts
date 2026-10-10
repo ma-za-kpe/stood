@@ -194,3 +194,38 @@ it('reads a saved-account create as an authorization, records a decline, and nev
   expect(await new PayPalFundingAdapter({ fund: untouched }, broken).create(saved)).toEqual({ complete: false });
   expect(untouched).not.toHaveBeenCalled();
 });
+// T-0295 (found live): a create PayPal refuses outright is final, and a live payee that cannot be a PayPal merchant
+// id is refused before any call.
+it('reports a refused create as REJECTED with PayPal’s debug id, and never sends a live order to a non-merchant payee', async () => {
+  const creating = { ...operation, status: 'CREATING' as const, orderId: null, approvalUrl: null };
+  const refused = {
+    fund: vi.fn(async () => ({
+      status: 422,
+      body: {
+        name: 'UNPROCESSABLE_ENTITY',
+        message: 'Payee account is invalid.',
+        debug_id: 'debug-7',
+        details: [{ issue: 'PAYEE_ACCOUNT_INVALID' }],
+      },
+    })),
+  };
+  expect(await new PayPalFundingAdapter(refused).create(creating)).toMatchObject({
+    complete: true,
+    outcome: 'REJECTED',
+    reference: 'debug-7',
+  });
+  const unclear = { fund: vi.fn(async () => ({ status: 422, body: { name: 'UNPROCESSABLE_ENTITY' } })) };
+  expect(await new PayPalFundingAdapter(unclear).create(creating)).toEqual({ complete: false });
+  const server = { fund: vi.fn(async () => ({ status: 500, body: { debug_id: 'debug-8' } })) };
+  expect(await new PayPalFundingAdapter(server).create(creating)).toEqual({ complete: false });
+  const never = { fund: vi.fn() };
+  const live = {
+    ...creating,
+    instruction: { ...creating.instruction, mode: 'live' as const, payeeRef: 'yard:project' },
+  };
+  expect(await new PayPalFundingAdapter(never).create(live)).toMatchObject({
+    outcome: 'REJECTED',
+    reference: 'payee_not_a_paypal_merchant',
+  });
+  expect(never.fund).not.toHaveBeenCalled();
+});
