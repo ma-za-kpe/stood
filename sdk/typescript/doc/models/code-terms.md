@@ -19,7 +19,7 @@ Frozen terms of a code milestone (profiles code.*), checked at draft time.
 | `manifestHash` | `string` | Required | **Constraints**: *Pattern*: `^[a-f0-9]{64}$` |
 | `testIds` | `string[]` | Required | **Constraints**: *Minimum Items*: `1`, *Maximum Items*: `200` |
 | `tests` | [`FrozenTest[]`](../../doc/models/frozen-test.md) | Required | **Constraints**: *Minimum Items*: `1`, *Maximum Items*: `200` |
-| `minMutation` | `number` | Required | **Constraints**: `>= 0`, `<= 1` |
+| `minMutation` | `number \| undefined` | Optional | Mutation-score floor from 0 to 1; no floor (0) when omitted<br><br>**Constraints**: `>= 0`, `<= 1` |
 | `additionalProperties` | `Record<string, unknown>` | Optional | - |
 
 ## Example

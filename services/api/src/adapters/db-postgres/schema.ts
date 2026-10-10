@@ -14,7 +14,9 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { CodeTerms } from '../../application/code-terms.js';
 import type { TrancheCommand } from '../../domain/tranche-record.js';
+import type { BaselineResult, StoredBaseline } from '../../ports/baseline-store.js';
 import type { CommitPackageInput, StoredCommitPackage } from '../../ports/commit-package-store.js';
 import type { FundingHold, FundingInstruction, FundingStatus } from '../../ports/funding-store.js';
 import type { Mandate } from '../../ports/mandate-store.js';
@@ -292,6 +294,30 @@ export const commitPackages = pgTable(
     check(
       'commit_package_valid',
       sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.fingerprint} ~ '^[a-f0-9]{64}$' AND jsonb_typeof(${table.metadata}) = 'object' AND ${table.waitingFor} IN ('HOLD','RENEWAL','RUNNER')`,
+    ),
+  ],
+);
+// C4 (#77): baselines a platform requested; the reconciler's runner fills in the result once.
+export const baselines = pgTable(
+  'baselines',
+  {
+    id: text().primaryKey(),
+    platformId: text('platform_id').notNull(),
+    key: text().notNull(),
+    fingerprint: text().notNull(),
+    terms: jsonb().$type<CodeTerms>().notNull(),
+    status: text().$type<StoredBaseline['status']>().notNull().default('QUEUED'),
+    result: jsonb().$type<BaselineResult>(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    unique('baseline_request').on(table.platformId, table.key),
+    check(
+      'baseline_valid',
+      sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.fingerprint} ~ '^[a-f0-9]{64}$' AND jsonb_typeof(${table.terms}) = 'object' AND ${table.status} IN ('QUEUED','DONE','INVALID') AND ((${table.status} = 'DONE') = (${table.result} IS NOT NULL)) AND ((${table.status} = 'QUEUED') = (${table.finishedAt} IS NULL))`,
     ),
   ],
 );

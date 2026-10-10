@@ -3,10 +3,12 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { allowanceDraft } from '../application/allowance-draft.js';
+import { codeTerms } from '../application/code-terms.js';
 import { commitPackage } from '../application/commit-package.js';
 import { mandateTermsHash } from '../application/mandate-terms.js';
 import { trancheSentences } from '../domain/recipient-sentences.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
+import { type BaselineStore, BaselineStoreError } from '../ports/baseline-store.js';
 import { CommitPackageError, type CommitPackageStore } from '../ports/commit-package-store.js';
 import { type FundingStore, FundingStoreError } from '../ports/funding-store.js';
 import { type MandateStore, MandateStoreError } from '../ports/mandate-store.js';
@@ -15,6 +17,8 @@ import { type PlatformApiStore, PlatformApiStoreError } from '../ports/platform-
 export type PlatformApiConfig = Readonly<{
   store: PlatformApiStore;
   packages?: CommitPackageStore;
+  // C4 (#77): baselines that prove a milestone's frozen tests fail on the base commit.
+  baselines?: Pick<BaselineStore, 'request' | 'get'>;
   platformId: string;
   key: string;
   secret: string;
@@ -26,6 +30,17 @@ export type PlatformApiConfig = Readonly<{
     funding: Pick<FundingStore, 'reserve' | 'load'>;
   }>;
 }>;
+const baselineView = (b: Awaited<ReturnType<BaselineStore['get']>> & object) => ({
+  id: b.id,
+  status: b.status,
+  repository: b.terms.repository,
+  base_commit: b.terms.baseCommit,
+  test_bundle_hash: b.terms.testBundleHash,
+  tests: b.result?.tests ?? null,
+  evidence_sha256: b.result?.evidence.sha256 ?? null,
+  created_at: b.createdAt,
+  finished_at: b.finishedAt,
+});
 function problem(status: ContentfulStatusCode, code: string, detail: string): Response {
   return new Response(JSON.stringify({ type: `urn:stood:problem:${code}`, title: detail, status, code, detail }), {
     status,
@@ -90,9 +105,13 @@ export function platformApi(config: PlatformApiConfig): Hono {
               : error.code === 'IDENTITY_CONFLICT'
                 ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
                 : problem(409, 'conflict', 'Another signature or funding is already in progress.')
-        : error instanceof PlatformApiStoreError
-          ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
-          : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
+        : error instanceof BaselineStoreError
+          ? error.code === 'CONFLICT'
+            ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
+            : problem(422, 'validation', 'The baseline request is invalid.')
+          : error instanceof PlatformApiStoreError
+            ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
+            : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
   );
   app.post('/tranches/:id/packages', async (c) => {
     if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
@@ -115,6 +134,30 @@ export function platformApi(config: PlatformApiConfig): Hono {
     if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
     const value = await config.packages.get(config.platformId, c.req.param('id'), c.req.param('packageId'));
     return value ? c.json(value) : problem(404, 'not_found', 'Package not found.');
+  });
+  // C4 (#77): a platform asks Stood to run one milestone's frozen tests on its base commit. 202 records the request;
+  // the result appears on the GET once Stood's runner has run it. Stood never reports a pass that did not run.
+  app.post('/baselines', async (c) => {
+    if (!config.baselines) return problem(503, 'baselines_not_configured', 'Baselines are not configured.');
+    const key = c.req.header('Idempotency-Key') ?? '';
+    if (!key.trim() || key.length > 200 || !/^application\/json(?:;|$)/i.test(c.req.header('Content-Type') ?? ''))
+      return problem(422, 'validation', 'JSON and an idempotency key are required.');
+    const body = await c.req.text();
+    let terms: ReturnType<typeof codeTerms>;
+    try {
+      terms = codeTerms(JSON.parse(body));
+    } catch {
+      return problem(422, 'validation', 'The baseline request is invalid.');
+    }
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify([c.req.method, `/v1${c.req.path}`, body]))
+      .digest('hex');
+    return c.json(baselineView(await config.baselines.request(config.platformId, key, fingerprint, terms)), 202);
+  });
+  app.get('/baselines/:id', async (c) => {
+    if (!config.baselines) return problem(503, 'baselines_not_configured', 'Baselines are not configured.');
+    const value = await config.baselines.get(config.platformId, c.req.param('id'));
+    return value ? c.json(baselineView(value)) : problem(404, 'not_found', 'Baseline not found.');
   });
   app.post('/allowances', async (c) => {
     const key = c.req.header('Idempotency-Key') ?? '';

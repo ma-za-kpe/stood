@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { codeParams } from '../fixtures/code-terms.js';
 import { draft, harness, key, now, pkg, secret } from '../fixtures/contract-app.js';
 
 // T-0053: the TypeScript SDK that APIMatic generates from openapi/stood.json, with Stood's saved request-signing
@@ -15,7 +16,9 @@ type StoodApi = Record<
   | 'requestFunding'
   | 'getFunding'
   | 'submitPackage'
-  | 'getPackage',
+  | 'getPackage'
+  | 'requestBaseline'
+  | 'getBaseline',
   Call
 >;
 type Sdk = {
@@ -64,6 +67,10 @@ describe('APIMatic-generated Stood SDK', () => {
     });
     expect(submitted.result).toMatchObject({ status: 'QUEUED', waitingFor: 'RUNNER' });
     expect((await stood.getPackage('trn_1', 'pkg_1')).result).toMatchObject({ id: 'pkg_1' });
+    const baseline = await stood.requestBaseline('bl-key', codeParams);
+    expect(baseline.statusCode).toBe(202);
+    expect(baseline.result).toMatchObject({ id: 'bl_1', status: 'DONE', evidenceSha256: 'e'.repeat(64) });
+    expect((await stood.getBaseline('bl_1')).result).toMatchObject({ baseCommit: codeParams.baseCommit });
   });
 
   it('surfaces problems as typed errors, and a wrong secret is refused', async () => {

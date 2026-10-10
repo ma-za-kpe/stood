@@ -76,6 +76,17 @@ export async function harness() {
     metadata: pkg,
     createdAt: new Date(now).toISOString(),
   };
+  const baselineView = {
+    id: 'bl_1',
+    status: 'DONE' as const,
+    terms: codeParams,
+    result: {
+      tests: codeParams.testIds.map((id) => ({ id, status: 'FAIL' as const })),
+      evidence: { key: `baselines/platform_a/bl_1/${'e'.repeat(64)}`, sha256: 'e'.repeat(64) },
+    },
+    createdAt: new Date(now).toISOString(),
+    finishedAt: new Date(now + 60000).toISOString(),
+  };
   const app = createApp({
     appEnv: 'ci',
     paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
@@ -85,6 +96,10 @@ export async function harness() {
         create: vi.fn(async () => stored),
         allowance: vi.fn(async (_p: string, id: string) => (id === 'alw_1' ? stored : null)),
         tranche: vi.fn(async (_p: string, id: string) => (id === 'trn_1' ? tranches.load('trn_1') : null)),
+      },
+      baselines: {
+        request: vi.fn(async () => baselineView),
+        get: vi.fn(async (_p: string, id: string) => (id === 'bl_1' ? baselineView : null)),
       },
       packages: {
         submit: vi.fn(async () => packageView),

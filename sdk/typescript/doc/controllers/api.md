@@ -14,6 +14,8 @@ const api = new Api(client);
 * [Get Allowance](../../doc/controllers/api.md#get-allowance)
 * [Request Mandate](../../doc/controllers/api.md#request-mandate)
 * [Get Mandate](../../doc/controllers/api.md#get-mandate)
+* [Request Baseline](../../doc/controllers/api.md#request-baseline)
+* [Get Baseline](../../doc/controllers/api.md#get-baseline)
 * [Get Tranche](../../doc/controllers/api.md#get-tranche)
 * [Request Funding](../../doc/controllers/api.md#request-funding)
 * [Get Funding](../../doc/controllers/api.md#get-funding)
@@ -302,6 +304,163 @@ try {
     id,
     key
   );
+
+  // Extracting fully parsed response body.
+  console.log(response.result);
+
+  // Extracting response status code.
+  console.log(response.statusCode);
+  // Extracting response headers.
+  console.log(response.headers);
+  // Extracting response body of type `string | Stream`
+  console.log(response.body);
+} catch (error) {
+  if (error instanceof ApiError) {
+    // Extracting response error status code.
+    console.log(error.statusCode);
+    // Extracting response error headers.
+    console.log(error.headers);
+    // Extracting response error body of type `string | Stream`.
+    console.log(error.body);
+    if (error instanceof ProblemError) {
+      console.log(error.result);
+    }
+  }
+}
+```
+
+## Errors
+
+| HTTP Status Code | Error Description | Exception Class |
+|  --- | --- | --- |
+| 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
+| 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
+
+
+# Request Baseline
+
+```ts
+async requestBaseline(
+  idempotencyKey: string,
+  body: CodeTerms,
+  requestOptions?: RequestOptions
+): Promise<ApiResponse<Baseline>>
+```
+
+## Authentication
+
+This endpoint requires [platformKey](../../doc/auth/oauth-2-bearer-token.md) **AND** [requestSignature](../../doc/auth/custom-header-signature.md)
+
+## Parameters
+
+| Parameter | Type | Tags | Description |
+|  --- | --- | --- | --- |
+| `idempotencyKey` | `string` | Header, Required | Same key and body return the same response; a different body is 409<br><br>**Constraints**: *Maximum Length*: `200` |
+| `body` | [`CodeTerms`](../../doc/models/code-terms.md) | Body, Required | - |
+| `requestOptions` | `RequestOptions \| undefined` | Optional | Pass additional request options. |
+
+## Response Type
+
+**202**: Accepted (recorded, not yet done)
+
+This method returns an [`ApiResponse`](../../doc/api-response.md) instance. The `result` property of this instance returns the response data which is of type [`Baseline`](../../doc/models/baseline.md).
+
+## Example Usage
+
+```ts
+const idempotencyKey = 'Idempotency-Key0';
+
+const body: CodeTerms = {
+  repository: 'repository6',
+  baseCommit: 'baseCommit8',
+  testBundleHash: 'testBundleHash2',
+  manifestHash: 'manifestHash4',
+  testIds: [
+    'testIds9'
+  ],
+  tests: [
+    {
+      id: 'id6',
+      path: 'path0',
+    }
+  ],
+};
+
+try {
+  const response = await api.requestBaseline(
+    idempotencyKey,
+    body
+  );
+
+  // Extracting fully parsed response body.
+  console.log(response.result);
+
+  // Extracting response status code.
+  console.log(response.statusCode);
+  // Extracting response headers.
+  console.log(response.headers);
+  // Extracting response body of type `string | Stream`
+  console.log(response.body);
+} catch (error) {
+  if (error instanceof ApiError) {
+    // Extracting response error status code.
+    console.log(error.statusCode);
+    // Extracting response error headers.
+    console.log(error.headers);
+    // Extracting response error body of type `string | Stream`.
+    console.log(error.body);
+    if (error instanceof ProblemError) {
+      console.log(error.result);
+    }
+  }
+}
+```
+
+## Errors
+
+| HTTP Status Code | Error Description | Exception Class |
+|  --- | --- | --- |
+| 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
+| 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
+| 413 | Body over 64 KiB | [`ProblemError`](../../doc/models/problem-error.md) |
+| 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
+
+
+# Get Baseline
+
+```ts
+async getBaseline(
+  id: string,
+  requestOptions?: RequestOptions
+): Promise<ApiResponse<Baseline>>
+```
+
+## Authentication
+
+This endpoint requires [platformKey](../../doc/auth/oauth-2-bearer-token.md) **AND** [requestSignature](../../doc/auth/custom-header-signature.md)
+
+## Parameters
+
+| Parameter | Type | Tags | Description |
+|  --- | --- | --- | --- |
+| `id` | `string` | Template, Required | - |
+| `requestOptions` | `RequestOptions \| undefined` | Optional | Pass additional request options. |
+
+## Response Type
+
+**200**: OK
+
+This method returns an [`ApiResponse`](../../doc/api-response.md) instance. The `result` property of this instance returns the response data which is of type [`Baseline`](../../doc/models/baseline.md).
+
+## Example Usage
+
+```ts
+const id = 'id0';
+
+try {
+  const response = await api.getBaseline(id);
 
   // Extracting fully parsed response body.
   console.log(response.result);

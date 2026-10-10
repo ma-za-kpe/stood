@@ -24,7 +24,12 @@ export const CodeTerms = z
       .array(z.object({ id: z.string(), path: z.string() }).strict().meta({ id: 'FrozenTest' }))
       .min(1)
       .max(200),
-    minMutation: z.number().min(0).max(1),
+    minMutation: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe('Mutation-score floor from 0 to 1; no floor (0) when omitted'),
   })
   .strict()
   .meta({ id: 'CodeTerms', description: 'Frozen terms of a code milestone (profiles code.*), checked at draft time.' });
@@ -181,6 +186,32 @@ export const Tranche = z
   .strict()
   .meta({ id: 'Tranche' });
 
+export const BaselineStatus = z.enum(['QUEUED', 'DONE', 'INVALID']).meta({
+  id: 'BaselineStatus',
+  description: 'QUEUED until Stood has run it; INVALID when the frozen tests are not at the base commit as described',
+});
+export const BaselineTest = z
+  .object({ id: z.string(), status: z.enum(['PASS', 'FAIL']).meta({ id: 'BaselineTestStatus' }) })
+  .strict()
+  .meta({ id: 'BaselineTest' });
+export const Baseline = z
+  .object({
+    id,
+    status: BaselineStatus,
+    repository: z.string(),
+    base_commit: sha40,
+    test_bundle_hash: sha64,
+    tests: z
+      .array(BaselineTest)
+      .nullable()
+      .describe('Only when DONE: every frozen test as it ran on the base commit; a red baseline is all FAIL'),
+    evidence_sha256: sha64.nullable().describe("Only when DONE: SHA-256 of the run stored in Stood's evidence bucket"),
+    created_at: instant,
+    finished_at: instant.nullable(),
+  })
+  .strict()
+  .meta({ id: 'Baseline' });
+
 export const Problem = z
   .object({
     type: z.string().describe('urn:stood:problem:<code>'),
@@ -237,6 +268,25 @@ export const operations: readonly Operation[] = [
     id: 'getMandate',
     summary: 'Read signing status and, while awaiting the buyer, the approval link',
     ok: { status: 200, schema: Mandate },
+    problems: [401, 404, 503],
+  },
+  {
+    method: 'post',
+    path: '/baselines',
+    id: 'requestBaseline',
+    summary:
+      "Ask Stood to run one milestone's frozen tests on its base commit (a red baseline proves new work is needed)",
+    body: CodeTerms,
+    ok: { status: 202, schema: Baseline },
+    idempotent: true,
+    problems: [401, 409, 413, 422, 503],
+  },
+  {
+    method: 'get',
+    path: '/baselines/{id}',
+    id: 'getBaseline',
+    summary: 'Read a baseline: queued, or each frozen test as it ran on the base commit',
+    ok: { status: 200, schema: Baseline },
     problems: [401, 404, 503],
   },
   {
@@ -311,7 +361,7 @@ function nullables(value: unknown): unknown {
 
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
-export const API_VERSION = '1.0.0';
+export const API_VERSION = '1.1.0';
 
 export type OpenApiDocument = Readonly<{
   openapi: string;

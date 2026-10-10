@@ -201,7 +201,7 @@ scripts/dev runner-key     # create the signing key (refuses to replace one; --r
 scripts/dev evidence-check # qualify the evidence bucket: write once by hash, read back, retry is the same object
 ```
 
-Every signed run is stored in the evidence bucket before it can decide, at `runs/<platform>/<tranche>/<package>/<sha256>` (write-once: an object is never replaced). If the bucket cannot be reached, the package waits and nothing is decided.
+Baselines use the same runner: a platform asks `POST /v1/baselines` to run a milestone's frozen tests on the base commit before work is posted, and reads which failed with `GET /v1/baselines/{id}` (C4). Every signed run is stored in the evidence bucket before it can decide, at `runs/<platform>/<tranche>/<package>/<sha256>` (write-once: an object is never replaced). If the bucket cannot be reached, the package waits and nothing is decided.
 
 Final milestones (`code.final@1`) also require the buyer's usage confirmation (`usage_release`), which is not yet wired from Yard, so they wait after passing their tests.
 

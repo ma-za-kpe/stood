@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
+import { codeParams } from '../../test/fixtures/code-terms.js';
 import { draft, harness, now, pkg, signed } from '../../test/fixtures/contract-app.js';
 import {
   Allowance,
   AllowanceDraft,
+  Baseline,
+  CodeTerms,
   CommitPackage,
   CommitPackageInput,
   Funding,
@@ -94,6 +97,14 @@ describe('Stood API contract', () => {
       200,
       CommitPackage,
     );
+    const baseline = (await check(
+      await app.request('/v1/baselines', signed('POST', '/baselines', JSON.stringify(codeParams), 'b-key')),
+      202,
+      Baseline,
+    )) as z.infer<typeof Baseline>;
+    expect(baseline.tests?.every((t) => t.status === 'FAIL')).toBe(true);
+    await check(await app.request('/v1/baselines/bl_1', signed('GET', '/baselines/bl_1')), 200, Baseline);
+    await check(await app.request('/v1/baselines/missing', signed('GET', '/baselines/missing')), 404, Problem);
     for (const [path, status] of [
       ['/allowances/missing', 404],
       ['/tranches/missing', 404],
@@ -114,6 +125,7 @@ describe('Stood API contract', () => {
       ['/tranches/trn_1/funding', 'd', { expected_version: 0, nonce: 'K71' }, FundingRequest],
       ['/tranches/trn_1/packages', 'e', { ...pkg, commit_sha: 'main' }, CommitPackageInput],
       ['/tranches/trn_1/packages', 'f', { ...pkg, extra: 'x' }, CommitPackageInput],
+      ['/baselines', 'g', { ...codeParams, baseCommit: 'main' }, CodeTerms],
     ];
     for (const [path, idem, value, schema] of refused) {
       expect(schema.safeParse(value).success, `${path} ${idem}`).toBe(false);

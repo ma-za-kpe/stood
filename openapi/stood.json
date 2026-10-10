@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Stood platform API",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "summary": "Milestone payments held on PayPal (sandbox) and released only on evidence",
     "description": "Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Stood only talks to the PayPal sandbox.",
     "license": {
@@ -308,6 +308,166 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/baselines": {
+      "post": {
+        "operationId": "requestBaseline",
+        "summary": "Ask Stood to run one milestone's frozen tests on its base commit (a red baseline proves new work is needed)",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeTerms"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (recorded, not yet done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Baseline"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/baselines/{id}": {
+      "get": {
+        "operationId": "getBaseline",
+        "summary": "Read a baseline: queued, or each frozen test as it ran on the base commit",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Baseline"
                 }
               }
             }
@@ -845,6 +1005,103 @@
         ],
         "additionalProperties": false
       },
+      "Baseline": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "$ref": "#/components/schemas/BaselineStatus"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "base_commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "test_bundle_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "tests": {
+            "description": "Only when DONE: every frozen test as it ran on the base commit; a red baseline is all FAIL",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BaselineTest"
+            }
+          },
+          "evidence_sha256": {
+            "description": "Only when DONE: SHA-256 of the run stored in Stood's evidence bucket",
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "UTC ISO-8601 timestamp"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "UTC ISO-8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "repository",
+          "base_commit",
+          "test_bundle_hash",
+          "tests",
+          "evidence_sha256",
+          "created_at",
+          "finished_at"
+        ],
+        "additionalProperties": false
+      },
+      "BaselineStatus": {
+        "type": "string",
+        "enum": [
+          "QUEUED",
+          "DONE",
+          "INVALID"
+        ],
+        "description": "QUEUED until Stood has run it; INVALID when the frozen tests are not at the base commit as described"
+      },
+      "BaselineTest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BaselineTestStatus"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "BaselineTestStatus": {
+        "type": "string",
+        "enum": [
+          "PASS",
+          "FAIL"
+        ]
+      },
       "CodeTerms": {
         "type": "object",
         "properties": {
@@ -881,6 +1138,7 @@
             }
           },
           "minMutation": {
+            "description": "Mutation-score floor from 0 to 1; no floor (0) when omitted",
             "type": "number",
             "minimum": 0,
             "maximum": 1
@@ -892,8 +1150,7 @@
           "testBundleHash",
           "manifestHash",
           "testIds",
-          "tests",
-          "minMutation"
+          "tests"
         ],
         "additionalProperties": false,
         "description": "Frozen terms of a code milestone (profiles code.*), checked at draft time."

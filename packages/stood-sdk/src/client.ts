@@ -33,6 +33,25 @@ export type PackageView = Readonly<{
   metadata: PackageInput;
 }>;
 // A read of Stood's public tranche view. Callers act on it only together with a signed notification.
+// C4 (#77): one milestone's frozen code terms, as signed into the allowance.
+export type BaselineInput = Readonly<{
+  repository: string;
+  baseCommit: string;
+  testBundleHash: string;
+  manifestHash: string;
+  testIds: readonly string[];
+  tests: readonly Readonly<{ id: string; path: string }>[];
+}>;
+export type BaselineView = Readonly<{
+  id: string;
+  status: 'QUEUED' | 'DONE' | 'INVALID';
+  repository: string;
+  baseCommit: string;
+  testBundleHash: string;
+  // Only when DONE: each frozen test as it ran on the base commit.
+  tests: readonly Readonly<{ id: string; status: 'PASS' | 'FAIL' }>[] | null;
+  evidenceSha256: string | null;
+}>;
 export type TrancheView = Readonly<{
   id: string;
   state: string;
@@ -155,6 +174,37 @@ function trancheView(v: unknown, trancheId: string): TrancheView {
     packageId: v.package_id === null ? null : String(v.package_id),
     resubmissionsLeft: Number(v.resubmissions_left),
     provider: v.provider as 'simulator' | 'paypal-sandbox',
+  });
+}
+function baselineView(v: unknown): BaselineView {
+  if (
+    !object(v) ||
+    !id(v.id) ||
+    !['QUEUED', 'DONE', 'INVALID'].includes(String(v.status)) ||
+    typeof v.repository !== 'string' ||
+    !hex(v.base_commit, 40) ||
+    !hex(v.test_bundle_hash, 64)
+  )
+    throw new StoodClientError('INVALID_RESPONSE');
+  const done = v.status === 'DONE';
+  const tests = v.tests;
+  if (
+    done !== Array.isArray(tests) ||
+    done !== hex(v.evidence_sha256, 64) ||
+    (Array.isArray(tests) &&
+      !tests.every((t) => object(t) && typeof t.id === 'string' && (t.status === 'PASS' || t.status === 'FAIL')))
+  )
+    throw new StoodClientError('INVALID_RESPONSE');
+  return Object.freeze({
+    id: v.id as string,
+    status: v.status as BaselineView['status'],
+    repository: v.repository,
+    baseCommit: v.base_commit as string,
+    testBundleHash: v.test_bundle_hash as string,
+    tests: Array.isArray(tests)
+      ? Object.freeze(tests.map((t) => Object.freeze({ id: String(t.id), status: t.status as 'PASS' | 'FAIL' })))
+      : null,
+    evidenceSha256: done ? (v.evidence_sha256 as string) : null,
   });
 }
 function packageView(v: unknown, trancheId: string): PackageView {
@@ -355,6 +405,15 @@ export class StoodClient {
       await this.request('POST', `/tranches/${this.resource(trancheId)}/packages`, input, key),
       trancheId,
     );
+  }
+  // C4 (#77): ask Stood to run one milestone's frozen tests on its base commit; read the result when DONE.
+  async requestBaseline(input: BaselineInput, key: string): Promise<BaselineView> {
+    return baselineView(await this.request('POST', '/baselines', input, key));
+  }
+  async getBaseline(baselineId: string): Promise<BaselineView> {
+    const v = baselineView(await this.request('GET', `/baselines/${this.resource(baselineId)}`));
+    if (v.id !== baselineId) throw new StoodClientError('INVALID_RESPONSE');
+    return v;
   }
   async getTranche(trancheId: string): Promise<TrancheView> {
     return trancheView(await this.request('GET', `/tranches/${this.resource(trancheId)}`), trancheId);
