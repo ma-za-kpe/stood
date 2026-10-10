@@ -10,6 +10,7 @@ import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
+import { PayPalPayouts } from './adapters/paypal/payouts.js';
 import { RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodPackageGateway } from './adapters/stood/package-gateway.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
@@ -17,6 +18,7 @@ import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, MAX_ACTIVE_CLAIMS, type Operator } from './application/board.js';
 import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
+import { runPayouts } from './application/payouts.js';
 import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
@@ -120,6 +122,23 @@ export function yardRuntime(env: Env) {
   const signer = usageSigner(env.YARD_USAGE_KEY_ID, env.YARD_USAGE_SIGNING_KEY);
   if (stood && !signer) notes.push('Usage off: YARD_USAGE_KEY_ID and YARD_USAGE_SIGNING_KEY (Ed25519) are required.');
   const usage = stood && signer ? new UsageForwarder(board, stood, signer, Date.now) : null;
+  // ADR-0027: builders are paid out of Yard's own PayPal account (its own REST app, never Stood's), sandbox only.
+  const payoutClient = env.YARD_PAYPAL_CLIENT_ID?.trim() ?? '';
+  const payoutSecret = env.YARD_PAYPAL_CLIENT_SECRET?.trim() ?? '';
+  const payouts =
+    payoutClient && payoutSecret
+      ? new PayPalPayouts({
+          clientId: payoutClient,
+          clientSecret: payoutSecret,
+          baseUrl: 'https://api-m.sandbox.paypal.com',
+        })
+      : null;
+  if (!payouts)
+    notes.push(
+      "Payouts off: YARD_PAYPAL_CLIENT_ID and YARD_PAYPAL_CLIENT_SECRET (Yard's own PayPal sandbox app) are required.",
+    );
+  const payees = new Map(operators.flatMap((o) => (o.payeeRef ? [[o.actor.id, o.payeeRef] as const] : [])));
+  let paying: ReturnType<typeof setInterval> | null = null;
   let watching: ReturnType<typeof setInterval> | null = null;
   let sweeping: ReturnType<typeof setInterval> | null = null;
   let forwarding: ReturnType<typeof setInterval> | null = null;
@@ -159,6 +178,15 @@ export function yardRuntime(env: Env) {
       expiring = setInterval(expire, 86_400_000);
       expiring.unref();
       await expire();
+      if (payouts) {
+        const pay = () =>
+          runPayouts({ board, provider: payouts, payeeOf: (id) => payees.get(id), clock: Date.now }).catch(() =>
+            process.stderr.write(`${JSON.stringify({ code: 'PAYOUTS_FAILED' })}\n`),
+          );
+        paying = setInterval(pay, 60_000);
+        paying.unref();
+        await pay();
+      }
       if (usage) {
         const forward = () =>
           usage.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'USAGE_FORWARD_FAILED' })}\n`));
@@ -170,6 +198,7 @@ export function yardRuntime(env: Env) {
     async stop() {
       retention?.stop();
       if (watching) clearInterval(watching);
+      if (paying) clearInterval(paying);
       if (sweeping) clearInterval(sweeping);
       if (forwarding) clearInterval(forwarding);
       if (expiring) clearInterval(expiring);

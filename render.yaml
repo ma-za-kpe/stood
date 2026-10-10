@@ -167,6 +167,11 @@ services:
       # ADR-0027: Yard's fee on top of each milestone, in basis points (500 is 5%), paid by the buyer in the same hold.
       - key: YARD_FEE_BPS
         value: "500"
+      # ADR-0027: Yard's own PayPal sandbox REST app (never Stood's), used only to pay builders out (PayPal Payouts).
+      - key: YARD_PAYPAL_CLIENT_ID
+        sync: false
+      - key: YARD_PAYPAL_CLIENT_SECRET
+        sync: false
       # C4 (#77): Yard's Ed25519 usage key; Stood lists its public half in USAGE_AUTHORITY_KEYS.
       - key: YARD_USAGE_KEY_ID
         sync: false

@@ -137,8 +137,12 @@ it('prompts the owner for every secret in their own Render account and commits n
       expect(JSON.stringify(e)).not.toMatch(live);
     }
     if (!stood(s)) {
-      // Yard holds no PayPal credentials. Its merchant id (ADR-0027) is a public identifier, not a credential.
-      expect(keys.filter((k) => k.includes('PAYPAL') && k !== 'YARD_PAYPAL_MERCHANT_ID')).toEqual([]);
+      // Yard never holds Stood's PayPal credentials. ADR-0027: its merchant id is a public identifier, and its own
+      // PayPal app (used only to pay builders out) is prompted, never committed.
+      const yardPayPal = ['YARD_PAYPAL_MERCHANT_ID', 'YARD_PAYPAL_CLIENT_ID', 'YARD_PAYPAL_CLIENT_SECRET'];
+      expect(keys.filter((k) => k.includes('PAYPAL') && !yardPayPal.includes(k))).toEqual([]);
+      for (const key of ['YARD_PAYPAL_CLIENT_ID', 'YARD_PAYPAL_CLIENT_SECRET'])
+        if (keys.includes(key)) expect(s.envVars.find((e) => e.key === key)?.sync, key).toBe(false);
       expect(s.envVars.find((e) => e.key === 'YARD_ENV')?.value).toBe('demo');
       continue;
     }

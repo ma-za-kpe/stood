@@ -31,6 +31,7 @@ it('wires the Board, site log and secrets from configuration, and says why the r
     'Foreman off: GROK_PLANNER_API_KEY is missing.',
     'Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.',
     'Previews off: RENDER_PREVIEW_API_KEY is missing.',
+    "Payouts off: YARD_PAYPAL_CLIENT_ID and YARD_PAYPAL_CLIENT_SECRET (Yard's own PayPal sandbox app) are required.",
   ]);
   await runtime.stop();
 });
@@ -120,6 +121,7 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
   expect(on.notes).toEqual([
     'Payments off: STOOD_API_KEY or STOOD_HMAC_SECRET is missing.',
     'Previews off: RENDER_PREVIEW_API_KEY is missing.',
+    "Payouts off: YARD_PAYPAL_CLIENT_ID and YARD_PAYPAL_CLIENT_SECRET (Yard's own PayPal sandbox app) are required.",
   ]);
   expect(await capabilities(planner)).toMatchObject({ board: true, intake: true, foreman: true });
   await on.stop();
@@ -157,6 +159,14 @@ it('connects to Stood only with platform credentials over https, and says what i
   expect(on.notes.some((n) => n.startsWith('Packages off'))).toBe(false);
   expect(on.notes).toContain('Usage off: YARD_USAGE_KEY_ID and YARD_USAGE_SIGNING_KEY (Ed25519) are required.');
   expect(on.notes.some((n) => n.startsWith('Payments off'))).toBe(false);
+  // ADR-0027: with Yard's own PayPal sandbox app, payouts are on.
+  const paying = yardRuntime({
+    ...stood,
+    YARD_PAYPAL_CLIENT_ID: 'yard-client',
+    YARD_PAYPAL_CLIENT_SECRET: 'yard-secret',
+  });
+  expect(paying.notes.some((n) => n.startsWith('Payouts off'))).toBe(false);
+  await paying.stop();
   expect(on.config.board?.mandates).toBeDefined();
   expect(on.config.board?.packages).toBeDefined();
   expect(await capabilities(stood)).toMatchObject({ payments: true });

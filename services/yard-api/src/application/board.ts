@@ -76,6 +76,10 @@ type Order = {
   closed?: 'REFUSED';
   holds?: { attempt: number; expiresAt: number; eventId: string }[];
   usage?: { confirmedAt: number; forwarded?: { at: number; status: 'ACCEPTED' | 'REFUSED'; reason: string | null } };
+  // ADR-0027: when the capture was recorded, the buyer's dispute in the review window, and the builder's payout.
+  releasedAt?: number;
+  dispute?: { openedAt: number; reason: string };
+  payout?: Payout;
 };
 export type MandateRequest = Readonly<{
   payee_ref: string;
@@ -107,6 +111,23 @@ export type MandateIntent = Readonly<{
   // made before the fee existed (no fee).
   lines?: readonly MandateLine[];
 }>;
+// ADR-0027: a builder's payout, one PayPal Payouts batch per paid work order. RESERVED is written before PayPal is
+// called (the batch id doubles as PayPal-Request-Id, so a resend after a lost answer cannot pay twice); SENT once
+// PayPal accepted it; then PayPal's item status: PAID_OUT, or UNCLAIMED, RETURNED or FAILED (money back with Yard).
+export type PayoutStatus = 'RESERVED' | 'SENT' | 'PAID_OUT' | 'UNCLAIMED' | 'RETURNED' | 'FAILED';
+export type Payout = {
+  batchId: string;
+  payee: string;
+  builderMinor: number;
+  currency: string;
+  status: PayoutStatus;
+  reservedAt: number;
+  payoutBatchId?: string;
+  reference?: string;
+};
+// ADR-0027: a release on the runner's evidence alone is paid out after a 48-hour review window; the final milestone,
+// released on the buyer's own confirmation of use, is paid out on release.
+export const HOLDBACK_MS = 48 * 3_600_000;
 export type MandateLine = Readonly<{ milestoneId: string; builderMinor: number; feeMinor: number }>;
 // ADR-0027: Yard's fee, in basis points of the builder's price (500 is 5%), rounded to the nearest minor unit.
 export const yardFee = (builderMinor: number, feeBps: number) => Math.round((builderMinor * feeBps) / 10_000);
@@ -127,6 +148,12 @@ type Data = {
   changes?: ChangeOrder[];
   previews?: { wo: string; serviceId: string; url: string; expiresAt: number }[];
 };
+// ADR-0027: when a paid work order may be paid out: at release for the final milestone, 48 hours later otherwise.
+function payoutDueAt(d: Data, order: Order): number | null {
+  if (!order.payment || order.releasedAt === undefined) return null;
+  const final = terms(d, order.milestone)?.profileId === 'code.final@1';
+  return final ? order.releasedAt : order.releasedAt + HOLDBACK_MS;
+}
 // Effective milestone terms: the immutable signed milestone with approved change orders applied in order.
 function terms(d: Data, milestoneId: string) {
   const base = d.blueprint.milestones.find((m) => m.id === milestoneId);
@@ -1251,7 +1278,7 @@ export class Board {
     return { trancheId: order.trancheId, repository: d.blueprint.repository, baseCommit: d.blueprint.baseCommit };
   }
   // Only an authenticated Stood integration calls this after matching provider-backed read proof.
-  settlement(id: string, wo: string, proof: SettlementProof, version: number) {
+  settlement(id: string, wo: string, proof: SettlementProof, version: number, now = Date.now()) {
     return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {
       const d = data(raw);
       const { work, order } = workOrder(d, wo);
@@ -1273,6 +1300,7 @@ export class Board {
       )
         throw new YardError('INVALID');
       order.payment = structuredClone(proof);
+      order.releasedAt = now;
       return {
         data: d,
         type: 'stood.released',
@@ -1286,6 +1314,150 @@ export class Board {
           feeMinor,
           simulated: true,
         },
+      };
+    });
+  }
+  // ADR-0027: the buyer opens a dispute on a paid milestone inside its review window, before any payout is reserved.
+  // The money stays in this job's ledger until the dispute is closed by the owner.
+  dispute(id: string, wo: string, actor: Operator, version: number, key: string, now: number, reason: string) {
+    return this.events.mutate(id, version, actor.id, `dispute:${key}`, fingerprint({ wo, reason }), (raw) => {
+      const d = data(raw);
+      const { order } = workOrder(d, wo);
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      const text = reason.trim();
+      if (!text || text.length > 2000) throw new YardError('INVALID');
+      if (!order.payment || order.payout || order.dispute || !payoutDueAt(d, order) || now >= payoutDueAt(d, order)!)
+        throw new YardError('CONFLICT');
+      order.dispute = { openedAt: now, reason: text };
+      return { data: d, type: 'payout.disputed', payload: { wo, openedAt: now } };
+    });
+  }
+  // ADR-0027: paid work orders whose payout is due now: released, past the review window (none for the final
+  // milestone), not disputed and not yet reserved. Each comes with the builder who did the work.
+  async payoutsDue(now: number) {
+    const due: { projectId: string; wo: string; builderId: string; builderMinor: number; currency: string }[] = [];
+    await this.eachProject((id, d) => {
+      for (const [wo, order] of Object.entries(d.orders)) {
+        const dueAt = payoutDueAt(d, order);
+        const builderId = workOrder(d, wo).work.snapshot.currentClaim?.builderId;
+        if (!order.payment || order.payout || order.dispute || dueAt === null || now < dueAt || !builderId) continue;
+        const builderMinor = terms(d, order.milestone)!.budgetMinor;
+        due.push({ projectId: id, wo, builderId, builderMinor, currency: d.blueprint.currency });
+      }
+    });
+    return due;
+  }
+  // Written before PayPal is called. The batch id is fixed per work order, so a second reservation is the same one.
+  reservePayout(id: string, wo: string, version: number, payee: string, now: number) {
+    const batchId = `yard-${createHash('sha256').update(`${id}\0${wo}`).digest('hex').slice(0, 40)}`;
+    return this.events.mutate(
+      id,
+      version,
+      'yard-payouts',
+      `payout:reserve:${wo}`,
+      fingerprint({ wo, payee }),
+      (raw) => {
+        const d = data(raw);
+        const { order } = workOrder(d, wo);
+        const dueAt = payoutDueAt(d, order);
+        if (!order.payment || order.payout || order.dispute || dueAt === null || now < dueAt)
+          throw new YardError('CONFLICT');
+        order.payout = {
+          batchId,
+          payee,
+          builderMinor: terms(d, order.milestone)!.budgetMinor,
+          currency: d.blueprint.currency,
+          status: 'RESERVED',
+          reservedAt: now,
+        };
+        return { data: d, type: 'payout.reserved', payload: { wo, batchId, builderMinor: order.payout.builderMinor } };
+      },
+    );
+  }
+  // PayPal's answer to the payout, then its item status as reconciliation reads it. Only forward moves are recorded.
+  payoutUpdate(
+    id: string,
+    wo: string,
+    version: number,
+    update: Readonly<{ status: Exclude<PayoutStatus, 'RESERVED'>; payoutBatchId?: string; reference?: string }>,
+  ) {
+    return this.events.mutate(
+      id,
+      version,
+      'yard-payouts',
+      `payout:${update.status}:${wo}`,
+      fingerprint({ wo, update }),
+      (raw) => {
+        const d = data(raw);
+        const { order } = workOrder(d, wo);
+        const payout = order.payout;
+        const from: Record<string, readonly PayoutStatus[]> = {
+          SENT: ['RESERVED'],
+          FAILED: ['RESERVED', 'SENT'],
+          PAID_OUT: ['SENT', 'UNCLAIMED'],
+          UNCLAIMED: ['SENT'],
+          RETURNED: ['SENT', 'UNCLAIMED'],
+        };
+        if (!payout || !from[update.status]?.includes(payout.status)) throw new YardError('CONFLICT');
+        if (update.status === 'SENT' && !update.payoutBatchId) throw new YardError('INVALID');
+        payout.status = update.status;
+        if (update.payoutBatchId) payout.payoutBatchId = update.payoutBatchId;
+        if (update.reference) payout.reference = update.reference;
+        return { data: d, type: `payout.${update.status.toLowerCase()}`, payload: { wo, status: update.status } };
+      },
+    );
+  }
+  // Payouts in flight (reserved or sent, or unclaimed and still claimable), for the worker to finish or reconcile.
+  async payoutsOpen() {
+    const open: { projectId: string; wo: string; payout: Payout }[] = [];
+    await this.eachProject((id, d) => {
+      for (const [wo, order] of Object.entries(d.orders))
+        if (order.payout && ['RESERVED', 'SENT', 'UNCLAIMED'].includes(order.payout.status))
+          open.push({ projectId: id, wo, payout: structuredClone(order.payout) });
+    });
+    return open;
+  }
+  // Every project once, a hundred at a time (a page of 101 means there is another page).
+  private async eachProject(visit: (id: string, d: Data) => void) {
+    let after = '';
+    do {
+      const projects = await this.events.list(after);
+      const page = projects.slice(0, 100);
+      for (const p of page) visit(p.id, data(p.data));
+      after = projects.length > 100 ? (page.at(-1)?.id ?? '') : '';
+    } while (after);
+  }
+  // ADR-0027: the job's ledger, one line per work order, never a general balance. Buyer only.
+  async ledger(id: string, actor: Operator) {
+    const snapshot = await this.read(id, actor);
+    const d = data(snapshot.data);
+    if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
+    return Object.entries(d.orders).map(([wo, order]) => {
+      const line = d.mandate?.lines?.find((l) => l.milestoneId === order.milestone);
+      const builderMinor = terms(d, order.milestone)!.budgetMinor;
+      const dueAt = payoutDueAt(d, order);
+      const state = order.payout
+        ? order.payout.status
+        : order.dispute
+          ? 'DISPUTED'
+          : order.payment
+            ? 'HELD_BACK'
+            : order.closed
+              ? 'VOIDED'
+              : 'AUTHORIZED';
+      return {
+        wo,
+        milestoneId: order.milestone,
+        currency: d.blueprint.currency,
+        builderMinor,
+        feeMinor: line?.feeMinor ?? 0,
+        state,
+        capturedMinor: order.payment?.minor ?? 0,
+        payoutDueAt: order.payment ? dueAt : null,
+        disputedAt: order.dispute?.openedAt ?? null,
+        payoutReference: order.payout?.reference ?? order.payout?.payoutBatchId ?? null,
+        simulated: true as const,
       };
     });
   }
