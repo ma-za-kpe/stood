@@ -19,6 +19,9 @@ export type SandboxOptions = Readonly<{
 }>;
 export type { RunJob, RunResult } from '../../ports/code-runner.js';
 
+// The managed image every run boots. Vercel names it by tag, not digest, so the image itself can change under it.
+export const SANDBOX_IMAGE = 'vercel/sandbox/node:24';
+
 const ROOT = '/vercel/run';
 // Audit 2026-10-10: npm errors that mean the submission itself is broken. Anything else (registry, DNS, throttling,
 // an error npm does not name) is the runner's problem: the package waits instead of being refused.
@@ -92,7 +95,7 @@ export class VercelSandboxRunner implements CodeRunner {
     let session: SandboxSession;
     try {
       session = await this.sandbox.create({
-        image: 'vercel/sandbox/node:24',
+        image: SANDBOX_IMAGE,
         resources: { vcpus: 1 },
         timeout: 600_000,
         persistent: false,

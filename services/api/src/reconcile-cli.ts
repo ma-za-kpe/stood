@@ -22,7 +22,7 @@ import { runReconciliationAudit } from './application/reconciliation-audit-run.j
 import { reconciliationTick } from './application/reconciliation-worker.js';
 import type { ProviderTransactions } from './ports/provider-transactions.js';
 import { reconciliationRuntime } from './reconciliation-runtime.js';
-import { RUNNER_ID, RUNNER_IMAGE, runnerSettings } from './runner-runtime.js';
+import { RUNNER_ID, RUNNER_LABEL_HASH, runnerSettings } from './runner-runtime.js';
 import { signingWorker } from './signing-worker.js';
 
 const required = ['DATABASE_URL', 'PROVIDER_PAYPAL', 'RECONCILIATION_OWNER'] as const;
@@ -78,7 +78,7 @@ if (!missing.length && problem) {
         verifier: runner.verifier,
         evidence: runner.evidence,
         runnerId: RUNNER_ID,
-        imageDigest: RUNNER_IMAGE,
+        imageDigest: RUNNER_LABEL_HASH,
         clock: () => Date.now(),
       };
       // A run takes minutes, so it has its own loop beside reconciliation instead of stalling the 15-second tick.
