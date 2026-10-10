@@ -128,7 +128,7 @@ describe('runCodeJob', () => {
     expect(run.contract).toMatchObject({ packageId: 'pkg_1', commit, runnerId });
     expect(run.report.signature).toEqual(expect.any(String));
     const down = await harness({ evidence: 'down' });
-    expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
+    expect(await runCodeJob(job(), down.deps)).toBe('WAIT:EVIDENCE_UNAVAILABLE');
     expect((await down.state()).state).toBe('HELD');
   });
 
@@ -163,11 +163,11 @@ describe('runCodeJob', () => {
 
   it('decides nothing while the runner or the frozen tests are unavailable, and never runs a package twice', async () => {
     const down = await harness({ runner: 'down' });
-    expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
+    expect(await runCodeJob(job(), down.deps)).toBe('WAIT:RUNNER_UNAVAILABLE');
     expect((await down.state()).state).toBe('HELD');
     const wrongBundle = await harness();
     expect(await runCodeJob(job({ terms: { ...job().terms, testBundleHash: 'f'.repeat(64) } }), wrongBundle.deps)).toBe(
-      'WAIT',
+      'WAIT:TESTS_NOT_AT_BASE',
     );
     expect((await wrongBundle.state()).state).toBe('HELD');
     const once = await harness();
