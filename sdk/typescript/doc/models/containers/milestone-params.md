@@ -34,6 +34,7 @@ const value: MilestoneParams = {
       path: 'path0',
     }
   ],
+  minMutation: 1,
 };
 ```
 

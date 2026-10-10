@@ -30,6 +30,7 @@ export { BaselineStatus } from './models/baselineStatus.js';
 export type { BaselineTest } from './models/baselineTest.js';
 export { BaselineTestStatus } from './models/baselineTestStatus.js';
 export type { CodeTerms } from './models/codeTerms.js';
+export type { CodeTermsInput } from './models/codeTermsInput.js';
 export type { CommitPackage } from './models/commitPackage.js';
 export type { CommitPackageInput } from './models/commitPackageInput.js';
 export type { Decision } from './models/decision.js';

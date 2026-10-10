@@ -24,8 +24,7 @@ export interface CodeTerms {
   manifestHash: string;
   testIds: string[];
   tests: FrozenTest[];
-  /** Mutation-score floor from 0 to 1; no floor (0) when omitted */
-  minMutation?: number;
+  minMutation: number;
   additionalProperties?: Record<string, unknown>;
 }
 
@@ -38,7 +37,7 @@ export const codeTermsSchema: Schema<CodeTerms> = lazy(() =>
       manifestHash: ['manifestHash', string()],
       testIds: ['testIds', array(string())],
       tests: ['tests', array(frozenTestSchema)],
-      minMutation: ['minMutation', optional(number())],
+      minMutation: ['minMutation', number()],
     },
     'additionalProperties',
     optional(unknown())

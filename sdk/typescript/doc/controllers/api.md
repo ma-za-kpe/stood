@@ -343,7 +343,7 @@ try {
 ```ts
 async requestBaseline(
   idempotencyKey: string,
-  body: CodeTerms,
+  body: CodeTermsInput,
   requestOptions?: RequestOptions
 ): Promise<ApiResponse<Baseline>>
 ```
@@ -357,7 +357,7 @@ This endpoint requires [platformKey](../../doc/auth/oauth-2-bearer-token.md) **A
 | Parameter | Type | Tags | Description |
 |  --- | --- | --- | --- |
 | `idempotencyKey` | `string` | Header, Required | Same key and body return the same response; a different body is 409<br><br>**Constraints**: *Maximum Length*: `200` |
-| `body` | [`CodeTerms`](../../doc/models/code-terms.md) | Body, Required | - |
+| `body` | [`CodeTermsInput`](../../doc/models/code-terms-input.md) | Body, Required | - |
 | `requestOptions` | `RequestOptions \| undefined` | Optional | Pass additional request options. |
 
 ## Response Type
@@ -371,7 +371,7 @@ This method returns an [`ApiResponse`](../../doc/api-response.md) instance. The 
 ```ts
 const idempotencyKey = 'Idempotency-Key0';
 
-const body: CodeTerms = {
+const body: CodeTermsInput = {
   repository: 'repository6',
   baseCommit: 'baseCommit8',
   testBundleHash: 'testBundleHash2',

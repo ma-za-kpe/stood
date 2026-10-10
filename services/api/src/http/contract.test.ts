@@ -7,7 +7,7 @@ import {
   Allowance,
   AllowanceDraft,
   Baseline,
-  CodeTerms,
+  CodeTermsInput,
   CommitPackage,
   CommitPackageInput,
   Funding,
@@ -125,7 +125,7 @@ describe('Stood API contract', () => {
       ['/tranches/trn_1/funding', 'd', { expected_version: 0, nonce: 'K71' }, FundingRequest],
       ['/tranches/trn_1/packages', 'e', { ...pkg, commit_sha: 'main' }, CommitPackageInput],
       ['/tranches/trn_1/packages', 'f', { ...pkg, extra: 'x' }, CommitPackageInput],
-      ['/baselines', 'g', { ...codeParams, baseCommit: 'main' }, CodeTerms],
+      ['/baselines', 'g', { ...codeParams, baseCommit: 'main' }, CodeTermsInput],
     ];
     for (const [path, idem, value, schema] of refused) {
       expect(schema.safeParse(value).success, `${path} ${idem}`).toBe(false);

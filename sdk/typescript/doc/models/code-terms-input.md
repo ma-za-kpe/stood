@@ -1,13 +1,11 @@
 
-# Code Terms
+# Code Terms Input
 
-Frozen terms of a code milestone (profiles code.*), checked at draft time.
-
-*This model accepts additional fields of type unknown.*
+Frozen terms of a code milestone, as a platform sends them.
 
 ## Structure
 
-`CodeTerms`
+`CodeTermsInput`
 
 ## Fields
 
@@ -19,23 +17,22 @@ Frozen terms of a code milestone (profiles code.*), checked at draft time.
 | `manifestHash` | `string` | Required | **Constraints**: *Pattern*: `^[a-f0-9]{64}$` |
 | `testIds` | `string[]` | Required | **Constraints**: *Minimum Items*: `1`, *Maximum Items*: `200` |
 | `tests` | [`FrozenTest[]`](../../doc/models/frozen-test.md) | Required | **Constraints**: *Minimum Items*: `1`, *Maximum Items*: `200` |
-| `minMutation` | `number` | Required | **Constraints**: `>= 0`, `<= 1` |
-| `additionalProperties` | `Record<string, unknown>` | Optional | - |
+| `minMutation` | `number \| undefined` | Optional | Mutation-score floor from 0 to 1; no floor (0) when omitted<br><br>**Constraints**: `>= 0`, `<= 1` |
 
 ## Example
 
 ```ts
-import { CodeTerms } from 'stood-platform-apilib';
+import { CodeTermsInput } from 'stood-platform-apilib';
 
-const codeTerms: CodeTerms = {
-  repository: 'repository2',
-  baseCommit: 'baseCommit2',
-  testBundleHash: 'testBundleHash8',
-  manifestHash: 'manifestHash8',
+const codeTermsInput: CodeTermsInput = {
+  repository: 'repository8',
+  baseCommit: 'baseCommit6',
+  testBundleHash: 'testBundleHash4',
+  manifestHash: 'manifestHash2',
   testIds: [
     'testIds7',
-    'testIds6',
-    'testIds5'
+    'testIds8',
+    'testIds9'
   ],
   tests: [
     {
@@ -44,9 +41,6 @@ const codeTerms: CodeTerms = {
     }
   ],
   minMutation: 1,
-  additionalProperties: {
-    'exampleAdditionalProperty': { 'key1': 'val1', 'key2': 'val2' }
-  },
 };
 ```
 

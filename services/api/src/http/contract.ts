@@ -13,17 +13,26 @@ export const Money = z
   .strict()
   .meta({ id: 'Money' });
 
+const codeTermsShape = {
+  repository: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/),
+  baseCommit: sha40,
+  testBundleHash: sha64,
+  manifestHash: sha64,
+  testIds: z.array(z.string()).min(1).max(200),
+  tests: z
+    .array(z.object({ id: z.string(), path: z.string() }).strict().meta({ id: 'FrozenTest' }))
+    .min(1)
+    .max(200),
+};
+// What Stood returns: the checked terms, always with their mutation floor.
 export const CodeTerms = z
+  .object({ ...codeTermsShape, minMutation: z.number().min(0).max(1) })
+  .strict()
+  .meta({ id: 'CodeTerms', description: 'Frozen terms of a code milestone (profiles code.*), checked at draft time.' });
+// What a platform sends: the same terms, where the mutation floor defaults to 0 (none).
+export const CodeTermsInput = z
   .object({
-    repository: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/),
-    baseCommit: sha40,
-    testBundleHash: sha64,
-    manifestHash: sha64,
-    testIds: z.array(z.string()).min(1).max(200),
-    tests: z
-      .array(z.object({ id: z.string(), path: z.string() }).strict().meta({ id: 'FrozenTest' }))
-      .min(1)
-      .max(200),
+    ...codeTermsShape,
     minMutation: z
       .number()
       .min(0)
@@ -32,13 +41,16 @@ export const CodeTerms = z
       .describe('Mutation-score floor from 0 to 1; no floor (0) when omitted'),
   })
   .strict()
-  .meta({ id: 'CodeTerms', description: 'Frozen terms of a code milestone (profiles code.*), checked at draft time.' });
+  .meta({ id: 'CodeTermsInput', description: 'Frozen terms of a code milestone, as a platform sends them.' });
 
+const milestoneShape = {
+  name: z.string().min(1).max(100),
+  amount: Money,
+  profile: z.string().min(1).max(100).describe('Evidence profile, e.g. code.milestone@1 or code.final@1'),
+};
 export const Milestone = z
   .object({
-    name: z.string().min(1).max(100),
-    amount: Money,
-    profile: z.string().min(1).max(100).describe('Evidence profile, e.g. code.milestone@1 or code.final@1'),
+    ...milestoneShape,
     params: z
       .union([CodeTerms, z.record(z.string(), z.unknown())])
       .optional()
@@ -276,7 +288,7 @@ export const operations: readonly Operation[] = [
     id: 'requestBaseline',
     summary:
       "Ask Stood to run one milestone's frozen tests on its base commit (a red baseline proves new work is needed)",
-    body: CodeTerms,
+    body: CodeTermsInput,
     ok: { status: 202, schema: Baseline },
     idempotent: true,
     problems: [401, 409, 413, 422, 503],
