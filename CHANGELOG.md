@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.10.0](https://github.com/ma-za-kpe/stood/compare/v0.9.0...v0.10.0) (2026-10-10)
+
+
+### Features
+
+* **api:** Kernel approves the PayPal sandbox buyer step unattended (T-0284) ([ef45a9d](https://github.com/ma-za-kpe/stood/commit/ef45a9d4e91ab90001001b8b818671e1a86a3375))
+* **api:** tranche view a platform can act on without trusting a notification (T-0189) ([4768151](https://github.com/ma-za-kpe/stood/commit/4768151c161185dc8e2b0ee187f68f462910dc95))
+* C3 live Yard adapters (planner, GitHub, Stood reads, previews, Kernel) ([5b61814](https://github.com/ma-za-kpe/stood/commit/5b61814fcb993534a0c6ba85d367d8879aa3b69b))
+* **foreman:** carry imported research to the planner as quoted data, verdict always kept (T-0283) ([c315c2d](https://github.com/ma-za-kpe/stood/commit/c315c2dd9b23c71f0eb2e077be4283e52578a409))
+* **foreman:** live Grok planner, cost-first and unable to set money (T-0221) ([7b54858](https://github.com/ma-za-kpe/stood/commit/7b548580d7bbbae4c475cd2f1fa9d9fbeca80983))
+* trusted code runner on Vercel Sandbox, from commit to one verified decision (C4 [#77](https://github.com/ma-za-kpe/stood/issues/77)) ([#117](https://github.com/ma-za-kpe/stood/issues/117)) ([08c8b88](https://github.com/ma-za-kpe/stood/commit/08c8b88ac5464a2941c6504cf3335ebb83a0cdee))
+* **yard-web:** idea gallery as visual cards with one action (T-0282) ([982d028](https://github.com/ma-za-kpe/stood/commit/982d028b4322577cc875ad89a0466cafb2180e37))
+* **yard:** GitHub App adapter that enforces Yard's repository rules (T-0188) ([561ddcf](https://github.com/ma-za-kpe/stood/commit/561ddcf401bf90b8d1de5a03b198e7320dd2f3a9))
+* **yard:** hosted Foreman with a shared daily cap, pinned to the sandbox repository (T-0181) ([0fd8ebe](https://github.com/ma-za-kpe/stood/commit/0fd8ebe2f732dc7e1a53322ffccc2313b587ae7d))
+* **yard:** live Render previews with Yard's own cap, buyer-only, swept hourly (T-0196) ([5260609](https://github.com/ma-za-kpe/stood/commit/5260609c56c23b6ec38277c97c693a364d0b7601))
+* **yard:** planner budget that holds across restarts and replicas (T-0181) ([7287152](https://github.com/ma-za-kpe/stood/commit/728715272496ffeff06ea0fd76c5c90cc7f46f3a))
+* **yard:** read Stood's signed tranche view for holds, captures and refusals (T-0189) ([156ae4f](https://github.com/ma-za-kpe/stood/commit/156ae4fe1123724a3d0fd27bf78588383720c018))
+
+
+### Fixes
+
+* **api:** match PayPal hosts exactly in the Kernel approver; plainly fake test values (T-0284) ([4fdb47a](https://github.com/ma-za-kpe/stood/commit/4fdb47aef30df44cfd01196b57156dd8c9218a72))
+* Kernel approves PayPal's current sandbox pages unattended (C3) ([#115](https://github.com/ma-za-kpe/stood/issues/115)) ([4e68f28](https://github.com/ma-za-kpe/stood/commit/4e68f289c97bf8b266d23090a8928a10705a92b3))
+* **yard-web:** drop unreachable country-name fallbacks to keep the 98% gate (T-0282) ([70bd51e](https://github.com/ma-za-kpe/stood/commit/70bd51ed08ecbbdefc846cd36797c9fb7dd08ba4))
+
+
+### Documentation
+
+* **yard-web:** idea card screenshots, desktop and mobile (T-0282) ([4ffbfab](https://github.com/ma-za-kpe/stood/commit/4ffbfab642da299288dbfc8b3ecc1db7c93b580e))
+
 ## [0.9.0](https://github.com/ma-za-kpe/stood/compare/v0.8.0...v0.9.0) (2026-10-09)
 
 
