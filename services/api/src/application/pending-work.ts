@@ -2,11 +2,10 @@ type Keys = Readonly<{ unresolved(): Promise<readonly string[]> }>;
 
 // T-0260: one worker step for saved-PayPal mandates and tranche funding. Each item is advanced by its own tested
 // use case (advanceMandate, advanceFunding), which owns every PayPal call and every durable phase.
-// Audit 2026-10-10: a step that only waited (on PayPal, or on the buyer's approval) moved nothing, so it is counted
-// as waiting, not advanced; the log said "2 fundings advanced" for two fundings stuck in CREATING.
+// Audit 2026-10-10: a step that answered WAIT moved nothing, so it is counted as waiting, not advanced; the log said
+// "2 fundings advanced" for two fundings stuck in CREATING.
 const waited = (outcome: unknown) =>
   outcome === 'WAIT' ||
-  outcome === 'AWAITING_APPROVAL' ||
   (typeof outcome === 'object' && outcome !== null && (outcome as { outcome?: unknown }).outcome === 'WAIT');
 
 export async function advancePending(deps: {

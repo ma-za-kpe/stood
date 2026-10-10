@@ -99,7 +99,7 @@ it('signs a saved-PayPal mandate and funds a tranche through the API, the worker
     const mandatePath = `/allowances/${draft.id}/mandate`;
     expect((await app.request(`/v1${mandatePath}`, signed('POST', mandatePath, '{}', 'mandate-1'))).status).toBe(202);
     const read = async (path: string) => (await app.request(`/v1${path}`, signed('GET', path, ''))).json();
-    expect(await tick()).toEqual({ mandates: 1, fundings: 0, failed: 0 });
+    expect(await tick()).toEqual({ mandates: 1, fundings: 0, waiting: 0, failed: 0 });
     const awaiting = await read(`${mandatePath}/mandate-1`);
     expect(awaiting).toMatchObject({
       status: 'AWAITING_APPROVAL',
@@ -120,7 +120,7 @@ it('signs a saved-PayPal mandate and funds a tranche through the API, the worker
     const fundingPath = `/tranches/${trancheId}/funding`;
     const body = JSON.stringify({ expected_version: version, nonce: 'K7Q' });
     expect((await app.request(`/v1${fundingPath}`, signed('POST', fundingPath, body, 'funding-1'))).status).toBe(202);
-    expect(await tick()).toEqual({ mandates: 0, fundings: 1, failed: 0 });
+    expect(await tick()).toEqual({ mandates: 0, fundings: 1, waiting: 0, failed: 0 });
     const held = await read(`${fundingPath}/funding-1`);
     expect(held).toEqual({ key: 'funding-1', status: 'HELD', approve_url: null, hold_expires_at: expect.any(Number) });
     // The token stays sealed in the mandate and never reaches the funding record.
@@ -130,7 +130,7 @@ it('signs a saved-PayPal mandate and funds a tranche through the API, the worker
       .rows[0].i;
     expect(JSON.parse(funding)).toMatchObject({ source: 'SAVED_PAYPAL' });
     expect(funding).not.toContain('SIM-TOKEN');
-    expect(await tick()).toEqual({ mandates: 0, fundings: 0, failed: 0 });
+    expect(await tick()).toEqual({ mandates: 0, fundings: 0, waiting: 0, failed: 0 });
   } finally {
     await h.close();
   }
