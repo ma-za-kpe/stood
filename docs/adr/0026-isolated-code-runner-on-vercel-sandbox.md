@@ -58,8 +58,14 @@ An external audit of the runner found that a PASS proved less than it claimed. F
 
 `scripts/dev runner-check` replays each attack on real Vercel Sandbox before the runner is trusted again.
 
-**Remaining limit (in-process forgery).** The frozen tests run in the same Node process as the builder's code. Code that runs on import can still replace `node:assert`, patch `node:test`, or write well-formed TAP lines of its own, so a determined builder could forge a PASS. File permissions, capabilities and the network cannot stop code from lying inside its own process.
+**Owner decision, 2026-10-10: acceptance tests run out of process.** "Same-process tests are not evidence. Stood's whole claim is that the payee cannot write the proof alone." So (T-0305 to T-0309):
 
-**Proposed (owner's decision): black-box acceptance tests.** The buyer's frozen tests would drive the builder's code from a separate process: the code is started as a program or server, and the tests (run by a process the code cannot reach) check its outputs. A forged assertion inside the builder's process then changes nothing. This changes the test format for milestones (the Foreman would write tests against a command or HTTP interface instead of importing modules), so it needs the owner's decision.
+1. **Two identities in the VM.** The builder's code runs only as `nobody` (uid 65534) with no capabilities and `no_new_privs`, in `/vercel/run`. The frozen tests and Stood's harness run as the judge (uid 65533) from `/vercel/judge`. The judge cannot read the builder's code, so it cannot import it; the builder cannot write the tests, the harness or its own code, cannot signal the judge, and cannot read its memory or environment. Both are probed live before any test runs.
+2. **Tests reach the code only as a process.** `runBuilder(argv, { input })` from `stood-harness` starts the builder's program as a separate process and returns its status and output. The Foreman writes tests in that form and refuses any test that imports anything else.
+3. **Pass is the judge's process exiting 0** on the exact frozen files, whose bundle hash is in the allowance. Anything else is a refusal with the failed test named.
+4. **Only the judge can make a code milestone payable.** Its decisions are `judge:<package>` and `judge-usage:<package>`, and it signs as `stood-vercel-sandbox-judge`. Settlement refuses to capture a code milestone whose release is anything else.
+5. **Old releases are void for payment.** Every release recorded by the in-process runner (`run:` and `usage:` decisions) is refused by settlement and never replayed. `scripts/dev release-review` lists them, read-only, for the owner.
 
-Until that is decided, settlement stays off in production (`SETTLEMENT_EXECUTOR` unset). Decisions are recorded but no money moves on a runner verdict. Before switching it on, the owner reviews any decisions recorded while it was off.
+The judge's tests are trusted code (written by the Foreman, accepted by the buyer) and keep three capabilities (`setuid`, `setgid`, `setpcap`) only to start the builder's program as `nobody`.
+
+Settlement stays off in production until the judge is merged, deployed and qualified live, and the owner has reviewed every release decision recorded while the old path existed. Step-by-step: [the Vercel Sandbox guide](../guides/vercel-sandbox-untrusted-code-judge.md).
