@@ -9,7 +9,8 @@ oasdiff=mirror.gcr.io/tufin/oasdiff:v1.11.7@sha256:d6f1e645251cc1da527311955347d
 docker run --rm -v "$PWD/openapi:/spec:ro" "$redocly" lint /spec/stood.json --extends recommended
 base="$(mktemp -d)"
 trap 'rm -rf "$base"' EXIT
-git fetch --quiet --depth=1 origin main 2>/dev/null || true
+# A plain fetch: --depth would turn a full clone into a shallow one and break merge-base for every other tool.
+git fetch --quiet origin main 2>/dev/null || true
 if git show origin/main:openapi/stood.json >"$base/main.json" 2>/dev/null; then
   docker run --rm -v "$base:/base:ro" -v "$PWD/openapi:/spec:ro" "$oasdiff" \
     breaking /base/main.json /spec/stood.json --fail-on ERR

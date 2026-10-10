@@ -22,7 +22,10 @@ if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
 fi
 # Everything not yet on main: the exact range a promotion pull request will show GitGuardian.
 git fetch --quiet origin main 2>/dev/null || true
-base="$(git merge-base HEAD origin/main)"
+if ! base="$(git merge-base HEAD origin/main)"; then
+  echo "GitGuardian: no common history with origin/main (a shallow clone?). Run: git fetch --unshallow origin"
+  exit 1
+fi
 if [ "$base" = "$(git rev-parse HEAD)" ]; then
   echo "GitGuardian: nothing beyond main to scan."
   exit 0
