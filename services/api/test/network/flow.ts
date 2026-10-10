@@ -213,7 +213,8 @@ export class NetworkFlow {
           method: 'beginSettlement',
           args: [
             decide(this.scenario.profile, checks),
-            this.attempt === 1 ? `${this.scenario.id}:decision` : `${this.scenario.id}:decision:${this.attempt}`,
+            // Code milestones are paid only on the judge's decisions (owner decision 2026-10-10).
+            this.attempt === 1 ? `judge:${this.scenario.id}` : `judge:${this.scenario.id}:${this.attempt}`,
             this.at,
           ],
         });
