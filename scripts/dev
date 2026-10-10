@@ -77,8 +77,17 @@ PY
     grep -E '^(STOOD_API_URL|STOOD_API_KEY|STOOD_HMAC_SECRET|STOOD_SANDBOX_PAYEE_ID|KERNEL_API_KEY|PAYPAL_SANDBOX_BUYER_EMAIL|PAYPAL_SANDBOX_BUYER_PASSWORD|YARD_USAGE_KEY_ID|YARD_USAGE_SIGNING_KEY)=' .env >"$keys" || true
     # Resume a signed allowance after an interruption: scripts/dev live-e2e alw_...
     if [ -n "${2:-}" ]; then printf 'LIVE_ALLOWANCE=%s\n' "$2" >>"$keys"; fi
+    out=$(mktemp); trap 'rm -f "$keys" "$out"' EXIT
     docker compose run --rm --no-deps --env-from-file "$keys" app \
-      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/live-e2e-cli.js' ;;
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/live-e2e-cli.js' | tee "$out"
+    # Keep the run record (ids, states and decisions only) as evidence.
+    if grep -q '^RECORDING ' "$out"; then
+      mkdir -p services/api/test/scenarios/live
+      record="services/api/test/scenarios/live/live-e2e-$(date -u +%Y-%m-%dT%H-%M-%SZ).json"
+      sed -n 's/^RECORDING //p' "$out" | tail -1 >"$record"
+      echo "Recorded: $record"
+    fi
+    grep -q '^Live end-to-end: one CAPTURED' "$out" ;;
   usage-key)
     # C4 (#77): Yard's Ed25519 usage key straight into .env (never printed), and the public USAGE_AUTHORITY_KEYS line
     # for stood-api, which is safe to show. Refuses to replace an existing key unless asked: --rotate.

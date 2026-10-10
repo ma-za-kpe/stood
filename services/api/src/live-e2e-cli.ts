@@ -1,5 +1,5 @@
 import { createHash, createHmac, createPrivateKey, randomBytes, sign } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
 import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
@@ -305,13 +305,9 @@ final.final = await until(
 );
 note('decided', { milestone: 'final', state: final.final.state, decision: final.final.decision ?? null });
 
-const path = `services/api/test/scenarios/live/live-e2e-${run}.json`;
-mkdirSync('services/api/test/scenarios/live', { recursive: true });
-writeFileSync(
-  path,
-  `${JSON.stringify({ run, base, repository, allowance: draft.id, tranches, packages, events }, null, 2)}\n`,
-);
-log(`Recorded: ${path}`);
+// The run record goes to stdout on one tagged line; scripts/dev saves it under services/api/test/scenarios/live/.
+// This tool writes no network data to disk itself.
+log(`RECORDING ${JSON.stringify({ run, base, repository, allowance: draft.id, tranches, packages, events })}`);
 const expected = { one: 'RELEASED', two: 'REFUSED', final: 'RELEASED' } as const;
 const ok = Object.entries(expected).every(([name, state]) => final[name]?.state === state);
 log(
