@@ -142,6 +142,22 @@ The first argument of every POST is the idempotency key: the same key and body r
       Tests  2 passed (2)
 ```
 
+### What you get, in pictures
+
+These are real: a page of the generated reference as GitHub renders it, the generated SDK running against Stood's own router (run locally with in-memory stores, so no money moves), and the breaking-change check refusing a mistake we actually made on 10 October 2026.
+
+**1. The generated reference.** One page per operation, with its signature, the authentication it needs and every parameter. Nobody wrote this page; APIMatic generated it from `openapi/stood.json` ([live on GitHub](../../sdk/typescript/doc/controllers/api.md)).
+
+![The Create Allowance page of the generated SDK reference on GitHub](images/apimatic/apimatic-1-sdk-reference.png)
+
+**2. The SDK in use.** Typed inputs (`payeeRef`, `windowDays`) and typed results (`tranche.state`, `tranche.sentences`). The signer we added makes every request carry a fresh `Stood-Signature`.
+
+![Code calling createAllowance and getTranche through the generated SDK, and its real output](images/apimatic/apimatic-2-sdk-in-use.png)
+
+**3. A mistake caught before it shipped.** Making a field optional looked harmless, but every allowance response returns it, so clients relying on it would break. `scripts/check-openapi` (oasdiff) refused the push; the fix was a separate request schema.
+
+![oasdiff reporting two breaking changes and the push being refused, then the fix](images/apimatic/apimatic-3-breaking-change-refused.png)
+
 ## 8. How it works
 
 1. **Contract first.** Zod schemas in `contract.ts` describe each request and response; each schema with a `meta({ id })` becomes a named component. `openApiDocument()` builds the OpenAPI 3.1 document deterministically, and a test fails if the committed file differs.
