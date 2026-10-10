@@ -63,6 +63,26 @@ export class RunnerUnavailable extends Error {
   }
 }
 const TEST_SECONDS = 120;
+// Live qualification 2026-10-10: the sandbox's default user (uid 1000) holds every Linux capability, so file
+// permissions do not bind it. Tests run as nobody with every capability dropped, no way to regain one (no sudo), and
+// an empty environment.
+const UNPRIVILEGED = [
+  '--reuid=65534',
+  '--regid=65534',
+  '--clear-groups',
+  '--inh-caps=-all',
+  '--ambient-caps=-all',
+  '--bounding-set=-all',
+  '--no-new-privs',
+  '--',
+  'env',
+  '-i',
+  'PATH=/usr/local/bin:/usr/bin:/bin',
+  'HOME=/tmp',
+];
+// Succeeds only when that identity can neither create a file in the workspace nor open a frozen test for writing.
+// The append runs in a subshell: in dash a failed redirection on a builtin ends the whole shell.
+const WRITE_PROBE = `touch ${ROOT}/.stood-probe 2>/dev/null && exit 1; (: >> "$0") 2>/dev/null && exit 1; exit 0`;
 const safe = (path: string) =>
   typeof path === 'string' &&
   path.length > 0 &&
@@ -131,12 +151,17 @@ export class VercelSandboxRunner implements CodeRunner {
         }
       }
       // Audit 2026-10-10: the code under test must not be able to change what judges it. The whole workspace,
-      // frozen tests included, becomes root-owned and read-only before anything runs; the tests run unprivileged.
+      // frozen tests included, becomes root-owned and read-only before anything runs, and the identity the tests run
+      // as must really be refused a write (a permission check alone was fooled by the default user's capabilities).
       stage = 'LOCK';
       const owned = await session.runCommand({ cmd: 'chown', args: ['-R', 'root:root', ROOT], sudo: true });
       const frozen = await session.runCommand({ cmd: 'chmod', args: ['-R', 'a-w', ROOT], sudo: true });
-      const writable = await session.runCommand({ cmd: 'test', args: ['-w', ROOT] });
-      if (owned.exitCode !== 0 || frozen.exitCode !== 0 || writable.exitCode === 0) throw new RunnerUnavailable('LOCK');
+      const probe = await session.runCommand({
+        cmd: 'setpriv',
+        args: [...UNPRIVILEGED, 'sh', '-c', WRITE_PROBE, `${ROOT}/${job.frozenTests[0]?.path ?? 'package.json'}`],
+        sudo: true,
+      });
+      if (owned.exitCode !== 0 || frozen.exitCode !== 0 || probe.exitCode !== 0) throw new RunnerUnavailable('LOCK');
       // From here on the code under test is untrusted: no network at all, not even DNS.
       stage = 'NETWORK';
       await session.update({ networkPolicy: 'deny-all' });
@@ -149,9 +174,10 @@ export class VercelSandboxRunner implements CodeRunner {
         }
         const file = `${ROOT}/${test.path}`;
         const run = await session.runCommand({
-          cmd: 'timeout',
-          args: [String(TEST_SECONDS), 'node', '--test', '--test-reporter=tap', file],
+          cmd: 'setpriv',
+          args: [...UNPRIVILEGED, 'timeout', String(TEST_SECONDS), 'node', '--test', '--test-reporter=tap', file],
           cwd: ROOT,
+          sudo: true,
         });
         const passed = run.exitCode === 0 && provedPass(await run.stdout(), file);
         tests.push({ id: test.id, status: passed ? 'PASS' : 'FAIL' });

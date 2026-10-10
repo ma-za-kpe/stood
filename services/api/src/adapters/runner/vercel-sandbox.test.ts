@@ -46,8 +46,7 @@ function fakeSandbox(
       log.push(`run ${sudo ? 'sudo ' : ''}${line}`);
       if (fail === 'install' && args.includes('install')) throw new Error('session died');
       const key = Object.keys(exits).find((k) => line.includes(k));
-      // The locked workspace is not writable for the unprivileged user unless a test says otherwise.
-      const exitCode = key ? (exits[key] as number) : cmd === 'test' ? 1 : 0;
+      const exitCode = key ? (exits[key] as number) : 0;
       const tap =
         Object.entries(taps).find(([k]) => line.includes(k))?.[1] ?? (line.includes('--test') ? realPass : '');
       return { exitCode, stdout: async () => tap, stderr: async () => (cmd === 'npm' ? installOutput : '') };
@@ -88,16 +87,18 @@ describe('VercelSandboxRunner', () => {
         networkPolicy: { allow: ['registry.npmjs.org'] },
       },
     ]);
+    const probe = `touch /vercel/run/.stood-probe 2>/dev/null && exit 1; (: >> "$0") 2>/dev/null && exit 1; exit 0`;
     expect(h.log).toEqual([
       'write /vercel/run/package.json,/vercel/run/src/book.js,/vercel/run/tests/booking.test.js',
       'write /vercel/run/tests/booking.test.js,/vercel/run/tests/refund.test.js',
       'run npm install --ignore-scripts --no-audit --no-fund',
       'run sudo chown -R root:root /vercel/run',
       'run sudo chmod -R a-w /vercel/run',
-      'run test -w /vercel/run',
+      `run sudo setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs -- env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp sh -c ${probe} /vercel/run/tests/booking.test.js`,
       'network "deny-all"',
-      'run timeout 120 node --test --test-reporter=tap /vercel/run/tests/booking.test.js',
-      'run timeout 120 node --test --test-reporter=tap /vercel/run/tests/refund.test.js',
+      // As nobody, with every capability dropped: the sandbox's default user holds all of them.
+      'run sudo setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs -- env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp timeout 120 node --test --test-reporter=tap /vercel/run/tests/booking.test.js',
+      'run sudo setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all --ambient-caps=-all --bounding-set=-all --no-new-privs -- env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp timeout 120 node --test --test-reporter=tap /vercel/run/tests/refund.test.js',
       'stop',
     ]);
   });
@@ -123,7 +124,7 @@ describe('VercelSandboxRunner', () => {
   });
 
   it('skips install without a package.json, and fails a test that times out', async () => {
-    const h = fakeSandbox({ 'tests/booking.test.js': 124 });
+    const h = fakeSandbox({ 'node --test --test-reporter=tap /vercel/run/tests/booking.test.js': 124 });
     const result = await h.runner.run({ ...job, source: job.source.filter((f) => f.path !== 'package.json') });
     expect(result.tests[0]).toEqual({ id: 't1', status: 'FAIL' });
     expect(h.log.some((l) => l.includes('npm install'))).toBe(false);
@@ -150,7 +151,7 @@ describe('VercelSandboxRunner', () => {
   });
 
   it('runs nothing unless the workspace, frozen tests included, is locked read-only for the code under test', async () => {
-    for (const exits of [{ chown: 1 }, { chmod: 1 }, { 'test -w': 0 }]) {
+    for (const exits of [{ chown: 1 }, { chmod: 1 }, { 'stood-probe': 1 }]) {
       const h = fakeSandbox(exits);
       const error = await h.runner.run(job).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(RunnerUnavailable);
