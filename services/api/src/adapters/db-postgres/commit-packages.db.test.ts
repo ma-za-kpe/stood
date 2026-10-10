@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { codeParams } from '../../../test/fixtures/code-terms.js';
 import { CommitPackageError } from '../../ports/commit-package-store.js';
 import { PostgresCommitPackages } from './commit-packages.js';
 import { PostgresPlatformApi } from './platform-api.js';
@@ -28,7 +29,14 @@ async function tranche(profile = 'code.milestone@1') {
   const draft = await new PostgresPlatformApi(db).create('platform_a', randomUUID(), 'd'.repeat(64), {
     payee_ref: 'operator',
     cap: { minor: 120000, currency: 'USD' },
-    milestones: [{ name: 'build', amount: { minor: 120000, currency: 'USD' }, profile, params: {} }],
+    milestones: [
+      {
+        name: 'build',
+        amount: { minor: 120000, currency: 'USD' },
+        profile,
+        params: profile.startsWith('code.') ? codeParams : {},
+      },
+    ],
     window_days: 7,
     max_resubmits: 1,
   });

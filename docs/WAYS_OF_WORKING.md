@@ -289,6 +289,7 @@ Current ADRs:
 - [0023](adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md): a pinned, hermetic local gate, with the product check at pre-push
 - [0024](adr/0024-ci-gate-reviews-agent-code-in-the-sandbox.md): in the sandbox, the CI gate reviews agent-written code
 - [0025](adr/0025-owner-issued-yard-browser-sessions.md): owner-issued browser sessions for the hosted Yard pilot
+- [0026](adr/0026-isolated-code-runner-on-vercel-sandbox.md): untrusted builder code runs only in a disposable Vercel Sandbox microVM, with no credentials and no network while tests run; the worker signs the result outside the VM
 
 ---
 

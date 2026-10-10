@@ -197,7 +197,8 @@ it('posts frozen terms and serialises real claims using authenticated operator i
   expect(events[7]).toMatchObject({ type: 'stood.released', actor: 'stood' });
 });
 
-it('paginates beyond project 100 and keeps buyer repository out of discovery', async () => {
+// Creates 105 projects on real Postgres: seconds on a busy runner, so it has its own limit.
+it('paginates beyond project 100 and keeps buyer repository out of discovery', { timeout: 60_000 }, async () => {
   for (let i = 0; i < 105; i++) {
     const id = `${i % 2 ? 'Page' : 'page'}-${String(i).padStart(3, '0')}`;
     await board.create({ ...input, id }, buyer, 'create');

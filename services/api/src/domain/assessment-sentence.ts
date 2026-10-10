@@ -13,6 +13,8 @@ export function assessmentSentence(decision: Decision): string {
       return 'The signed tests were changed.';
     case 'tests_skipped':
       return 'Required tests were skipped.';
+    case 'tests_failed':
+      return 'A required test failed.';
     // Site-visit scenario copy.
     case 'plot': {
       const distance = decision.detail?.distance_m;

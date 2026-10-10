@@ -23,6 +23,9 @@ describe('Site-visit scenario assessment copy before payment (T-0127)', () => {
     ['missing:screen_contact', 'Missing evidence. Add screen contact.'],
     ['nonce', 'The visit code does not match.'],
     ['expired', 'The evidence arrived after the capture window.'],
+    ['signed_tests_changed', 'The signed tests were changed.'],
+    ['tests_skipped', 'Required tests were skipped.'],
+    ['tests_failed', 'A required test failed.'],
     ['unknown', 'The evidence does not meet the requirements.'],
     [null, 'The evidence does not meet the requirements.'],
   ])('describes %s without claiming a payment', (field, sentence) => {

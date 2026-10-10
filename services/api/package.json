@@ -18,7 +18,8 @@
     "drizzle-orm": "0.45.3",
     "hono": "4.13.12",
     "pg": "8.23.1",
-    "playwright-core": "1.63.0"
+    "playwright-core": "1.63.0",
+    "@vercel/sandbox": "3.5.0"
   },
   "devDependencies": {
     "@types/pg": "8.23.1"

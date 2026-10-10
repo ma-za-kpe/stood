@@ -178,6 +178,27 @@ scripts/dev planner-check   # five live drafts against the shared contract; abou
 
 The spend cap is kept in Postgres (`yard.planner_spend`), so restarts and extra instances share one daily budget. Plans are pinned to the repository's real `main` through a read-only token. The pre-deploy migration also creates the Foreman's checkpoint tables.
 
+### Code runner and settlement (T-0159, T-0164, ADR-0026)
+
+`stood-reconciler` decides code milestones itself. Every minute it takes the latest undecided package of each held code tranche and runs the buyer's frozen tests, read at the signed base commit and checked against the signed bundle hash, on the builder's exact commit in a disposable [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) microVM: no credentials inside, only the npm registry while dependencies install, no network at all while the tests run. The worker signs the result with its own Ed25519 key outside the VM, verifies it like any report, merges the read-only repository checks, and records one decision on the tranche.
+
+Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler then captures a released tranche or voids a refused one on the PayPal sandbox. Leave it unset and decisions are recorded but no money moves.
+
+| Variable | On `stood-reconciler` |
+| --- | --- |
+| `VERCEL_TOKEN` | A token scoped to the runner's team (prompted) |
+| `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Committed in `render.yaml` (the `stood-runner` project) |
+| `RUNNER_KEY_ID`, `RUNNER_SIGNING_KEY` | From `scripts/dev runner-key`, which writes them to `.env` without printing; copy both to Render |
+| `GITHUB_READ_TOKEN` | Optional, read-only, for private repositories |
+| `SETTLEMENT_EXECUTOR` | `on` to capture or void decided tranches; anything else keeps settlement off |
+
+```bash
+scripts/dev runner-check   # qualify the runner on real Vercel Sandbox: pass, fail, no network, no credentials, non-root, runaway stopped
+scripts/dev runner-key     # create the signing key (refuses to replace one; --rotate to replace)
+```
+
+Final milestones (`code.final@1`) also require the buyer's usage confirmation (`usage_release`), which is not yet wired from Yard, so they wait after passing their tests.
+
 ### Yard reads Stood (T-0189)
 
 Stood sends platforms no notifications, so `stood-yard-api` reads Stood's signed tranche view (`GET /v1/tranches/:id`) for every work order it waits on, once a minute, and applies only what that read shows: a hold for a claimed attempt, or a capture or refusal of the exact package it submitted. Set the platform's own credentials on `stood-yard-api` in Render, the same `STOOD_API_KEY` and `STOOD_HMAC_SECRET` that `stood-api` holds; `STOOD_API_URL` is committed as `https://stood-api.onrender.com`. With them, Yard creates allowance drafts through Stood and `/health` reports `payments: true`. Stood only ever talks to the PayPal sandbox, and Yard refuses any other provider.

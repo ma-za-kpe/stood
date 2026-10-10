@@ -60,6 +60,15 @@ describe('Copy for payer and inspector', () => {
         .inspector,
     ).toContain('750 m');
     expect(recipientAssessment({ ...decision, outcome: 'WAIT', effect: 'NONE' }).inspector).toContain('reviewer');
+    // Code milestones name what to fix: a changed, skipped or failed frozen test.
+    for (const [namedField, instruction] of [
+      ['signed_tests_changed', 'Restore the frozen signed tests and submit a new commit.'],
+      ['tests_skipped', 'Run every frozen test without skips or selective execution.'],
+      ['tests_failed', 'Make every frozen test pass on a new commit, then submit again.'],
+    ] as const)
+      expect(recipientAssessment({ ...decision, outcome: 'REFUSE', effect: 'VOID', namedField }).inspector).toBe(
+        instruction,
+      );
   });
   it('never claims a pending capture or cancellation paid or returned money', () => {
     const tranche = held();

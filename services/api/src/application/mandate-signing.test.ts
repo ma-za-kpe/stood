@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { codeParams } from '../../test/fixtures/code-terms.js';
 import type { Mandate, MandateStore, MandateTerms } from '../ports/mandate-store.js';
 import type { StoredDraft } from '../ports/platform-api-store.js';
 import type { VaultProvider } from '../ports/vault-provider.js';
@@ -10,7 +11,9 @@ const draft: StoredDraft = {
   status: 'DRAFT',
   payee_ref: 'payee',
   cap: { minor: 1000, currency: 'USD' },
-  milestones: [{ name: 'Build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: {} }],
+  milestones: [
+    { name: 'Build', amount: { minor: 1000, currency: 'USD' }, profile: 'code.milestone@1', params: codeParams },
+  ],
   window_days: 7,
   max_resubmits: 1,
   tranches: [{ id: 'tranche', name: 'Build' }],

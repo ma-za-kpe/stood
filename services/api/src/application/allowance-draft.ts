@@ -1,6 +1,7 @@
 import { Allowance } from '../domain/allowance.js';
 import { Money } from '../domain/money.js';
 import type { DraftInput } from '../ports/platform-api-store.js';
+import { codeTerms } from './code-terms.js';
 
 function object(value: unknown, keys?: readonly string[]): Record<string, unknown> {
   if (
@@ -33,11 +34,13 @@ export function allowanceDraft(value: unknown): DraftInput {
     throw new RangeError('Invalid draft limits');
   const milestones = v.milestones.map((raw: unknown) => {
     const m = object(raw, ['name', 'amount', 'profile', 'params']);
+    const profileId = text(m.profile, 100);
     return {
       name: text(m.name, 100),
       amount: money(m.amount),
-      profileId: text(m.profile, 100),
-      params: object(m.params ?? {}),
+      profileId,
+      // T-0159: a code milestone binds the runner and verifier to the terms signed here, so they must hold together.
+      params: profileId.startsWith('code.') ? { ...codeTerms(m.params) } : object(m.params ?? {}),
     };
   });
   const draft = new Allowance({

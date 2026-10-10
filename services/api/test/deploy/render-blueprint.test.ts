@@ -21,7 +21,7 @@ type Service = {
 };
 const blueprint = parse(readFileSync('render.yaml', 'utf8')) as { services: Service[] };
 const secretName = /SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|CLIENT_ID|WEBHOOK_ID|OWNER|OPERATORS/;
-const ownerChoice = ['PROVIDER_PAYPAL'];
+const ownerChoice = ['PROVIDER_PAYPAL', 'SETTLEMENT_EXECUTOR', 'RUNNER_KEY_ID'];
 const live = /sk_live|rk_live|api-m\.paypal\.com|FLWSECK-(?!TEST)/i;
 // Every variable each entry point reads must be declared, so the owner is prompted for all of them.
 const reads: Record<string, readonly string[]> = {
@@ -45,6 +45,13 @@ const reads: Record<string, readonly string[]> = {
     'PAYPAL_CLIENT_ID',
     'PAYPAL_CLIENT_SECRET',
     'VAULT_TOKEN_KEYS',
+    'VERCEL_TOKEN',
+    'VERCEL_TEAM_ID',
+    'VERCEL_PROJECT_ID',
+    'RUNNER_KEY_ID',
+    'RUNNER_SIGNING_KEY',
+    'GITHUB_READ_TOKEN',
+    'SETTLEMENT_EXECUTOR',
   ],
   // T-0214: yard-api reads its own restricted database URL; the owner-capable URL is used only by pre-deploy.
   'stood-yard-api': [
