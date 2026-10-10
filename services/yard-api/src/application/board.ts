@@ -278,7 +278,9 @@ export const MAX_ACTIVE_CLAIMS = 2;
 export class Board {
   constructor(
     readonly events: YardEvents,
-    private readonly limits: Readonly<{ maxActiveClaims: number }> = { maxActiveClaims: MAX_ACTIVE_CLAIMS },
+    private readonly limits: Readonly<{ maxActiveClaims: number; payee?: string }> = {
+      maxActiveClaims: MAX_ACTIVE_CLAIMS,
+    },
   ) {}
   // Active, unexpired leases held by an operator root across every project (paged).
   async activeClaims(root: string, now: number, except?: Readonly<{ id: string; wo: string }>): Promise<number> {
@@ -640,7 +642,9 @@ export class Board {
         const latest = Math.max(...effective.map((m) => m.deadline));
         const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
         const request: MandateRequest = {
-          payee_ref: `yard:${id}`,
+          // ADR-0027: Yard's PayPal merchant receives the capture; builders are paid out after release. Without a
+          // configured merchant (local simulations) the payee is a project reference only a simulator accepts.
+          payee_ref: this.limits.payee ?? `yard:${id}`,
           // Stood's cap covers builder milestones only; Yard and provider costs are never captured through it.
           cap: {
             minor: effective.reduce((n, m) => n + m.budgetMinor, 0),

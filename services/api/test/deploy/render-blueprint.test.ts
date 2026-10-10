@@ -22,7 +22,13 @@ type Service = {
 const blueprint = parse(readFileSync('render.yaml', 'utf8')) as { services: Service[] };
 const secretName = /SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|CLIENT_ID|WEBHOOK_ID|OWNER|OPERATORS/;
 // The evidence endpoint names the owner's Cloudflare account, so it is prompted rather than committed (C4).
-const ownerChoice = ['PROVIDER_PAYPAL', 'SETTLEMENT_EXECUTOR', 'RUNNER_KEY_ID', 'STOOD_EVIDENCE_S3_ENDPOINT'];
+const ownerChoice = [
+  'PROVIDER_PAYPAL',
+  'SETTLEMENT_EXECUTOR',
+  'RUNNER_KEY_ID',
+  'STOOD_EVIDENCE_S3_ENDPOINT',
+  'YARD_PAYPAL_MERCHANT_ID',
+];
 const live = /sk_live|rk_live|api-m\.paypal\.com|FLWSECK-(?!TEST)/i;
 // Every variable each entry point reads must be declared, so the owner is prompted for all of them.
 const reads: Record<string, readonly string[]> = {
@@ -63,6 +69,7 @@ const reads: Record<string, readonly string[]> = {
   'stood-yard-api': [
     'YARD_ENV',
     'PORT',
+    'YARD_PAYPAL_MERCHANT_ID',
     'YARD_USAGE_KEY_ID',
     'YARD_USAGE_SIGNING_KEY',
     'YARD_DATABASE_URL',
@@ -130,8 +137,8 @@ it('prompts the owner for every secret in their own Render account and commits n
       expect(JSON.stringify(e)).not.toMatch(live);
     }
     if (!stood(s)) {
-      // Yard holds no PayPal credentials at all.
-      expect(keys.filter((k) => k.includes('PAYPAL'))).toEqual([]);
+      // Yard holds no PayPal credentials. Its merchant id (ADR-0027) is a public identifier, not a credential.
+      expect(keys.filter((k) => k.includes('PAYPAL') && k !== 'YARD_PAYPAL_MERCHANT_ID')).toEqual([]);
       expect(s.envVars.find((e) => e.key === 'YARD_ENV')?.value).toBe('demo');
       continue;
     }

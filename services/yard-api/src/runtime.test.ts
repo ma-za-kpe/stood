@@ -142,7 +142,17 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
 // T-0189: with Stood's platform credentials, Yard creates allowance drafts, submits packages (Stood's own runner judges
 // them) and reads every tranche it waits on. Usage forwarding needs Yard's usage key, and says so when it is missing.
 it('connects to Stood only with platform credentials over https, and says what is still off', async () => {
-  const stood = { ...hosted, STOOD_API_KEY: 'platform-key-not-real', STOOD_HMAC_SECRET: 'h'.repeat(40) };
+  const stood = {
+    ...hosted,
+    STOOD_API_KEY: 'platform-key-not-real',
+    STOOD_HMAC_SECRET: 'h'.repeat(40),
+    YARD_PAYPAL_MERCHANT_ID: 'MERCHANTID123',
+  };
+  // ADR-0027: without Yard's PayPal merchant id, payments stay off rather than naming a project as the payee.
+  const noMerchant = yardRuntime({ ...stood, YARD_PAYPAL_MERCHANT_ID: 'yard:project' });
+  expect(noMerchant.notes).toContain("Payments off: YARD_PAYPAL_MERCHANT_ID (Yard's PayPal merchant id) is required.");
+  expect(noMerchant.config.board?.mandates).toBeUndefined();
+  await noMerchant.stop();
   const on = yardRuntime(stood);
   expect(on.notes.some((n) => n.startsWith('Packages off'))).toBe(false);
   expect(on.notes).toContain('Usage off: YARD_USAGE_KEY_ID and YARD_USAGE_SIGNING_KEY (Ed25519) are required.');

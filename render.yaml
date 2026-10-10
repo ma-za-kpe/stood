@@ -161,6 +161,9 @@ services:
         sync: false
       - key: STOOD_HMAC_SECRET
         sync: false
+      # ADR-0027: Yard's PayPal merchant id, the payee of every allowance (builders are paid out after release).
+      - key: YARD_PAYPAL_MERCHANT_ID
+        sync: false
       # C4 (#77): Yard's Ed25519 usage key; Stood lists its public half in USAGE_AUTHORITY_KEYS.
       - key: YARD_USAGE_KEY_ID
         sync: false

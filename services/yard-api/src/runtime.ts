@@ -14,7 +14,7 @@ import { RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodPackageGateway } from './adapters/stood/package-gateway.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
-import { Board, type Operator } from './application/board.js';
+import { Board, MAX_ACTIVE_CLAIMS, type Operator } from './application/board.js';
 import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
 import { Previews } from './application/previews.js';
@@ -57,7 +57,11 @@ export function yardRuntime(env: Env) {
   const pool = new pg.Pool({ connectionString: url, max: 5 });
   const clock = async () => Date.now();
   const events = new PostgresYardEvents(pool, clock);
-  const board = new Board(events);
+  // ADR-0027: with the real Stood, Yard's PayPal merchant id is the payee of every allowance.
+  const merchant = env.YARD_PAYPAL_MERCHANT_ID?.trim() ?? '';
+  const payee = /^[A-Z0-9]{13}$/.test(merchant) ? merchant : null;
+  if (stood && !payee) notes.push("Payments off: YARD_PAYPAL_MERCHANT_ID (Yard's PayPal merchant id) is required.");
+  const board = new Board(events, payee ? { maxActiveClaims: MAX_ACTIVE_CLAIMS, payee } : undefined);
   const logs = new PostgresSiteLogs(pool, events);
   const scanner = new GitleaksScanner();
   let retention: ReturnType<typeof startLogRetention> | null = null;
@@ -99,7 +103,7 @@ export function yardRuntime(env: Env) {
       siteLog: new SiteLog(logs, board, scanner),
       // T-0189: allowance drafts through Stood's signed API.
       ...(previews ? { previews } : {}),
-      ...(stood ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
+      ...(stood && payee ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
       // T-0189: submitted work goes to Stood, whose own runner runs the buyer's frozen tests on the exact commit.
       ...(stood ? { packages: new StoodPackageGateway(stood) } : {}),
     },
