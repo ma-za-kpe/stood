@@ -21,7 +21,7 @@ export const CodeTerms = z
     manifestHash: sha64,
     testIds: z.array(z.string()).min(1).max(200),
     tests: z
-      .array(z.object({ id: z.string(), path: z.string() }).strict())
+      .array(z.object({ id: z.string(), path: z.string() }).strict().meta({ id: 'FrozenTest' }))
       .min(1)
       .max(200),
     minMutation: z.number().min(0).max(1),
@@ -62,7 +62,7 @@ export const Allowance = z
     milestones: z.array(Milestone),
     window_days: z.number().int(),
     max_resubmits: z.number().int(),
-    tranches: z.array(z.object({ id, name: z.string() }).strict()),
+    tranches: z.array(z.object({ id, name: z.string() }).strict().meta({ id: 'TrancheRef' })),
   })
   .strict()
   .meta({ id: 'Allowance' });
@@ -83,7 +83,7 @@ export const CommitPackage = z
     id,
     trancheId: id,
     status: z.literal('QUEUED'),
-    waitingFor: z.enum(['HOLD', 'RENEWAL', 'RUNNER']),
+    waitingFor: z.enum(['HOLD', 'RENEWAL', 'RUNNER']).meta({ id: 'PackageWaitingFor' }),
     metadata: CommitPackageInput,
     createdAt: instant,
   })
@@ -93,7 +93,9 @@ export const CommitPackage = z
 export const Mandate = z
   .object({
     key: z.string(),
-    status: z.enum(['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'TOKENIZING', 'SIGNED', 'REVOKED']),
+    status: z
+      .enum(['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'TOKENIZING', 'SIGNED', 'REVOKED'])
+      .meta({ id: 'MandateStatus' }),
     approve_url: z.string().nullable().describe('Only while AWAITING_APPROVAL: where the buyer approves'),
     expires_at: z.number().int().describe('When the signing request lapses, Unix milliseconds'),
   })
@@ -111,7 +113,9 @@ export const FundingRequest = z
 export const Funding = z
   .object({
     key: z.string(),
-    status: z.enum(['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED']),
+    status: z
+      .enum(['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED'])
+      .meta({ id: 'FundingStatus' }),
     approve_url: z.string().nullable(),
     hold_expires_at: z.number().int().nullable().describe('Only while HELD: when the hold lapses, Unix milliseconds'),
   })
@@ -120,8 +124,8 @@ export const Funding = z
 
 export const Decision = z
   .object({
-    outcome: z.enum(['RELEASE', 'REFUSE', 'WAIT']),
-    effect: z.enum(['CAPTURE', 'VOID', 'NONE', 'REVIEW']),
+    outcome: z.enum(['RELEASE', 'REFUSE', 'WAIT']).meta({ id: 'DecisionOutcome' }),
+    effect: z.enum(['CAPTURE', 'VOID', 'NONE', 'REVIEW']).meta({ id: 'PaymentEffect' }),
     profileId: z.string(),
     ruleSetVersion: z.string(),
     namedField: z.string().nullable(),
@@ -131,24 +135,28 @@ export const Decision = z
   .loose()
   .meta({ id: 'Decision' });
 
+export const TrancheState = z
+  .enum([
+    'PENDING',
+    'WAIT_FUNDING',
+    'HELD',
+    'DECIDING',
+    'WAITING',
+    'CAPTURE_PENDING',
+    'VOID_PENDING',
+    'REAUTHORIZE_PENDING',
+    'RELEASED',
+    'REFUSED',
+    'EXPIRED',
+    'CANCELLED',
+    'DISPUTED',
+  ])
+  .meta({ id: 'TrancheState' });
+
 export const Tranche = z
   .object({
     id,
-    state: z.enum([
-      'PENDING',
-      'WAIT_FUNDING',
-      'HELD',
-      'DECIDING',
-      'WAITING',
-      'CAPTURE_PENDING',
-      'VOID_PENDING',
-      'REAUTHORIZE_PENDING',
-      'RELEASED',
-      'REFUSED',
-      'EXPIRED',
-      'CANCELLED',
-      'DISPUTED',
-    ]),
+    state: TrancheState,
     version: z.number().int().describe('Send as expected_version when funding'),
     profile: z.string(),
     amount: Money,
@@ -156,14 +164,19 @@ export const Tranche = z
     hold: z
       .object({ age_seconds: z.number().int().min(0), expires_at: instant })
       .strict()
+      .meta({ id: 'TrancheHold' })
       .nullable(),
-    settlement: z.object({ effect: z.string() }).loose().nullable(),
+    settlement: z.object({ effect: z.string() }).loose().meta({ id: 'Settlement' }).nullable(),
     safe_recovery: z.boolean(),
-    pending: z.object({ effect: z.string(), status: z.string(), created_at: instant }).strict().nullable(),
+    pending: z
+      .object({ effect: z.string(), status: z.string(), created_at: instant })
+      .strict()
+      .meta({ id: 'PendingPaymentOperation' })
+      .nullable(),
     sentences: z.record(z.string(), z.unknown()).describe('Plain-language status for the payer and the inspector'),
     package_id: id.nullable(),
     resubmissions_left: z.number().int().min(0),
-    provider: z.enum(['paypal-sandbox', 'simulator']),
+    provider: z.enum(['paypal-sandbox', 'simulator']).meta({ id: 'PaymentProvider' }),
   })
   .strict()
   .meta({ id: 'Tranche' });
@@ -279,12 +292,36 @@ const ref = (s: z.ZodType) => {
   return inline;
 };
 
+// Zod writes `X | null` as anyOf [X, {type: null}]. APIMatic models that as a wrapper type that refuses null, so
+// a nullable reference is written oneOf [ref, null] and a nullable plain value as type [t, "null"] (checked by
+// generating the SDK with each spelling; the 3.0 `nullable` keyword is ignored).
+function nullables(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(nullables);
+  if (!value || typeof value !== 'object') return value;
+  const node = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, nullables(v)])) as Record<string, unknown>;
+  const options = node.anyOf;
+  if (!Array.isArray(options) || options.length !== 2) return node;
+  const isNull = (o: unknown) => !!o && typeof o === 'object' && (o as { type?: unknown }).type === 'null';
+  const other = options.find((o) => !isNull(o)) as Record<string, unknown> | undefined;
+  if (!other || !options.some(isNull)) return node;
+  const { anyOf: _anyOf, ...rest } = node;
+  if (typeof other.type === 'string') return { ...rest, ...other, type: [other.type, 'null'] };
+  return { ...rest, oneOf: [other, { type: 'null' }] };
+}
+
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
 export const API_VERSION = '1.0.0';
 
+export type OpenApiDocument = Readonly<{
+  openapi: string;
+  info: Readonly<Record<string, unknown>>;
+  paths: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  components: Readonly<Record<string, unknown>>;
+}>;
+
 // The OpenAPI 3.1 document. Deterministic: the same schemas always produce the same bytes.
-export function openApiDocument(version: string = API_VERSION) {
+export function openApiDocument(version: string = API_VERSION): OpenApiDocument {
   // Every schema above that carries a meta id becomes a named component; references point at components.
   const { schemas } = z.toJSONSchema(z.globalRegistry, {
     target: 'draft-2020-12',
@@ -347,7 +384,7 @@ export function openApiDocument(version: string = API_VERSION) {
       },
     };
   }
-  return {
+  return nullables({
     openapi: '3.1.0',
     info: {
       title: 'Stood platform API',
@@ -372,7 +409,7 @@ export function openApiDocument(version: string = API_VERSION) {
         },
       },
     },
-  };
+  }) as OpenApiDocument;
 }
 const PROBLEM_TEXT: Readonly<Record<number, string>> = {
   401: 'Missing or invalid platform key or signature',

@@ -5,7 +5,7 @@ export default defineConfig({
     // Slow shared builders (Render's image build) need more than the 5 s default; CI and local keep it.
     testTimeout: Number(process.env.STOOD_TEST_TIMEOUT_MS) || 5000,
     include: ['services/**/*.test.ts', 'packages/**/*.test.ts', 'apps/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/*.db.test.ts', '**/*.network.test.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.db.test.ts', '**/*.network.test.ts', '**/*.sdk.test.ts'],
     coverage: {
       provider: 'v8',
       include: [

@@ -51,6 +51,7 @@ Buyer sign-in opens the start screen with automatically loaded clickable researc
 | Render service environment | Each service's runtime values (table below) | Render and the owner |
 | Project `.env` only (not on Render yet) | `GROK_PLANNER_API_KEY` for Yard's planner model (xAI). Checked with a free model listing (HTTP 200). The live adapter is T-0181 | The owner |
 | `~/.config/stood/yard-github-app.pem` (mode 600) | The Yard GitHub App private key; `.env` holds `GITHUB_APP_ID` and the key's path. The app is installable only on the owner's account, on selected test repositories, with Contents and Pull requests read/write and Metadata read; its webhook stays off until Yard is deployed | The owner |
+| Project `.env` only | `APIMATIC_API_KEY`: regenerates the TypeScript SDK with `scripts/dev sdk` (T-0053). From the APIMatic dashboard → Account → API Keys. Only the person regenerating needs it; CI builds and tests the committed SDK without it | The owner |
 | Project `.env` only | `GITGUARDIAN_API_KEY`: a GitGuardian personal access token with the `scan` scope, for the `ggshield` pre-push hook (T-0287). Get it at [dashboard.gitguardian.com](https://dashboard.gitguardian.com) → API → Personal access tokens. Every push fails without it | The owner |
 | `~/.claude/settings.json` (mode 600) | `PAYPAL_SANDBOX_ACCESS_TOKEN` for the PayPal AI Toolkit MCP server only ([T16](tech/T16-paypal-ai-toolkit.md)), renewed automatically by the token refresher (section 8) | The developer's Claude Code |
 

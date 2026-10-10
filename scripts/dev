@@ -80,6 +80,22 @@ PY
   openapi)
     # T-0053: regenerate openapi/stood.json from the Zod contract (services/api/src/http/contract.ts).
     exec docker compose run --rm --no-deps app sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/openapi-cli.js' ;;
+  sdk) shift
+    # T-0053: regenerate the TypeScript SDK (into sdk/typescript) from openapi/stood.json with APIMatic (CLI 1.5.0).
+    # Needs APIMATIC_API_KEY in .env (never printed). Saved customizations (the request signer) are reapplied.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^APIMATIC_API_KEY=' .env >"$keys" || true
+    cp openapi/stood.json apimatic/src/spec/stood.json
+    docker compose run --rm --no-deps --env-from-file "$keys" app sh -c \
+      'npx -y @apimatic/cli@1.5.0 sdk generate --input=apimatic --destination=sdk --language=typescript --force "$@" --auth-key="$APIMATIC_API_KEY"' sdk "$@" ;;
+  sdk-save)
+    # T-0053: save hand-made changes in sdk/typescript (the request signer) so every regeneration reapplies them.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^APIMATIC_API_KEY=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app sh -c \
+      'npx -y @apimatic/cli@1.5.0 auth login --auth-key="$APIMATIC_API_KEY" >/dev/null && npx -y @apimatic/cli@1.5.0 sdk save-changes --input=apimatic --sdk=sdk/typescript --language=typescript' ;;
   evidence-check)
     # C4 (#77): qualify Stood's evidence bucket (Cloudflare R2) with the reconciler's settings. Prints no setting.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }

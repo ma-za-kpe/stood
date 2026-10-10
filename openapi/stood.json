@@ -791,22 +791,7 @@
           "tranches": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "name"
-              ],
-              "additionalProperties": false
+              "$ref": "#/components/schemas/TrancheRef"
             }
           }
         },
@@ -892,20 +877,7 @@
             "maxItems": 200,
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "path": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "path"
-              ],
-              "additionalProperties": false
+              "$ref": "#/components/schemas/FrozenTest"
             }
           },
           "minMutation": {
@@ -944,12 +916,7 @@
             "const": "QUEUED"
           },
           "waitingFor": {
-            "type": "string",
-            "enum": [
-              "HOLD",
-              "RENEWAL",
-              "RUNNER"
-            ]
+            "$ref": "#/components/schemas/PackageWaitingFor"
           },
           "metadata": {
             "$ref": "#/components/schemas/CommitPackageInput"
@@ -1006,21 +973,10 @@
         "type": "object",
         "properties": {
           "outcome": {
-            "type": "string",
-            "enum": [
-              "RELEASE",
-              "REFUSE",
-              "WAIT"
-            ]
+            "$ref": "#/components/schemas/DecisionOutcome"
           },
           "effect": {
-            "type": "string",
-            "enum": [
-              "CAPTURE",
-              "VOID",
-              "NONE",
-              "REVIEW"
-            ]
+            "$ref": "#/components/schemas/PaymentEffect"
           },
           "profileId": {
             "type": "string"
@@ -1050,6 +1006,30 @@
         ],
         "additionalProperties": {}
       },
+      "DecisionOutcome": {
+        "type": "string",
+        "enum": [
+          "RELEASE",
+          "REFUSE",
+          "WAIT"
+        ]
+      },
+      "FrozenTest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "path"
+        ],
+        "additionalProperties": false
+      },
       "Funding": {
         "type": "object",
         "properties": {
@@ -1057,16 +1037,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string",
-            "enum": [
-              "RESERVED",
-              "CREATING",
-              "AWAITING_APPROVAL",
-              "AUTHORIZING",
-              "HELD",
-              "FAILED",
-              "EXPIRED"
-            ]
+            "$ref": "#/components/schemas/FundingStatus"
           },
           "approve_url": {
             "type": [
@@ -1075,17 +1046,13 @@
             ]
           },
           "hold_expires_at": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
+            "description": "Only while HELD: when the hold lapses, Unix milliseconds",
+            "type": [
+              "integer",
+              "null"
             ],
-            "description": "Only while HELD: when the hold lapses, Unix milliseconds"
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -1116,6 +1083,18 @@
         ],
         "additionalProperties": false
       },
+      "FundingStatus": {
+        "type": "string",
+        "enum": [
+          "RESERVED",
+          "CREATING",
+          "AWAITING_APPROVAL",
+          "AUTHORIZING",
+          "HELD",
+          "FAILED",
+          "EXPIRED"
+        ]
+      },
       "Mandate": {
         "type": "object",
         "properties": {
@@ -1123,15 +1102,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string",
-            "enum": [
-              "RESERVED",
-              "CREATING",
-              "AWAITING_APPROVAL",
-              "TOKENIZING",
-              "SIGNED",
-              "REVOKED"
-            ]
+            "$ref": "#/components/schemas/MandateStatus"
           },
           "approve_url": {
             "description": "Only while AWAITING_APPROVAL: where the buyer approves",
@@ -1154,6 +1125,17 @@
           "expires_at"
         ],
         "additionalProperties": false
+      },
+      "MandateStatus": {
+        "type": "string",
+        "enum": [
+          "RESERVED",
+          "CREATING",
+          "AWAITING_APPROVAL",
+          "TOKENIZING",
+          "SIGNED",
+          "REVOKED"
+        ]
       },
       "Milestone": {
         "type": "object",
@@ -1216,6 +1198,51 @@
         ],
         "additionalProperties": false
       },
+      "PackageWaitingFor": {
+        "type": "string",
+        "enum": [
+          "HOLD",
+          "RENEWAL",
+          "RUNNER"
+        ]
+      },
+      "PaymentEffect": {
+        "type": "string",
+        "enum": [
+          "CAPTURE",
+          "VOID",
+          "NONE",
+          "REVIEW"
+        ]
+      },
+      "PaymentProvider": {
+        "type": "string",
+        "enum": [
+          "paypal-sandbox",
+          "simulator"
+        ]
+      },
+      "PendingPaymentOperation": {
+        "type": "object",
+        "properties": {
+          "effect": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "UTC ISO-8601 timestamp"
+          }
+        },
+        "required": [
+          "effect",
+          "status",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
       "Problem": {
         "type": "object",
         "properties": {
@@ -1248,6 +1275,18 @@
         "additionalProperties": false,
         "description": "RFC 9457 problem details"
       },
+      "Settlement": {
+        "type": "object",
+        "properties": {
+          "effect": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "effect"
+        ],
+        "additionalProperties": {}
+      },
       "Tranche": {
         "type": "object",
         "properties": {
@@ -1257,22 +1296,7 @@
             "maxLength": 200
           },
           "state": {
-            "type": "string",
-            "enum": [
-              "PENDING",
-              "WAIT_FUNDING",
-              "HELD",
-              "DECIDING",
-              "WAITING",
-              "CAPTURE_PENDING",
-              "VOID_PENDING",
-              "REAUTHORIZE_PENDING",
-              "RELEASED",
-              "REFUSED",
-              "EXPIRED",
-              "CANCELLED",
-              "DISPUTED"
-            ]
+            "$ref": "#/components/schemas/TrancheState"
           },
           "version": {
             "type": "integer",
@@ -1287,7 +1311,7 @@
             "$ref": "#/components/schemas/Money"
           },
           "decision": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/Decision"
               },
@@ -1297,25 +1321,9 @@
             ]
           },
           "hold": {
-            "anyOf": [
+            "oneOf": [
               {
-                "type": "object",
-                "properties": {
-                  "age_seconds": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
-                  },
-                  "expires_at": {
-                    "type": "string",
-                    "description": "UTC ISO-8601 timestamp"
-                  }
-                },
-                "required": [
-                  "age_seconds",
-                  "expires_at"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/TrancheHold"
               },
               {
                 "type": "null"
@@ -1323,18 +1331,9 @@
             ]
           },
           "settlement": {
-            "anyOf": [
+            "oneOf": [
               {
-                "type": "object",
-                "properties": {
-                  "effect": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "effect"
-                ],
-                "additionalProperties": {}
+                "$ref": "#/components/schemas/Settlement"
               },
               {
                 "type": "null"
@@ -1345,27 +1344,9 @@
             "type": "boolean"
           },
           "pending": {
-            "anyOf": [
+            "oneOf": [
               {
-                "type": "object",
-                "properties": {
-                  "effect": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  },
-                  "created_at": {
-                    "type": "string",
-                    "description": "UTC ISO-8601 timestamp"
-                  }
-                },
-                "required": [
-                  "effect",
-                  "status",
-                  "created_at"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/PendingPaymentOperation"
               },
               {
                 "type": "null"
@@ -1381,16 +1362,12 @@
             "description": "Plain-language status for the payer and the inspector"
           },
           "package_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
           },
           "resubmissions_left": {
             "type": "integer",
@@ -1398,11 +1375,7 @@
             "maximum": 9007199254740991
           },
           "provider": {
-            "type": "string",
-            "enum": [
-              "paypal-sandbox",
-              "simulator"
-            ]
+            "$ref": "#/components/schemas/PaymentProvider"
           }
         },
         "required": [
@@ -1422,6 +1395,61 @@
           "provider"
         ],
         "additionalProperties": false
+      },
+      "TrancheHold": {
+        "type": "object",
+        "properties": {
+          "age_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "UTC ISO-8601 timestamp"
+          }
+        },
+        "required": [
+          "age_seconds",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "TrancheRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "TrancheState": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "WAIT_FUNDING",
+          "HELD",
+          "DECIDING",
+          "WAITING",
+          "CAPTURE_PENDING",
+          "VOID_PENDING",
+          "REAUTHORIZE_PENDING",
+          "RELEASED",
+          "REFUSED",
+          "EXPIRED",
+          "CANCELLED",
+          "DISPUTED"
+        ]
       }
     },
     "securitySchemes": {
