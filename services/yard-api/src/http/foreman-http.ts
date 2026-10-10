@@ -1,6 +1,7 @@
 import type { PlannerIntake } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import type { Operator } from '../application/board.js';
+import { planBlueprint } from '../application/plan-blueprint.js';
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
 export function foremanHttp(
@@ -8,6 +9,7 @@ export function foremanHttp(
   config: Readonly<{
     foreman: ForemanPlans;
     request(c: Context): Readonly<{ actor: Operator; body: string; now: number }>;
+    blueprints?: Omit<Parameters<typeof planBlueprint>[2], 'plans'>;
   }>,
 ) {
   const actor = (c: Context) => {
@@ -86,6 +88,17 @@ export function foremanHttp(
       await invoke(() => config.foreman.revise(c.req.param('id'), buyer, version, input.feedback as string)),
     );
   });
+  // C4 (#77): seed the accepted plan's tests, create its blueprint and freeze it once Stood shows every test red.
+  // Idempotent: the buyer calls it again to read progress until it is FROZEN or NEEDS_REVISION.
+  if (config.blueprints) {
+    const deps = { ...config.blueprints, plans: config.foreman };
+    app.post('/yard/v1/plans/:id/blueprint', async (c) => {
+      body(c, []);
+      const operator = actor(c);
+      c.header('Cache-Control', 'private, no-store');
+      return c.json(await invoke(() => planBlueprint(c.req.param('id'), operator, deps)));
+    });
+  }
   app.post('/yard/v1/plans/:id/recover', async (c) => {
     const buyer = actor(c).id;
     body(c, []);

@@ -2,6 +2,7 @@ import { StoodClient } from '@stood/stood-sdk';
 import { Foreman, GrokPlannerModel, PostgresForemanCoordinator, PostgresSaver } from '@stood/yard-foreman';
 import pg from 'pg';
 import { LocalKeyWrapper } from './adapters/crypto/local-key-wrapper.js';
+import { usageSigner } from './adapters/crypto/usage-signer.js';
 import { PostgresYardEvents } from './adapters/db-postgres/events.js';
 import { PostgresIntakes } from './adapters/db-postgres/intakes.js';
 import { PostgresPlannerSpend } from './adapters/db-postgres/planner-spend.js';
@@ -13,11 +14,13 @@ import { RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, type Operator } from './application/board.js';
+import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
 import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
 import { StoodWatch } from './application/stood-watch.js';
+import { UsageForwarder } from './application/usage-forwarder.js';
 import type { createYardApp } from './http/app.js';
 import { startLogRetention } from './jobs/site-log-retention.js';
 import { YardError } from './ports/events.js';
@@ -87,6 +90,8 @@ export function yardRuntime(env: Env) {
       ...(foreman && planner
         ? { foreman, intakePlanner: new IntakePlanner(intakes, foreman, planner.repositories) }
         : {}),
+      // C4 (#77): accepted plans become frozen blueprints once Stood's runner shows every frozen test red.
+      ...(foreman && planner && stood ? { planBlueprints: { ...planner.seed, stood } } : {}),
       clock,
       operators,
       secrets: vault,
@@ -97,8 +102,14 @@ export function yardRuntime(env: Env) {
     },
   };
   const watch = stood ? new StoodWatch(board, new StoodTrancheProofs(stood)) : null;
+  // C4 (#77): the buyer's usage confirmations go to Stood as receipts signed with Yard's usage key.
+  const signer = usageSigner(env.YARD_USAGE_KEY_ID, env.YARD_USAGE_SIGNING_KEY);
+  if (stood && !signer) notes.push('Usage off: YARD_USAGE_KEY_ID and YARD_USAGE_SIGNING_KEY (Ed25519) are required.');
+  const usage = stood && signer ? new UsageForwarder(board, stood, signer, Date.now) : null;
   let watching: ReturnType<typeof setInterval> | null = null;
   let sweeping: ReturnType<typeof setInterval> | null = null;
+  let forwarding: ReturnType<typeof setInterval> | null = null;
+  let expiring: ReturnType<typeof setInterval> | null = null;
   return {
     config,
     notes,
@@ -125,11 +136,29 @@ export function yardRuntime(env: Env) {
         watching.unref();
         await tick();
       }
+      // T-0217: intake drafts nobody touched for 90 days are erased once a day, with the planner's copy.
+      const expire = () =>
+        expireIntakes(
+          Date.now(),
+          foreman ? { intakes, projects: events, foreman } : { intakes, projects: events },
+        ).catch(() => process.stderr.write(`${JSON.stringify({ code: 'INTAKE_EXPIRY_FAILED' })}\n`));
+      expiring = setInterval(expire, 86_400_000);
+      expiring.unref();
+      await expire();
+      if (usage) {
+        const forward = () =>
+          usage.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'USAGE_FORWARD_FAILED' })}\n`));
+        forwarding = setInterval(forward, 60_000);
+        forwarding.unref();
+        await forward();
+      }
     },
     async stop() {
       retention?.stop();
       if (watching) clearInterval(watching);
       if (sweeping) clearInterval(sweeping);
+      if (forwarding) clearInterval(forwarding);
+      if (expiring) clearInterval(expiring);
       await pool.end();
     },
   };
@@ -165,6 +194,8 @@ export function plannerConfig(env: Env, notes: string[]) {
     apiKey,
     model: env.GROK_PLANNER_MODEL?.trim() || undefined,
     dailyMicros: Math.round(dollars * 1_000_000),
+    // C4 (#77): the same App seeds the buyer's frozen tests when a plan becomes a blueprint.
+    seed: { repositories: app, installation },
     repositories: {
       async resolve(_buyer: string, requested: string) {
         if (requested !== repository) throw new YardError('FORBIDDEN');

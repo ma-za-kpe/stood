@@ -195,5 +195,12 @@ describe('runCodeJob', () => {
     const t = restoreTrancheRecord((await h.store.load('fin')).record);
     expect(t.state).toBe('WAITING');
     expect(t.decisions.at(-1)?.decision).toMatchObject({ outcome: 'WAIT', reason: 'missing_result:usage_release' });
+    // C4 (#77): once the buyer's use is confirmed, the same package is decided again, once, and released.
+    const confirmed = job({ trancheId: 'fin', profileId: 'code.final@1', usageConfirmed: true });
+    expect(await runCodeJob(confirmed, h.deps)).toBe('DECIDED');
+    const released = restoreTrancheRecord((await h.store.load('fin')).record);
+    expect(released.state).toBe('CAPTURE_PENDING');
+    expect(released.decisions.at(-1)).toMatchObject({ id: 'usage:pkg_1', decision: { outcome: 'RELEASE' } });
+    expect(await runCodeJob(confirmed, h.deps)).toBe('ALREADY_DECIDED');
   });
 });

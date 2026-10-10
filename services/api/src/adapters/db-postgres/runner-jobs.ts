@@ -10,10 +10,12 @@ const {
   apiTrancheOwners: owners,
   apiAllowances: allowances,
   paymentStreams: streams,
+  usageReceipts: usage,
 } = schema;
 
 // T-0159: the runner's queue. For each code tranche that is held (or waiting after an earlier package), the latest
-// package not yet decided, with the terms the buyer signed on the allowance and the commits submitted before it.
+// package not yet decided, with the terms the buyer signed on the allowance and the commits submitted before it,
+// and a final milestone again once its use is confirmed.
 // A tranche whose stored terms no longer check is skipped rather than run against guessed terms.
 export class PostgresRunnerJobs {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -41,7 +43,25 @@ export class PostgresRunnerJobs {
       if (!latest.record) continue;
       const tranche = restoreTrancheRecord(latest.record);
       if (!['HELD', 'WAITING'].includes(tranche.state)) continue;
-      if (tranche.decisions.some((d) => d.id === `run:${latest.packageId}`)) continue;
+      // C4 (#77): a final milestone that waited only for usage runs again once a verified receipt for its commit exists.
+      const run = tranche.decisions.find((d) => d.id === `run:${latest.packageId}`);
+      let confirmed = false;
+      if (run) {
+        if (
+          tranche.state !== 'WAITING' ||
+          run.decision.outcome !== 'WAIT' ||
+          !run.decision.reason.includes('usage_release') ||
+          tranche.decisions.some((d) => d.id === `usage:${latest.packageId}`)
+        )
+          continue;
+        const [receipt] = await this.db
+          .select({ nonce: usage.nonce })
+          .from(usage)
+          .where(and(eq(usage.trancheId, trancheId), eq(usage.commit, latest.metadata.commit_sha)))
+          .limit(1);
+        if (!receipt) continue;
+        confirmed = true;
+      }
       const index = latest.body.tranches.findIndex((t) => t.id === trancheId);
       const milestone = latest.body.milestones[index];
       if (!milestone || !milestone.profile.startsWith('code.')) continue;
@@ -65,6 +85,7 @@ export class PostgresRunnerJobs {
           commit: latest.metadata.commit_sha,
         },
         priorCommits: list.slice(0, -1).map((r) => r.metadata.commit_sha),
+        ...(confirmed ? { usageConfirmed: true } : {}),
       });
       if (jobs.length >= limit) break;
     }

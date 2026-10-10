@@ -171,12 +171,14 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
 export class Foreman {
   private readonly graph;
   private readonly coordinator: ForemanCoordinator;
+  private readonly checkpoint: BaseCheckpointSaver;
   constructor(
     model: PlannerModel,
     checkpoint: BaseCheckpointSaver,
     simulated = true,
     coordinator?: ForemanCoordinator,
   ) {
+    this.checkpoint = checkpoint;
     this.coordinator = coordinator ?? memoryCoordinator(checkpoint);
     this.graph = new StateGraph(State)
       .addNode('draft', async (state) => {
@@ -247,6 +249,11 @@ export class Foreman {
     const plan = state.values.plan as Plan | undefined;
     if (!plan) throw new PlannerError('NOT_FOUND');
     return structuredClone(plan);
+  }
+  // T-0217: deletes everything the planner kept for this intake (its checkpoints and pending writes).
+  async forget(id: string): Promise<void> {
+    this.config(id);
+    await this.coordinator.run(id, () => this.checkpoint.deleteThread(id));
   }
   async recover(id: string, buyer: string): Promise<Plan> {
     const config = this.config(id);

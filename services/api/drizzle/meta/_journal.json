@@ -155,6 +155,20 @@
       "when": 1791469384269,
       "tag": "0021_mandate_sealed_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791623904271,
+      "tag": "0022_baselines",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791625467029,
+      "tag": "0023_usage_receipts",
+      "breakpoints": true
     }
   ]
 }

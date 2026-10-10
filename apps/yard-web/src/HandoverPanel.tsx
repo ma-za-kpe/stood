@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { browserRequestKey } from './claim-keys.js';
 import { closeBlocker } from './handover.js';
 import { api } from './http.js';
-import type { ProjectRoom } from './project-state.js';
+import type { OrderView, ProjectRoom } from './project-state.js';
 
 const reasons = {
   UNPAID: 'Every milestone must be paid by Stood before the project can close.',
@@ -32,6 +32,11 @@ export function HandoverPanel({ room, buyer }: { room: ProjectRoom; buyer: boole
     <section className="handover" aria-labelledby="handover-title">
       <p className="eyebrow">Handover</p>
       <h3 id="handover-title">{done ? 'Closed. The keys are yours.' : 'Your turn. Take the keys.'}</h3>
+      {room.orders
+        .filter((o) => o.final && o.submission && !o.payment)
+        .map((o) => (
+          <UsageConfirm key={o.id} room={room} order={o} buyer={buyer && !done} />
+        ))}
       <ul className="checklist">
         {HANDOVER_CHECKLIST.map((item) => {
           const yard = item.owner === 'YARD';
@@ -81,5 +86,39 @@ export function HandoverPanel({ room, buyer }: { room: ProjectRoom; buyer: boole
         </p>
       )}
     </section>
+  );
+}
+
+const usageText = {
+  CONFIRMED: 'You confirmed you are using it. Yard is sending that to Stood.',
+  ACCEPTED: 'Stood accepted your confirmation. It now checks the final milestone again and releases it if it passes.',
+  REFUSED: 'Stood did not accept the confirmation. Ask Yard support; nothing was paid.',
+} as const;
+// C4 (#77): the final milestone releases only once the buyer confirms they are using what was delivered.
+function UsageConfirm({ room, order, buyer }: { room: ProjectRoom; order: OrderView; buyer: boolean }) {
+  const client = useQueryClient();
+  const key = useRef(`usage-${browserRequestKey()}`);
+  const confirm = useMutation({
+    mutationFn: () =>
+      api(`/blueprints/${encodeURIComponent(room.id)}/work-orders/${encodeURIComponent(order.id)}/usage`, {
+        method: 'POST',
+        body: '{}',
+        headers: { 'If-Match': String(room.version), 'Idempotency-Key': key.current },
+      }),
+    onSettled: () => client.invalidateQueries({ queryKey: ['room', room.id] }),
+  });
+  if (order.usage) return <p role="status">{usageText[order.usage.status]}</p>;
+  if (!buyer) return <p className="fine">{order.name}: waiting for the buyer to confirm use.</p>;
+  return (
+    <div className="usage">
+      <p>
+        {order.name} is delivered. Its payment is released only once you confirm you are using it, so the builder is
+        paid for something that works for you.
+      </p>
+      <button type="button" disabled={confirm.isPending} onClick={() => confirm.mutate()}>
+        {confirm.isPending ? 'Confirming…' : `I’m using ${order.name}`}
+      </button>
+      {confirm.isError && <p role="alert">{(confirm.error as Error).message}</p>}
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { setTimeout } from 'node:timers/promises';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import { PostgresBaselines } from './adapters/db-postgres/baselines.js';
 import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js';
 import { confirmedCaptures } from './adapters/db-postgres/ledger-captures.js';
 import { PostgresReconciliationFindings } from './adapters/db-postgres/reconciliation-findings.js';
@@ -13,6 +14,7 @@ import { PayPalAdapter } from './adapters/payments-paypal/adapter.js';
 import { reportSigner } from './adapters/runner/report-signer.js';
 import { VercelSandboxRunner } from './adapters/runner/vercel-sandbox.js';
 import { vercelSandbox } from './adapters/runner/vercel-sdk.js';
+import { runBaseline } from './application/baseline-run.js';
 import { runCodeJob } from './application/code-run.js';
 import { runReconciliationAudit } from './application/reconciliation-audit-run.js';
 import { reconciliationTick } from './application/reconciliation-worker.js';
@@ -62,6 +64,7 @@ if (!missing.length && problem) {
     const runner = settings.runner;
     if (runner) {
       const jobs = new PostgresRunnerJobs(db);
+      const baselines = new PostgresBaselines(db);
       const deps = {
         store,
         reader: new GitHubRepositoryReader(
@@ -85,6 +88,15 @@ if (!missing.length && problem) {
             }
           } catch {
             process.stdout.write('Code runner: queue unavailable.\n');
+          }
+          // C4 (#77): baselines use the same runner, after the packages waiting on money.
+          try {
+            for (const job of await baselines.pending(2)) {
+              const outcome = await runBaseline(job, { ...deps, store: baselines }).catch(() => 'FAILED');
+              process.stdout.write(`Code runner: baseline ${job.id} ${outcome}.\n`);
+            }
+          } catch {
+            process.stdout.write('Code runner: baseline queue unavailable.\n');
           }
           await setTimeout(60_000, undefined, { signal: abort.signal }).catch(() => undefined);
         }

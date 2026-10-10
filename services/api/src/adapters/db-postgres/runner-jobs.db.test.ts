@@ -5,12 +5,13 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { codeParams } from '../../../test/fixtures/code-terms.js';
-import { decide } from '../../domain/decision.js';
+import { decide, getProfile } from '../../domain/decision.js';
 import { PostgresCommitPackages } from './commit-packages.js';
 import { PostgresPlatformApi } from './platform-api.js';
 import { PostgresRunnerJobs } from './runner-jobs.js';
 import * as schema from './schema.js';
 import { PostgresTranches } from './tranches.js';
+import { PostgresUsageReceipts } from './usage-receipts.js';
 
 const name = `test_runner_jobs_${randomUUID().replaceAll('-', '')}`;
 const admin = new pg.Pool({ connectionString: 'postgres://stood:stood_local_only@db:5432/stood' });
@@ -75,4 +76,106 @@ it('lists the latest package of each held code tranche with its signed terms, un
     args: [decide('code.milestone@1', []), `run:${latest.id}`, at + 1],
   });
   expect(await jobs.pending()).toEqual([]);
+});
+
+// C4 (#77): a final milestone that waited only for usage returns to the queue once a verified receipt exists for
+// its package's commit, and leaves it when decided again.
+it('queues a waiting final milestone again once its use is confirmed for that commit', async () => {
+  const draft = await new PostgresPlatformApi(db).create('platform_u', randomUUID(), 'd'.repeat(64), {
+    payee_ref: 'builder',
+    cap: { minor: 1000, currency: 'USD' },
+    milestones: [
+      { name: 'final', amount: { minor: 1000, currency: 'USD' }, profile: 'code.final@1', params: codeParams },
+    ],
+    window_days: 7,
+    max_resubmits: 1,
+  });
+  const [final] = draft.tranches.map((t) => t.id) as [string];
+  const tranches = new PostgresTranches(db);
+  await tranches.apply(final, 0, 'dispatch', { method: 'dispatch', args: ['auth-u', 'K7R', at, at + 28 * 86400000] });
+  const pkg = await new PostgresCommitPackages(db).submit(
+    'platform_u',
+    final,
+    'only',
+    'a'.repeat(64),
+    metadata('e'.repeat(40)),
+  );
+  const held = await tranches.load(final);
+  const started = await tranches.apply(final, held.version, 'start', { method: 'startDeciding', args: [] });
+  const passing = getProfile('code.final@1')
+    .checks.filter(({ code }) => code !== 'usage_release')
+    .map(({ code }) => ({ code, source: 'RULE' as const, status: 'PASS' as const, reason: 'ok' }));
+  await tranches.apply(final, started.version, `run:${pkg.id}`, {
+    method: 'beginSettlement',
+    args: [decide('code.final@1', passing), `run:${pkg.id}`, at + 1],
+  });
+  const jobs = new PostgresRunnerJobs(db);
+  const mine = async () => (await jobs.pending(50)).filter((j) => j.trancheId === final);
+  expect(await mine()).toEqual([]);
+  const usage = new PostgresUsageReceipts(db);
+  const receipt = {
+    version: 1 as const,
+    allowanceId: draft.id,
+    trancheId: final,
+    commit: 'f'.repeat(40),
+    authority: { keyId: 'yard-usage-1', root: 'yard-buyers' },
+    observedAt: at,
+    nonce: `nonce-${randomUUID()}`,
+    signature: 'c2lnbmVk',
+  };
+  // A receipt for another commit does not count.
+  await usage.record('platform_u', receipt);
+  expect(await mine()).toEqual([]);
+  await usage.record('platform_u', { ...receipt, commit: 'e'.repeat(40), nonce: `nonce-${randomUUID()}` });
+  expect(await mine()).toEqual([expect.objectContaining({ packageId: pkg.id, usageConfirmed: true })]);
+  const waiting = await tranches.load(final);
+  await tranches.apply(final, waiting.version, `usage:${pkg.id}`, {
+    method: 'beginSettlement',
+    args: [
+      decide('code.final@1', [...passing, { code: 'usage_release', source: 'RULE', status: 'PASS', reason: 'ok' }]),
+      `usage:${pkg.id}`,
+      at + 2,
+    ],
+  });
+  expect(await mine()).toEqual([]);
+});
+
+// C4 (#77): the usage store finds the latest package's commit for a tranche its platform owns, and keeps each nonce once.
+it('stores verified usage once per nonce and finds it by tranche and commit', async () => {
+  const draft = await new PostgresPlatformApi(db).create('platform_v', randomUUID(), 'd'.repeat(64), {
+    payee_ref: 'builder',
+    cap: { minor: 1000, currency: 'USD' },
+    milestones: [
+      { name: 'final', amount: { minor: 1000, currency: 'USD' }, profile: 'code.final@1', params: codeParams },
+    ],
+    window_days: 7,
+    max_resubmits: 1,
+  });
+  const [final] = draft.tranches.map((t) => t.id) as [string];
+  const usage = new PostgresUsageReceipts(db);
+  expect(await usage.target('platform_v', final)).toBeNull();
+  await new PostgresTranches(db).apply(final, 0, 'dispatch', {
+    method: 'dispatch',
+    args: ['auth-v', 'K7S', at, at + 28 * 86400000],
+  });
+  await new PostgresCommitPackages(db).submit('platform_v', final, 'p', 'a'.repeat(64), metadata('e'.repeat(40)));
+  expect(await usage.target('platform_v', final)).toEqual({ allowanceId: draft.id, commit: 'e'.repeat(40) });
+  expect(await usage.target('platform_other', final)).toBeNull();
+  const receipt = {
+    version: 1 as const,
+    allowanceId: draft.id,
+    trancheId: final,
+    commit: 'e'.repeat(40),
+    authority: { keyId: 'k', root: 'r' },
+    observedAt: at,
+    nonce: `nonce-${randomUUID()}`,
+    signature: 'c2lnbmVk',
+  };
+  const stored = await usage.record('platform_v', receipt);
+  expect(stored).toMatchObject({ trancheId: final, commit: 'e'.repeat(40), nonce: receipt.nonce });
+  expect(await usage.byNonce(receipt.nonce)).toEqual({ usage: stored, receipt });
+  expect(await usage.byNonce('nonce-unknown-000000')).toBeNull();
+  expect(await usage.find(final, 'e'.repeat(40))).toEqual(stored);
+  expect(await usage.find(final, 'f'.repeat(40))).toBeNull();
+  await expect(usage.record('platform_v', receipt)).rejects.toThrow('REPLAYED');
 });

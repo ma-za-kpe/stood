@@ -30,7 +30,7 @@ Status: hosted sandbox pilot. Owner-issued browser sessions protect buyer-owned 
 | Build log text | 90 days, then folded into counts by kind |
 | Stored keys | Deleted 7 days after handover, or on revoke |
 | Previews | At most 30 days, and removed when the project closes |
-| Intake drafts | Kept until deletion is built (open item below) |
+| Intake drafts | Until the buyer deletes them, or 90 days after the last change (T-0217). Erasure removes the draft, its history, its save receipts and the Foreman's plan checkpoints, and keeps only the intake id, the reason and the time |
 
 ## Consent copy
 
@@ -38,8 +38,7 @@ Status: hosted sandbox pilot. Owner-issued browser sessions protect buyer-owned 
 
 ## Open before real buyers
 
-- **Deletion requests.** Erasing an intake draft, and replacing operator IDs in old events with a tombstone where law requires it, is not built. The event store is append-only by design, so erasure needs a reviewed approach (for example per-project keys that can be destroyed).
-- **Automatic intake expiry** for abandoned drafts.
+- **Deletion requests for projects.** The buyer can delete an intake draft (`DELETE /yard/v1/intakes/{id}`, T-0217), and abandoned drafts expire after 90 days. A draft that already became a Board project is refused (409): the project's event store is append-only by design, so erasing it, or replacing operator ids in old events with a tombstone where law requires it, still needs a reviewed approach (for example per-project keys that can be destroyed).
 - **Hosting region and processors.** Yard runs on Render in Frankfurt with its own restricted Neon schema and roles. Research discovery contacts StartupTribunal’s public feed; pasted JSON is reviewed in the browser, then only the confirmed intake excerpt is saved. Hosted model and email adapters remain unconnected; publish the full processor list before enabling them.
 - **Legal review** of the consent copy and of the lawful basis for keeping payment records.
 

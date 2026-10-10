@@ -23,4 +23,7 @@ export interface IntakeStore {
   save(input: IntakeWrite): Promise<IntakeRecord>;
   read(id: string, after: number): Promise<readonly YardEvent[]>;
   subscribe?(id: string, wake: () => void): Promise<() => void>;
+  // T-0217: erase an intake and its history (owner only); list drafts idle since `before`.
+  erase?(id: string, owner: string, reason: 'BUYER_REQUEST' | 'EXPIRED', now: number): Promise<'ERASED' | 'ALREADY'>;
+  idle?(before: number, limit?: number): Promise<readonly Readonly<{ id: string; owner: string }>[]>;
 }

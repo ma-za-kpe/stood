@@ -22,6 +22,8 @@ export type RunnerJob = Readonly<{
   package: Readonly<{ repository: string; baseCommit: string; commit: string }>;
   // Commits already submitted for this tranche: a resubmission must be new work.
   priorCommits: readonly string[];
+  // C4 (#77): a verified usage receipt exists for this package's commit (final milestones).
+  usageConfirmed?: boolean;
 }>;
 type Deps = Readonly<{
   store: TrancheStore;
@@ -59,7 +61,8 @@ function merge(...sets: readonly (readonly CheckResult[])[]): CheckResult[] {
 // The reconciler then captures or voids. Anything unavailable decides nothing (WAIT): the package is tried again
 // later and never passes by default.
 export async function runCodeJob(job: RunnerJob, deps: Deps): Promise<'DECIDED' | 'WAIT' | 'ALREADY_DECIDED'> {
-  const decisionId = `run:${job.packageId}`;
+  // A final milestone is decided again, once, when its use is confirmed.
+  const decisionId = job.usageConfirmed ? `usage:${job.packageId}` : `run:${job.packageId}`;
   const current = await deps.store.load(job.trancheId);
   const tranche = restoreTrancheRecord(current.record);
   if (tranche.decisions.some((d) => d.id === decisionId)) return 'ALREADY_DECIDED';
@@ -135,7 +138,13 @@ export async function runCodeJob(job: RunnerJob, deps: Deps): Promise<'DECIDED' 
         // New dependencies are not allowed unless they were already in the buyer's base commit.
         dependencyAllowlist: Object.keys(await deps.reader.dependencies(t.repository, t.baseCommit)),
       });
-      checks = merge(signed, repository);
+      checks = merge(
+        signed,
+        repository,
+        job.usageConfirmed
+          ? [{ code: 'usage_release', source: 'RULE', status: 'PASS', reason: 'outside_usage_confirmed' }]
+          : [],
+      );
     } catch {
       return 'WAIT';
     }

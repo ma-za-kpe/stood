@@ -13,27 +13,44 @@ export const Money = z
   .strict()
   .meta({ id: 'Money' });
 
+const codeTermsShape = {
+  repository: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/),
+  baseCommit: sha40,
+  testBundleHash: sha64,
+  manifestHash: sha64,
+  testIds: z.array(z.string()).min(1).max(200),
+  tests: z
+    .array(z.object({ id: z.string(), path: z.string() }).strict().meta({ id: 'FrozenTest' }))
+    .min(1)
+    .max(200),
+};
+// What Stood returns: the checked terms, always with their mutation floor.
 export const CodeTerms = z
-  .object({
-    repository: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/),
-    baseCommit: sha40,
-    testBundleHash: sha64,
-    manifestHash: sha64,
-    testIds: z.array(z.string()).min(1).max(200),
-    tests: z
-      .array(z.object({ id: z.string(), path: z.string() }).strict().meta({ id: 'FrozenTest' }))
-      .min(1)
-      .max(200),
-    minMutation: z.number().min(0).max(1),
-  })
+  .object({ ...codeTermsShape, minMutation: z.number().min(0).max(1) })
   .strict()
   .meta({ id: 'CodeTerms', description: 'Frozen terms of a code milestone (profiles code.*), checked at draft time.' });
+// What a platform sends: the same terms, where the mutation floor defaults to 0 (none).
+export const CodeTermsInput = z
+  .object({
+    ...codeTermsShape,
+    minMutation: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe('Mutation-score floor from 0 to 1; no floor (0) when omitted'),
+  })
+  .strict()
+  .meta({ id: 'CodeTermsInput', description: 'Frozen terms of a code milestone, as a platform sends them.' });
 
+const milestoneShape = {
+  name: z.string().min(1).max(100),
+  amount: Money,
+  profile: z.string().min(1).max(100).describe('Evidence profile, e.g. code.milestone@1 or code.final@1'),
+};
 export const Milestone = z
   .object({
-    name: z.string().min(1).max(100),
-    amount: Money,
-    profile: z.string().min(1).max(100).describe('Evidence profile, e.g. code.milestone@1 or code.final@1'),
+    ...milestoneShape,
     params: z
       .union([CodeTerms, z.record(z.string(), z.unknown())])
       .optional()
@@ -181,6 +198,63 @@ export const Tranche = z
   .strict()
   .meta({ id: 'Tranche' });
 
+export const BaselineStatus = z.enum(['QUEUED', 'DONE', 'INVALID']).meta({
+  id: 'BaselineStatus',
+  description: 'QUEUED until Stood has run it; INVALID when the frozen tests are not at the base commit as described',
+});
+export const BaselineTest = z
+  .object({ id: z.string(), status: z.enum(['PASS', 'FAIL']).meta({ id: 'BaselineTestStatus' }) })
+  .strict()
+  .meta({ id: 'BaselineTest' });
+export const Baseline = z
+  .object({
+    id,
+    status: BaselineStatus,
+    repository: z.string(),
+    base_commit: sha40,
+    test_bundle_hash: sha64,
+    tests: z
+      .array(BaselineTest)
+      .nullable()
+      .describe('Only when DONE: every frozen test as it ran on the base commit; a red baseline is all FAIL'),
+    evidence_sha256: sha64.nullable().describe("Only when DONE: SHA-256 of the run stored in Stood's evidence bucket"),
+    created_at: instant,
+    finished_at: instant.nullable(),
+  })
+  .strict()
+  .meta({ id: 'Baseline' });
+
+export const UsageReceipt = z
+  .object({
+    version: z.literal(1),
+    allowanceId: id,
+    trancheId: id,
+    commit: sha40.describe("The tranche's latest submitted package commit"),
+    authority: z
+      .object({ keyId: z.string().max(64), root: z.string().max(100) })
+      .strict()
+      .meta({ id: 'UsageAuthority', description: "A key Stood is configured to trust, outside the builder's tree" }),
+    observedAt: z.number().int().describe('When the buyer confirmed use, Unix milliseconds (within 24 hours)'),
+    nonce: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
+    signature: z
+      .string()
+      .max(200)
+      .describe(
+        'Base64 Ed25519 signature over "stood-usage-receipt/v1", allowanceId, trancheId, commit, keyId, root, observedAt and nonce, joined by NUL',
+      ),
+  })
+  .strict()
+  .meta({ id: 'UsageReceipt', description: "The buyer's signed confirmation that a final milestone is in use" });
+export const UsageAcceptance = z
+  .object({
+    tranche_id: id,
+    commit: sha40,
+    status: z.literal('ACCEPTED').meta({ id: 'UsageStatus' }),
+    accepted_at: instant,
+  })
+  .strict()
+  .meta({ id: 'UsageAcceptance' });
+
 export const Problem = z
   .object({
     type: z.string().describe('urn:stood:problem:<code>'),
@@ -240,6 +314,25 @@ export const operations: readonly Operation[] = [
     problems: [401, 404, 503],
   },
   {
+    method: 'post',
+    path: '/baselines',
+    id: 'requestBaseline',
+    summary:
+      "Ask Stood to run one milestone's frozen tests on its base commit (a red baseline proves new work is needed)",
+    body: CodeTermsInput,
+    ok: { status: 202, schema: Baseline },
+    idempotent: true,
+    problems: [401, 409, 413, 422, 503],
+  },
+  {
+    method: 'get',
+    path: '/baselines/{id}',
+    id: 'getBaseline',
+    summary: 'Read a baseline: queued, or each frozen test as it ran on the base commit',
+    ok: { status: 200, schema: Baseline },
+    problems: [401, 404, 503],
+  },
+  {
     method: 'get',
     path: '/tranches/{id}',
     id: 'getTranche',
@@ -274,6 +367,16 @@ export const operations: readonly Operation[] = [
     ok: { status: 202, schema: CommitPackage },
     idempotent: true,
     problems: [401, 404, 409, 422, 503],
+  },
+  {
+    method: 'post',
+    path: '/tranches/{id}/usage',
+    id: 'confirmUsage',
+    summary:
+      "Forward the buyer's signed confirmation that a final milestone is in use; the runner then decides it again",
+    body: UsageReceipt,
+    ok: { status: 202, schema: UsageAcceptance },
+    problems: [401, 404, 413, 422, 503],
   },
   {
     method: 'get',
@@ -311,7 +414,7 @@ function nullables(value: unknown): unknown {
 
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
-export const API_VERSION = '1.0.0';
+export const API_VERSION = '1.2.0';
 
 export type OpenApiDocument = Readonly<{
   openapi: string;

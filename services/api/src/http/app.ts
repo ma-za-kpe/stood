@@ -238,7 +238,7 @@ export function createApp(config: AppConfig) {
     const apiConfig = config.api;
     platformApi(apiConfig); // Validate configuration at boot, before the first request.
     app.use('/v1/*', async (c, next) => {
-      if (!/^\/v1\/(allowances|tranches)(?:\/|$)/.test(c.req.path)) return next();
+      if (!/^\/v1\/(allowances|tranches|baselines)(?:\/|$)/.test(c.req.path)) return next();
       const url = new URL(c.req.url);
       url.pathname = url.pathname.slice(3);
       const now = c.get('now');
@@ -248,6 +248,9 @@ export function createApp(config: AppConfig) {
         response.status !== 404 ||
         (c.req.method === 'GET' && /^\/v1\/(allowances(?:\/[^/]+)?|tranches\/[^/]+)$/.test(c.req.path)) ||
         /^\/v1\/tranches\/[^/]+\/packages(?:\/[^/]+)?$/.test(c.req.path) ||
+        // C4 (#77): baselines and usage receipts answer their own 404s.
+        /^\/v1\/tranches\/[^/]+\/usage$/.test(c.req.path) ||
+        /^\/v1\/baselines(?:\/[^/]+)?$/.test(c.req.path) ||
         // T-0260: signing and funding answer their own 404s.
         /^\/v1\/(allowances\/[^/]+\/mandate|tranches\/[^/]+\/funding)(?:\/[^/]+)?$/.test(c.req.path)
       )
