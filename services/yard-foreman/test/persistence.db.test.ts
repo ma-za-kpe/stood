@@ -87,7 +87,14 @@ it('resumes the newest real-Postgres review despite host clock rollback, with no
         name,
         budgetMinor: 1000,
         deadline: intake.createdAt + 86400000,
-        tests: [{ id: 'works', path: 'tests/booking.test.ts', content: 'expect(await book()).toBe(true);' }],
+        tests: [
+          {
+            id: 'works',
+            path: 'tests/booking.test.ts',
+            content:
+              "import { runBuilder } from 'stood-harness';\nimport assert from 'node:assert/strict';\nassert.equal(runBuilder(['node', 'src/cli.js', 'book']).status, 0);",
+          },
+        ],
       })),
     };
     const model = { draft: vi.fn(async () => output) };

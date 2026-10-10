@@ -19,7 +19,7 @@ export function xaiServer(
           {
             id: `t${i + 1}`,
             path: `tests/stage-${i + 1}.test.js`,
-            content: `import assert from 'node:assert/strict';\nassert.equal(${i + 1}, ${i + 1});\n`,
+            content: `import assert from 'node:assert/strict';\nimport { runBuilder } from 'stood-harness';\nassert.equal(runBuilder(['node', 'src/cli.js', '${i + 1}']).status, 0);\n`,
           },
         ],
       })),

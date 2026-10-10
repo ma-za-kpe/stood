@@ -19,7 +19,14 @@ const fixture = () => {
         name,
         budgetMinor: 1000,
         deadline: intake.createdAt + 7 * 86400000,
-        tests: [{ id: 'book', path: 'tests/book.test.ts', content: 'expect(await book()).toBe(true);' }],
+        tests: [
+          {
+            id: 'book',
+            path: 'tests/book.test.ts',
+            content:
+              "import { runBuilder } from 'stood-harness';\nimport assert from 'node:assert/strict';\nassert.equal(runBuilder(['node', 'src/cli.js', 'book']).status, 0);",
+          },
+        ],
       })),
     })),
   };

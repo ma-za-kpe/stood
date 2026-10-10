@@ -28,7 +28,8 @@ const draft = () => ({
       {
         id: 'booking-works',
         path: 'tests/booking.test.ts',
-        content: 'expect(await book()).toEqual({ booked: true });',
+        content:
+          "import { runBuilder } from 'stood-harness';\nimport assert from 'node:assert/strict';\nassert.equal(runBuilder(['node', 'src/cli.js', 'book']).status, 0);",
       },
     ],
   })),

@@ -97,6 +97,16 @@ function intakeChecked(value: PlannerIntake): PlannerIntake {
   }
   return Object.freeze(structuredClone(value));
 }
+// Owner decision 2026-10-10: acceptance tests run out of process. A frozen test reaches the builder's code only as a
+// separate process, through Stood's harness (runBuilder); it may import nothing else but Node's test and assert
+// modules, never the builder's code, and loads nothing dynamically. Stood's judge could not import the code anyway;
+// this keeps the Foreman from writing tests that could never pass.
+const ALLOWED_IMPORTS = new Set(['node:test', 'node:assert', 'node:assert/strict', 'stood-harness']);
+export function outOfProcess(content: string): boolean {
+  if (/\brequire\s*\(|\bimport\s*\(/.test(content)) return false;
+  const specifiers = [...content.matchAll(/\b(?:from|import)\s*['"]([^'"]+)['"]/g)].map((m) => m[1] as string);
+  return specifiers.includes('stood-harness') && specifiers.every((s) => ALLOWED_IMPORTS.has(s));
+}
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function validateDraft(input: PlannerIntake, value: unknown, simulated: boolean): Plan {
   try {
@@ -117,7 +127,8 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
         !text(t.path) ||
         !/^tests\/[A-Za-z0-9_./-]+\.(ts|js)$/.test(t.path) ||
         t.path.split('/').some((p) => p === '.' || p === '..' || !p) ||
-        !text(t.content)
+        !text(t.content) ||
+        !outOfProcess(t.content)
       )
         throw new PlannerError('INVALID');
       return { id: t.id, path: t.path, content: t.content };
