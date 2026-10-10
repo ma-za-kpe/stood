@@ -194,7 +194,8 @@ Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler t
 | `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Committed in `render.yaml` (the `stood-runner` project) |
 | `RUNNER_KEY_ID`, `RUNNER_SIGNING_KEY` | From `scripts/dev runner-key`, which writes them to `.env` without printing; copy both to Render |
 | `STOOD_EVIDENCE_S3_ENDPOINT`, `STOOD_EVIDENCE_S3_ACCESS_KEY_ID`, `STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY` | Cloudflare R2: the account's S3 endpoint and a token scoped to the `stood-evidence` bucket only (set 2026-10-10). `STOOD_EVIDENCE_S3_BUCKET=stood-evidence` is committed in `render.yaml`. The runner stays off without all four |
-| `GITHUB_READ_TOKEN` | Optional, read-only, for private repositories |
+| `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64` | GitHub reads through the Yard GitHub App: short-lived installation tokens limited to reading contents and metadata, renewed before they expire. The two ids are committed in `render.yaml`; Render prompts for the key (the same one `stood-yard-api` uses). The log names which access is in use |
+| `GITHUB_READ_TOKEN` | Fallback while the App key is not set: a read-only token (private repositories, GitHub's higher rate limit) |
 | `SETTLEMENT_EXECUTOR` | `on` to capture or void decided tranches; anything else keeps settlement off |
 
 ```bash

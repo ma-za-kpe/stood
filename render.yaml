@@ -100,7 +100,14 @@ services:
         sync: false
       - key: STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY
         sync: false
-      # Optional read-only token for private repositories; public ones need none.
+      # GitHub reads (#77): the Yard GitHub App's short-lived, read-only installation tokens. The App's private key is
+      # prompted (the same one stood-yard-api uses). GITHUB_READ_TOKEN is the fallback while the key is not set.
+      - key: GITHUB_APP_ID
+        value: "5230872"
+      - key: GITHUB_APP_INSTALLATION_ID
+        value: "169056228"
+      - key: GITHUB_APP_PRIVATE_KEY_BASE64
+        sync: false
       - key: GITHUB_READ_TOKEN
         sync: false
       # The owner's switch: captures or voids decided tranches only when set to "on".

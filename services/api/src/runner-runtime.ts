@@ -1,5 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import { S3EvidenceStore } from './adapters/evidence/s3-evidence-store.js';
+import { githubAppToken } from './adapters/github/app-token.js';
 import type { RunnerKey } from './adapters/runner/report-signer.js';
 import { SignedReportVerifier } from './adapters/runner/signed-report.js';
 import { HARNESS, SANDBOX_IMAGE } from './adapters/runner/vercel-sandbox.js';
@@ -79,4 +80,27 @@ export function runnerSettings(env: Env): Readonly<{
   const settle = env.SETTLEMENT_EXECUTOR === 'on';
   if (!settle) notes.push('Settlement off: SETTLEMENT_EXECUTOR is not "on".');
   return { runner, settle, notes };
+}
+
+// #77 operations: how the reconciler reads builders' repositories. The Yard GitHub App's short-lived, read-only
+// installation tokens when GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID and GITHUB_APP_PRIVATE_KEY_BASE64 are set; else
+// GITHUB_READ_TOKEN; else anonymous (public repositories, GitHub's low rate limit). The note names which, never a value.
+export function githubReadAccess(env: Env): Readonly<{ token?: string | (() => Promise<string>); note: string }> {
+  const appId = env.GITHUB_APP_ID?.trim() ?? '';
+  const installationId = env.GITHUB_APP_INSTALLATION_ID?.trim() ?? '';
+  const privateKey = Buffer.from(env.GITHUB_APP_PRIVATE_KEY_BASE64?.trim() ?? '', 'base64').toString('utf8');
+  if (appId || installationId || env.GITHUB_APP_PRIVATE_KEY_BASE64?.trim()) {
+    try {
+      createPrivateKey(privateKey);
+      return {
+        token: githubAppToken({ appId, installationId, privateKey }),
+        note: 'GitHub reads: the Yard GitHub App (short-lived, read-only installation tokens).',
+      };
+    } catch {
+      return { note: 'GitHub reads: anonymous. The GitHub App settings are incomplete or invalid; see docs/SETUP.md.' };
+    }
+  }
+  const token = env.GITHUB_READ_TOKEN?.trim();
+  if (token) return { token, note: 'GitHub reads: GITHUB_READ_TOKEN. Prefer the Yard GitHub App; see docs/SETUP.md.' };
+  return { note: "GitHub reads: anonymous (public repositories only, GitHub's low rate limit)." };
 }

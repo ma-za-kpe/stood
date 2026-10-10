@@ -22,7 +22,7 @@ import { runReconciliationAudit } from './application/reconciliation-audit-run.j
 import { reconciliationTick } from './application/reconciliation-worker.js';
 import type { ProviderTransactions } from './ports/provider-transactions.js';
 import { reconciliationRuntime } from './reconciliation-runtime.js';
-import { RUNNER_ID, RUNNER_LABEL_HASH, runnerSettings } from './runner-runtime.js';
+import { githubReadAccess, RUNNER_ID, RUNNER_LABEL_HASH, runnerSettings } from './runner-runtime.js';
 import { signingWorker } from './signing-worker.js';
 
 const required = ['DATABASE_URL', 'PROVIDER_PAYPAL', 'RECONCILIATION_OWNER'] as const;
@@ -65,14 +65,14 @@ if (!missing.length && problem) {
     for (const note of settings.notes) process.stdout.write(`${note}\n`);
     const runner = settings.runner;
     if (runner) {
+      const github = githubReadAccess(process.env);
+      process.stdout.write(`${github.note}\n`);
       const jobs = new PostgresRunnerJobs(db);
       const baselines = new PostgresBaselines(db);
       const claims = new PostgresRunClaims(db);
       const deps = {
         store,
-        reader: new GitHubRepositoryReader(
-          process.env.GITHUB_READ_TOKEN?.trim() ? { token: process.env.GITHUB_READ_TOKEN.trim() } : {},
-        ),
+        reader: new GitHubRepositoryReader(github.token ? { token: github.token } : {}),
         runner: new VercelSandboxRunner(vercelSandbox),
         signer: reportSigner(runner.key),
         verifier: runner.verifier,
