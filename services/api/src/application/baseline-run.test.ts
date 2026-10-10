@@ -97,9 +97,12 @@ describe('runBaseline', () => {
   });
 
   it('waits, recording nothing, while the runner or the evidence bucket is unavailable', async () => {
-    for (const o of [{ runner: 'down' as const }, { evidence: 'down' as const }]) {
+    for (const [o, why] of [
+      [{ runner: 'down' as const }, 'WAIT:RUNNER_UNAVAILABLE'],
+      [{ evidence: 'down' as const }, 'WAIT:EVIDENCE_UNAVAILABLE'],
+    ] as const) {
       const h = harness(o);
-      expect(await runBaseline(job, h.deps)).toBe('WAIT');
+      expect(await runBaseline(job, h.deps)).toBe(why);
       expect(h.finished).toEqual([]);
     }
   });

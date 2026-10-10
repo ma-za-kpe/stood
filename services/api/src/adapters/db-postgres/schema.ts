@@ -25,6 +25,7 @@ import type { Mandate } from '../../ports/mandate-store.js';
 import type { OperationIntent, OperationStatus } from '../../ports/payment-operation-store.js';
 import type { StoredDraft } from '../../ports/platform-api-store.js';
 import type { OperationalAlert } from '../../ports/reconciliation-queue.js';
+import type { RunKind } from '../../ports/run-claims.js';
 import type { VaultAttempt } from '../../ports/vault-provider.js';
 
 export const mandateSignatures = pgTable(
@@ -339,6 +340,27 @@ export const usageReceipts = pgTable(
   (table) => [
     index('usage_receipt_tranche').on(table.trancheId, table.commit),
     check('usage_receipt_valid', sql`${table.commit} ~ '^[a-f0-9]{40}$' AND jsonb_typeof(${table.receipt}) = 'object'`),
+  ],
+);
+// Audit 2026-10-10, finding 4: one lease per run (a baseline, or one decision on a code package), with its attempts and
+// the earliest time it may run again, so runs are claimed, back off and never run twice at once.
+export const runClaims = pgTable(
+  'run_claims',
+  {
+    kind: text().$type<RunKind>().notNull(),
+    jobId: text('job_id').notNull(),
+    attempts: integer().notNull().default(0),
+    claimedUntil: timestamp('claimed_until', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    lastReason: text('last_reason'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.kind, table.jobId] }),
+    check('run_claim_kind', sql`${table.kind} IN ('baseline', 'package') AND ${table.attempts} >= 0`),
   ],
 );
 export const apiRequests = pgTable(

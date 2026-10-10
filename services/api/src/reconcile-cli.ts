@@ -6,6 +6,7 @@ import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js'
 import { confirmedCaptures } from './adapters/db-postgres/ledger-captures.js';
 import { PostgresReconciliationFindings } from './adapters/db-postgres/reconciliation-findings.js';
 import { PostgresReconciliationQueue } from './adapters/db-postgres/reconciliation-queue.js';
+import { PostgresRunClaims } from './adapters/db-postgres/run-claims.js';
 import { PostgresRunnerJobs } from './adapters/db-postgres/runner-jobs.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { PostgresTranches } from './adapters/db-postgres/tranches.js';
@@ -15,12 +16,13 @@ import { reportSigner } from './adapters/runner/report-signer.js';
 import { VercelSandboxRunner } from './adapters/runner/vercel-sandbox.js';
 import { vercelSandbox } from './adapters/runner/vercel-sdk.js';
 import { runBaseline } from './application/baseline-run.js';
+import { runClaimed } from './application/claimed-queue.js';
 import { runCodeJob } from './application/code-run.js';
 import { runReconciliationAudit } from './application/reconciliation-audit-run.js';
 import { reconciliationTick } from './application/reconciliation-worker.js';
 import type { ProviderTransactions } from './ports/provider-transactions.js';
 import { reconciliationRuntime } from './reconciliation-runtime.js';
-import { RUNNER_ID, RUNNER_IMAGE, runnerSettings } from './runner-runtime.js';
+import { RUNNER_ID, RUNNER_LABEL_HASH, runnerSettings } from './runner-runtime.js';
 import { signingWorker } from './signing-worker.js';
 
 const required = ['DATABASE_URL', 'PROVIDER_PAYPAL', 'RECONCILIATION_OWNER'] as const;
@@ -65,6 +67,7 @@ if (!missing.length && problem) {
     if (runner) {
       const jobs = new PostgresRunnerJobs(db);
       const baselines = new PostgresBaselines(db);
+      const claims = new PostgresRunClaims(db);
       const deps = {
         store,
         reader: new GitHubRepositoryReader(
@@ -75,26 +78,36 @@ if (!missing.length && problem) {
         verifier: runner.verifier,
         evidence: runner.evidence,
         runnerId: RUNNER_ID,
-        imageDigest: RUNNER_IMAGE,
+        imageDigest: RUNNER_LABEL_HASH,
         clock: () => Date.now(),
       };
       // A run takes minutes, so it has its own loop beside reconciliation instead of stalling the 15-second tick.
       void (async () => {
         while (!abort.signal.aborted) {
           try {
-            for (const job of await jobs.pending(2)) {
-              const outcome = await runCodeJob(job, deps).catch(() => 'FAILED');
-              process.stdout.write(`Code runner: package ${job.packageId} ${outcome}.\n`);
-            }
+            const decided = await runClaimed(
+              claims,
+              'package',
+              await jobs.pending(50),
+              (job) => `${job.usageConfirmed ? 'usage' : 'run'}:${job.packageId}`,
+              2,
+              (job) => runCodeJob(job, deps),
+            );
+            for (const r of decided) process.stdout.write(`Code runner: package ${r.id} ${r.outcome}.\n`);
           } catch {
             process.stdout.write('Code runner: queue unavailable.\n');
           }
           // C4 (#77): baselines use the same runner, after the packages waiting on money.
           try {
-            for (const job of await baselines.pending(2)) {
-              const outcome = await runBaseline(job, { ...deps, store: baselines }).catch(() => 'FAILED');
-              process.stdout.write(`Code runner: baseline ${job.id} ${outcome}.\n`);
-            }
+            const ran = await runClaimed(
+              claims,
+              'baseline',
+              await baselines.pending(50),
+              (job) => job.id,
+              2,
+              (job) => runBaseline(job, { ...deps, store: baselines }),
+            );
+            for (const r of ran) process.stdout.write(`Code runner: baseline ${r.id} ${r.outcome}.\n`);
           } catch {
             process.stdout.write('Code runner: baseline queue unavailable.\n');
           }
@@ -116,9 +129,9 @@ if (!missing.length && problem) {
       );
       if (pending) {
         const moved = await pending();
-        if (moved.mandates || moved.fundings || moved.failed)
+        if (moved.mandates || moved.fundings || moved.waiting || moved.failed)
           process.stdout.write(
-            `Signing and funding: ${moved.mandates} mandates and ${moved.fundings} fundings advanced, ${moved.failed} failed.\n`,
+            `Signing and funding: ${moved.mandates} mandates and ${moved.fundings} fundings advanced, ${moved.waiting} waiting, ${moved.failed} failed.\n`,
           );
       }
       if (search.captures && now - lastAudit >= 3600000) {

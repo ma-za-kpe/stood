@@ -52,7 +52,7 @@ it('lists the latest package of each held code tranche with its signed terms, un
   const tranches = new PostgresTranches(db);
   await tranches.apply(one, 0, 'dispatch', { method: 'dispatch', args: ['auth', 'K7Q', at, at + 28 * 86400000] });
   const packages = new PostgresCommitPackages(db);
-  await packages.submit('platform_a', one, 'first', 'a'.repeat(64), metadata('b'.repeat(40)));
+  const first = await packages.submit('platform_a', one, 'first', 'a'.repeat(64), metadata('b'.repeat(40)));
   const latest = await packages.submit('platform_a', one, 'second', 'b'.repeat(64), metadata('e'.repeat(40)));
   await packages.submit('platform_a', two, 'not-held', 'c'.repeat(64), metadata('f'.repeat(40)));
   const jobs = new PostgresRunnerJobs(db);
@@ -70,11 +70,26 @@ it('lists the latest package of each held code tranche with its signed terms, un
     },
   ]);
   const held = await tranches.load(one);
-  const started = await tranches.apply(one, held.version, 'start', { method: 'startDeciding', args: [] });
-  await tranches.apply(one, started.version, `run:${latest.id}`, {
-    method: 'beginSettlement',
-    args: [decide('code.milestone@1', []), `run:${latest.id}`, at + 1],
-  });
+  // Audit 2026-10-10, finding 5: a decision on a superseded package is refused under the submission lock.
+  await expect(
+    tranches.applyIfLatest(one, held.version, 'stale', { method: 'startDeciding', args: [] }, first.id),
+  ).rejects.toThrow('STALE_PACKAGE');
+  const started = await tranches.applyIfLatest(
+    one,
+    held.version,
+    'start',
+    { method: 'startDeciding', args: [] },
+    latest.id,
+  );
+  // A run that stopped after starting to decide stays queued, so it is decided again.
+  expect((await jobs.pending()).map((j) => j.packageId)).toEqual([latest.id]);
+  await tranches.applyIfLatest(
+    one,
+    started.version,
+    `run:${latest.id}`,
+    { method: 'beginSettlement', args: [decide('code.milestone@1', []), `run:${latest.id}`, at + 1] },
+    latest.id,
+  );
   expect(await jobs.pending()).toEqual([]);
 });
 

@@ -128,8 +128,22 @@ describe('runCodeJob', () => {
     expect(run.contract).toMatchObject({ packageId: 'pkg_1', commit, runnerId });
     expect(run.report.signature).toEqual(expect.any(String));
     const down = await harness({ evidence: 'down' });
-    expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
+    expect(await runCodeJob(job(), down.deps)).toBe('WAIT:EVIDENCE_UNAVAILABLE');
     expect((await down.state()).state).toBe('HELD');
+  });
+
+  // Audit 2026-10-10, finding 5: a run that finished after a newer package arrived must not settle the stale one.
+  it('decides nothing for a package superseded while it ran, and finishes a decision an earlier run started', async () => {
+    const h = await harness();
+    h.store.latestPackage.set('trn', 'pkg_2');
+    expect(await runCodeJob(job(), h.deps)).toBe('SUPERSEDED');
+    expect((await h.state()).decisions).toEqual([]);
+    h.store.latestPackage.set('trn', 'pkg_1');
+    const held = await h.store.load('trn');
+    await h.store.apply('trn', held.version, 'run:pkg_1:start', { method: 'startDeciding', args: [] });
+    expect((await h.state()).state).toBe('DECIDING');
+    expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
+    expect((await h.state()).decisions.at(-1)?.id).toBe('run:pkg_1');
   });
 
   it('refuses when a frozen test fails, naming what failed', async () => {
@@ -163,11 +177,11 @@ describe('runCodeJob', () => {
 
   it('decides nothing while the runner or the frozen tests are unavailable, and never runs a package twice', async () => {
     const down = await harness({ runner: 'down' });
-    expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
+    expect(await runCodeJob(job(), down.deps)).toBe('WAIT:RUNNER_UNAVAILABLE');
     expect((await down.state()).state).toBe('HELD');
     const wrongBundle = await harness();
     expect(await runCodeJob(job({ terms: { ...job().terms, testBundleHash: 'f'.repeat(64) } }), wrongBundle.deps)).toBe(
-      'WAIT',
+      'WAIT:TESTS_NOT_AT_BASE',
     );
     expect((await wrongBundle.state()).state).toBe('HELD');
     const once = await harness();

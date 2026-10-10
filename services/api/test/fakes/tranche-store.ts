@@ -1,8 +1,20 @@
 import { advanceTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../../src/domain/tranche-record.js';
-import { type StoredTranche, type TrancheStore, TrancheStoreError } from '../../src/ports/tranche-store.js';
+import {
+  type LatestPackageGuard,
+  type StoredTranche,
+  type TrancheStore,
+  TrancheStoreError,
+} from '../../src/ports/tranche-store.js';
 // Application test provider. Real locking, audit and restart evidence uses Postgres.
-export class MemoryTranches implements TrancheStore {
+export class MemoryTranches implements TrancheStore, LatestPackageGuard {
   private values = new Map<string, StoredTranche>();
+  // The latest package submitted per tranche; a tranche with none here accepts any package.
+  readonly latestPackage = new Map<string, string>();
+  async applyIfLatest(id: string, expectedVersion: number, commandId: string, command: TrancheCommand, pkg: string) {
+    const latest = this.latestPackage.get(id);
+    if (latest !== undefined && latest !== pkg) throw new TrancheStoreError('STALE_PACKAGE');
+    return this.apply(id, expectedVersion, commandId, command);
+  }
   async create(record: string) {
     const t = restoreTrancheRecord(record);
     const value = { trancheId: t.id, version: 0, record, pending: null };

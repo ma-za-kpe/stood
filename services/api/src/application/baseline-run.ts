@@ -3,6 +3,7 @@ import type { CodeRunner } from '../ports/code-runner.js';
 import type { EvidenceStore } from '../ports/evidence-store.js';
 import type { RepositoryReader } from '../ports/repository-reader.js';
 import { bundleHash } from './code-evidence.js';
+import { type Step, type Waiting, waitingOn } from './waiting.js';
 
 type Deps = Readonly<{
   store: Pick<BaselineStore, 'finish'>;
@@ -20,8 +21,9 @@ type Deps = Readonly<{
 // C4 (#77): runs one milestone's frozen tests on the base commit, in the same isolated runner that later judges the
 // work (ADR-0026), and records each test's result. Tests missing or changed at the base are INVALID; anything
 // unavailable (GitHub, the runner, the evidence bucket) leaves the baseline queued to try again.
-export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' | 'INVALID' | 'WAIT'> {
+export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' | 'INVALID' | Waiting> {
   const t = job.terms;
+  let step: Step = 'GITHUB';
   try {
     const frozen = await deps.reader.files(
       t.repository,
@@ -37,8 +39,10 @@ export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' 
       return 'INVALID';
     }
     const byPath = new Map(frozen.map((f) => [f.path, f.content]));
+    const source = await deps.reader.source(t.repository, t.baseCommit);
+    step = 'RUNNER';
     const run = await deps.runner.run({
-      source: await deps.reader.source(t.repository, t.baseCommit),
+      source,
       frozenTests: t.tests.map((x) => ({ id: x.id, path: x.path, content: byPath.get(x.path) as string })),
     });
     const status = new Map(run.tests.map((r) => [r.id, r.status]));
@@ -47,6 +51,7 @@ export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' 
       id,
       status: status.get(id) === 'PASS' ? ('PASS' as const) : ('FAIL' as const),
     }));
+    step = 'EVIDENCE';
     const stored = await deps.evidence.put(
       `baselines/${job.platformId}/${job.id}`,
       Buffer.from(
@@ -62,12 +67,13 @@ export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' 
       ),
       'application/json',
     );
+    step = 'STORE';
     await deps.store.finish(job.id, {
       status: 'DONE',
       result: { tests, evidence: { key: stored.key, sha256: stored.sha256 } },
     });
     return 'DONE';
-  } catch {
-    return 'WAIT';
+  } catch (error) {
+    return waitingOn(step, error);
   }
 }

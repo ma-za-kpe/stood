@@ -184,7 +184,9 @@ The spend cap is kept in Postgres (`yard.planner_spend`), so restarts and extra 
 
 `stood-reconciler` decides code milestones itself. Every minute it takes the latest undecided package of each held code tranche and runs the buyer's frozen tests, read at the signed base commit and checked against the signed bundle hash, on the builder's exact commit in a disposable [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) microVM: no credentials inside, only the npm registry while dependencies install, no network at all while the tests run. The worker signs the result with its own Ed25519 key outside the VM, verifies it like any report, merges the read-only repository checks, and records one decision on the tranche.
 
-Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler then captures a released tranche or voids a refused one on the PayPal sandbox. Leave it unset and decisions are recorded but no money moves.
+The tests run as `nobody` with every Linux capability dropped, in a workspace made read-only first (the sandbox's default user holds every capability, so permissions alone would not bind it). A test file passes only when Node's own report lists real, named results that all passed; exiting early, skipping, or declaring no tests is a FAIL. Each run is claimed with a lease, a run that waits backs off and logs why (for example `WAIT:RUNNER_UNAVAILABLE:INSTALL`), and a decision applies only to the tranche's latest package.
+
+Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler then captures a released tranche or voids a refused one on the PayPal sandbox. Leave it unset and decisions are recorded but no money moves. **Settlement is off in production** (2026-10-10) until the owner decides how far a PASS must be trusted ([ADR-0026 amendment](adr/0026-isolated-code-runner-on-vercel-sandbox.md#amendment-2026-10-10-what-a-pass-proves-external-audit)): code under test shares a process with the frozen tests and could still forge their result.
 
 | Variable | On `stood-reconciler` |
 | --- | --- |
@@ -196,7 +198,7 @@ Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler t
 | `SETTLEMENT_EXECUTOR` | `on` to capture or void decided tranches; anything else keeps settlement off |
 
 ```bash
-scripts/dev runner-check   # qualify the runner on real Vercel Sandbox: pass, fail, no network, no credentials, non-root, runaway stopped
+scripts/dev runner-check   # qualify the runner on real Vercel Sandbox: pass, fail, no network, no credentials, no capabilities, read-only, runaway stopped, and early exit, no tests or skipped tests all FAIL
 scripts/dev runner-key     # create the signing key (refuses to replace one; --rotate to replace)
 scripts/dev evidence-check # qualify the evidence bucket: write once by hash, read back, retry is the same object
 ```
