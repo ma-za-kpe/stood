@@ -217,7 +217,7 @@ Set `YARD_USAGE_KEY_ID` and `YARD_USAGE_SIGNING_KEY` on `stood-yard-api`, and `U
 
 Stood sends platforms no notifications, so `stood-yard-api` reads Stood's signed tranche view (`GET /v1/tranches/:id`) for every work order it waits on, once a minute, and applies only what that read shows: a hold for a claimed attempt, or a capture or refusal of the exact package it submitted. Set the platform's own credentials on `stood-yard-api` in Render, the same `STOOD_API_KEY` and `STOOD_HMAC_SECRET` that `stood-api` holds; `STOOD_API_URL` is committed as `https://stood-api.onrender.com`. With them, Yard creates allowance drafts through Stood and `/health` reports `payments: true`. Stood only ever talks to the PayPal sandbox, and Yard refuses any other provider.
 
-Not yet: Yard submits no packages while hosted (the log says `Packages off`), because a package must carry a real test report and the runner that produces one is C4 (T-0159/T-0164). Until then, captures and refusals are proven in `scripts/mock-network`, which reads the same real tranche view.
+Hosted Yard submits packages to Stood (`StoodPackageGateway`). Stood never trusts a platform's test report: its own runner runs the buyer's frozen tests on the exact commit (T-0159). Yard sends the digest of its submission manifest (tranche, repository, base commit, commit) as `report_sha256`, for traceability only.
 
 ### Yard previews on Render (T-0196)
 

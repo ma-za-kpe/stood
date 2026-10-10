@@ -11,6 +11,7 @@ import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
 import { RenderPreviewHost } from './adapters/render/render-host.js';
+import { StoodPackageGateway } from './adapters/stood/package-gateway.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, type Operator } from './application/board.js';
@@ -96,9 +97,11 @@ export function yardRuntime(env: Env) {
       operators,
       secrets: vault,
       siteLog: new SiteLog(logs, board, scanner),
-      // T-0189: allowance drafts through Stood's signed API. Packages wait for a runner's real test report.
+      // T-0189: allowance drafts through Stood's signed API.
       ...(previews ? { previews } : {}),
       ...(stood ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
+      // T-0189: submitted work goes to Stood, whose own runner runs the buyer's frozen tests on the exact commit.
+      ...(stood ? { packages: new StoodPackageGateway(stood) } : {}),
     },
   };
   const watch = stood ? new StoodWatch(board, new StoodTrancheProofs(stood)) : null;
@@ -230,7 +233,6 @@ function stoodClient(env: Env, notes: string[]) {
   else if (!URL.canParse(baseUrl) || new URL(baseUrl).protocol !== 'https:')
     notes.push('Payments off: STOOD_API_URL must be an https URL.');
   else {
-    notes.push('Packages off: Stood needs a runner test report before Yard can submit work.');
     return new StoodClient({ baseUrl, key, secret, clock: Date.now });
   }
   return null;
