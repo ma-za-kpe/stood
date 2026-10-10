@@ -1,0 +1,2 @@
+# The spec is copied in from openapi/stood.json by `scripts/dev sdk`; openapi/ is the single source.
+src/spec/stood.json

@@ -20,7 +20,7 @@ Response: DRAFT and PENDING tranche IDs, no approval URL. Params are unverified 
 
 Future commit packages bind repository/base/new SHA, frozen manifest and authenticated runner/usage reports. Raw client check results cannot authorise capture. Demo fixtures are synthetic and execute no payments.
 
-The planned **OpenAPI 3.1** document will be the source of truth (`openapi/stood.yaml`, generated from Zod route schemas under T-0053; neither is implemented yet). APIMatic generates the TypeScript SDK, docs portal and MCP server from it ([S13](../stood/S13-sponsor-integration.md)). This page is the human summary.
+The **OpenAPI 3.1** document is [`openapi/stood.json`](../../openapi/stood.json) (T-0053). It is generated from the Zod contract in [`services/api/src/http/contract.ts`](../../services/api/src/http/contract.ts) with `scripts/dev openapi`, and contract tests run the real router against it: every route is documented, every response matches its schema, and request bodies are accepted or refused exactly as the server does. `scripts/check-openapi` (part of the product gate) lints it with Redocly and fails on any breaking change against `main` (oasdiff). The TypeScript SDK in [`sdk/typescript`](../../sdk/typescript) is generated from it by APIMatic (`scripts/dev sdk`); `createStoodClient` adds the per-request `Stood-Signature`, saved as an APIMatic customization so regeneration keeps it. `scripts/check-sdk` (product gate) builds the SDK and calls every operation on the real router over HTTP. This page is the human summary.
 
 ## Implemented draft and package API (T-0028, partial)
 

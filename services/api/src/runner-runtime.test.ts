@@ -9,7 +9,13 @@ const env = {
   VERCEL_PROJECT_ID: 'prj_x',
   RUNNER_KEY_ID: 'runner-2026-10',
   RUNNER_SIGNING_KEY: Buffer.from(pem).toString('base64'),
+  STOOD_EVIDENCE_S3_ENDPOINT: 'https://account.r2.example',
+  STOOD_EVIDENCE_S3_BUCKET: 'stood-evidence',
+  STOOD_EVIDENCE_S3_ACCESS_KEY_ID: 'key-id',
+  STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY: 'not-real',
 };
+const noEvidence =
+  'Code runner off: STOOD_EVIDENCE_S3_ENDPOINT, STOOD_EVIDENCE_S3_BUCKET, STOOD_EVIDENCE_S3_ACCESS_KEY_ID and STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY are required.';
 
 // T-0159: the code runner and settlement execution are separate, explicit switches on the reconciler. Missing or
 // unsafe settings turn each off with a named note, never a crash and never a printed value.
@@ -18,6 +24,7 @@ it('turns the runner on only with Vercel settings and a valid Ed25519 signing ke
   expect(on.notes).toEqual(['Settlement off: SETTLEMENT_EXECUTOR is not "on".']);
   expect(on.runner?.key.id).toBe('runner-2026-10');
   expect(on.runner?.verifier).toBeDefined();
+  expect(on.runner?.evidence).toBeDefined();
   expect(on.settle).toBe(false);
   expect(runnerSettings({ ...env, SETTLEMENT_EXECUTOR: 'on' })).toMatchObject({ settle: true, notes: [] });
   for (const [change, note] of [
@@ -28,6 +35,9 @@ it('turns the runner on only with Vercel settings and a valid Ed25519 signing ke
       'Code runner off: RUNNER_KEY_ID and RUNNER_SIGNING_KEY (Ed25519) are required.',
     ],
     [{ RUNNER_KEY_ID: 'bad id!' }, 'Code runner off: RUNNER_KEY_ID and RUNNER_SIGNING_KEY (Ed25519) are required.'],
+    [{ STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY: '' }, noEvidence],
+    [{ STOOD_EVIDENCE_S3_BUCKET: 'Not A Bucket' }, noEvidence],
+    [{ STOOD_EVIDENCE_S3_ENDPOINT: 'not a url' }, noEvidence],
   ] as const) {
     const off = runnerSettings({ ...env, ...change });
     expect(off.runner).toBeNull();

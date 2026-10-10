@@ -3,7 +3,7 @@ import { MemoryEvents } from '../../test/fakes/events.js';
 import { Board } from '../application/board.js';
 import { createYardApp } from './app.js';
 
-const code = 'buyer-access-code-0123456789abcdef';
+const code = 'buyer-access-code-xxxxxxxxxxxxxxxx';
 const secret = 's'.repeat(40);
 function hosted() {
   let now = 1791158400000;

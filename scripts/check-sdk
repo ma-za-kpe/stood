@@ -1,0 +1,16 @@
+#!/bin/sh
+# T-0053: build the APIMatic-generated TypeScript SDK (sdk/typescript, its own lockfile) and run it against the
+# real Stood router over HTTP, signing every request. Part of the product gate.
+set -eu
+cd "$(dirname "$0")/.."
+exec docker compose run --rm --no-deps app sh -c '
+  set -e
+  cd sdk/typescript
+  npm ci --no-audit --no-fund --ignore-scripts >/dev/null
+  rm -rf dist
+  npx tsc -p tsconfig.esm.json
+  npx tsc -p tsconfig.cjs.json
+  node ./scripts/split-package-json.mjs
+  cd ../..
+  pnpm vitest run --config vitest.sdk.config.ts
+'
