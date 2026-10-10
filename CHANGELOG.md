@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/ma-za-kpe/stood/compare/v0.10.0...v0.11.0) (2026-10-10)
+
+
+### Features
+
+* evidence storage, OpenAPI 3.1 contract and APIMatic SDK, tighter secret checks (C4 [#77](https://github.com/ma-za-kpe/stood/issues/77)) ([#121](https://github.com/ma-za-kpe/stood/issues/121)) ([b76257d](https://github.com/ma-za-kpe/stood/commit/b76257d0f00973e84e68e7d2ed59d0cb281e0af7))
+* plan to blueprint with Stood baselines, usage release, intake deletion and expiry (C4 [#77](https://github.com/ma-za-kpe/stood/issues/77)) ([#125](https://github.com/ma-za-kpe/stood/issues/125)) ([d71bae6](https://github.com/ma-za-kpe/stood/commit/d71bae6a703f6e1536588ed776d09da4e92a9578))
+
+
+### Fixes
+
+* PayPal holds that hung live, hosted package submission, the live end-to-end tool (C4 [#77](https://github.com/ma-za-kpe/stood/issues/77)) ([#127](https://github.com/ma-za-kpe/stood/issues/127)) ([862773f](https://github.com/ma-za-kpe/stood/commit/862773ffe3751b26b2ad816e52110f96c7837a57))
+
 ## [0.10.0](https://github.com/ma-za-kpe/stood/compare/v0.9.0...v0.10.0) (2026-10-10)
 
 
