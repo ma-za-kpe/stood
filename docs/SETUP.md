@@ -51,6 +51,8 @@ Buyer sign-in opens the start screen with automatically loaded clickable researc
 | Render service environment | Each service's runtime values (table below) | Render and the owner |
 | Project `.env` only (not on Render yet) | `GROK_PLANNER_API_KEY` for Yard's planner model (xAI). Checked with a free model listing (HTTP 200). The live adapter is T-0181 | The owner |
 | `~/.config/stood/yard-github-app.pem` (mode 600) | The Yard GitHub App private key; `.env` holds `GITHUB_APP_ID` and the key's path. The app is installable only on the owner's account, on selected test repositories, with Contents and Pull requests read/write and Metadata read; its webhook stays off until Yard is deployed | The owner |
+| Project `.env` only | `APIMATIC_API_KEY`: regenerates the TypeScript SDK with `scripts/dev sdk` (T-0053). From the APIMatic dashboard → Account → API Keys. Only the person regenerating needs it; CI builds and tests the committed SDK without it | The owner |
+| Project `.env` only | `GITGUARDIAN_API_KEY`: a GitGuardian personal access token with the `scan` scope, for the `ggshield` pre-push hook (T-0287). Get it at [dashboard.gitguardian.com](https://dashboard.gitguardian.com) → API → Personal access tokens. Every push fails without it | The owner |
 | `~/.claude/settings.json` (mode 600) | `PAYPAL_SANDBOX_ACCESS_TOKEN` for the PayPal AI Toolkit MCP server only ([T16](tech/T16-paypal-ai-toolkit.md)), renewed automatically by the token refresher (section 8) | The developer's Claude Code |
 
 Rules we followed: no value in Git, chat, issues or screenshots; tools report only "set" or "empty". Values containing `&` (such as database URLs) must be read with a parser, not `source`d by a shell.
@@ -189,13 +191,17 @@ Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler t
 | `VERCEL_TOKEN` | A token scoped to the runner's team (prompted) |
 | `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Committed in `render.yaml` (the `stood-runner` project) |
 | `RUNNER_KEY_ID`, `RUNNER_SIGNING_KEY` | From `scripts/dev runner-key`, which writes them to `.env` without printing; copy both to Render |
+| `STOOD_EVIDENCE_S3_ENDPOINT`, `STOOD_EVIDENCE_S3_ACCESS_KEY_ID`, `STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY` | Cloudflare R2: the account's S3 endpoint and a token scoped to the `stood-evidence` bucket only (set 2026-10-10). `STOOD_EVIDENCE_S3_BUCKET=stood-evidence` is committed in `render.yaml`. The runner stays off without all four |
 | `GITHUB_READ_TOKEN` | Optional, read-only, for private repositories |
 | `SETTLEMENT_EXECUTOR` | `on` to capture or void decided tranches; anything else keeps settlement off |
 
 ```bash
 scripts/dev runner-check   # qualify the runner on real Vercel Sandbox: pass, fail, no network, no credentials, non-root, runaway stopped
 scripts/dev runner-key     # create the signing key (refuses to replace one; --rotate to replace)
+scripts/dev evidence-check # qualify the evidence bucket: write once by hash, read back, retry is the same object
 ```
+
+Every signed run is stored in the evidence bucket before it can decide, at `runs/<platform>/<tranche>/<package>/<sha256>` (write-once: an object is never replaced). If the bucket cannot be reached, the package waits and nothing is decided.
 
 Final milestones (`code.final@1`) also require the buyer's usage confirmation (`usage_release`), which is not yet wired from Yard, so they wait after passing their tests.
 

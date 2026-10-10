@@ -4,8 +4,8 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright';
 
 // Synthetic operator codes only. The production image runs against an isolated disposable Postgres database.
-const code = 'hosted-test-buyer-code-0123456789abcdef';
-const builder = 'hosted-test-builder-code-0123456789abcdef';
+const code = 'hosted-test-buyer-code-xxxxxxxxxxxxxxxx';
+const builder = 'hosted-test-builder-code-xxxxxxxxxxxxxxxx';
 const sourceFixture = JSON.parse(readFileSync('/fixture.json', 'utf8'));
 const fixture = JSON.stringify({ ...sourceFixture, owner_user_id: null });
 mkdirSync('/out', { recursive: true });

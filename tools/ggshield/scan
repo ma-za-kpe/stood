@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Pre-push hook: GitGuardian's own scanner over every commit the next promotion to main would carry, so a finding
+# shows up here before GitHub's GitGuardian check sees it. GitGuardian scans each commit of a pull request, not
+# only its final state, so a value already removed later still raises an incident on promotion.
+#
+# Needs GITGUARDIAN_API_KEY (from the environment or the repository's .env; never printed). Without it, a local push
+# fails with how to get one. In GitHub CI the GitGuardian app scans every pull request itself, so this step is skipped.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+if [ -z "${GITGUARDIAN_API_KEY:-}" ] && [ -f .env ]; then
+  GITGUARDIAN_API_KEY="$(sed -n 's/^GITGUARDIAN_API_KEY=//p' .env | tail -1)"
+  export GITGUARDIAN_API_KEY
+fi
+if [ -z "${GITGUARDIAN_API_KEY:-}" ]; then
+  if [ "${CI:-}" = true ]; then
+    echo "GitGuardian: skipped in CI (the GitGuardian app scans every pull request)."
+    exit 0
+  fi
+  echo "GitGuardian: GITGUARDIAN_API_KEY is missing. Create a personal access token with the scan scope at"
+  echo "https://dashboard.gitguardian.com (API > Personal access tokens) and put it in .env. See docs/SETUP.md."
+  exit 1
+fi
+# Everything not yet on main: the exact range a promotion pull request will show GitGuardian.
+git fetch --quiet origin main 2>/dev/null || true
+if ! base="$(git merge-base HEAD origin/main)"; then
+  echo "GitGuardian: no common history with origin/main (a shallow clone?). Run: git fetch --unshallow origin"
+  exit 1
+fi
+if [ "$base" = "$(git rev-parse HEAD)" ]; then
+  echo "GitGuardian: nothing beyond main to scan."
+  exit 0
+fi
+exec ggshield secret scan commit-range "${base}..HEAD"

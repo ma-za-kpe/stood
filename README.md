@@ -54,6 +54,7 @@
 | Yard test repository | <https://github.com/ma-za-kpe/yard-sandbox> | Throwaway: where Yard's `wo/*` branches and pull requests appear in demos |
 | Guide for PayPal developers | [Authorize, capture and void on the PayPal sandbox, step by step](docs/guides/paypal-sandbox-authorize-capture-void.md) | Written from our own setup, with every error we hit |
 | Guide for Kernel developers | [Approve PayPal sandbox payments unattended with a Kernel cloud browser, step by step](docs/guides/kernel-paypal-sandbox-approval.md) | Written from our own runs: CAPTURED, VOIDED and VAULTED with nobody at the keyboard, and every selector mistake we fixed |
+| Guide for APIMatic developers | [A typed SDK from your OpenAPI contract, including per-request HMAC signing, step by step](docs/guides/apimatic-sdk-from-openapi.md) | Written from our own runs: the SDK calls the real router in CI, and every generation mistake we fixed |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
 **Browse ideas:** open [hosted Yard](https://stood-yard-api.onrender.com/app/), sign in with the buyer code from the private `~/.config/stood/yard-access-codes` file, then open **Describe a project**. Ideas load automatically; search and click **View idea** to review a card. No StartupTribunal API key is needed for public discovery. Codes are already configured as `accessCode` entries in the private `.env` `YARD_OPERATORS`; never paste them into issues or screenshots.
@@ -158,7 +159,7 @@ flowchart LR
   WEB --> API
 ```
 
-Hexagonal domain core, pure decision rules, idempotent money commands, a transactional outbox. Details: [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) · [T06 PayPal](docs/tech/T06-paypal-integration.md).
+Hexagonal domain core, pure decision rules, idempotent money commands, a transactional outbox. Details: [T02 Architecture](docs/tech/T02-architecture.md) · [T03 Domain](docs/tech/T03-domain-model.md) · [T04 API](docs/tech/T04-api-spec.md) ([OpenAPI 3.1](openapi/stood.json), [TypeScript SDK](sdk/typescript)) · [T06 PayPal](docs/tech/T06-paypal-integration.md).
 
 ## Built with
 
@@ -198,7 +199,7 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 └─ .github/              CI, Pages, release-please, back-merge, templates, rulesets
 ```
 
-Implemented core: `services/api`. Planned additional services: `apps/web`, `services/api`, `services/workflows`, `services/evidence-agent`, `openapi/`, `fixtures/` ([S14](docs/stood/S14-open-source-plan.md)).
+Implemented core: `services/api`. Planned additional services: `apps/web`, `services/api`, `services/workflows`, `services/evidence-agent`, `fixtures/` ([S14](docs/stood/S14-open-source-plan.md)).
 
 ## Documentation
 

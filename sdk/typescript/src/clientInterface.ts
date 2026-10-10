@@ -1,0 +1,27 @@
+/**
+ * Stood platform APILib
+ *
+ * This file was automatically generated for Stood by APIMATIC v3.0 ( https://www.apimatic.io ).
+ */
+
+import { createAuthProviderFromConfig } from './authProvider.js';
+import { AuthenticatorInterface, RequestBuilderFactory } from './core.js';
+
+export interface ClientInterface {
+  getRequestBuilderFactory(): SdkRequestBuilderFactory;
+}
+
+export type SdkRequestBuilderFactory = RequestBuilderFactory<
+  Server,
+  AuthParams
+>;
+
+export type SdkRequestBuilder = ReturnType<SdkRequestBuilderFactory>;
+
+export type Server = 'default';
+
+export type AuthParams = ReturnType<
+  typeof createAuthProviderFromConfig
+> extends AuthenticatorInterface<infer X>
+  ? X
+  : never;

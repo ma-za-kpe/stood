@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { type CheckResult, decide, getProfile } from '../domain/decision.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
 import type { CodeRunner } from '../ports/code-runner.js';
+import type { EvidenceStore } from '../ports/evidence-store.js';
 import type { RepositoryReader } from '../ports/repository-reader.js';
 import type { FrozenCodeContract, ReportSigner, RunnerReportVerifier } from '../ports/runner-report.js';
 import type { TrancheStore } from '../ports/tranche-store.js';
@@ -31,6 +32,8 @@ type Deps = Readonly<{
   runner: CodeRunner;
   signer: ReportSigner;
   verifier: RunnerReportVerifier;
+  // Stood's own bucket: every signed run is stored before it can decide anything.
+  evidence: EvidenceStore;
   runnerId: string;
   imageDigest: string;
   clock(): number;
@@ -51,9 +54,10 @@ function merge(...sets: readonly (readonly CheckResult[])[]): CheckResult[] {
 }
 
 // T-0159: turns one queued code package into exactly one recorded decision. The buyer's frozen tests run on the
-// exact commit in the isolated runner (ADR-0026); the run is signed outside the VM and verified like any report;
-// the read-only repository checks are merged in; and the decision rules decide. The reconciler then captures or
-// voids. Anything unavailable decides nothing (WAIT): the package is tried again later and never passes by default.
+// exact commit in the isolated runner (ADR-0026); the run is signed outside the VM, verified like any report and
+// stored in Stood's evidence bucket; the read-only repository checks are merged in; and the decision rules decide.
+// The reconciler then captures or voids. Anything unavailable decides nothing (WAIT): the package is tried again
+// later and never passes by default.
 export async function runCodeJob(job: RunnerJob, deps: Deps): Promise<'DECIDED' | 'WAIT' | 'ALREADY_DECIDED'> {
   const decisionId = `run:${job.packageId}`;
   const current = await deps.store.load(job.trancheId);
@@ -116,6 +120,12 @@ export async function runCodeJob(job: RunnerJob, deps: Deps): Promise<'DECIDED' 
       });
       const signed = deps.verifier.verify(contract, report);
       if (!signed) return 'WAIT';
+      // The signed run is evidence: stored (write-once, by its hash) before it decides, or nothing is decided.
+      await deps.evidence.put(
+        `runs/${job.platformId}/${job.trancheId}/${job.packageId}`,
+        Buffer.from(JSON.stringify({ contract, report })),
+        'application/json',
+      );
       const repository = await repositoryChecks(deps.reader, {
         repository: t.repository,
         base: t.baseCommit,
