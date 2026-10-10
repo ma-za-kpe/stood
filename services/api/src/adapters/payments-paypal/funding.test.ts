@@ -229,3 +229,47 @@ it('reports a refused create as REJECTED with PayPal’s debug id, and never sen
   });
   expect(never.fund).not.toHaveBeenCalled();
 });
+// T-0295 (found live, 2026-10-10): PayPal's real answer to a saved-account create omits `captures` and the
+// authorization's related order id. That is still a matching hold; anything captured, or a different order, is not.
+it('reads PayPal’s real saved-account create (no captures list, no related order id) as a held authorization', async () => {
+  const saved = {
+    ...operation,
+    status: 'CREATING' as const,
+    orderId: null,
+    approvalUrl: null,
+    instruction: { ...operation.instruction, source: 'SAVED_PAYPAL' as const },
+  };
+  const real = () => {
+    const body = order();
+    const { captures: _none, ...payments } = body.purchase_units[0]?.payments ?? { authorizations: [] };
+    const { supplementary_data: _missing, ...authorization } = payments.authorizations[0] ?? {};
+    return { ...body, purchase_units: [{ ...body.purchase_units[0], payments: { authorizations: [authorization] } }] };
+  };
+  const tokens = { tokenFor: async () => 'vault-token' };
+  const live = new PayPalFundingAdapter({ fund: vi.fn(async () => ({ status: 201, body: real() })) }, tokens);
+  expect(await live.create(saved)).toMatchObject({
+    outcome: 'HELD',
+    orderId: 'ORDER',
+    hold: { authorizationId: 'AUTH' },
+  });
+  const otherOrder = real();
+  (otherOrder.purchase_units[0]?.payments.authorizations[0] as Record<string, unknown>).supplementary_data = {
+    related_ids: { order_id: 'ELSEWHERE' },
+  };
+  expect(
+    await new PayPalFundingAdapter({ fund: async () => ({ status: 201, body: otherOrder }) }, tokens).create(saved),
+  ).toEqual({
+    complete: false,
+  });
+  const captured = {
+    ...real(),
+    purchase_units: [
+      { ...real().purchase_units[0], payments: { ...real().purchase_units[0]?.payments, captures: [{ id: 'CAP' }] } },
+    ],
+  };
+  expect(
+    await new PayPalFundingAdapter({ fund: async () => ({ status: 201, body: captured }) }, tokens).create(saved),
+  ).toEqual({
+    complete: false,
+  });
+});

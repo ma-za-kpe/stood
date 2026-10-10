@@ -150,7 +150,9 @@ export class PayPalFundingAdapter implements FundingProvider {
       )
         return unknown;
       const unit = object(body.purchase_units[0]),
-        payments = object(unit?.payments);
+        payments = object(unit?.payments),
+        // T-0295 (found live): PayPal leaves `captures` out when nothing is captured; an absent list is empty.
+        captures = payments && payments.captures === undefined ? [] : payments?.captures;
       if (
         unit?.reference_id !== operation.key ||
         unit.custom_id !== operation.trancheId ||
@@ -165,8 +167,8 @@ export class PayPalFundingAdapter implements FundingProvider {
           (payments &&
             (!Array.isArray(payments.authorizations) ||
               payments.authorizations.length ||
-              !Array.isArray(payments.captures) ||
-              payments.captures.length))
+              !Array.isArray(captures) ||
+              captures.length))
         )
           return unknown;
         const url = operation.approvalUrl ?? approval(body.links, operation, body.id);
@@ -178,8 +180,8 @@ export class PayPalFundingAdapter implements FundingProvider {
         body.status !== 'COMPLETED' ||
         !Array.isArray(payments?.authorizations) ||
         payments.authorizations.length !== 1 ||
-        !Array.isArray(payments.captures) ||
-        payments.captures.length
+        !Array.isArray(captures) ||
+        captures.length
       )
         return unknown;
       const authorization = object(payments.authorizations[0]);
@@ -188,7 +190,11 @@ export class PayPalFundingAdapter implements FundingProvider {
         !['CREATED', 'EXPIRED'].includes(String(authorization?.status)) ||
         (authorization?.status === 'EXPIRED' && action !== 'GET_FUNDING_ORDER') ||
         !amountMatches(authorization.amount, request) ||
-        object(object(authorization.supplementary_data)?.related_ids)?.order_id !== body.id ||
+        // The authorization sits in this order's own purchase unit; a related order id, when PayPal gives one, must
+        // be this order (PayPal omits it on a saved-account create).
+        ![undefined, body.id].includes(
+          object(object(authorization.supplementary_data)?.related_ids)?.order_id as string,
+        ) ||
         typeof authorization.create_time !== 'string' ||
         typeof authorization.expiration_time !== 'string'
       )
