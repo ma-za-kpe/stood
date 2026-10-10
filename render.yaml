@@ -164,6 +164,9 @@ services:
       # ADR-0027: Yard's PayPal merchant id, the payee of every allowance (builders are paid out after release).
       - key: YARD_PAYPAL_MERCHANT_ID
         sync: false
+      # ADR-0027: Yard's fee on top of each milestone, in basis points (500 is 5%), paid by the buyer in the same hold.
+      - key: YARD_FEE_BPS
+        value: "500"
       # C4 (#77): Yard's Ed25519 usage key; Stood lists its public half in USAGE_AUTHORITY_KEYS.
       - key: YARD_USAGE_KEY_ID
         sync: false

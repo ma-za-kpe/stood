@@ -103,7 +103,13 @@ export type MandateIntent = Readonly<{
   status: 'RESERVED' | 'CREATED';
   allowanceId: string | null;
   tranches: Readonly<Record<string, string>> | null;
+  // ADR-0027: what the buyer authorizes per milestone, the builder's price plus Yard's fee on top. Absent on mandates
+  // made before the fee existed (no fee).
+  lines?: readonly MandateLine[];
 }>;
+export type MandateLine = Readonly<{ milestoneId: string; builderMinor: number; feeMinor: number }>;
+// ADR-0027: Yard's fee, in basis points of the builder's price (500 is 5%), rounded to the nearest minor unit.
+export const yardFee = (builderMinor: number, feeBps: number) => Math.round((builderMinor * feeBps) / 10_000);
 export type MilestoneChange = Readonly<{ milestoneId: string; name: string; budgetMinor: number; deadline: number }>;
 type ChangeOrder = {
   id: string;
@@ -278,7 +284,7 @@ export const MAX_ACTIVE_CLAIMS = 2;
 export class Board {
   constructor(
     readonly events: YardEvents,
-    private readonly limits: Readonly<{ maxActiveClaims: number; payee?: string }> = {
+    private readonly limits: Readonly<{ maxActiveClaims: number; payee?: string; feeBps?: number }> = {
       maxActiveClaims: MAX_ACTIVE_CLAIMS,
     },
   ) {}
@@ -640,19 +646,28 @@ export class Board {
           throw new YardError('CONFLICT');
         const effective = d.blueprint.milestones.map((m) => terms(d, m.id) ?? m);
         const latest = Math.max(...effective.map((m) => m.deadline));
+        // ADR-0027: the buyer pays Yard's fee on top of each milestone, in the same hold, so a refusal voids both and
+        // the builder receives exactly their price.
+        const feeBps = this.limits.feeBps ?? 0;
+        const lines = effective.map((m) => ({
+          milestoneId: m.id,
+          builderMinor: m.budgetMinor,
+          feeMinor: yardFee(m.budgetMinor, feeBps),
+        }));
+        const hold = (i: number) => (lines[i] as MandateLine).builderMinor + (lines[i] as MandateLine).feeMinor;
         const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
         const request: MandateRequest = {
           // ADR-0027: Yard's PayPal merchant receives the capture; builders are paid out after release. Without a
           // configured merchant (local simulations) the payee is a project reference only a simulator accepts.
           payee_ref: this.limits.payee ?? `yard:${id}`,
-          // Stood's cap covers builder milestones only; Yard and provider costs are never captured through it.
+          // Stood's cap covers the milestones as the buyer authorizes them: each builder price plus Yard's fee.
           cap: {
-            minor: effective.reduce((n, m) => n + m.budgetMinor, 0),
+            minor: effective.reduce((n, _m, i) => n + hold(i), 0),
             currency: d.blueprint.currency,
           },
-          milestones: effective.map((m) => ({
+          milestones: effective.map((m, i) => ({
             name: m.name,
-            amount: { minor: m.budgetMinor, currency: d.blueprint.currency },
+            amount: { minor: hold(i), currency: d.blueprint.currency },
             profile: m.profileId,
             // T-0159: the frozen code terms Stood checks and later binds the runner and verifier to.
             params: {
@@ -674,6 +689,7 @@ export class Board {
           status: 'RESERVED',
           allowanceId: null,
           tranches: null,
+          lines,
         };
         return { state: 'RESERVED', simulated: true };
       },
@@ -1240,6 +1256,8 @@ export class Board {
       const d = data(raw);
       const { work, order } = workOrder(d, wo);
       const m = terms(d, order.milestone)!;
+      const line = d.mandate?.lines?.find((l) => l.milestoneId === order.milestone);
+      const feeMinor = line?.feeMinor ?? 0;
       if (
         work.snapshot.state !== 'CHECKING' ||
         order.payment ||
@@ -1249,7 +1267,7 @@ export class Board {
         proof.effect !== 'CAPTURE' ||
         !proof.reference.trim() ||
         !proof.eventId.trim() ||
-        proof.minor !== m.budgetMinor ||
+        proof.minor !== m.budgetMinor + feeMinor ||
         proof.currency !== d.blueprint.currency ||
         proof.simulated !== true
       )
@@ -1258,7 +1276,16 @@ export class Board {
       return {
         data: d,
         type: 'stood.released',
-        payload: { wo, state: 'PAID', reference: proof.reference, payment: structuredClone(proof), simulated: true },
+        // ADR-0027: the capture splits into the builder's line (paid out later) and Yard's fee.
+        payload: {
+          wo,
+          state: 'PAID',
+          reference: proof.reference,
+          payment: structuredClone(proof),
+          builderMinor: m.budgetMinor,
+          feeMinor,
+          simulated: true,
+        },
       };
     });
   }

@@ -17,12 +17,14 @@ export class MandateBridge {
     return this.deliver(id, intent);
   }
   private async deliver(id: string, intent: MandateIntent) {
-    if (intent.status === 'CREATED') return { allowanceId: intent.allowanceId, tranches: intent.tranches };
+    // ADR-0027: the lines (builder price and Yard's fee per milestone) go back to the buyer with the draft to sign.
+    const lines = intent.lines ?? [];
+    if (intent.status === 'CREATED') return { allowanceId: intent.allowanceId, tranches: intent.tranches, lines };
     // A retry after a lost reply reuses the same idempotency key, so Stood returns the same draft.
     const draft = await this.gateway.createDraft(structuredClone(intent.request), intent.key);
     const snapshot = await this.board.completeMandate(id, intent, draft);
     const mandate = (snapshot.data as { mandate: MandateIntent }).mandate;
-    return { allowanceId: mandate.allowanceId, tranches: mandate.tranches };
+    return { allowanceId: mandate.allowanceId, tranches: mandate.tranches, lines };
   }
   async recover(): Promise<readonly { projectId: string; status: 'DELIVERED' | 'WAIT' }[]> {
     const results: { projectId: string; status: 'DELIVERED' | 'WAIT' }[] = [];

@@ -61,7 +61,14 @@ export function yardRuntime(env: Env) {
   const merchant = env.YARD_PAYPAL_MERCHANT_ID?.trim() ?? '';
   const payee = /^[A-Z0-9]{13}$/.test(merchant) ? merchant : null;
   if (stood && !payee) notes.push("Payments off: YARD_PAYPAL_MERCHANT_ID (Yard's PayPal merchant id) is required.");
-  const board = new Board(events, payee ? { maxActiveClaims: MAX_ACTIVE_CLAIMS, payee } : undefined);
+  // ADR-0027: Yard's fee on top of each milestone, in basis points (500 is 5%); 0 to 2000, otherwise no fee.
+  const feeText = env.YARD_FEE_BPS?.trim() ?? '';
+  const feeBps = /^\d{1,4}$/.test(feeText) && Number(feeText) <= 2000 ? Number(feeText) : 0;
+  if (feeText && String(feeBps) !== feeText) notes.push('Fee off: YARD_FEE_BPS must be 0 to 2000 basis points.');
+  const board = new Board(
+    events,
+    payee || feeBps ? { maxActiveClaims: MAX_ACTIVE_CLAIMS, ...(payee ? { payee } : {}), feeBps } : undefined,
+  );
   const logs = new PostgresSiteLogs(pool, events);
   const scanner = new GitleaksScanner();
   let retention: ReturnType<typeof startLogRetention> | null = null;
