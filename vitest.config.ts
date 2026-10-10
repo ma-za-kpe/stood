@@ -33,6 +33,7 @@ export default defineConfig({
         '**/api/src/runner-check-cli.ts',
         '**/api/src/evidence-check-cli.ts',
         '**/api/src/openapi-cli.ts',
+        '**/api/src/live-e2e-cli.ts',
         '**/adapters/runner/vercel-sdk.ts',
         '**/yard-api/src/server.ts',
         '**/adapters/db-postgres/**',

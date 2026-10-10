@@ -88,6 +88,10 @@ scripts/dev sandbox-run vault-refuse    # a later hold from the saved token, the
 
 **Lesson 10: setup tokens need `usage_type: MERCHANT`.** Without it, PayPal creates the setup token with status `CREATED` and **no approval link**, so no buyer can ever approve it. With it, the status is `PAYER_ACTION_REQUIRED` and there is an `approve` link. We found this when our first real setup run returned no link; the fix was one field.
 
+**Lesson 11: a saved-account create omits fields that other order responses carry (found live, 10 October 2026).** Answering a create made with `vault_id`, PayPal returned `COMPLETED` with one authorization, but **no `payments.captures` list** and **no `supplementary_data.related_ids.order_id`** on the authorization. Our parser required both, as the authorize response has them, so it read a real $2.00 hold as an uncertain answer. Because Stood never re-sends an uncertain create (a re-send can place a second hold), the funding waited forever. We found it by replaying the exact create with its original `PayPal-Request-Id`: PayPal answers a repeated id with the original result and creates nothing new, so it is a safe way to see what really happened. The fix: an absent `captures` list counts as empty, and a related order id is optional but must match when present. Build your fixtures from real responses, not from the documented superset.
+
+**Lesson 12: the payee is the merchant id, and a refused create has no order.** We first sent a platform reference (`yard:…`) as the payee; PayPal refused the create, and because a refused create returns no order id, our code waited instead of failing. Validate the payee (`/^[A-Z0-9]{13}$/` for a merchant id) before calling, and treat PayPal's 400/422 with a `debug_id` on a create as final.
+
 ## 4. Check what PayPal recorded, independently
 
 Don't trust your own code's view alone. Stood keeps a second, independent reader ([`tools/paypal-witness`](../../tools/paypal-witness/witness.py), Python standard library only, read-only):
