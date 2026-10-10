@@ -135,6 +135,14 @@ PY
     grep -E '^APIMATIC_API_KEY=' .env >"$keys" || true
     docker compose run --rm --no-deps --env-from-file "$keys" app sh -c \
       'npx -y @apimatic/cli@1.5.0 auth login --auth-key="$APIMATIC_API_KEY" >/dev/null && npx -y @apimatic/cli@1.5.0 sdk save-changes --input=apimatic --sdk=sdk/typescript --language=typescript' ;;
+  release-review)
+    # Owner decision 2026-10-10: list, read-only, every code decision the old in-process runner recorded. Prints ids and
+    # outcomes only, never a setting. Run it against production before settlement is switched back on.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^DATABASE_URL=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/release-review-cli.js' ;;
   evidence-check)
     # C4 (#77): qualify Stood's evidence bucket (Cloudflare R2) with the reconciler's settings. Prints no setting.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
