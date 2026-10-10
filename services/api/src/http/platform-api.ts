@@ -6,6 +6,7 @@ import { allowanceDraft } from '../application/allowance-draft.js';
 import { codeTerms } from '../application/code-terms.js';
 import { commitPackage } from '../application/commit-package.js';
 import { mandateTermsHash } from '../application/mandate-terms.js';
+import { acceptUsage, type UsageAuthority } from '../application/usage-intake.js';
 import { trancheSentences } from '../domain/recipient-sentences.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
 import { type BaselineStore, BaselineStoreError } from '../ports/baseline-store.js';
@@ -13,12 +14,15 @@ import { CommitPackageError, type CommitPackageStore } from '../ports/commit-pac
 import { type FundingStore, FundingStoreError } from '../ports/funding-store.js';
 import { type MandateStore, MandateStoreError } from '../ports/mandate-store.js';
 import { type PlatformApiStore, PlatformApiStoreError } from '../ports/platform-api-store.js';
+import { type UsageStore, UsageStoreError } from '../ports/usage-store.js';
 
 export type PlatformApiConfig = Readonly<{
   store: PlatformApiStore;
   packages?: CommitPackageStore;
   // C4 (#77): baselines that prove a milestone's frozen tests fail on the base commit.
   baselines?: Pick<BaselineStore, 'request' | 'get'>;
+  // C4 (#77): the buyer's signed confirmation that a final milestone is in use, and who may sign it.
+  usage?: Readonly<{ store: UsageStore; authorities: readonly UsageAuthority[] }>;
   platformId: string;
   key: string;
   secret: string;
@@ -105,13 +109,15 @@ export function platformApi(config: PlatformApiConfig): Hono {
               : error.code === 'IDENTITY_CONFLICT'
                 ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
                 : problem(409, 'conflict', 'Another signature or funding is already in progress.')
-        : error instanceof BaselineStoreError
-          ? error.code === 'CONFLICT'
-            ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
-            : problem(422, 'validation', 'The baseline request is invalid.')
-          : error instanceof PlatformApiStoreError
-            ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
-            : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
+        : error instanceof UsageStoreError
+          ? problem(422, 'usage_replayed', 'This usage receipt was already used.')
+          : error instanceof BaselineStoreError
+            ? error.code === 'CONFLICT'
+              ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
+              : problem(422, 'validation', 'The baseline request is invalid.')
+            : error instanceof PlatformApiStoreError
+              ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
+              : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
   );
   app.post('/tranches/:id/packages', async (c) => {
     if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
@@ -158,6 +164,36 @@ export function platformApi(config: PlatformApiConfig): Hono {
     if (!config.baselines) return problem(503, 'baselines_not_configured', 'Baselines are not configured.');
     const value = await config.baselines.get(config.platformId, c.req.param('id'));
     return value ? c.json(baselineView(value)) : problem(404, 'not_found', 'Baseline not found.');
+  });
+  // C4 (#77): a final milestone releases only on use confirmed outside the builder's tree. 202 means Stood verified
+  // and stored the receipt; the runner then decides the waiting milestone again with usage confirmed.
+  app.post('/tranches/:id/usage', async (c) => {
+    if (!config.usage) return problem(503, 'usage_not_configured', 'Usage confirmation is not configured.');
+    if (!/^application\/json(?:;|$)/i.test(c.req.header('Content-Type') ?? ''))
+      return problem(422, 'validation', 'JSON is required.');
+    let receipt: unknown;
+    try {
+      receipt = JSON.parse(await c.req.text());
+    } catch {
+      return problem(422, 'validation', 'The usage receipt is invalid.');
+    }
+    const outcome = await acceptUsage(config.platformId, c.req.param('id'), receipt as never, {
+      ...config.usage,
+      now: config.clock(),
+    });
+    if (!outcome.accepted)
+      return outcome.reason === 'not_found'
+        ? problem(404, 'not_found', 'No submitted package for this tranche.')
+        : problem(422, `usage_${outcome.reason}`, 'The usage receipt was not accepted.');
+    return c.json(
+      {
+        tranche_id: outcome.usage.trancheId,
+        commit: outcome.usage.commit,
+        status: 'ACCEPTED',
+        accepted_at: outcome.usage.acceptedAt,
+      },
+      202,
+    );
   });
   app.post('/allowances', async (c) => {
     const key = c.req.header('Idempotency-Key') ?? '';

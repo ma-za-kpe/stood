@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 import { codeParams } from '../../test/fixtures/code-terms.js';
-import { draft, harness, now, pkg, signed } from '../../test/fixtures/contract-app.js';
+import { draft, harness, now, pkg, signed, usageReceipt } from '../../test/fixtures/contract-app.js';
 import {
   Allowance,
   AllowanceDraft,
@@ -17,6 +17,8 @@ import {
   operations,
   Problem,
   Tranche,
+  UsageAcceptance,
+  UsageReceipt,
 } from './contract.js';
 import { platformApi } from './platform-api.js';
 
@@ -105,6 +107,25 @@ describe('Stood API contract', () => {
     expect(baseline.tests?.every((t) => t.status === 'FAIL')).toBe(true);
     await check(await app.request('/v1/baselines/bl_1', signed('GET', '/baselines/bl_1')), 200, Baseline);
     await check(await app.request('/v1/baselines/missing', signed('GET', '/baselines/missing')), 404, Problem);
+    const receipt = JSON.stringify(usageReceipt());
+    await check(
+      await app.request('/v1/tranches/trn_1/usage', signed('POST', '/tranches/trn_1/usage', receipt)),
+      202,
+      UsageAcceptance,
+    );
+    const stale = JSON.stringify({ ...usageReceipt(), observedAt: now - 3 * 86400000 });
+    expect(
+      await check(
+        await app.request('/v1/tranches/trn_1/usage', signed('POST', '/tranches/trn_1/usage', stale)),
+        422,
+        Problem,
+      ),
+    ).toMatchObject({ code: 'usage_stale' });
+    await check(
+      await app.request('/v1/tranches/missing/usage', signed('POST', '/tranches/missing/usage', receipt)),
+      404,
+      Problem,
+    );
     for (const [path, status] of [
       ['/allowances/missing', 404],
       ['/tranches/missing', 404],
@@ -126,6 +147,7 @@ describe('Stood API contract', () => {
       ['/tranches/trn_1/packages', 'e', { ...pkg, commit_sha: 'main' }, CommitPackageInput],
       ['/tranches/trn_1/packages', 'f', { ...pkg, extra: 'x' }, CommitPackageInput],
       ['/baselines', 'g', { ...codeParams, baseCommit: 'main' }, CodeTermsInput],
+      ['/tranches/trn_1/usage', '', { ...usageReceipt(), version: 2 }, UsageReceipt],
     ];
     for (const [path, idem, value, schema] of refused) {
       expect(schema.safeParse(value).success, `${path} ${idem}`).toBe(false);

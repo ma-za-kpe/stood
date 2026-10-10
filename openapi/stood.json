@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Stood platform API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "summary": "Milestone payments held on PayPal (sandbox) and released only on evidence",
     "description": "Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Stood only talks to the PayPal sandbox.",
     "license": {
@@ -808,6 +808,100 @@
           },
           "409": {
             "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tranches/{id}/usage": {
+      "post": {
+        "operationId": "confirmUsage",
+        "summary": "Forward the buyer's signed confirmation that a final milestone is in use; the runner then decides it again",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsageReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (recorded, not yet done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageAcceptance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1760,6 +1854,111 @@
           "CANCELLED",
           "DISPUTED"
         ]
+      },
+      "UsageAcceptance": {
+        "type": "object",
+        "properties": {
+          "tranche_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UsageStatus"
+          },
+          "accepted_at": {
+            "type": "string",
+            "description": "UTC ISO-8601 timestamp"
+          }
+        },
+        "required": [
+          "tranche_id",
+          "commit",
+          "status",
+          "accepted_at"
+        ],
+        "additionalProperties": false
+      },
+      "UsageAuthority": {
+        "type": "object",
+        "properties": {
+          "keyId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "root": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "keyId",
+          "root"
+        ],
+        "additionalProperties": false,
+        "description": "A key Stood is configured to trust, outside the builder's tree"
+      },
+      "UsageReceipt": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "allowanceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "trancheId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$",
+            "description": "The tranche's latest submitted package commit"
+          },
+          "authority": {
+            "$ref": "#/components/schemas/UsageAuthority"
+          },
+          "observedAt": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "When the buyer confirmed use, Unix milliseconds (within 24 hours)"
+          },
+          "nonce": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16,200}$"
+          },
+          "signature": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Base64 Ed25519 signature over \"stood-usage-receipt/v1\", allowanceId, trancheId, commit, keyId, root, observedAt and nonce, joined by NUL"
+          }
+        },
+        "required": [
+          "version",
+          "allowanceId",
+          "trancheId",
+          "commit",
+          "authority",
+          "observedAt",
+          "nonce",
+          "signature"
+        ],
+        "additionalProperties": false,
+        "description": "The buyer's signed confirmation that a final milestone is in use"
+      },
+      "UsageStatus": {
+        "type": "string",
+        "const": "ACCEPTED"
       }
     },
     "securitySchemes": {

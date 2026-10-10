@@ -20,6 +20,7 @@ const api = new Api(client);
 * [Request Funding](../../doc/controllers/api.md#request-funding)
 * [Get Funding](../../doc/controllers/api.md#get-funding)
 * [Submit Package](../../doc/controllers/api.md#submit-package)
+* [Confirm Usage](../../doc/controllers/api.md#confirm-usage)
 * [Get Package](../../doc/controllers/api.md#get-package)
 
 
@@ -802,6 +803,94 @@ try {
 | 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
 | 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
+| 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
+
+
+# Confirm Usage
+
+```ts
+async confirmUsage(
+  id: string,
+  body: UsageReceipt,
+  requestOptions?: RequestOptions
+): Promise<ApiResponse<UsageAcceptance>>
+```
+
+## Authentication
+
+This endpoint requires [platformKey](../../doc/auth/oauth-2-bearer-token.md) **AND** [requestSignature](../../doc/auth/custom-header-signature.md)
+
+## Parameters
+
+| Parameter | Type | Tags | Description |
+|  --- | --- | --- | --- |
+| `id` | `string` | Template, Required | - |
+| `body` | [`UsageReceipt`](../../doc/models/usage-receipt.md) | Body, Required | - |
+| `requestOptions` | `RequestOptions \| undefined` | Optional | Pass additional request options. |
+
+## Response Type
+
+**202**: Accepted (recorded, not yet done)
+
+This method returns an [`ApiResponse`](../../doc/api-response.md) instance. The `result` property of this instance returns the response data which is of type [`UsageAcceptance`](../../doc/models/usage-acceptance.md).
+
+## Example Usage
+
+```ts
+const id = 'id0';
+
+const body: UsageReceipt = {
+  version: 1,
+  allowanceId: 'allowanceId2',
+  trancheId: 'trancheId4',
+  commit: 'commit8',
+  authority: {
+    keyId: 'keyId6',
+    root: 'root2',
+  },
+  observedAt: 116,
+  nonce: 'nonce8',
+  signature: 'signature4',
+};
+
+try {
+  const response = await api.confirmUsage(
+    id,
+    body
+  );
+
+  // Extracting fully parsed response body.
+  console.log(response.result);
+
+  // Extracting response status code.
+  console.log(response.statusCode);
+  // Extracting response headers.
+  console.log(response.headers);
+  // Extracting response body of type `string | Stream`
+  console.log(response.body);
+} catch (error) {
+  if (error instanceof ApiError) {
+    // Extracting response error status code.
+    console.log(error.statusCode);
+    // Extracting response error headers.
+    console.log(error.headers);
+    // Extracting response error body of type `string | Stream`.
+    console.log(error.body);
+    if (error instanceof ProblemError) {
+      console.log(error.result);
+    }
+  }
+}
+```
+
+## Errors
+
+| HTTP Status Code | Error Description | Exception Class |
+|  --- | --- | --- |
+| 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
+| 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 413 | Body over 64 KiB | [`ProblemError`](../../doc/models/problem-error.md) |
 | 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 

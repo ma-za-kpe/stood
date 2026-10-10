@@ -203,7 +203,9 @@ scripts/dev evidence-check # qualify the evidence bucket: write once by hash, re
 
 Baselines use the same runner: a platform asks `POST /v1/baselines` to run a milestone's frozen tests on the base commit before work is posted, and reads which failed with `GET /v1/baselines/{id}` (C4). Every signed run is stored in the evidence bucket before it can decide, at `runs/<platform>/<tranche>/<package>/<sha256>` (write-once: an object is never replaced). If the bucket cannot be reached, the package waits and nothing is decided.
 
-Final milestones (`code.final@1`) also require the buyer's usage confirmation (`usage_release`), which is not yet wired from Yard, so they wait after passing their tests.
+Final milestones (`code.final@1`) also require the buyer's usage confirmation (`usage_release`). A platform forwards it to `POST /v1/tranches/{id}/usage` as a usage receipt: Ed25519-signed, bound to the allowance, the tranche and the latest package's commit, at most 24 hours old, and with a nonce used once. Stood accepts receipts only from keys listed in `USAGE_AUTHORITY_KEYS` on `stood-api` (`[{"keyId", "root", "publicKey": base64 of an Ed25519 SPKI PEM}]`). The runner then decides the waiting final milestone again, once, with usage confirmed (decision `usage:<package>`).
+
+**Trust note.** The usage authority is the platform's own key (Yard's), not a key any builder holds. Yard signs only when the authenticated buyer who owns the blueprint confirms use, so Stood relies on the platform for who the buyer is, as it already does for the allowance itself. Stood does not know builder identities, so it cannot check the builder's tree itself.
 
 ### Yard reads Stood (T-0189)
 

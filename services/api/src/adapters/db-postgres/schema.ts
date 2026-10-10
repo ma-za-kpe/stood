@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -16,6 +17,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { CodeTerms } from '../../application/code-terms.js';
 import type { TrancheCommand } from '../../domain/tranche-record.js';
+import type { UsageReceipt } from '../../domain/usage-receipt.js';
 import type { BaselineResult, StoredBaseline } from '../../ports/baseline-store.js';
 import type { CommitPackageInput, StoredCommitPackage } from '../../ports/commit-package-store.js';
 import type { FundingHold, FundingInstruction, FundingStatus } from '../../ports/funding-store.js';
@@ -319,6 +321,24 @@ export const baselines = pgTable(
       'baseline_valid',
       sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.fingerprint} ~ '^[a-f0-9]{64}$' AND jsonb_typeof(${table.terms}) = 'object' AND ${table.status} IN ('QUEUED','DONE','INVALID') AND ((${table.status} = 'DONE') = (${table.result} IS NOT NULL)) AND ((${table.status} = 'QUEUED') = (${table.finishedAt} IS NULL))`,
     ),
+  ],
+);
+// C4 (#77): usage receipts Stood verified; each nonce once. The runner re-decides a waiting final milestone with one.
+export const usageReceipts = pgTable(
+  'usage_receipts',
+  {
+    nonce: text().primaryKey(),
+    platformId: text('platform_id').notNull(),
+    trancheId: text('tranche_id').notNull(),
+    commit: text().notNull(),
+    receipt: jsonb().$type<UsageReceipt>().notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    index('usage_receipt_tranche').on(table.trancheId, table.commit),
+    check('usage_receipt_valid', sql`${table.commit} ~ '^[a-f0-9]{40}$' AND jsonb_typeof(${table.receipt}) = 'object'`),
   ],
 );
 export const apiRequests = pgTable(

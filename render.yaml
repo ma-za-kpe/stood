@@ -42,6 +42,9 @@ services:
         sync: false
       - key: STOOD_WEBHOOK_SECRET
         sync: false
+      # C4 (#77): public Ed25519 keys whose usage receipts Stood accepts (Yard's usage key). Public, but set per deploy.
+      - key: USAGE_AUTHORITY_KEYS
+        sync: false
       # T-0227/T-0260: keys that seal saved PayPal tokens; signing and funding stay off without them.
       - key: VAULT_TOKEN_KEYS
         sync: false

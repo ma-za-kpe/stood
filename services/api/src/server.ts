@@ -11,7 +11,9 @@ import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import { PostgresProviderEvents } from './adapters/db-postgres/provider-events.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { TokenCipher } from './adapters/db-postgres/token-cipher.js';
+import { PostgresUsageReceipts } from './adapters/db-postgres/usage-receipts.js';
 import { PAYMENT_KEYS } from './application/payment-readiness.js';
+import { usageAuthorities } from './application/usage-intake.js';
 import { createApp } from './http/app.js';
 import { providerRuntime } from './provider-runtime.js';
 import { paypalWebhookReceiver } from './provider-webhooks.js';
@@ -56,6 +58,10 @@ const app = createApp({
           store: new PostgresPlatformApi(drizzle(pool, { schema })),
           packages: new PostgresCommitPackages(drizzle(pool, { schema })),
           baselines: new PostgresBaselines(drizzle(pool, { schema })),
+          usage: {
+            store: new PostgresUsageReceipts(drizzle(pool, { schema })),
+            authorities: usageAuthorities(process.env.USAGE_AUTHORITY_KEYS),
+          },
           platformId: process.env.STOOD_PLATFORM_ID ?? 'local-platform',
           key: process.env.STOOD_API_KEY ?? '',
           secret: process.env.STOOD_HMAC_SECRET ?? '',

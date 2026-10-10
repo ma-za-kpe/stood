@@ -35,6 +35,7 @@ const reads: Record<string, readonly string[]> = {
     'PROVIDER_PAYPAL',
     'STOOD_PLATFORM_ID',
     'VAULT_TOKEN_KEYS',
+    'USAGE_AUTHORITY_KEYS',
     ...PAYMENT_KEYS,
   ],
   'stood-reconciler': [

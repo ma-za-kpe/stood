@@ -52,6 +52,10 @@ export type { Tranche } from './models/tranche.js';
 export type { TrancheHold } from './models/trancheHold.js';
 export type { TrancheRef } from './models/trancheRef.js';
 export { TrancheState } from './models/trancheState.js';
+export type { UsageAcceptance } from './models/usageAcceptance.js';
+export type { UsageAuthority } from './models/usageAuthority.js';
+export type { UsageReceipt } from './models/usageReceipt.js';
+export { UsageStatus } from './models/usageStatus.js';
 export * from './models/containers/milestoneParams.js';
 
 // Stood customization (not generated): signed requests.

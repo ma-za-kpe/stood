@@ -384,3 +384,34 @@ describe('Public SDK baselines against the actual local Stood HTTP router', () =
     }
   });
 });
+
+// C4 (#77): the platform forwards a usage receipt; Stood's refusal reaches the caller as a typed error.
+describe('Public SDK usage confirmation against the actual local Stood HTTP router', () => {
+  it('confirms use with a signed receipt and refuses a forged one', async () => {
+    const { harness, usageReceipt, key, secret, now } = await import('../../test/fixtures/contract-app.js');
+    const app = await harness();
+    const sdk = new StoodClient({
+      baseUrl: 'https://stood.fixture',
+      key,
+      secret,
+      clock: () => now,
+      transport: async (r: Request) => app.fetch(r),
+    });
+    expect(await sdk.confirmUsage('trn_1', usageReceipt())).toMatchObject({
+      trancheId: 'trn_1',
+      commit: 'b'.repeat(40),
+    });
+    await expect(sdk.confirmUsage('trn_1', { ...usageReceipt(), signature: 'Zm9yZ2Vk' })).rejects.toBeInstanceOf(
+      StoodClientError,
+    );
+    const lying = new StoodClient({
+      baseUrl: 'https://stood.fixture',
+      key,
+      secret,
+      clock: () => now,
+      transport: async () =>
+        Response.json({ tranche_id: 'other', commit: 'b'.repeat(40), status: 'ACCEPTED', accepted_at: 'x' }),
+    });
+    await expect(lying.confirmUsage('trn_1', usageReceipt())).rejects.toBeInstanceOf(StoodClientError);
+  });
+});

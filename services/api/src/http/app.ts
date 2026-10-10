@@ -248,7 +248,8 @@ export function createApp(config: AppConfig) {
         response.status !== 404 ||
         (c.req.method === 'GET' && /^\/v1\/(allowances(?:\/[^/]+)?|tranches\/[^/]+)$/.test(c.req.path)) ||
         /^\/v1\/tranches\/[^/]+\/packages(?:\/[^/]+)?$/.test(c.req.path) ||
-        // C4 (#77): baselines answer their own 404s.
+        // C4 (#77): baselines and usage receipts answer their own 404s.
+        /^\/v1\/tranches\/[^/]+\/usage$/.test(c.req.path) ||
         /^\/v1\/baselines(?:\/[^/]+)?$/.test(c.req.path) ||
         // T-0260: signing and funding answer their own 404s.
         /^\/v1\/(allowances\/[^/]+\/mandate|tranches\/[^/]+\/funding)(?:\/[^/]+)?$/.test(c.req.path)

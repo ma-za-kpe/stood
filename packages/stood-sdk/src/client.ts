@@ -52,6 +52,18 @@ export type BaselineView = Readonly<{
   tests: readonly Readonly<{ id: string; status: 'PASS' | 'FAIL' }>[] | null;
   evidenceSha256: string | null;
 }>;
+// C4 (#77): the buyer's signed confirmation that a final milestone is in use (see Stood's UsageReceipt).
+export type UsageReceiptInput = Readonly<{
+  version: 1;
+  allowanceId: string;
+  trancheId: string;
+  commit: string;
+  authority: Readonly<{ keyId: string; root: string }>;
+  observedAt: number;
+  nonce: string;
+  signature: string;
+}>;
+export type UsageAcceptanceView = Readonly<{ trancheId: string; commit: string; acceptedAt: string }>;
 export type TrancheView = Readonly<{
   id: string;
   state: string;
@@ -414,6 +426,24 @@ export class StoodClient {
     const v = baselineView(await this.request('GET', `/baselines/${this.resource(baselineId)}`));
     if (v.id !== baselineId) throw new StoodClientError('INVALID_RESPONSE');
     return v;
+  }
+  // C4 (#77): forward a usage receipt. Stood verifies it before accepting; a refused receipt is a typed error.
+  async confirmUsage(trancheId: string, receipt: UsageReceiptInput): Promise<UsageAcceptanceView> {
+    const v = await this.request(
+      'POST',
+      `/tranches/${this.resource(trancheId)}/usage`,
+      receipt,
+      `usage-${receipt.nonce}`,
+    );
+    if (
+      !object(v) ||
+      v.tranche_id !== trancheId ||
+      v.status !== 'ACCEPTED' ||
+      !hex(v.commit, 40) ||
+      typeof v.accepted_at !== 'string'
+    )
+      throw new StoodClientError('INVALID_RESPONSE');
+    return Object.freeze({ trancheId, commit: v.commit, acceptedAt: v.accepted_at });
   }
   async getTranche(trancheId: string): Promise<TrancheView> {
     return trancheView(await this.request('GET', `/tranches/${this.resource(trancheId)}`), trancheId);

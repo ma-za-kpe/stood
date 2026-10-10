@@ -224,6 +224,37 @@ export const Baseline = z
   .strict()
   .meta({ id: 'Baseline' });
 
+export const UsageReceipt = z
+  .object({
+    version: z.literal(1),
+    allowanceId: id,
+    trancheId: id,
+    commit: sha40.describe("The tranche's latest submitted package commit"),
+    authority: z
+      .object({ keyId: z.string().max(64), root: z.string().max(100) })
+      .strict()
+      .meta({ id: 'UsageAuthority', description: "A key Stood is configured to trust, outside the builder's tree" }),
+    observedAt: z.number().int().describe('When the buyer confirmed use, Unix milliseconds (within 24 hours)'),
+    nonce: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
+    signature: z
+      .string()
+      .max(200)
+      .describe(
+        'Base64 Ed25519 signature over "stood-usage-receipt/v1", allowanceId, trancheId, commit, keyId, root, observedAt and nonce, joined by NUL',
+      ),
+  })
+  .strict()
+  .meta({ id: 'UsageReceipt', description: "The buyer's signed confirmation that a final milestone is in use" });
+export const UsageAcceptance = z
+  .object({
+    tranche_id: id,
+    commit: sha40,
+    status: z.literal('ACCEPTED').meta({ id: 'UsageStatus' }),
+    accepted_at: instant,
+  })
+  .strict()
+  .meta({ id: 'UsageAcceptance' });
+
 export const Problem = z
   .object({
     type: z.string().describe('urn:stood:problem:<code>'),
@@ -338,6 +369,16 @@ export const operations: readonly Operation[] = [
     problems: [401, 404, 409, 422, 503],
   },
   {
+    method: 'post',
+    path: '/tranches/{id}/usage',
+    id: 'confirmUsage',
+    summary:
+      "Forward the buyer's signed confirmation that a final milestone is in use; the runner then decides it again",
+    body: UsageReceipt,
+    ok: { status: 202, schema: UsageAcceptance },
+    problems: [401, 404, 413, 422, 503],
+  },
+  {
     method: 'get',
     path: '/tranches/{id}/packages/{packageId}',
     id: 'getPackage',
@@ -373,7 +414,7 @@ function nullables(value: unknown): unknown {
 
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
-export const API_VERSION = '1.1.0';
+export const API_VERSION = '1.2.0';
 
 export type OpenApiDocument = Readonly<{
   openapi: string;
