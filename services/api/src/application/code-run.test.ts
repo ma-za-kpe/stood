@@ -1,5 +1,6 @@
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { MemoryEvidence } from '../../test/fakes/evidence-store.js';
 import { MemoryTranches } from '../../test/fakes/tranche-store.js';
 import { reportSigner } from '../adapters/runner/report-signer.js';
 import { SignedReportVerifier } from '../adapters/runner/signed-report.js';
@@ -44,7 +45,9 @@ function job(over: Partial<RunnerJob> = {}): RunnerJob {
     ...over,
   };
 }
-async function harness(o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; changedTestAtCommit?: boolean } = {}) {
+async function harness(
+  o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; changedTestAtCommit?: boolean; evidence?: 'down' } = {},
+) {
   const store = new MemoryTranches();
   await store.create(
     createTrancheRecord({
@@ -85,8 +88,11 @@ async function harness(o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; chan
       };
     },
   };
+  const evidence = new MemoryEvidence();
+  evidence.down = o.evidence === 'down';
   const deps = {
     store,
+    evidence,
     reader,
     runner,
     signer: reportSigner(key),
@@ -96,7 +102,7 @@ async function harness(o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; chan
     clock: () => now,
   };
   const state = async () => restoreTrancheRecord((await store.load('trn')).record);
-  return { deps, runs, state, store };
+  return { deps, evidence, runs, state, store };
 }
 
 // T-0159: a queued code package becomes exactly one recorded decision, from a signed and verified run of the buyer's
@@ -109,6 +115,19 @@ describe('runCodeJob', () => {
     expect(t.state).toBe('CAPTURE_PENDING');
     expect(t.decisions.at(-1)?.decision).toMatchObject({ outcome: 'RELEASE', effect: 'CAPTURE' });
     expect(h.runs[0]).toMatchObject({ frozenTests: frozen, source: [{ path: 'src/app.js' }] });
+  });
+
+  it('stores the signed run in the evidence bucket before deciding, and decides nothing if it cannot', async () => {
+    const h = await harness();
+    expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
+    const [[key, body]] = [...h.evidence.objects];
+    expect(key).toMatch(/^runs\/platform\/trn\/pkg_1\/[a-f0-9]{64}$/);
+    const stored = JSON.parse(String(body));
+    expect(stored.contract).toMatchObject({ packageId: 'pkg_1', commit, runnerId });
+    expect(stored.report.signature).toEqual(expect.any(String));
+    const down = await harness({ evidence: 'down' });
+    expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
+    expect((await down.state()).state).toBe('HELD');
   });
 
   it('refuses when a frozen test fails, naming what failed', async () => {

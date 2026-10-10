@@ -88,6 +88,15 @@ services:
         sync: false
       - key: RUNNER_SIGNING_KEY
         sync: false
+      # C4 (#77): Stood's evidence bucket (Cloudflare R2, bucket-scoped token). The runner stays off without it.
+      - key: STOOD_EVIDENCE_S3_ENDPOINT
+        sync: false
+      - key: STOOD_EVIDENCE_S3_BUCKET  # gitleaks:allow (a variable name, no value)
+        value: stood-evidence
+      - key: STOOD_EVIDENCE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY
+        sync: false
       # Optional read-only token for private repositories; public ones need none.
       - key: GITHUB_READ_TOKEN
         sync: false

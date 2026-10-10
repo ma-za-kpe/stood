@@ -70,6 +70,7 @@ if (!missing.length && problem) {
         runner: new VercelSandboxRunner(vercelSandbox),
         signer: reportSigner(runner.key),
         verifier: runner.verifier,
+        evidence: runner.evidence,
         runnerId: RUNNER_ID,
         imageDigest: RUNNER_IMAGE,
         clock: () => Date.now(),

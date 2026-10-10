@@ -31,6 +31,7 @@ export default defineConfig({
         '**/yard-api/src/github-check-cli.ts',
         '**/yard-api/src/preview-check-cli.ts',
         '**/api/src/runner-check-cli.ts',
+        '**/api/src/evidence-check-cli.ts',
         '**/adapters/runner/vercel-sdk.ts',
         '**/yard-api/src/server.ts',
         '**/adapters/db-postgres/**',
