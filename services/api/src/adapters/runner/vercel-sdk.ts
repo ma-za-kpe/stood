@@ -20,8 +20,13 @@ export const vercelSandbox = Object.freeze({
     return {
       writeFiles: (files) => sandbox.writeFiles(files.map((f) => ({ path: f.path, content: f.content }))),
       update: ({ networkPolicy }) => sandbox.updateNetworkPolicy(networkPolicy as never).then(() => undefined),
-      runCommand: async ({ cmd, args, cwd }) => {
-        const finished = await sandbox.runCommand({ cmd, args: [...args], ...(cwd ? { cwd } : {}) });
+      runCommand: async ({ cmd, args, cwd, sudo }) => {
+        const finished = await sandbox.runCommand({
+          cmd,
+          args: [...args],
+          ...(cwd ? { cwd } : {}),
+          ...(sudo ? { sudo: true } : {}),
+        });
         return { exitCode: finished.exitCode, stdout: () => finished.stdout(), stderr: () => finished.stderr() };
       },
       stop: () => sandbox.stop().then(() => undefined),
