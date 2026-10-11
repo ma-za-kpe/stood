@@ -19,6 +19,10 @@ const job: RunJob = {
     { id: 't2', path: 'tests/refund.test.js', content: 'buyer test two' },
   ],
 };
+const passing =
+  'TAP version 13\n# Subtest: books\nok 1 - books\n  ---\n  ...\n1..1\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
+const failing =
+  "TAP version 13\n# Subtest: books\nnot ok 1 - books\n  ---\n  failureType: 'testCodeFailure'\n  code: 'ERR_ASSERTION'\n  ...\n1..1\n# tests 1\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n";
 function fakeSandbox(exits: Record<string, number> = {}, fail?: 'create' | 'install', installOutput = '') {
   const log: string[] = [];
   let files: Record<string, string> = {};
@@ -36,7 +40,9 @@ function fakeSandbox(exits: Record<string, number> = {}, fail?: 'create' | 'inst
       if (fail === 'install' && args.includes('install')) throw new Error('session died');
       const key = Object.keys(exits).find((k) => line.includes(k));
       const exitCode = key ? (exits[key] as number) : 0;
-      return { exitCode, stdout: async () => '', stderr: async () => (cmd === 'npm' ? installOutput : '') };
+      // What the judge's own node --test prints: a passing test on exit 0, an assertion failure on exit 1.
+      const tap = !line.includes('--test') ? '' : exitCode === 0 ? passing : exitCode === 1 ? failing : '';
+      return { exitCode, stdout: async () => tap, stderr: async () => (cmd === 'npm' ? installOutput : '') };
     },
     stop: async () => {
       log.push('stop');
@@ -60,11 +66,11 @@ describe('VercelSandboxRunner', () => {
   // Owner decision 2026-10-10: the tests run in the judge's own process; the builder's code only in processes the
   // harness starts as the builder. The frozen tests never enter the builder's workspace.
   it("runs each frozen test in the judge's own process, with the network off, apart from the builder's code", async () => {
-    const h = fakeSandbox({ 'node --test /vercel/judge/tests/refund.test.js': 1 });
+    const h = fakeSandbox({ 'node --test --test-reporter=tap /vercel/judge/tests/refund.test.js': 1 });
     const result = await h.runner.run(job);
     expect(result.tests).toEqual([
-      { id: 't1', status: 'PASS' },
-      { id: 't2', status: 'FAIL' },
+      { id: 't1', status: 'PASS', outcome: 'PASSED' },
+      { id: 't2', status: 'FAIL', outcome: 'ASSERTION_FAILED' },
     ]);
     expect(h.files()['/vercel/judge/tests/booking.test.js']).toContain('buyer test');
     expect(h.files()['/vercel/run/tests/booking.test.js']).toBe('builder tried to weaken this test');
@@ -94,17 +100,17 @@ describe('VercelSandboxRunner', () => {
       ),
       expect.stringMatching(/^run sudo setpriv --reuid=65533 .* sh -c .* probe \/vercel\/run \/vercel\/judge$/),
       'network "deny-all"',
-      `run sudo ${judge} timeout 120 node --test /vercel/judge/tests/booking.test.js`,
-      `run sudo ${judge} timeout 120 node --test /vercel/judge/tests/refund.test.js`,
+      `run sudo ${judge} timeout 120 node --test --test-reporter=tap /vercel/judge/tests/booking.test.js`,
+      `run sudo ${judge} timeout 120 node --test --test-reporter=tap /vercel/judge/tests/refund.test.js`,
       'stop',
     ]);
     expect(builder).toContain('--bounding-set=-all --no-new-privs -- env -i -C /vercel/run');
   });
 
   it('skips install without a package.json, and fails a test that times out', async () => {
-    const h = fakeSandbox({ 'node --test /vercel/judge/tests/booking.test.js': 124 });
+    const h = fakeSandbox({ 'node --test --test-reporter=tap /vercel/judge/tests/booking.test.js': 124 });
     const result = await h.runner.run({ ...job, source: job.source.filter((f) => f.path !== 'package.json') });
-    expect(result.tests[0]).toEqual({ id: 't1', status: 'FAIL' });
+    expect(result.tests[0]).toEqual({ id: 't1', status: 'FAIL', outcome: 'NOT_RUN' });
     expect(h.log.some((l) => l.includes('npm install'))).toBe(false);
     expect(h.log).toContain('network "deny-all"');
   });

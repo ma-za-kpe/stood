@@ -19,7 +19,8 @@ type Deps = Readonly<{
 }>;
 
 // C4 (#77): runs one milestone's frozen tests on the base commit, in the same isolated runner that later judges the
-// work (ADR-0026), and records each test's result. Tests missing or changed at the base are INVALID; anything
+// work (ADR-0026), and records each test's result. Tests missing or changed at the base, or that could not run there,
+// are INVALID; anything
 // unavailable (GitHub, the runner, the evidence bucket) leaves the baseline queued to try again.
 export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' | 'INVALID' | Waiting> {
   const t = job.terms;
@@ -45,11 +46,18 @@ export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' 
       source,
       frozenTests: t.tests.map((x) => ({ id: x.id, path: x.path, content: byPath.get(x.path) as string })),
     });
-    const status = new Map(run.tests.map((r) => [r.id, r.status]));
-    // A test the run did not report did not pass.
+    const outcome = new Map(run.tests.map((r) => [r.id, r.outcome]));
+    // Second audit (2026-10-11): red means an assertion failed against unfinished software. A test that could not
+    // run at all (did not load, threw outside an assertion, skipped, timed out, missing from the run) proves nothing
+    // about the work, so the baseline is INVALID and the buyer's tests go back for revision.
+    if (t.testIds.some((id) => !['PASSED', 'ASSERTION_FAILED'].includes(outcome.get(id) ?? 'NOT_RUN'))) {
+      step = 'STORE';
+      await deps.store.finish(job.id, { status: 'INVALID' });
+      return 'INVALID';
+    }
     const tests = t.testIds.map((id) => ({
       id,
-      status: status.get(id) === 'PASS' ? ('PASS' as const) : ('FAIL' as const),
+      status: outcome.get(id) === 'PASSED' ? ('PASS' as const) : ('FAIL' as const),
     }));
     step = 'EVIDENCE';
     const stored = await deps.evidence.put(

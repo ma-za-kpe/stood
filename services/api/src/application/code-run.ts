@@ -123,7 +123,8 @@ export async function runCodeJob(
       };
       const report = deps.signer.sign({
         contract,
-        tests: run.tests,
+        // The signed report keeps its format: each test's id and PASS or FAIL (PASS only when every test in it ran and passed).
+        tests: run.tests.map(({ id, status }) => ({ id, status })),
         diffHash: diffHash(t.baseCommit, job.package.commit),
         // No mutation tool runs yet, so a milestone that demands a mutation floor cannot pass on it (ADR-0026).
         mutationScore: 0,

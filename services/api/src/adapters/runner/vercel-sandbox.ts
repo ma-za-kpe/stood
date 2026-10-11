@@ -1,4 +1,4 @@
-import type { CodeRunner, RunJob, RunResult } from '../../ports/code-runner.js';
+import type { CodeRunner, RunJob, RunResult, TestOutcome } from '../../ports/code-runner.js';
 // The slice of a Vercel Sandbox session the runner uses; the CLI and worker wire the real SDK to it (ADR-0026).
 export type SandboxSession = Readonly<{
   writeFiles(files: readonly Readonly<{ path: string; content: Buffer }>[]): Promise<void>;
@@ -37,6 +37,47 @@ const SUBMISSION_INSTALL_ERRORS = new Set([
   'EINVALIDTAGNAME',
   'ERESOLVE',
 ]);
+// Second audit (2026-10-11): exit code 0 is not proof that the assertions ran (a skipped test exits 0 too). The judge's
+// own TAP report is trustworthy now that builder output cannot reach it, so each file is classified from it.
+export function judgeOutcome(tap: string, exitCode: number, file: string): TestOutcome {
+  const lines = tap.split('\n');
+  const results: { ok: boolean; name: string; directive: string; code: string; failureType: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\s*)(not )?ok \d+ - (.*?)(?: # (SKIP|TODO)\b.*)?$/.exec(lines[i] ?? '');
+    if (!m) continue;
+    const indent = (m[1] ?? '').length;
+    let code = '';
+    let failureType = '';
+    // The YAML block under a result is indented two spaces deeper than the result itself.
+    for (let j = i + 1; j < lines.length; j++) {
+      const line = lines[j] ?? '';
+      if (/^\s*(not )?ok \d+ - /.test(line) || /^\s*# Subtest:/.test(line)) break;
+      const yaml = new RegExp(`^ {${indent + 2}}(code|failureType): '([^']*)'$`).exec(line);
+      if (yaml?.[1] === 'code') code = yaml[2] ?? '';
+      if (yaml?.[1] === 'failureType') failureType = yaml[2] ?? '';
+    }
+    results.push({ ok: !m[2], name: (m[3] ?? '').trim(), directive: m[4] ?? '', code, failureType });
+  }
+  const count = (name: string) => Number(new RegExp(`^# ${name} (\\d+)$`, 'm').exec(tap)?.[1] ?? Number.NaN);
+  const [tests, pass, fail] = [count('tests'), count('pass'), count('fail')];
+  const notRun =
+    !results.length ||
+    !(tests > 0) ||
+    count('cancelled') !== 0 ||
+    count('skipped') !== 0 ||
+    count('todo') !== 0 ||
+    results.some(
+      (r) =>
+        r.directive ||
+        !r.name ||
+        r.name === file ||
+        file.endsWith(`/${r.name}`) ||
+        (!r.ok && r.code !== 'ERR_ASSERTION' && r.failureType !== 'subtestsFailed'),
+    );
+  if (notRun) return 'NOT_RUN';
+  if (exitCode === 0 && fail === 0 && pass === tests && results.every((r) => r.ok)) return 'PASSED';
+  return fail > 0 && exitCode !== 0 ? 'ASSERTION_FAILED' : 'NOT_RUN';
+}
 // A failure that decides nothing, named by the stage it happened in, so an operator can tell them apart.
 export class RunnerUnavailable extends Error {
   constructor(readonly stage: 'CREATE' | 'WRITE' | 'INSTALL' | 'LOCK' | 'NETWORK' | 'TEST') {
@@ -203,20 +244,30 @@ export class VercelSandboxRunner implements CodeRunner {
       stage = 'NETWORK';
       await session.update({ networkPolicy: 'deny-all' });
       stage = 'TEST';
-      const tests: { id: string; status: 'PASS' | 'FAIL' }[] = [];
+      const tests: { id: string; status: 'PASS' | 'FAIL'; outcome: TestOutcome }[] = [];
       for (const test of job.frozenTests) {
+        // The submission's dependencies did not install: no test could run.
         if (installExitCode !== null && installExitCode !== 0) {
-          tests.push({ id: test.id, status: 'FAIL' });
+          tests.push({ id: test.id, status: 'FAIL', outcome: 'NOT_RUN' });
           continue;
         }
-        // The verdict is the judge's own process: a clean Node invocation on the exact frozen file, which exits 0 or
-        // does not. The builder's code runs only in the processes the harness starts, so it cannot reach this one.
+        // The verdict is the judge's own process: a clean Node invocation on the exact frozen file, and its own test
+        // report. The builder's code runs only in the processes the harness starts, so it cannot reach either.
         const run = await session.runCommand({
           cmd: 'setpriv',
-          args: [...JUDGE_IDENTITY, 'timeout', String(TEST_SECONDS), 'node', '--test', `${JUDGE}/${test.path}`],
+          args: [
+            ...JUDGE_IDENTITY,
+            'timeout',
+            String(TEST_SECONDS),
+            'node',
+            '--test',
+            '--test-reporter=tap',
+            `${JUDGE}/${test.path}`,
+          ],
           sudo: true,
         });
-        tests.push({ id: test.id, status: run.exitCode === 0 ? 'PASS' : 'FAIL' });
+        const outcome = judgeOutcome(await run.stdout(), run.exitCode, `${JUDGE}/${test.path}`);
+        tests.push({ id: test.id, status: outcome === 'PASSED' ? 'PASS' : 'FAIL', outcome });
       }
       return { tests, installExitCode };
     } catch (error) {
