@@ -144,6 +144,13 @@ PY
     grep -E '^(DATABASE_URL|APP_ENV|PROVIDER_PAYPAL|PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|PAYPAL_BASE_URL|VAULT_TOKEN_KEYS)=' .env >"$keys" || true
     docker compose run --rm --no-deps --env-from-file "$keys" app \
       sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/funding-recover-cli.js "$0" "$1"' "$1" "$2" ;;
+  yard-payout) shift
+    # Third audit (2026-10-11), ADR-0027: list builder payouts that need the owner, or record the owner's decision.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^YARD_DATABASE_URL=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter "@stood/yard-api..." build >/dev/null && node services/yard-api/dist/payout-cli.js "$@"' sh "$@" ;;
   release-review)
     # Owner decision 2026-10-10: list, read-only, every code decision the old in-process runner recorded. Prints ids and
     # outcomes only, never a setting. Run it against production before settlement is switched back on.

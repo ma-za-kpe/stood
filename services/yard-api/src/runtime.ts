@@ -179,9 +179,19 @@ export function yardRuntime(env: Env) {
       expiring.unref();
       await expire();
       if (payouts) {
+        // Third audit (2026-10-11): every run's counts, and each problem with its job, work order and reason.
+        const checked = new Map<string, number>();
         const pay = () =>
-          runPayouts({ board, provider: payouts, payeeOf: (id) => payees.get(id), clock: Date.now }).catch(() =>
-            process.stderr.write(`${JSON.stringify({ code: 'PAYOUTS_FAILED' })}\n`),
+          runPayouts({ board, provider: payouts, payeeOf: (id) => payees.get(id), clock: Date.now, checked }).then(
+            ({ issues, ...counts }) => {
+              if (Object.values(counts).some((n) => n > 0))
+                process.stdout.write(`${JSON.stringify({ code: 'PAYOUTS', ...counts })}\n`);
+              for (const i of issues) process.stderr.write(`${JSON.stringify(i)}\n`);
+            },
+            (error) =>
+              process.stderr.write(
+                `${JSON.stringify({ code: 'PAYOUTS_FAILED', reason: error instanceof Error ? error.message : 'unknown' })}\n`,
+              ),
           );
         paying = setInterval(pay, 60_000);
         paying.unref();
