@@ -5,8 +5,12 @@ import { MemoryTranches } from '../../test/fakes/tranche-store.js';
 import { reportSigner } from '../adapters/runner/report-signer.js';
 import { SignedReportVerifier } from '../adapters/runner/signed-report.js';
 import { createTrancheRecord, restoreTrancheRecord } from '../domain/tranche-record.js';
+import type { PaymentExecutor, PaymentResult } from '../ports/payment-executor.js';
+import type { ClaimState, RunClaims } from '../ports/run-claims.js';
+import { runClaimed } from './claimed-queue.js';
 import { bundleHash } from './code-evidence.js';
 import { type RunnerJob, runCodeJob } from './code-run.js';
+import { executePayment } from './execute-payment.js';
 
 const result = (id: string, s: string) =>
   s === 'PASS'
@@ -242,4 +246,69 @@ describe('runCodeJob', () => {
     expect(released.decisions.at(-1)).toMatchObject({ id: 'judge-usage:pkg_1', decision: { outcome: 'RELEASE' } });
     expect(await runCodeJob(confirmed, h.deps)).toBe('ALREADY_DECIDED');
   });
+});
+
+// Second audit (2026-10-11): recovery across the whole path. GitHub is down on the first tick, the package waits
+// with nothing recorded; it recovers on the next tick, the judge's decision releases, and settlement captures once.
+it('recovers from an outage through the claimed queue to exactly one capture', async () => {
+  const h = await harness();
+  const rows = new Map<string, { attempts: number; due: boolean; token: string }>();
+  const claims: RunClaims = {
+    states: async (_k, ids) => new Map(ids.flatMap((id) => (rows.has(id) ? [[id, rows.get(id) as ClaimState]] : []))),
+    claim: async (_k, id) => {
+      const row = rows.get(id);
+      if (row && !row.due) return null;
+      const next = { attempts: (row?.attempts ?? 0) + 1, due: false, token: `t${row?.attempts ?? 0}` };
+      rows.set(id, next);
+      return { attempts: next.attempts, token: next.token };
+    },
+    renew: async () => true,
+    release: async (_k, id, token, waited) => {
+      if (rows.get(id)?.token !== token) return;
+      if (waited === null) rows.delete(id);
+      else rows.set(id, { ...(rows.get(id) as { attempts: number; due: boolean; token: string }), due: false });
+    },
+  };
+  const changedPaths = h.deps.reader.changedPaths;
+  h.deps.reader.changedPaths = async () => {
+    throw new Error('REPOSITORY_UNAVAILABLE');
+  };
+  const tick = () =>
+    runClaimed(
+      claims,
+      'package',
+      [job()],
+      (j) => `judge:${j.packageId}`,
+      2,
+      (j) => runCodeJob(j, h.deps),
+    );
+  expect(await tick()).toEqual([{ id: 'judge:pkg_1', outcome: 'WAIT:GITHUB_UNAVAILABLE' }]);
+  expect((await h.state()).decisions).toEqual([]);
+  // Backing off: the next tick does not run it.
+  expect(await tick()).toEqual([]);
+  // The backoff ends and GitHub is back.
+  rows.set('judge:pkg_1', {
+    ...(rows.get('judge:pkg_1') as { attempts: number; due: boolean; token: string }),
+    due: true,
+  });
+  h.deps.reader.changedPaths = changedPaths;
+  expect(await tick()).toEqual([{ id: 'judge:pkg_1', outcome: 'DECIDED' }]);
+  expect((await h.state()).decisions.at(-1)).toMatchObject({ id: 'judge:pkg_1', decision: { outcome: 'RELEASE' } });
+  const captures: string[] = [];
+  const executor: PaymentExecutor = {
+    execute: async (snapshot) => {
+      const op = snapshot.pending?.operation;
+      captures.push(String(op?.effect));
+      return {
+        method: 'confirmSettlement',
+        args: [{ effect: 'CAPTURE', authorizationId: String(op?.authorizationId), reference: 'CAP-1' }],
+      } as unknown as PaymentResult;
+    },
+  };
+  await executePayment(h.store, executor, 'trn', 'settle-1', () => now);
+  await executePayment(h.store, executor, 'trn', 'settle-2', () => now);
+  expect(captures).toEqual(['CAPTURE']);
+  // Fed the same package again, the runner decides nothing new.
+  expect((await tick())[0]?.outcome).toBe('ALREADY_DECIDED');
+  expect((await h.state()).decisions.filter((d) => d.id === 'judge:pkg_1')).toHaveLength(1);
 });
