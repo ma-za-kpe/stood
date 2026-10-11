@@ -88,7 +88,8 @@ if (!missing.length && problem) {
             const decided = await runClaimed(
               claims,
               'package',
-              await jobs.pending(50),
+              // Second audit (2026-10-11): every undecided package, so the claim layer's fairness sees them all.
+              await jobs.pending(Number.MAX_SAFE_INTEGER),
               (job) => `${job.usageConfirmed ? 'judge-usage' : 'judge'}:${job.packageId}`,
               2,
               (job) => runCodeJob(job, deps),
@@ -102,6 +103,7 @@ if (!missing.length && problem) {
             const ran = await runClaimed(
               claims,
               'baseline',
+              // Due baselines only, fewest attempts first, chosen in the database.
               await baselines.pending(50),
               (job) => job.id,
               2,
