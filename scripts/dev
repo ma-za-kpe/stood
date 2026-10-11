@@ -128,6 +128,15 @@ PY
     cp openapi/stood.json apimatic/src/spec/stood.json
     docker compose run --rm --no-deps --env-from-file "$keys" app sh -c \
       'npx -y @apimatic/cli@1.5.0 sdk generate --input=apimatic --destination=sdk --language=typescript --force "$@" --auth-key="$APIMATIC_API_KEY"' sdk "$@" ;;
+  portal)
+    # T-0332: build the APIMatic developer portal (static files in apimatic/portal) from openapi/stood.json and
+    # apimatic/src/content. CI builds it the same way and publishes it with the website at /stood/api/.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^APIMATIC_API_KEY=' .env >"$keys" || true
+    cp openapi/stood.json apimatic/src/spec/stood.json
+    docker compose run --rm --no-deps --env-from-file "$keys" app sh -c \
+      'npx -y @apimatic/cli@1.5.0 portal generate --input=apimatic --destination=apimatic/portal --force --auth-key="$APIMATIC_API_KEY"' ;;
   sdk-save)
     # T-0053: save hand-made changes in sdk/typescript (the request signer) so every regeneration reapplies them.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }

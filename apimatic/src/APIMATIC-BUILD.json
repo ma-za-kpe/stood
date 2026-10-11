@@ -1,0 +1,19 @@
+{
+  "$schema": "https://titan.apimatic.io/api/build/schema",
+  "buildFileVersion": "1",
+  "generatePortal": {
+    "pageTitle": "Stood API reference",
+    "navTitle": "Stood platform API",
+    "apiSpecs": ["stood"],
+    "baseUrl": "https://ma-za-kpe.github.io/stood/api",
+    "indexable": {},
+    "languageConfig": {
+      "http": {},
+      "typescript": {}
+    },
+    "portalSettings": {
+      "enableConsoleCalls": false,
+      "enableExport": true
+    }
+  }
+}

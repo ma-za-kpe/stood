@@ -3,7 +3,7 @@
 
 ## Introduction
 
-Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Stood only talks to the PayPal sandbox.
+Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Each platform may make 120 writes and 600 reads a minute; over that, or after 30 failed sign-ins from one address in a minute, Stood answers 429 with Retry-After. Stood only talks to the PayPal sandbox.
 
 ## Building
 

@@ -2,7 +2,7 @@
 
 This is the record of the hosted sandbox setup done on 7–8 October 2026: every account, service, variable name and decision, and how to repeat it. It names **where** each value lives, never the value. For the full key inventory and the tests that wait on keys, see [`HANDOFF.md`](HANDOFF.md). For the target architecture, see [T10](tech/T10-deployment.md). Keep this page current: every change to hosting, keys or accounts updates it in the same PR.
 
-**Sandbox only.** No live PayPal app exists. `PROVIDER_PAYPAL=live` means "talk to the real PayPal **sandbox**", never real money.
+**Sandbox only.** No live PayPal app exists. `PROVIDER_PAYPAL=live` means "talk to the real PayPal **sandbox**", never real money. What would have to change before real money (PayPal approvals, Yard as merchant of record, builder verification, tax): [real-money.md](real-money.md).
 
 ## 1. What runs where
 

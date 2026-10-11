@@ -66,6 +66,16 @@ it('reads GitHub through the App when configured, else the read token, else anon
     GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from('not a key').toString('base64'),
   });
   expect(broken).toEqual({ note: expect.stringContaining('incomplete or invalid') });
+  // Found live on deploy: the App ids are committed before the key is set; the read token is used, not anonymous.
+  const idsOnly = githubReadAccess({
+    GITHUB_APP_ID: '5230872',
+    GITHUB_APP_INSTALLATION_ID: '169056228',
+    GITHUB_READ_TOKEN: 'read-not-real',
+  });
+  expect(idsOnly).toEqual({
+    token: 'read-not-real',
+    note: expect.stringMatching(/^GitHub reads: GITHUB_READ_TOKEN\. The GitHub App settings are incomplete/),
+  });
   expect(githubReadAccess({ GITHUB_READ_TOKEN: 'read-not-real' })).toMatchObject({ token: 'read-not-real' });
   expect(githubReadAccess({})).toEqual({ note: expect.stringContaining('anonymous') });
   for (const access of [viaApp, broken, githubReadAccess({ GITHUB_READ_TOKEN: 'read-not-real' })])

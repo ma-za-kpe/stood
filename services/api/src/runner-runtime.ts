@@ -89,6 +89,7 @@ export function githubReadAccess(env: Env): Readonly<{ token?: string | (() => P
   const appId = env.GITHUB_APP_ID?.trim() ?? '';
   const installationId = env.GITHUB_APP_INSTALLATION_ID?.trim() ?? '';
   const privateKey = Buffer.from(env.GITHUB_APP_PRIVATE_KEY_BASE64?.trim() ?? '', 'base64').toString('utf8');
+  let app = '';
   if (appId || installationId || env.GITHUB_APP_PRIVATE_KEY_BASE64?.trim()) {
     try {
       createPrivateKey(privateKey);
@@ -97,10 +98,17 @@ export function githubReadAccess(env: Env): Readonly<{ token?: string | (() => P
         note: 'GitHub reads: the Yard GitHub App (short-lived, read-only installation tokens).',
       };
     } catch {
-      return { note: 'GitHub reads: anonymous. The GitHub App settings are incomplete or invalid; see docs/SETUP.md.' };
+      // Found live on deploy (2026-10-11): the App ids are committed before its key is set. That falls back to the
+      // read token, never straight to anonymous (GitHub's low rate limit stalled baselines before).
+      app = ' The GitHub App settings are incomplete or invalid; see docs/SETUP.md.';
     }
   }
   const token = env.GITHUB_READ_TOKEN?.trim();
-  if (token) return { token, note: 'GitHub reads: GITHUB_READ_TOKEN. Prefer the Yard GitHub App; see docs/SETUP.md.' };
+  if (token)
+    return {
+      token,
+      note: `GitHub reads: GITHUB_READ_TOKEN.${app || ' Prefer the Yard GitHub App; see docs/SETUP.md.'}`,
+    };
+  if (app) return { note: `GitHub reads: anonymous.${app}` };
   return { note: "GitHub reads: anonymous (public repositories only, GitHub's low rate limit)." };
 }
