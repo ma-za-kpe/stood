@@ -201,6 +201,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -280,6 +290,16 @@
           },
           "409": {
             "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -688,6 +708,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -765,6 +795,16 @@
           },
           "409": {
             "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -979,6 +1019,16 @@
           },
           "409": {
             "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
             "content": {
               "application/problem+json": {
                 "schema": {

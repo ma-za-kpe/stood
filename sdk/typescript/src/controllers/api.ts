@@ -100,6 +100,11 @@ export class Api extends BaseApi {
       ProblemError,
       "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
     );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
     req.authenticate([{ platformKey: true, requestSignature: true }]);
     return req.callAsJson(allowanceSchema, requestOptions);
   }
@@ -133,6 +138,7 @@ export class Api extends BaseApi {
     );
     req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
     req.throwOn(409, ProblemError, 'Idempotency or version conflict');
+    req.throwOn(413, ProblemError, 'Body over 64 KiB');
     req.throwOn(422, ProblemError, 'Invalid request');
     req.throwOn(
       429,
@@ -278,6 +284,11 @@ export class Api extends BaseApi {
       ProblemError,
       "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
     );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
     req.authenticate([{ platformKey: true, requestSignature: true }]);
     return req.callAsJson(trancheSchema, requestOptions);
   }
@@ -312,6 +323,7 @@ export class Api extends BaseApi {
     );
     req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
     req.throwOn(409, ProblemError, 'Idempotency or version conflict');
+    req.throwOn(413, ProblemError, 'Body over 64 KiB');
     req.throwOn(422, ProblemError, 'Invalid request');
     req.throwOn(
       429,
@@ -393,6 +405,7 @@ export class Api extends BaseApi {
     );
     req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
     req.throwOn(409, ProblemError, 'Idempotency or version conflict');
+    req.throwOn(413, ProblemError, 'Body over 64 KiB');
     req.throwOn(422, ProblemError, 'Invalid request');
     req.throwOn(
       429,

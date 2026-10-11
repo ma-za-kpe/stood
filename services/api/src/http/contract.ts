@@ -476,8 +476,9 @@ export function openApiDocument(version: string = API_VERSION): OpenApiDocument 
           content: { 'application/json': { schema: ref(op.ok.schema) } },
         },
         ...Object.fromEntries(
-          // T-0156: every route can answer 429 (per-platform budgets and failed sign-ins per client).
-          [...op.problems, 429]
+          // T-0156: what every route can really answer, beside its own problems: 429 (rate limits), 503 (storage
+          // unavailable, from any route) and 413 (the 64 KiB body limit, on any route with a body).
+          [...new Set([...op.problems, 429, 503, ...(op.body ? [413] : [])])]
             .sort((a, b) => a - b)
             .map((status) => [
               status,
