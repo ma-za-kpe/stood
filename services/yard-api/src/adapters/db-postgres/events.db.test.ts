@@ -74,24 +74,20 @@ it('cleans the replacement listener when its last original viewer disconnects', 
     resolveLost = resolve;
   });
   const first = await store.subscribe('reconnect', resolveLost);
-  const backend = await fixture.pool.query(
-    "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN yard_events' AND state='idle'",
-  );
-  expect(backend.rows).toHaveLength(1);
-  await fixture.pool.query('SELECT pg_terminate_backend($1)', [backend.rows[0].pid]);
+  const listeners = async () =>
+    (
+      await fixture.pool.query(
+        "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN yard_events' AND state='idle'",
+      )
+    ).rows;
+  // The previous test's listener may still be closing, so wait for this store's to be the only one.
+  await expect.poll(async () => (await listeners()).length).toBe(1);
+  const [backend] = await listeners();
+  await fixture.pool.query('SELECT pg_terminate_backend($1)', [backend.pid]);
   await lost;
   const second = await store.subscribe('reconnect', () => {});
   second();
   first();
   expect(store.subscriptionCount).toBe(0);
-  await expect
-    .poll(
-      async () =>
-        (
-          await fixture.pool.query(
-            "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN yard_events' AND state='idle'",
-          )
-        ).rows.length,
-    )
-    .toBe(0);
+  await expect.poll(async () => (await listeners()).length).toBe(0);
 });
