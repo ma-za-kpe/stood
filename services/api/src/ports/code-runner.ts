@@ -6,10 +6,17 @@ export type RunJob = Readonly<{
   // The buyer's frozen tests: written last, so they replace anything the builder put at those paths.
   frozenTests: readonly Readonly<{ id: string; path: string; content: string }>[];
 }>;
+// Second audit (2026-10-11): how each frozen file ran, read from the judge's own test report.
+// PASSED: real named tests ran and every one passed. ASSERTION_FAILED: real named tests ran and every failure is an
+// assertion (the software does not do what the test asks). NOT_RUN: the file could not show either (it did not load,
+// threw outside an assertion, timed out, skipped or cancelled a test, or declared none).
+export type TestOutcome = 'PASSED' | 'ASSERTION_FAILED' | 'NOT_RUN';
 export type RunResult = Readonly<{
-  tests: readonly Readonly<{ id: string; status: 'PASS' | 'FAIL' }>[];
+  // PASS only when the outcome is PASSED.
+  tests: readonly Readonly<{ id: string; status: 'PASS' | 'FAIL'; outcome: TestOutcome }>[];
   installExitCode: number | null;
 }>;
 export interface CodeRunner {
-  run(job: RunJob): Promise<RunResult>;
+  // Fifth audit (2026-10-11): an aborted run stops its sandbox and rejects promptly; it never yields results.
+  run(job: RunJob, signal?: AbortSignal): Promise<RunResult>;
 }

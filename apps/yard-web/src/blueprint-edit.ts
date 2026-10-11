@@ -1,4 +1,13 @@
-export type EditableTest = { id: string; path: string; content: string };
+// An acceptance case (stood.cases@1): run `node src/cli.js ...args` with `input`, expect the exit status and output.
+export type AcceptanceCase = {
+  name: string;
+  args: string[];
+  input: string;
+  status: number;
+  output: string;
+  match: 'exact' | 'includes';
+};
+export type EditableTest = { id: string; path: string; cases: AcceptanceCase[] };
 export type EditableDraft = {
   summary: string;
   requirements: { id: string; text: string; testIds: string[] }[];
@@ -13,7 +22,10 @@ export function mergeMilestones(draft: EditableDraft, index: number): EditableDr
     throw new Error('Keep at least three milestones.');
   for (const test of b.tests) {
     const prior = a.tests.find((t) => t.path === test.path || t.id === test.id);
-    if (prior && (prior.path !== test.path || prior.id !== test.id || prior.content !== test.content))
+    if (
+      prior &&
+      (prior.path !== test.path || prior.id !== test.id || JSON.stringify(prior.cases) !== JSON.stringify(test.cases))
+    )
       throw new Error('Resolve conflicting tests before merging.');
     if (!prior) a.tests.push(test);
   }

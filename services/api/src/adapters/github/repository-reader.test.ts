@@ -1,4 +1,8 @@
-import { gzipSync } from 'node:zlib';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname as dirnameOf, join } from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { GitHubRepositoryReader } from './repository-reader.js';
 
@@ -134,5 +138,60 @@ describe('GitHubRepositoryReader', () => {
     await expect(new GitHubRepositoryReader({ fetch: traversal.fetch }).source('owner/repo', commit)).rejects.toThrow(
       'REPOSITORY_UNAVAILABLE',
     );
+  });
+});
+
+// Fifth audit (2026-10-11): memory is bounded while downloading, and long paths survive the archive.
+describe('GitHubRepositoryReader archives', () => {
+  const tarball = (format: 'posix' | 'gnu') => {
+    const dir = mkdtempSync(join(tmpdir(), 'tar-'));
+    const deep = `owner-repo-${'b'.repeat(7)}/src/${'feature-'.repeat(8)}/${'nested-'.repeat(6)}/${'module-'.repeat(16)}.js`;
+    mkdirSync(join(dir, dirnameOf(deep)), { recursive: true });
+    writeFileSync(join(dir, deep), 'export const ok = true;\n');
+    writeFileSync(join(dir, `owner-repo-${'b'.repeat(7)}`, 'package.json'), '{"type":"module"}');
+    const archive = join(dir, 'a.tar.gz');
+    execFileSync('tar', [`--format=${format}`, '-czf', archive, '-C', dir, `owner-repo-${'b'.repeat(7)}`]);
+    return { bytes: readFileSync(archive), deep: deep.split('/').slice(1).join('/') };
+  };
+  for (const format of ['posix', 'gnu'] as const)
+    it(`keeps a long nested path from a ${format} archive exactly`, async () => {
+      const { bytes, deep } = tarball(format);
+      expect(deep.length).toBeGreaterThan(100);
+      // The archive really uses the extended header for this path (a filename over 100 characters forces it).
+      expect(gunzipSync(bytes).includes(format === 'posix' ? ' path=' : '././@LongLink')).toBe(true);
+      const reader = new GitHubRepositoryReader({ fetch: async () => new Response(bytes) });
+      const files = await reader.source('owner/repo', commit);
+      expect(files.map((f) => f.path).sort()).toEqual([deep, 'package.json'].sort());
+      expect(files.find((f) => f.path === deep)?.content).toBe('export const ok = true;\n');
+    });
+
+  it('stops reading the moment the download passes its limit', async () => {
+    let pulled = 0;
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulled >= 64 * 1024) return controller.close();
+        pulled += 1024;
+        controller.enqueue(new Uint8Array(1024));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const reader = new GitHubRepositoryReader({ maxSourceBytes: 1024, fetch: async () => new Response(stream) });
+    await expect(reader.source('owner/repo', commit)).rejects.toThrow('REPOSITORY_UNAVAILABLE');
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThanOrEqual(4 * 1024);
+  });
+
+  it('refuses archive metadata it does not understand instead of guessing a name', async () => {
+    const h = Buffer.alloc(512);
+    h.write('owner-repo-bbbbbbb/sparse.bin', 0);
+    h.write('00000000000\0', 124);
+    h.write('S', 156);
+    h.write('ustar\0', 257);
+    const archive = gzipSync(Buffer.concat([h, Buffer.alloc(1024)]));
+    const reader = new GitHubRepositoryReader({ fetch: async () => new Response(archive) });
+    await expect(reader.source('owner/repo', commit)).rejects.toThrow('REPOSITORY_UNAVAILABLE');
   });
 });

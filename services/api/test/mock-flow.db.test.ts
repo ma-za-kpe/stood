@@ -229,7 +229,8 @@ it.each(scenarios)('mock integration: $id (fixture setup, actual Postgres and HT
               method: 'beginSettlement',
               args: [
                 decide(scenario.profile, checks),
-                attempt === 1 ? `${scenario.id}:decision` : `${scenario.id}:decision:${attempt}`,
+                // Code milestones are paid only on the judge's decisions (owner decision 2026-10-10).
+                attempt === 1 ? `judge:${scenario.id}` : `judge:${scenario.id}:${attempt}`,
                 at,
               ],
             });

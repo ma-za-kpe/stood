@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CAPTURE_RETRY_PROOF_MAX_AGE_MS, captureAllowedAt } from '../domain/hold-policy.js';
+import { captureFenced } from '../domain/judged-release.js';
 import { advanceTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../domain/tranche-record.js';
 import type { PaymentExecutor, PaymentResult } from '../ports/payment-executor.js';
 import type { ProviderStatusReader } from '../ports/provider-status-reader.js';
@@ -27,6 +28,7 @@ export async function retryCapture(
     !t.canSubmitPendingOperation ||
     t.captureRetryClaim !== null ||
     t.profileId === 'rental.return@1' ||
+    captureFenced(t, 'CAPTURE') ||
     start < t.currentHold.heldAt ||
     !captureAllowedAt(t.currentHold.expiresAt, start)
   )

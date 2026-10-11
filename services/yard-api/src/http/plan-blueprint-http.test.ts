@@ -23,7 +23,22 @@ it('freezes an accepted plan only after Stood reports every frozen test red, and
         name,
         budgetMinor: 1000,
         deadline: intake.createdAt + 7 * 86400000,
-        tests: [{ id: `book${i}`, path: `tests/book${i}.test.ts`, content: `expect(await book(${i})).toBe(true);` }],
+        tests: [
+          {
+            id: `book${i}`,
+            path: `tests/book${i}.test.js`,
+            cases: [
+              {
+                name: `books ${i}`,
+                args: ['book', String(i)],
+                input: '',
+                status: 0,
+                output: 'booked\n',
+                match: 'exact',
+              },
+            ],
+          },
+        ],
       })),
     })),
   };

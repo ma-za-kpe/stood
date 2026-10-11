@@ -29,7 +29,9 @@ export function unsafePath(path: string): boolean {
 }
 const rule = (code: string, status: CheckResult['status'], reason: string, namedField?: string): CheckResult =>
   namedField ? { code, source: 'RULE', status, reason, namedField } : { code, source: 'RULE', status, reason };
-// T-0165: deterministic findings from a read-only repository. Unavailable evidence waits; it never passes.
+// T-0165: deterministic findings from a read-only repository. Second audit (2026-10-11): an unavailable repository
+// is not a finding. It throws, so the run waits and is tried again; recording it would use up the package's one
+// decision and strand the submission after GitHub recovers.
 export async function repositoryChecks(reader: RepositoryReader, terms: SignedTerms): Promise<CheckResult[]> {
   const waitAll = (reason: string) =>
     ['signed_tests', 'test_integrity', 'new_commit'].map((code) => rule(code, 'UNCERTAIN', reason));
@@ -71,6 +73,6 @@ export async function repositoryChecks(reader: RepositoryReader, terms: SignedTe
     );
     return results;
   } catch {
-    return waitAll('repository_unavailable');
+    throw new Error('REPOSITORY_UNAVAILABLE');
   }
 }

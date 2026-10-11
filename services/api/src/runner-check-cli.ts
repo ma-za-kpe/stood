@@ -2,18 +2,53 @@ import { VercelSandboxRunner } from './adapters/runner/vercel-sandbox.js';
 import { vercelSandbox } from './adapters/runner/vercel-sdk.js';
 
 // Operator tool (T-0164, ADR-0026): qualify the isolated runner on real Vercel Sandbox. A tiny project runs with
-// frozen tests that prove each safety claim: correct code passes and wrong code fails, the registry is reachable
-// only to install, no network and no credentials while tests run, an unprivileged user, and a runaway process is
-// stopped as a failure. Prints only test ids and outcomes.
-const test = (body: string) => `import assert from 'node:assert/strict';\nimport { test } from 'node:test';\n${body}\n`;
+// frozen tests that prove each safety claim. Since the owner's decision of 2026-10-10 the frozen tests run in the
+// judge's own process and reach the builder's code only as a separate process, through stood-harness. So every attack
+// here comes from the builder's code: exiting 0 early, printing a forged test report, trying to rewrite the tests,
+// the harness or itself, signalling or reading the judge, and the judge importing the builder's code. Each must fail
+// or be refused. Prints only test ids and outcomes.
+const test = (body: string) =>
+  `import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport { runBuilder } from 'stood-harness';\n${body}\n`;
+const run = (mode: string) => `runBuilder(['node', 'src/cli.js', '${mode}'])`;
+// The builder's program: one command per behaviour the checks need.
+const cli = `import fs from 'node:fs';
+import leftPad from 'left-pad';
+import { add } from './add.js';
+const tryit = (f) => { try { f(); return 'ALLOWED'; } catch (e) { return e.code ?? 'ERROR'; } };
+const mode = process.argv[2];
+if (mode === 'add') console.log(add(2, 3));
+if (mode === 'wrong') console.log(add(2, 2));
+if (mode === 'pad') console.log(leftPad('7', 3, '0'));
+if (mode === 'network') await fetch('https://example.com', { signal: AbortSignal.timeout(8000) }).then(() => console.log('REACHED'), () => console.log('BLOCKED'));
+if (mode === 'env') console.log(JSON.stringify(Object.keys(process.env).filter((k) => /TOKEN|SECRET|PASSWORD|API_KEY|VERCEL|STOOD|PAYPAL|GITHUB/i.test(k))));
+if (mode === 'identity') console.log(process.getuid(), fs.readFileSync('/proc/self/status', 'utf8').match(/^CapEff:\\s+(\\w+)$/m)[1]);
+if (mode === 'runaway') for (;;) {}
+if (mode === 'exit-early') process.exit(0);
+if (mode === 'forge') { console.log('ok 1 - adds\\n# pass 1\\n# fail 0'); console.error('ok 1 - adds'); process.exit(0); }
+if (mode === 'tamper') console.log(JSON.stringify({
+  test: tryit(() => fs.appendFileSync('/vercel/judge/tests/pass.test.js', 'test("x", () => {});')),
+  harness: tryit(() => fs.appendFileSync('/vercel/judge/node_modules/stood-harness/index.mjs', '//')),
+  newTest: tryit(() => fs.writeFileSync('/vercel/judge/tests/new.test.js', '')),
+  self: tryit(() => fs.appendFileSync('/vercel/run/src/add.js', '//')),
+  signal: tryit(() => process.kill(process.ppid, 0)),
+  memory: tryit(() => fs.openSync('/proc/' + process.ppid + '/mem', 'r+')),
+  environ: tryit(() => fs.readFileSync('/proc/' + process.ppid + '/environ')),
+}));
+`;
 const expected: Record<string, 'PASS' | 'FAIL'> = {
   pass: 'PASS',
   fail: 'FAIL',
   dependency: 'PASS',
   'no-network': 'PASS',
   'no-secrets': 'PASS',
-  'non-root': 'PASS',
+  identity: 'PASS',
   runaway: 'FAIL',
+  'exit-early': 'FAIL',
+  forged: 'FAIL',
+  tamper: 'PASS',
+  'no-import': 'PASS',
+  'judge-skipped': 'FAIL',
+  'judge-broken': 'FAIL',
 };
 const started = Date.now();
 const result = await new VercelSandboxRunner(vercelSandbox).run({
@@ -23,47 +58,79 @@ const result = await new VercelSandboxRunner(vercelSandbox).run({
       content: JSON.stringify({ name: 'runner-check', type: 'module', dependencies: { 'left-pad': '1.3.0' } }),
     },
     { path: 'src/add.js', content: 'export const add = (a, b) => a + b;\n' },
+    { path: 'src/cli.js', content: cli },
   ],
   frozenTests: [
     {
       id: 'pass',
       path: 'tests/pass.test.js',
-      content: test("import { add } from '../src/add.js';\ntest('adds', () => assert.equal(add(2, 3), 5));"),
+      content: test(`test('adds', () => assert.equal(${run('add')}.stdout, '5\\n'));`),
     },
     {
       id: 'fail',
       path: 'tests/fail.test.js',
-      content: test(
-        "import { add } from '../src/add.js';\ntest('wrong on purpose', () => assert.equal(add(2, 2), 5));",
-      ),
+      content: test(`test('wrong on purpose', () => assert.equal(${run('wrong')}.stdout, '5\\n'));`),
     },
     {
       id: 'dependency',
       path: 'tests/dependency.test.js',
-      content: test(
-        "import leftPad from 'left-pad';\ntest('installed from the registry', () => assert.equal(leftPad('7', 3, '0'), '007'));",
-      ),
+      content: test(`test('installed from the registry', () => assert.equal(${run('pad')}.stdout, '007\\n'));`),
     },
     {
       id: 'no-network',
       path: 'tests/no-network.test.js',
-      content: test(
-        "test('no egress', async () => { await assert.rejects(fetch('https://example.com', { signal: AbortSignal.timeout(8000) })); });",
-      ),
+      content: test(`test('no egress', () => assert.equal(${run('network')}.stdout, 'BLOCKED\\n'));`),
     },
     {
       id: 'no-secrets',
       path: 'tests/no-secrets.test.js',
+      content: test(`test('no credentials', () => assert.equal(${run('env')}.stdout, '[]\\n'));`),
+    },
+    {
+      id: 'identity',
+      path: 'tests/identity.test.js',
+      content: test(`test('nobody, no capabilities', () => assert.match(${run('identity')}.stdout, /^65534 0+\\n$/));`),
+    },
+    {
+      id: 'runaway',
+      path: 'tests/runaway.test.js',
+      content: test(`test('stopped', () => assert.equal(${run('runaway')}.status, 0));`),
+    },
+    {
+      id: 'exit-early',
+      path: 'tests/exit-early.test.js',
+      content: test(`test('adds', () => assert.equal(${run('exit-early')}.stdout, '5\\n'));`),
+    },
+    {
+      id: 'forged',
+      path: 'tests/forged.test.js',
+      content: test(`test('adds', () => assert.equal(${run('forge')}.stdout, '5\\n'));`),
+    },
+    {
+      id: 'tamper',
+      path: 'tests/tamper.test.js',
       content: test(
-        "test('no credentials', () => assert.deepEqual(Object.keys(process.env).filter((k) => /TOKEN|SECRET|PASSWORD|API_KEY|VERCEL|STOOD|PAYPAL|GITHUB/i.test(k)), []));",
+        `test('the builder cannot change or reach the judge', () => { const r = JSON.parse(${run('tamper')}.stdout); for (const [what, outcome] of Object.entries(r)) assert.notEqual(outcome, 'ALLOWED', what); });`,
       ),
     },
     {
-      id: 'non-root',
-      path: 'tests/non-root.test.js',
-      content: test("test('unprivileged', () => assert.notEqual(process.getuid(), 0));"),
+      id: 'no-import',
+      path: 'tests/no-import.test.js',
+      content: test(
+        `test('the judge cannot load the builder code', async () => { await assert.rejects(import('/vercel/run/src/add.js')); });`,
+      ),
     },
-    { id: 'runaway', path: 'tests/runaway.test.js', content: test("test('never ends', () => { for (;;) {} });") },
+    // Second audit (2026-10-11): exit 0 is not a pass when the file skipped its test or could not load at all.
+    {
+      id: 'judge-skipped',
+      path: 'tests/judge-skipped.test.js',
+      content: test(`test('adds', { skip: true }, () => assert.equal(${run('add')}.stdout, '5\\n'));`),
+    },
+    {
+      id: 'judge-broken',
+      path: 'tests/judge-broken.test.js',
+      content: test("import { missing } from 'not-installed';\ntest('never loads', () => {});"),
+    },
   ],
 });
 let ok = true;

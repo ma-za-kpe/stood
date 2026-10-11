@@ -92,9 +92,9 @@ export async function harness() {
       ...(code === 'test_integrity' ? { namedField: 'tests_failed' } : {}),
     })),
   );
-  await tranches.apply('trn_1', deciding.version, 'run:pkg_1', {
+  await tranches.apply('trn_1', deciding.version, 'judge:pkg_1', {
     method: 'beginSettlement',
-    args: [refusal, 'run:pkg_1', now],
+    args: [refusal, 'judge:pkg_1', now],
   });
   const packageView = {
     id: 'pkg_1',

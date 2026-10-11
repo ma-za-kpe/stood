@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { captureAllowedAt } from '../domain/hold-policy.js';
+import { captureFenced } from '../domain/judged-release.js';
 import { advanceTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../domain/tranche-record.js';
 import type { PaymentExecutor, PaymentResult } from '../ports/payment-executor.js';
 import { type TrancheStore, TrancheStoreError } from '../ports/tranche-store.js';
@@ -19,7 +20,9 @@ export async function executePayment(
   if (
     pending.status !== 'RESERVED' ||
     !tranche.canSubmitPendingOperation ||
-    (tranche.profileId === 'rental.return@1' && tranche.pendingOperation?.target === 'RELEASED')
+    (tranche.profileId === 'rental.return@1' && tranche.pendingOperation?.target === 'RELEASED') ||
+    // Never pays a code milestone released by the old in-process runner.
+    captureFenced(tranche, pending.operation.effect)
   )
     return 'WAIT';
   const operation = pending.operation;

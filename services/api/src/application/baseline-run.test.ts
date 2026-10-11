@@ -4,6 +4,10 @@ import { MemoryEvidence } from '../../test/fakes/evidence-store.js';
 import { runBaseline } from './baseline-run.js';
 import { bundleHash } from './code-evidence.js';
 
+const result = (id: string, s: string) =>
+  s === 'PASS'
+    ? { id, status: 'PASS' as const, outcome: 'PASSED' as const }
+    : { id, status: 'FAIL' as const, outcome: s === 'NOT_RUN' ? ('NOT_RUN' as const) : ('ASSERTION_FAILED' as const) };
 const base = 'a'.repeat(40);
 const frozen = [
   { id: 't1', path: 'tests/a.test.js', content: 'buyer test a' },
@@ -21,7 +25,12 @@ const terms = {
 };
 const job = { id: 'bl_1', platformId: 'platform', terms };
 function harness(
-  o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; atBase?: 'changed' | 'missing'; evidence?: 'down' } = {},
+  o: {
+    results?: ('PASS' | 'FAIL' | 'NOT_RUN')[];
+    runner?: 'down';
+    atBase?: 'changed' | 'missing';
+    evidence?: 'down';
+  } = {},
 ) {
   const finished: unknown[] = [];
   const evidence = new MemoryEvidence();
@@ -48,7 +57,7 @@ function harness(
         runs.push(r);
         if (o.runner === 'down') throw new Error('RUNNER_UNAVAILABLE');
         const s = o.results ?? ['FAIL', 'FAIL'];
-        return { tests: frozen.map((t, i) => ({ id: t.id, status: s[i] as 'PASS' | 'FAIL' })), installExitCode: 0 };
+        return { tests: frozen.map((t, i) => result(t.id, s[i] as string)), installExitCode: 0 };
       },
     },
     evidence,
@@ -87,6 +96,20 @@ describe('runBaseline', () => {
     ]);
   });
 
+  // Second audit (2026-10-11): a suite that cannot run (syntax error, bad import, throw outside an assertion,
+  // skipped test) is not proof that new work is needed.
+  it('is invalid, not red, when any frozen test could not run at the base', async () => {
+    for (const results of [
+      ['NOT_RUN', 'FAIL'],
+      ['NOT_RUN', 'NOT_RUN'],
+      ['FAIL', 'NOT_RUN'],
+    ] as const) {
+      const h = harness({ results: [...results] });
+      expect(await runBaseline(job, h.deps)).toBe('INVALID');
+      expect(h.finished).toEqual([{ id: 'bl_1', outcome: { status: 'INVALID' } }]);
+    }
+  });
+
   it('is invalid when the frozen tests at the base are missing or not the signed ones, without running anything', async () => {
     for (const atBase of ['changed', 'missing'] as const) {
       const h = harness({ atBase });
@@ -97,9 +120,12 @@ describe('runBaseline', () => {
   });
 
   it('waits, recording nothing, while the runner or the evidence bucket is unavailable', async () => {
-    for (const o of [{ runner: 'down' as const }, { evidence: 'down' as const }]) {
+    for (const [o, why] of [
+      [{ runner: 'down' as const }, 'WAIT:RUNNER_UNAVAILABLE'],
+      [{ evidence: 'down' as const }, 'WAIT:EVIDENCE_UNAVAILABLE'],
+    ] as const) {
       const h = harness(o);
-      expect(await runBaseline(job, h.deps)).toBe('WAIT');
+      expect(await runBaseline(job, h.deps)).toBe(why);
       expect(h.finished).toEqual([]);
     }
   });

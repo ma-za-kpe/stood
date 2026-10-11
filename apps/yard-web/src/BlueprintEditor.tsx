@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { type EditableDraft, mergeMilestones, splitMilestone } from './blueprint-edit.js';
+import { type AcceptanceCase, type EditableDraft, mergeMilestones, splitMilestone } from './blueprint-edit.js';
 import { browserRequestKey } from './claim-keys.js';
 export function BlueprintEditor({
   initial,
@@ -21,6 +21,9 @@ export function BlueprintEditor({
   const [draft, setDraft] = useState(() => structuredClone(initial));
   const [error, setError] = useState(''),
     [submitted, setSubmitted] = useState(false);
+  // Each test's cases as typed, and which ones are not a JSON list yet (saving waits until all are).
+  const [texts, setTexts] = useState<Record<string, string>>({}),
+    [invalid, setInvalid] = useState<ReadonlySet<string>>(new Set());
   const receipt = useRef<{ key: string; draft: EditableDraft } | null>(null);
   const locked = busy || submitted;
   const total = draft.milestones.reduce(
@@ -118,21 +121,42 @@ export function BlueprintEditor({
               />
               <details>
                 <summary>Acceptance tests ({m.tests.length})</summary>
-                {m.tests.map((t, ti) => (
-                  <div className="intake-field" key={`${t.id}:${t.path}`}>
-                    <label htmlFor={`edit-test-${m.id}-${ti}`}>{t.path}</label>
-                    <textarea
-                      id={`edit-test-${m.id}-${ti}`}
-                      value={t.content}
-                      spellCheck={false}
-                      onChange={(e) =>
-                        change((n) => {
-                          n.milestones[index]!.tests[ti]!.content = e.target.value;
-                        })
-                      }
-                    />
-                  </div>
-                ))}
+                {m.tests.map((t, ti) => {
+                  const field = `${m.id}:${t.id}`;
+                  return (
+                    <div className="intake-field" key={`${t.id}:${t.path}`}>
+                      <label htmlFor={`edit-test-${m.id}-${ti}`}>{t.path} (acceptance cases, JSON)</label>
+                      <textarea
+                        id={`edit-test-${m.id}-${ti}`}
+                        value={texts[field] ?? JSON.stringify(t.cases, null, 2)}
+                        spellCheck={false}
+                        aria-invalid={invalid.has(field)}
+                        onChange={(e) => {
+                          const text = e.target.value;
+                          setTexts((all) => ({ ...all, [field]: text }));
+                          let cases: unknown;
+                          try {
+                            cases = JSON.parse(text);
+                          } catch {
+                            cases = null;
+                          }
+                          const ok = Array.isArray(cases);
+                          setInvalid((all) => {
+                            const next = new Set(all);
+                            if (ok) next.delete(field);
+                            else next.add(field);
+                            return next;
+                          });
+                          if (ok)
+                            change((n) => {
+                              n.milestones[index]!.tests[ti]!.cases = cases as AcceptanceCase[];
+                            });
+                        }}
+                      />
+                      {invalid.has(field) && <p className="fine">Not a JSON list of cases yet.</p>}
+                    </div>
+                  );
+                })}
               </details>
               <div className="editor-actions">
                 <button
@@ -166,7 +190,8 @@ export function BlueprintEditor({
           disabled={
             busy ||
             (!submitted &&
-              (total !== BigInt(capMinor) ||
+              (invalid.size > 0 ||
+                total !== BigInt(capMinor) ||
                 draft.milestones.some(
                   (m) => !Number.isSafeInteger(m.budgetMinor) || m.budgetMinor < 1 || !Number.isFinite(m.deadline),
                 )))

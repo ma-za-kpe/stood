@@ -5,9 +5,17 @@ import { MemoryTranches } from '../../test/fakes/tranche-store.js';
 import { reportSigner } from '../adapters/runner/report-signer.js';
 import { SignedReportVerifier } from '../adapters/runner/signed-report.js';
 import { createTrancheRecord, restoreTrancheRecord } from '../domain/tranche-record.js';
+import type { PaymentExecutor, PaymentResult } from '../ports/payment-executor.js';
+import type { ClaimState, RunClaims } from '../ports/run-claims.js';
+import { runClaimed } from './claimed-queue.js';
 import { bundleHash } from './code-evidence.js';
 import { type RunnerJob, runCodeJob } from './code-run.js';
+import { executePayment } from './execute-payment.js';
 
+const result = (id: string, s: string) =>
+  s === 'PASS'
+    ? { id, status: 'PASS' as const, outcome: 'PASSED' as const }
+    : { id, status: 'FAIL' as const, outcome: s === 'NOT_RUN' ? ('NOT_RUN' as const) : ('ASSERTION_FAILED' as const) };
 const now = 1790985600000;
 const base = 'a'.repeat(40);
 const commit = 'b'.repeat(40);
@@ -46,7 +54,12 @@ function job(over: Partial<RunnerJob> = {}): RunnerJob {
   };
 }
 async function harness(
-  o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; changedTestAtCommit?: boolean; evidence?: 'down' } = {},
+  o: {
+    results?: ('PASS' | 'FAIL' | 'NOT_RUN')[];
+    runner?: 'down';
+    changedTestAtCommit?: boolean;
+    evidence?: 'down';
+  } = {},
 ) {
   const store = new MemoryTranches();
   await store.create(
@@ -83,7 +96,7 @@ async function harness(
       if (o.runner === 'down') throw new Error('RUNNER_UNAVAILABLE');
       const statuses = o.results ?? ['PASS', 'PASS'];
       return {
-        tests: frozen.map((t, i) => ({ id: t.id, status: statuses[i] as 'PASS' | 'FAIL' })),
+        tests: frozen.map((t, i) => result(t.id, statuses[i] as string)),
         installExitCode: null,
       };
     },
@@ -128,8 +141,38 @@ describe('runCodeJob', () => {
     expect(run.contract).toMatchObject({ packageId: 'pkg_1', commit, runnerId });
     expect(run.report.signature).toEqual(expect.any(String));
     const down = await harness({ evidence: 'down' });
-    expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
+    expect(await runCodeJob(job(), down.deps)).toBe('WAIT:EVIDENCE_UNAVAILABLE');
     expect((await down.state()).state).toBe('HELD');
+  });
+
+  // Audit 2026-10-10, finding 5: a run that finished after a newer package arrived must not settle the stale one.
+  it('decides nothing for a package superseded while it ran, and finishes a decision an earlier run started', async () => {
+    const h = await harness();
+    h.store.latestPackage.set('trn', 'pkg_2');
+    expect(await runCodeJob(job(), h.deps)).toBe('SUPERSEDED');
+    expect((await h.state()).decisions).toEqual([]);
+    h.store.latestPackage.set('trn', 'pkg_1');
+    const held = await h.store.load('trn');
+    await h.store.apply('trn', held.version, 'judge:pkg_1:start', { method: 'startDeciding', args: [] });
+    expect((await h.state()).state).toBe('DECIDING');
+    expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
+    expect((await h.state()).decisions.at(-1)?.id).toBe('judge:pkg_1');
+  });
+
+  // Second audit (2026-10-11): a temporary GitHub outage used to record a WAIT decision, after which the package
+  // was ALREADY_DECIDED forever. An outage must stay retryable and leave the decision id unused.
+  it('retries a package after GitHub recovers, recording nothing while it was down', async () => {
+    const h = await harness();
+    const changedPaths = h.deps.reader.changedPaths;
+    h.deps.reader.changedPaths = async () => {
+      throw new Error('REPOSITORY_UNAVAILABLE');
+    };
+    expect(await runCodeJob(job(), h.deps)).toBe('WAIT:GITHUB_UNAVAILABLE');
+    expect((await h.state()).decisions).toEqual([]);
+    expect((await h.state()).state).toBe('HELD');
+    h.deps.reader.changedPaths = changedPaths;
+    expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
+    expect((await h.state()).decisions.at(-1)?.decision).toMatchObject({ outcome: 'RELEASE' });
   });
 
   it('refuses when a frozen test fails, naming what failed', async () => {
@@ -163,11 +206,11 @@ describe('runCodeJob', () => {
 
   it('decides nothing while the runner or the frozen tests are unavailable, and never runs a package twice', async () => {
     const down = await harness({ runner: 'down' });
-    expect(await runCodeJob(job(), down.deps)).toBe('WAIT');
+    expect(await runCodeJob(job(), down.deps)).toBe('WAIT:RUNNER_UNAVAILABLE');
     expect((await down.state()).state).toBe('HELD');
     const wrongBundle = await harness();
     expect(await runCodeJob(job({ terms: { ...job().terms, testBundleHash: 'f'.repeat(64) } }), wrongBundle.deps)).toBe(
-      'WAIT',
+      'WAIT:TESTS_NOT_AT_BASE',
     );
     expect((await wrongBundle.state()).state).toBe('HELD');
     const once = await harness();
@@ -200,7 +243,72 @@ describe('runCodeJob', () => {
     expect(await runCodeJob(confirmed, h.deps)).toBe('DECIDED');
     const released = restoreTrancheRecord((await h.store.load('fin')).record);
     expect(released.state).toBe('CAPTURE_PENDING');
-    expect(released.decisions.at(-1)).toMatchObject({ id: 'usage:pkg_1', decision: { outcome: 'RELEASE' } });
+    expect(released.decisions.at(-1)).toMatchObject({ id: 'judge-usage:pkg_1', decision: { outcome: 'RELEASE' } });
     expect(await runCodeJob(confirmed, h.deps)).toBe('ALREADY_DECIDED');
   });
+});
+
+// Second audit (2026-10-11): recovery across the whole path. GitHub is down on the first tick, the package waits
+// with nothing recorded; it recovers on the next tick, the judge's decision releases, and settlement captures once.
+it('recovers from an outage through the claimed queue to exactly one capture', async () => {
+  const h = await harness();
+  const rows = new Map<string, { attempts: number; due: boolean; token: string }>();
+  const claims: RunClaims = {
+    states: async (_k, ids) => new Map(ids.flatMap((id) => (rows.has(id) ? [[id, rows.get(id) as ClaimState]] : []))),
+    claim: async (_k, id) => {
+      const row = rows.get(id);
+      if (row && !row.due) return null;
+      const next = { attempts: (row?.attempts ?? 0) + 1, due: false, token: `t${row?.attempts ?? 0}` };
+      rows.set(id, next);
+      return { attempts: next.attempts, token: next.token };
+    },
+    renew: async () => true,
+    release: async (_k, id, token, waited) => {
+      if (rows.get(id)?.token !== token) return;
+      if (waited === null) rows.delete(id);
+      else rows.set(id, { ...(rows.get(id) as { attempts: number; due: boolean; token: string }), due: false });
+    },
+  };
+  const changedPaths = h.deps.reader.changedPaths;
+  h.deps.reader.changedPaths = async () => {
+    throw new Error('REPOSITORY_UNAVAILABLE');
+  };
+  const tick = () =>
+    runClaimed(
+      claims,
+      'package',
+      [job()],
+      (j) => `judge:${j.packageId}`,
+      2,
+      (j) => runCodeJob(j, h.deps),
+    );
+  expect(await tick()).toEqual([{ id: 'judge:pkg_1', outcome: 'WAIT:GITHUB_UNAVAILABLE' }]);
+  expect((await h.state()).decisions).toEqual([]);
+  // Backing off: the next tick does not run it.
+  expect(await tick()).toEqual([]);
+  // The backoff ends and GitHub is back.
+  rows.set('judge:pkg_1', {
+    ...(rows.get('judge:pkg_1') as { attempts: number; due: boolean; token: string }),
+    due: true,
+  });
+  h.deps.reader.changedPaths = changedPaths;
+  expect(await tick()).toEqual([{ id: 'judge:pkg_1', outcome: 'DECIDED' }]);
+  expect((await h.state()).decisions.at(-1)).toMatchObject({ id: 'judge:pkg_1', decision: { outcome: 'RELEASE' } });
+  const captures: string[] = [];
+  const executor: PaymentExecutor = {
+    execute: async (snapshot) => {
+      const op = snapshot.pending?.operation;
+      captures.push(String(op?.effect));
+      return {
+        method: 'confirmSettlement',
+        args: [{ effect: 'CAPTURE', authorizationId: String(op?.authorizationId), reference: 'CAP-1' }],
+      } as unknown as PaymentResult;
+    },
+  };
+  await executePayment(h.store, executor, 'trn', 'settle-1', () => now);
+  await executePayment(h.store, executor, 'trn', 'settle-2', () => now);
+  expect(captures).toEqual(['CAPTURE']);
+  // Fed the same package again, the runner decides nothing new.
+  expect((await tick())[0]?.outcome).toBe('ALREADY_DECIDED');
+  expect((await h.state()).decisions.filter((d) => d.id === 'judge:pkg_1')).toHaveLength(1);
 });

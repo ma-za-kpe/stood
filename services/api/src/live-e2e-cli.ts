@@ -17,9 +17,11 @@ const base = (env.STOOD_API_URL?.trim() || 'https://stood-api.onrender.com').rep
 const key = env.STOOD_API_KEY?.trim() ?? '';
 const secret = env.STOOD_HMAC_SECRET?.trim() ?? '';
 const repository = 'ma-za-kpe/yard-sandbox';
-const baseCommit = '692951b1a7030c00759bb7f6244d483925f9ce63';
-const passing = '48ee3f847072163ab162c673567ad618f0ca9acb';
-const failing = '1c11267d9e3bbcb5c4c66d362535a594081a1f2d';
+// Branches e2e/judge-base, e2e/judge-pass and e2e/judge-fail: the buyer's frozen test drives the booking program as a
+// separate process through stood-harness, as the judge requires (owner decision 2026-10-10).
+const baseCommit = '8bf97d5c62cfa1a32fbb26573376f9ab560aba1b';
+const passing = '5ba5a5a4f65a929f6cac039c379fc48d9bb736ee';
+const failing = 'f688c0f64099ce9aa2fbf0b1efff8e32f270ebe7';
 const run = new Date().toISOString().replace(/[:.]/g, '-');
 const log = (line: string) => process.stdout.write(`${line}\n`);
 const events: unknown[] = [];

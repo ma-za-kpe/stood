@@ -7,6 +7,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { codeParams as params } from '../../../test/fixtures/code-terms.js';
 import { codeTerms } from '../../application/code-terms.js';
 import { PostgresBaselines } from './baselines.js';
+import { PostgresRunClaims } from './run-claims.js';
 import * as schema from './schema.js';
 
 const name = `test_baselines_${randomUUID().replaceAll('-', '')}`;
@@ -70,4 +71,24 @@ it('lists queued baselines oldest first and records each result exactly once', a
   await store.finish(b.id, { status: 'INVALID' });
   expect(await store.get('platform_c', b.id)).toMatchObject({ status: 'INVALID', result: null });
   expect((await store.pending(50)).map((j) => j.id)).not.toContain(a.id);
+});
+
+// Second audit (2026-10-11): fifty baselines backing off must not hide the fifty-first.
+it('lists only due baselines, fewest attempts first, past any number that are backing off', async () => {
+  const store = new PostgresBaselines(db);
+  const claims = new PostgresRunClaims(db);
+  for (const { id } of (await pool.query("SELECT id FROM baselines WHERE status = 'QUEUED'")).rows)
+    await store.finish(id, { status: 'INVALID' });
+  const queued = [];
+  for (let i = 0; i < 51; i++) queued.push(await store.request('platform_f', `f-${i}`, fp('f'), codeParams));
+  for (const b of queued.slice(0, 50)) {
+    const lease = await claims.claim('baseline', b.id, 60_000);
+    await claims.release('baseline', b.id, lease?.token ?? '', 'WAIT:RUNNER_UNAVAILABLE:CREATE');
+  }
+  expect((await store.pending(50)).map((j) => j.id)).toEqual([queued[50]?.id]);
+  // Once due again, those that waited come after any never tried.
+  await pool.query("UPDATE run_claims SET next_attempt_at = clock_timestamp() - interval '1 second'");
+  const order = (await store.pending(50)).map((j) => j.id);
+  expect(order[0]).toBe(queued[50]?.id);
+  expect(order).toHaveLength(50);
 });

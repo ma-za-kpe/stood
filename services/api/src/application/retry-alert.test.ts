@@ -28,7 +28,7 @@ async function ambiguousCapture() {
   }));
   await store.apply('retry', 2, 'reserve', {
     method: 'beginSettlement',
-    args: [decide('code.milestone@1', checks), 'decision', at],
+    args: [decide('code.milestone@1', checks), 'judge:decision', at],
   });
   const lost = async () => {
     throw new Error('reply lost');
