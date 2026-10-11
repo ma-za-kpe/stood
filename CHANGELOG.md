@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.11.0](https://github.com/ma-za-kpe/stood/compare/v0.10.0...v0.11.0) (2026-10-11)
+
+
+### Features
+
+* **api:** only the judge's decisions can pay a code milestone (T-0306) ([dca4c70](https://github.com/ma-za-kpe/stood/commit/dca4c7071deda01fcf51afa652582e4ab1430714))
+* **api:** the reconciler reads GitHub with the Yard App's short-lived tokens (T-0311) ([6921efa](https://github.com/ma-za-kpe/stood/commit/6921efa8216bf1f541ba072cc3a9a48239fac6cc))
+* evidence storage, OpenAPI 3.1 contract and APIMatic SDK, tighter secret checks (C4 [#77](https://github.com/ma-za-kpe/stood/issues/77)) ([#121](https://github.com/ma-za-kpe/stood/issues/121)) ([b76257d](https://github.com/ma-za-kpe/stood/commit/b76257d0f00973e84e68e7d2ed59d0cb281e0af7))
+* **foreman:** acceptance tests are data the Foreman writes and Yard renders, never model-written code (T-0318) ([1915a93](https://github.com/ma-za-kpe/stood/commit/1915a93352d488f8f709ba788ad973e923faa860))
+* **foreman:** acceptance tests drive the builder's program only through stood-harness (T-0308) ([bcd3df8](https://github.com/ma-za-kpe/stood/commit/bcd3df832dad09df5d672343a77050f45119b895))
+* **ops:** read-only review of every decision the old runner recorded (T-0307) ([c255df7](https://github.com/ma-za-kpe/stood/commit/c255df7580a8815a55a294e50208435202098550))
+* **ops:** recover a funding stuck in CREATING from a PayPal order id (T-0310) ([9fa0a36](https://github.com/ma-za-kpe/stood/commit/9fa0a36c8805243d1e8ec4f4799afb30fc9dcc18))
+* plan to blueprint with Stood baselines, usage release, intake deletion and expiry (C4 [#77](https://github.com/ma-za-kpe/stood/issues/77)) ([#125](https://github.com/ma-za-kpe/stood/issues/125)) ([d71bae6](https://github.com/ma-za-kpe/stood/commit/d71bae6a703f6e1536588ed776d09da4e92a9578))
+* **runner:** frozen tests run in the judge's own process, apart from the builder's code (T-0305) ([02ec8fd](https://github.com/ma-za-kpe/stood/commit/02ec8fd671039d91becfea7b425e49ed06eb5652))
+* **yard:** builder payouts on PayPal's contract, funding recovery and operations ([#77](https://github.com/ma-za-kpe/stood/issues/77)) ([d5ef629](https://github.com/ma-za-kpe/stood/commit/d5ef629533d9465d6c5b95629231260f872c2e02))
+* **yard:** builder payouts, per-job ledger, 48-hour holdback and disputes (T-0313, T-0314) ([b0593f6](https://github.com/ma-za-kpe/stood/commit/b0593f614b8436c808c130ba43b0b7b171eed5a6))
+* **yard:** the buyer pays Yard's fee on top of each milestone, in the same hold (T-0312) ([6f6e8bd](https://github.com/ma-za-kpe/stood/commit/6f6e8bdf96c093aed0ed9335555d399e4c9978c2))
+* **yard:** Yard's PayPal merchant is the payee of every allowance (T-0297) ([5f858c0](https://github.com/ma-za-kpe/stood/commit/5f858c00c61f434f0ee806428d65ca150628f64e))
+
+
+### Fixes
+
+* **api:** a code decision settles only the tranche's latest package (T-0302) ([710603d](https://github.com/ma-za-kpe/stood/commit/710603d2d82727df81b679a44cc39eca13a96de3))
+* **api:** a GitHub outage leaves the package retryable, never decided (T-0315) ([ba9ff7f](https://github.com/ma-za-kpe/stood/commit/ba9ff7fcb35583fe51e927491b5b4e7b9d9dfe9e))
+* **api:** claim each run, back off waiting ones, run the untried first (T-0301) ([65e7673](https://github.com/ma-za-kpe/stood/commit/65e7673498095850a90f9eb187f4e232f7bc4b89))
+* **api:** count only an explicit WAIT as waiting; reaching approval is progress (T-0300) ([efa16d5](https://github.com/ma-za-kpe/stood/commit/efa16d58a47bfeeed0c80f99f5451c80eaf0cbdd))
+* **api:** count waiting fundings as waiting, not advanced (T-0300) ([e85ddf6](https://github.com/ma-za-kpe/stood/commit/e85ddf6da123ff57e30ac235c13659391b7e3e9c))
+* **api:** every waiting run names the step it stopped at (T-0299) ([910724f](https://github.com/ma-za-kpe/stood/commit/910724f650b35a81c100ffb14914aa5eee4de09c))
+* **api:** fair queues past any number of jobs backing off (T-0321) ([150a4f4](https://github.com/ma-za-kpe/stood/commit/150a4f4a0d3d8097a3e7a6dc217d82605a2075c4))
+* **api:** repository downloads are capped while streaming; long archive paths are kept exactly (T-0327) ([d710dd7](https://github.com/ma-za-kpe/stood/commit/d710dd70d60d52a98c7cd910f78392b7f4b8159b))
+* **api:** run leases are owned by a token, renewed while working, bounded by a deadline (T-0320) ([bf446c6](https://github.com/ma-za-kpe/stood/commit/bf446c66bbb0cba8915f6c7d0a422f2e65bc5f75))
+* **api:** worker counters count state changes; a refused funding is a failure (T-0319) ([ea6ec76](https://github.com/ma-za-kpe/stood/commit/ea6ec7632263d34cde0f3d78f116a7b6d53322ea))
+* **ops,yard:** recovery cannot write to PayPal; settled reviews stay monitored; 401 reads refresh; failed checks are reported (T-0326) ([49fab15](https://github.com/ma-za-kpe/stood/commit/49fab15819416235031049f4ded89993934acaa5))
+* **ops:** funding recovery only reads; it refuses any state the normal flow would act on (T-0323) ([20e3225](https://github.com/ma-za-kpe/stood/commit/20e32253ee6e0dd85a6d2364d312d344151fa6b1))
+* PayPal holds that hung live, hosted package submission, the live end-to-end tool (C4 [#77](https://github.com/ma-za-kpe/stood/issues/77)) ([#127](https://github.com/ma-za-kpe/stood/issues/127)) ([862773f](https://github.com/ma-za-kpe/stood/commit/862773ffe3751b26b2ad816e52110f96c7837a57))
+* **runner:** a file passes only when every test in it ran and passed; a broken suite is never a red baseline (T-0316, T-0317) ([5a7c42d](https://github.com/ma-za-kpe/stood/commit/5a7c42d0dbd0f00d310bcf3eaee2508cabebfcbe))
+* **runner:** harden the code runner from the external audit ([#77](https://github.com/ma-za-kpe/stood/issues/77)) ([ed3feb6](https://github.com/ma-za-kpe/stood/commit/ed3feb6ffdf0c9deeb41510c62a7f213471cd3fb))
+* **runner:** pass only on real test results, lock the workspace read-only, wait on install outages (T-0298) ([649c132](https://github.com/ma-za-kpe/stood/commit/649c1327883e7c91a736a1a01179cf2b60df60af))
+* **runner:** run tests as nobody with every capability dropped; qualify the audit's attacks live (T-0304) ([2d3672d](https://github.com/ma-za-kpe/stood/commit/2d3672dac6d6fd2984525a1f4f34cf40e4b1e366))
+* **runner:** the run deadline aborts the run and stops the VM; a VM that will not stop is reported (T-0328) ([05580ec](https://github.com/ma-za-kpe/stood/commit/05580ecf38a76fd71dc4a29a07dbc7426350e52c))
+* **yard:** no payout dead ends: resend window, owner actions, full reconciliation, logged issues (T-0325) ([801e4af](https://github.com/ma-za-kpe/stood/commit/801e4af3a7600c837113fe6f0c030a23d0899d30))
+* **yard:** payouts follow PayPal's contract: recover duplicates, retry what is retryable (T-0324) ([27c7948](https://github.com/ma-za-kpe/stood/commit/27c7948b41a524de8f17cffc47982be27b3f0a80))
+* **yard:** the blueprint editor edits acceptance cases, and plans keep them (T-0318) ([bb6c0cd](https://github.com/ma-za-kpe/stood/commit/bb6c0cd493efcd923aaf003e7d2c7c022ff22a0c))
+
+
+### Documentation
+
+* ADR-0026 amendment on what a PASS proves; settlement off in production; tasks T-0298 to T-0304 ([4813be0](https://github.com/ma-za-kpe/stood/commit/4813be05ea20a262b7dddbc121cf2dc4507efd5f))
+* fifth audit (T-0327, T-0328) in TASKS ([d7ca491](https://github.com/ma-za-kpe/stood/commit/d7ca491125a94db930a49fc991b6aca42b55e665))
+* operations batch (funding recovery, GitHub App reads, fee line); Yard's own PayPal app for Payouts (ADR-0027) ([34b9415](https://github.com/ma-za-kpe/stood/commit/34b9415401818395a9f3226a50d0e8acb4bb9bee))
+* second audit (T-0315 to T-0322): judge outcomes, case format, ADR-0026 note, guide ([117d694](https://github.com/ma-za-kpe/stood/commit/117d69441c1921fab2294ac0948cb3d6ae95e5a3))
+* the judge (owner decision), Vercel Sandbox guide, release review; tasks T-0305 to T-0309 ([03d6262](https://github.com/ma-za-kpe/stood/commit/03d626232dd2f9f7840da550e117a5c2510849a8))
+* third audit (T-0323 to T-0325): payouts on PayPal's contract, owner actions ([6b47279](https://github.com/ma-za-kpe/stood/commit/6b4727974151f42ddcc9cc3ffd93f79a058d2f68))
+
+
+### Refactoring
+
+* **runner:** call the image hash what it is, a label hash, from the image the runner boots (T-0303) ([22e5e12](https://github.com/ma-za-kpe/stood/commit/22e5e1234b1cb29338b194157d19f50af92cca54))
+
 ## [0.10.0](https://github.com/ma-za-kpe/stood/compare/v0.9.0...v0.10.0) (2026-10-10)
 
 
