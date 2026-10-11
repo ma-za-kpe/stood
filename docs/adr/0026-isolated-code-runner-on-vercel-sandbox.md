@@ -68,4 +68,12 @@ An external audit of the runner found that a PASS proved less than it claimed. F
 
 The judge's tests are trusted code (written by the Foreman, accepted by the buyer) and keep three capabilities (`setuid`, `setgid`, `setpcap`) only to start the builder's program as `nobody`.
 
+**Second audit, 2026-10-11 (T-0315 to T-0322).** A process outcome is not business evidence, and a temporary failure is not a decision:
+
+- A pass needs the judge's own report to show every test ran and passed; a skipped, cancelled or missing test fails.
+- A baseline is red only on real assertion failures; a suite that cannot run at the base is `INVALID`.
+- An unavailable repository leaves the package retryable; it never records a decision.
+- The Foreman writes acceptance cases (data), and Yard renders the test file from one template.
+- Leases carry an owner's token, are renewed while a run works, and end at an overall deadline; due jobs are chosen fairly in the database; worker counts are state changes.
+
 Settlement stays off in production until the judge is merged, deployed and qualified live, and the owner has reviewed every release decision recorded while the old path existed. Step-by-step: [the Vercel Sandbox guide](../guides/vercel-sandbox-untrusted-code-judge.md).

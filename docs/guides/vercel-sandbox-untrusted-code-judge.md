@@ -96,19 +96,41 @@ The worker signs the per-test results with its own Ed25519 key, which never ente
 
 ## Writing a test for the judge
 
+Nobody writes judge test code by hand in Yard: the Foreman writes **acceptance cases**, which are data, and Yard renders every frozen test file from one template (format `stood.cases@1`). Each case runs the builder's program as a separate process and checks what it did:
+
+```json
+{ "name": "books a slot", "args": ["book", "10:00"], "input": "", "status": 0, "output": "booked 10:00\n", "match": "exact" }
+```
+
+The rendered file (the cases are embedded as JSON, so case text can never change the code):
+
 ```js
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runBuilder } from 'stood-harness';
 
-test('a slot can be booked', () => {
-  const run = runBuilder(['node', 'src/cli.js', '10:00']);
-  assert.equal(run.status, 0);
-  assert.equal(run.stdout, 'booked 10:00\n');
-});
+const cases = [/* the cases above */];
+
+for (const c of cases)
+  test(c.name, () => {
+    const run = runBuilder(['node', 'src/cli.js', ...c.args], { input: c.input });
+    assert.equal(run.status, c.status, 'exit status');
+    if (c.match === 'exact') assert.equal(run.stdout, c.output, 'output');
+    else assert.ok(run.stdout.includes(c.output), `output includes ${JSON.stringify(c.output)}`);
+  });
 ```
 
-Import nothing else: no `../src`, no `fs`, no dynamic `import()` or `require`. The Foreman refuses any planned test that does. Our sandbox repository has a working example on the branches `e2e/judge-base`, `e2e/judge-pass` and `e2e/judge-fail` of [`ma-za-kpe/yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox).
+We first validated hand-written tests by checking their imports with regular expressions. A second audit bypassed that three ways (a commented-out import, `import /* */ ('node:fs')`, `process.getBuiltinModule`): checking imports cannot constrain arbitrary JavaScript, so the model no longer writes code at all. Our sandbox repository has a hand-written example in the same shape on the branches `e2e/judge-base`, `e2e/judge-pass` and `e2e/judge-fail` of [`ma-za-kpe/yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox).
+
+## How the judge reads a result
+
+Exit code 0 is not proof: a skipped test, or a file with no tests, exits 0 too. The judge reads its own TAP report (`node --test --test-reporter=tap`), which the builder's code cannot write to, and classifies each file:
+
+| Outcome | Means | Milestone | Baseline |
+| --- | --- | --- | --- |
+| `PASSED` | real named tests ran, every one passed | PASS | the test is already green: revise it |
+| `ASSERTION_FAILED` | real named tests ran; every failure is `ERR_ASSERTION` | FAIL | red: new work is needed |
+| `NOT_RUN` | did not load, threw outside an assertion, skipped, todo, cancelled, timed out, or had no tests | FAIL | `INVALID`: the tests cannot prove anything yet |
 
 ## Qualify it
 
@@ -141,7 +163,8 @@ ok  no-import   PASS (expected PASS)
 3. **A shell probe that lied.** In `dash`, a failed redirection on the `:` builtin (`: >> file`) ends the whole shell, so a refused write made our probe fail for the wrong reason. Run the write in a subshell: `(: >> "$0")`.
 4. **The judge could not start the builder.** `spawn` with `cwd: '/vercel/run'` failed with `EACCES`, because the judge is not allowed into the builder's directory, which is the point. The builder changes directory itself after switching user (`env -C /vercel/run`).
 5. **Dropping the bounding set needs a capability.** The judge's `setpriv --bounding-set=-all` for the builder failed until the judge kept `CAP_SETPCAP`.
-6. **A test that never ran tests.** A file with no tests exits 0. The baseline catches it: before work is posted, every frozen test must fail on the base commit, and a test with nothing in it does not.
+6. **A test that never ran tests.** A file with no tests, or only a skipped one, exits 0, and our judge first counted that as a pass. It now reads its own report and passes a file only when every test in it ran and passed.
+7. **A broken suite as a red baseline.** We counted any failure on the base commit as "red", so a syntax error or a missing import could freeze tests that no implementation can satisfy. Only real assertion failures count as red now; anything that could not run makes the baseline `INVALID`.
 
 ## Troubleshooting
 
