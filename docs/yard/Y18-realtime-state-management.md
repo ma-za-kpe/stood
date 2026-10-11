@@ -48,7 +48,7 @@ yard.events (
 | Board | `wo.posted`, `wo.claimed`, `wo.lease_extended`, `wo.lease_expired`, `wo.released_claim`, `wo.submitted` |
 | Stood checks (money) | `stood.tranche_held`, `stood.check_started`, `stood.released`, `stood.refused` (with the punch list), `stood.in_review`, `stood.voided`, `stood.reauthorized` |
 | Repo | `repo.created`, `repo.pr_opened`, `repo.merged` |
-| Handover / hosting | `preview.deployed`, `preview.expired`, `handover.ready`, `handover.deployed_in_buyer_account`, `handover.rotation_confirmed`, `blueprint.closed` |
+| Handover / hosting | `preview.reserved`, `preview.deployed`, `preview.released`, `preview.expired`, `handover.ready`, `handover.deployed_in_buyer_account`, `handover.rotation_confirmed`, `blueprint.closed` |
 | Secrets (metadata only) | `secret.added`, `secret.validated`, `secret.revoked`. **Never the value, never the last 4 in the event** |
 
 ## 3. Transport: Server-Sent Events, not WebSockets

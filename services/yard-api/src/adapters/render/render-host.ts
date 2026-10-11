@@ -45,16 +45,8 @@ export class RenderPreviewHost implements PreviewHost {
     return response.status === 204 ? null : ((await response.json()) as Record<string, unknown>);
   }
   async deploy(input: Readonly<{ name: string; image: string; env: Readonly<Record<string, string>> }>) {
-    if (input.name.startsWith('yard-preview-')) {
-      const listed = (await this.call(
-        'GET',
-        `/v1/services?ownerId=${encodeURIComponent(this.config.ownerId)}&limit=100`,
-      )) as unknown as { service?: { name?: string } }[];
-      const live = (Array.isArray(listed) ? listed : []).filter((s) =>
-        String(s.service?.name ?? '').startsWith('yard-preview-'),
-      ).length;
-      if (live >= (this.config.maxActive ?? 3)) throw new Error('PREVIEW_CAP');
-    }
+    if (input.name.startsWith('yard-preview-') && (await this.list()).length >= (this.config.maxActive ?? 3))
+      throw new Error('PREVIEW_CAP');
     const created = (await this.call('POST', '/v1/services', {
       type: 'web_service',
       name: input.name,
@@ -68,6 +60,26 @@ export class RenderPreviewHost implements PreviewHost {
     if (typeof id !== 'string' || typeof url !== 'string' || !url.startsWith('https://'))
       throw new Error('Render returned an unexpected service');
     return { serviceId: id, url };
+  }
+  // Render pages its service list by cursor, 100 at a time; only services named as Yard previews are returned.
+  async list() {
+    const found: { serviceId: string; name: string }[] = [];
+    let cursor = '';
+    for (let page = 0; page < 20; page++) {
+      const listed = (await this.call(
+        'GET',
+        `/v1/services?ownerId=${encodeURIComponent(this.config.ownerId)}&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      )) as unknown as { service?: { id?: string; name?: string }; cursor?: string }[];
+      const rows = Array.isArray(listed) ? listed : [];
+      for (const r of rows) {
+        const name = String(r.service?.name ?? ''),
+          id = String(r.service?.id ?? '');
+        if (name.startsWith('yard-preview-') && /^srv-[a-z0-9]+$/.test(id)) found.push({ serviceId: id, name });
+      }
+      cursor = rows.length === 100 ? String(rows.at(-1)?.cursor ?? '') : '';
+      if (!cursor) return found;
+    }
+    throw new Error('Render returned too many services');
   }
   async destroy(serviceId: string) {
     if (!/^srv-[a-z0-9]+$/.test(serviceId)) throw new RangeError('Invalid service id');
