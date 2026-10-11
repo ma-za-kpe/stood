@@ -61,6 +61,9 @@ export function fundingRecovery(deps: WorkerDeps) {
   return async (key: string, orderId: string) => {
     if (!/^[A-Za-z0-9_-]{1,200}$/.test(orderId)) throw new Error('INVALID_ORDER_ID');
     const before = await funding.load(key);
+    // Third audit (2026-10-11): recovery only reads. Every state but these would let the normal state machine act
+    // (RESERVED creates an order); a finished funding has nothing to recover.
+    if (!['CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING'].includes(before.status)) throw new Error('NOT_RECOVERABLE');
     const outcome = await advanceFunding(funding, deps.tranches, provider, mandates, key, deps.clock, orderId);
     return { before: before.status, outcome };
   };
