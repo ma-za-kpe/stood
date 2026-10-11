@@ -36,7 +36,16 @@ export class ScriptedPlannerModel implements PlannerModel {
           {
             id: `acceptance-${i + 1}`,
             path: `tests/milestone-${i + 1}.test.js`,
-            content: `import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport { runBuilder } from 'stood-harness';\ntest('delivers stage ${i + 1}', () => assert.equal(runBuilder(['node', 'src/cli.js', 'deliver', '${i + 1}']).stdout, 'delivered\\n'));\n`,
+            cases: [
+              {
+                name: `delivers stage ${i + 1}`,
+                args: ['deliver', String(i + 1)],
+                input: '',
+                status: 0,
+                output: 'delivered\n',
+                match: 'exact',
+              },
+            ],
           },
         ],
       })),

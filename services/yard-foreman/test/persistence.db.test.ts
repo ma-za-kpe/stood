@@ -90,9 +90,17 @@ it('resumes the newest real-Postgres review despite host clock rollback, with no
         tests: [
           {
             id: 'works',
-            path: 'tests/booking.test.ts',
-            content:
-              "import { runBuilder } from 'stood-harness';\nimport assert from 'node:assert/strict';\nassert.equal(runBuilder(['node', 'src/cli.js', 'book']).status, 0);",
+            path: 'tests/booking.test.js',
+            cases: [
+              {
+                name: 'books a slot',
+                args: ['book', '10:00'],
+                input: '',
+                status: 0,
+                output: 'booked 10:00\n',
+                match: 'exact',
+              },
+            ],
           },
         ],
       })),

@@ -26,8 +26,17 @@ it('freezes an accepted plan only after Stood reports every frozen test red, and
         tests: [
           {
             id: `book${i}`,
-            path: `tests/book${i}.test.ts`,
-            content: `import { runBuilder } from 'stood-harness';\nimport assert from 'node:assert/strict';\nassert.equal(runBuilder(['node', 'src/cli.js', 'book', '${i}']).status, 0);`,
+            path: `tests/book${i}.test.js`,
+            cases: [
+              {
+                name: `books ${i}`,
+                args: ['book', String(i)],
+                input: '',
+                status: 0,
+                output: 'booked\n',
+                match: 'exact',
+              },
+            ],
           },
         ],
       })),

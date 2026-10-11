@@ -6,6 +6,7 @@ import { Blueprint, type Plan, type PlannerErrorCode, type PlannerIntake } from 
 
 export type { Plan, PlannerIntake } from '@stood/yard-domain';
 
+import { acceptanceCases, renderAcceptanceTest } from './acceptance-cases.js';
 import { type ForemanCoordinator, memoryCoordinator } from './coordinator.js';
 export class PlannerError extends Error {
   constructor(readonly code: PlannerErrorCode) {
@@ -97,16 +98,6 @@ function intakeChecked(value: PlannerIntake): PlannerIntake {
   }
   return Object.freeze(structuredClone(value));
 }
-// Owner decision 2026-10-10: acceptance tests run out of process. A frozen test reaches the builder's code only as a
-// separate process, through Stood's harness (runBuilder); it may import nothing else but Node's test and assert
-// modules, never the builder's code, and loads nothing dynamically. Stood's judge could not import the code anyway;
-// this keeps the Foreman from writing tests that could never pass.
-const ALLOWED_IMPORTS = new Set(['node:test', 'node:assert', 'node:assert/strict', 'stood-harness']);
-export function outOfProcess(content: string): boolean {
-  if (/\brequire\s*\(|\bimport\s*\(/.test(content)) return false;
-  const specifiers = [...content.matchAll(/\b(?:from|import)\s*['"]([^'"]+)['"]/g)].map((m) => m[1] as string);
-  return specifiers.includes('stood-harness') && specifiers.every((s) => ALLOWED_IMPORTS.has(s));
-}
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function validateDraft(input: PlannerIntake, value: unknown, simulated: boolean): Plan {
   try {
@@ -121,17 +112,18 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
     const m = object(raw, ['id', 'name', 'budgetMinor', 'deadline', 'tests']);
     if (!text(m.id) || !/^[A-Za-z0-9_-]{1,100}$/.test(m.id) || !text(m.name)) throw new PlannerError('INVALID');
     const bundle = list(m.tests, 1, 100).map((rawTest) => {
-      const t = object(rawTest, ['id', 'path', 'content']);
+      // Second audit (2026-10-11): the model gives acceptance cases (data); Yard renders the test file itself.
+      const t = object(rawTest, ['id', 'path', 'cases']);
       if (
         !text(t.id) ||
         !text(t.path) ||
-        !/^tests\/[A-Za-z0-9_./-]+\.(ts|js)$/.test(t.path) ||
-        t.path.split('/').some((p) => p === '.' || p === '..' || !p) ||
-        !text(t.content) ||
-        !outOfProcess(t.content)
+        !/^tests\/[A-Za-z0-9_./-]+\.test\.js$/.test(t.path) ||
+        t.path.split('/').some((p) => p === '.' || p === '..' || !p)
       )
         throw new PlannerError('INVALID');
-      return { id: t.id, path: t.path, content: t.content };
+      const cases = acceptanceCases(t.cases);
+      if (!cases) throw new PlannerError('INVALID');
+      return { id: t.id, path: t.path, content: renderAcceptanceTest(cases) };
     });
     if (new Set(bundle.map((t) => t.path)).size !== bundle.length) throw new PlannerError('INVALID');
     bundle.sort((a, b) => a.path.localeCompare(b.path));

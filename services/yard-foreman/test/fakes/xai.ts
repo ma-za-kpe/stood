@@ -19,7 +19,16 @@ export function xaiServer(
           {
             id: `t${i + 1}`,
             path: `tests/stage-${i + 1}.test.js`,
-            content: `import assert from 'node:assert/strict';\nimport { runBuilder } from 'stood-harness';\nassert.equal(runBuilder(['node', 'src/cli.js', '${i + 1}']).status, 0);\n`,
+            cases: [
+              {
+                name: `stage ${i + 1} runs`,
+                args: [String(i + 1)],
+                input: '',
+                status: 0,
+                output: 'ok',
+                match: 'includes',
+              },
+            ],
           },
         ],
       })),

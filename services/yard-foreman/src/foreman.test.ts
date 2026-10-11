@@ -27,9 +27,17 @@ const draft = () => ({
     tests: [
       {
         id: 'booking-works',
-        path: 'tests/booking.test.ts',
-        content:
-          "import { runBuilder } from 'stood-harness';\nimport assert from 'node:assert/strict';\nassert.equal(runBuilder(['node', 'src/cli.js', 'book']).status, 0);",
+        path: 'tests/booking.test.js',
+        cases: [
+          {
+            name: 'books a slot',
+            args: ['book', '10:00'],
+            input: '',
+            status: 0,
+            output: 'booked 10:00\n',
+            match: 'exact',
+          },
+        ],
       },
     ],
   })),
@@ -152,7 +160,25 @@ it.each([
   { ...draft(), requirements: [{ id: 'booking', text: 'Works', testIds: ['missing'] }] },
   {
     ...draft(),
-    milestones: draft().milestones.map((m) => ({ ...m, tests: [{ id: 'works', path: '../.env', content: 'x' }] })),
+    milestones: draft().milestones.map((m) => ({
+      ...m,
+      tests: [
+        {
+          id: 'works',
+          path: '../.env',
+          cases: [
+            {
+              name: 'books a slot',
+              args: ['book', '10:00'],
+              input: '',
+              status: 0,
+              output: 'booked 10:00\n',
+              match: 'exact',
+            },
+          ],
+        },
+      ],
+    })),
   },
 ])('rejects invalid or authority-bearing model output without making a reviewable plan', async (output) => {
   const f = new Foreman({ draft: async () => output }, new MemorySaver());
