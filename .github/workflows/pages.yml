@@ -1,6 +1,6 @@
 name: landing-page
 
-# Publishes the landing page + changelog to GitHub Pages on every merge to main.
+# Publishes the landing page, changelog and API portal (/api/) to GitHub Pages on every merge to main.
 on:
   push:
     branches: [main]
@@ -34,6 +34,16 @@ jobs:
           pnpm --filter @stood/yard-web build
           npm ci --prefix tools/site --ignore-scripts
           node tools/site/build.mjs
+      # T-0332: the APIMatic developer portal for the Stood API, from openapi/stood.json, at /stood/api/.
+      # Without the APIMATIC_API_KEY secret the site publishes without it.
+      - name: Build API portal (APIMatic)
+        env:
+          APIMATIC_API_KEY: ${{ secrets.APIMATIC_API_KEY }}
+        run: |
+          if [ -z "$APIMATIC_API_KEY" ]; then echo "APIMATIC_API_KEY not set: publishing without the API portal."; exit 0; fi
+          cp openapi/stood.json apimatic/src/spec/stood.json
+          npx -y @apimatic/cli@1.5.0 portal generate --input=apimatic --destination=_site/api --force --auth-key="$APIMATIC_API_KEY"
+          test -f _site/api/index.html
       # actions/configure-pages v6.0.0
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
       # actions/upload-pages-artifact v5.0.0

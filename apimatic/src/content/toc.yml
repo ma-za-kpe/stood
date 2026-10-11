@@ -1,0 +1,9 @@
+toc:
+  - group: Getting started
+    items:
+      - page: Signing requests
+        file: guides/signing-requests.md
+  - generate: API Endpoints
+    from: endpoints
+  - generate: Models
+    from: models

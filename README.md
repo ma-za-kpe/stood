@@ -45,6 +45,7 @@
 | Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**. `/health` says whether sandbox payments are on and, if not, what is missing ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
 | Hosted Yard app | <https://stood-yard-api.onrender.com/app/> | Owner-issued access code; Board, events, site log and private intake |
 | Stood API contract (OpenAPI 3.1) | <https://stood-api.onrender.com/v1/openapi.json> | Served by `stood-api` from API 1.3.0; the same file is [`openapi/stood.json`](openapi/stood.json) |
+| Stood API reference (APIMatic portal) | <https://ma-za-kpe.github.io/stood/api/> | Generated from the same contract by APIMatic on every merge to `main`; HTTP and TypeScript examples, a signing guide, no Try It (requests need your secret) |
 | Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake is connected; the Foreman and Yard payments remain off until their adapters are connected |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |
