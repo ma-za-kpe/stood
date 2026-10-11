@@ -8,6 +8,10 @@ import { createTrancheRecord, restoreTrancheRecord } from '../domain/tranche-rec
 import { bundleHash } from './code-evidence.js';
 import { type RunnerJob, runCodeJob } from './code-run.js';
 
+const result = (id: string, s: string) =>
+  s === 'PASS'
+    ? { id, status: 'PASS' as const, outcome: 'PASSED' as const }
+    : { id, status: 'FAIL' as const, outcome: s === 'NOT_RUN' ? ('NOT_RUN' as const) : ('ASSERTION_FAILED' as const) };
 const now = 1790985600000;
 const base = 'a'.repeat(40);
 const commit = 'b'.repeat(40);
@@ -46,7 +50,12 @@ function job(over: Partial<RunnerJob> = {}): RunnerJob {
   };
 }
 async function harness(
-  o: { results?: ('PASS' | 'FAIL')[]; runner?: 'down'; changedTestAtCommit?: boolean; evidence?: 'down' } = {},
+  o: {
+    results?: ('PASS' | 'FAIL' | 'NOT_RUN')[];
+    runner?: 'down';
+    changedTestAtCommit?: boolean;
+    evidence?: 'down';
+  } = {},
 ) {
   const store = new MemoryTranches();
   await store.create(
@@ -83,7 +92,7 @@ async function harness(
       if (o.runner === 'down') throw new Error('RUNNER_UNAVAILABLE');
       const statuses = o.results ?? ['PASS', 'PASS'];
       return {
-        tests: frozen.map((t, i) => ({ id: t.id, status: statuses[i] as 'PASS' | 'FAIL' })),
+        tests: frozen.map((t, i) => result(t.id, statuses[i] as string)),
         installExitCode: null,
       };
     },
@@ -144,6 +153,22 @@ describe('runCodeJob', () => {
     expect((await h.state()).state).toBe('DECIDING');
     expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
     expect((await h.state()).decisions.at(-1)?.id).toBe('judge:pkg_1');
+  });
+
+  // Second audit (2026-10-11): a temporary GitHub outage used to record a WAIT decision, after which the package
+  // was ALREADY_DECIDED forever. An outage must stay retryable and leave the decision id unused.
+  it('retries a package after GitHub recovers, recording nothing while it was down', async () => {
+    const h = await harness();
+    const changedPaths = h.deps.reader.changedPaths;
+    h.deps.reader.changedPaths = async () => {
+      throw new Error('REPOSITORY_UNAVAILABLE');
+    };
+    expect(await runCodeJob(job(), h.deps)).toBe('WAIT:GITHUB_UNAVAILABLE');
+    expect((await h.state()).decisions).toEqual([]);
+    expect((await h.state()).state).toBe('HELD');
+    h.deps.reader.changedPaths = changedPaths;
+    expect(await runCodeJob(job(), h.deps)).toBe('DECIDED');
+    expect((await h.state()).decisions.at(-1)?.decision).toMatchObject({ outcome: 'RELEASE' });
   });
 
   it('refuses when a frozen test fails, naming what failed', async () => {

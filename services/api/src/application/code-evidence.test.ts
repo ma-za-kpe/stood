@@ -65,13 +65,9 @@ describe('Read-only repository evidence (T-0165)', () => {
   ] as const)('fails with a named field for %s', async (_label, patch, code, field) => {
     expect(byCode(await repositoryChecks(reader(patch as never), terms))[code]).toEqual(['FAIL', field]);
   });
-  it('waits instead of passing when the repository is unavailable or the terms are invalid', async () => {
+  it('throws when the repository is unavailable (retryable, never a finding), and waits on invalid terms', async () => {
     const down: RepositoryReader = { ...reader(), files: async () => Promise.reject(new Error('rate limited')) };
-    expect(Object.values(byCode(await repositoryChecks(down, terms)))).toEqual([
-      ['UNCERTAIN', null],
-      ['UNCERTAIN', null],
-      ['UNCERTAIN', null],
-    ]);
+    await expect(repositoryChecks(down, terms)).rejects.toThrow('REPOSITORY_UNAVAILABLE');
     expect((await repositoryChecks(reader(), { ...terms, base: 'main' })).every((r) => r.status === 'UNCERTAIN')).toBe(
       true,
     );
