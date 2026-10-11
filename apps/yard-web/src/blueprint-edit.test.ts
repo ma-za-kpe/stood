@@ -11,8 +11,16 @@ const fixture = (): EditableDraft => ({
     budgetMinor: 1001,
     deadline: 1791244800000,
     tests: [
-      { id: 'a', path: 'tests/a.test.ts', content: 'expect(a()).toBe(true);' },
-      { id: 'b', path: 'tests/b.test.ts', content: 'expect(b()).toBe(true);' },
+      {
+        id: 'a',
+        path: 'tests/a.test.ts',
+        cases: [{ name: 'a', args: ['a'], input: '', status: 0, output: 'ok\n', match: 'exact' as const }],
+      },
+      {
+        id: 'b',
+        path: 'tests/b.test.ts',
+        cases: [{ name: 'b', args: ['b'], input: '', status: 0, output: 'ok\n', match: 'exact' as const }],
+      },
     ],
   })),
 });
@@ -25,7 +33,9 @@ it('merges compatible test bundles and preserves the cap, requirement mapping an
   expect(original.milestones).toHaveLength(4);
   expect(() => mergeMilestones(next, 0)).toThrow();
   const conflict = fixture();
-  conflict.milestones[1]!.tests[0]!.content = 'Different';
+  conflict.milestones[1]!.tests[0]!.cases = [
+    { name: 'different', args: [], input: '', status: 1, output: '', match: 'exact' },
+  ];
   expect(() => mergeMilestones(conflict, 0)).toThrow();
 });
 it('splits real tests between distinct milestones without losing a cent or inventing acceptance tests', () => {
@@ -51,6 +61,10 @@ it('refuses merges that would overflow the budget or mix tests that share an id 
 });
 it('brings tests the first milestone lacks into a merge (T-0275)', () => {
   const draft = fixture();
-  draft.milestones[1]!.tests.push({ id: 'c', path: 'tests/c.test.ts', content: 'expect(c()).toBe(true);' });
+  draft.milestones[1]!.tests.push({
+    id: 'c',
+    path: 'tests/c.test.ts',
+    cases: [{ name: 'c', args: ['c'], input: '', status: 0, output: 'ok\n', match: 'exact' as const }],
+  });
   expect(mergeMilestones(draft, 0).milestones[0]?.tests.map((t) => t.id)).toEqual(['a', 'b', 'c']);
 });

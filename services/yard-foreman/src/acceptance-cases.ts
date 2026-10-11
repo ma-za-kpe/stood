@@ -2,14 +2,9 @@
 // writes test code at all. It writes acceptance cases, data only, and Yard renders every frozen test file from the one
 // template below. Each case runs the builder's program as a separate process (`node src/cli.js ...args`, through
 // Stood's harness) with the given input, and expects its exit status and output, exactly or as a substring.
-export type AcceptanceCase = Readonly<{
-  name: string;
-  args: readonly string[];
-  input: string;
-  status: number;
-  output: string;
-  match: 'exact' | 'includes';
-}>;
+import type { AcceptanceCase } from '@stood/yard-domain';
+
+export type { AcceptanceCase };
 export const CASES_FORMAT = 'stood.cases@1';
 
 class Invalid extends Error {}

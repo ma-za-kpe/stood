@@ -6,7 +6,7 @@ import { Blueprint, type Plan, type PlannerErrorCode, type PlannerIntake } from 
 
 export type { Plan, PlannerIntake } from '@stood/yard-domain';
 
-import { acceptanceCases, renderAcceptanceTest } from './acceptance-cases.js';
+import { type AcceptanceCase, acceptanceCases, renderAcceptanceTest } from './acceptance-cases.js';
 import { type ForemanCoordinator, memoryCoordinator } from './coordinator.js';
 export class PlannerError extends Error {
   constructor(readonly code: PlannerErrorCode) {
@@ -107,7 +107,7 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
   }
   const d = object(value, ['summary', 'requirements', 'milestones', 'risks']);
   if (!text(d.summary)) throw new PlannerError('INVALID');
-  const tests: { milestoneId: string; id: string; path: string; content: string }[] = [];
+  const tests: { milestoneId: string; id: string; path: string; content: string; cases: AcceptanceCase[] }[] = [];
   const milestones = list(d.milestones, 3, 6).map((raw, index, all) => {
     const m = object(raw, ['id', 'name', 'budgetMinor', 'deadline', 'tests']);
     if (!text(m.id) || !/^[A-Za-z0-9_-]{1,100}$/.test(m.id) || !text(m.name)) throw new PlannerError('INVALID');
@@ -123,7 +123,7 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
         throw new PlannerError('INVALID');
       const cases = acceptanceCases(t.cases);
       if (!cases) throw new PlannerError('INVALID');
-      return { id: t.id, path: t.path, content: renderAcceptanceTest(cases) };
+      return { id: t.id, path: t.path, content: renderAcceptanceTest(cases), cases };
     });
     if (new Set(bundle.map((t) => t.path)).size !== bundle.length) throw new PlannerError('INVALID');
     bundle.sort((a, b) => a.path.localeCompare(b.path));
