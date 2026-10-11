@@ -118,6 +118,19 @@ describe('Write-only test-key vault (T-0227, T-0195)', () => {
     expect(await f.vault.list('bp', 'buyer')).toEqual([]);
     expect(f.rows.dump()).toEqual([]);
   });
+  // Fifth audit (2026-10-11): the deadline holds even when the purge job has not run yet.
+  it('refuses a key past its deletion deadline before the purge removes it', async () => {
+    const f = vault();
+    await f.vault.put(input);
+    const deadline = at + 7 * 86400000;
+    await f.vault.scheduleDeletion('bp', 'buyer', deadline);
+    const use = (now: number) => f.vault.decryptForDeploy('bp', 'SUPABASE_URL', { deployId: 'p', now });
+    expect(await use(deadline - 1)).toBe(input.value);
+    expect(await f.vault.list('bp', 'buyer', deadline - 1)).toHaveLength(1);
+    await expect(use(deadline)).rejects.toThrow('NOT_FOUND');
+    expect(await f.vault.list('bp', 'buyer', deadline)).toEqual([]);
+    expect(f.rows.dump()).toHaveLength(1);
+  });
 });
 
 describe('Local key wrapper', () => {

@@ -26,6 +26,7 @@ export type PutSecret = Readonly<{
 }>;
 const aad = (row: Pick<SecretRow, 'blueprintId' | 'name' | 'environment' | 'version'>) =>
   Buffer.from(JSON.stringify(['stood-yard-secret@1', row.blueprintId, row.name, row.environment, row.version]));
+const expired = (row: SecretRow, now: number) => row.deleteAt !== null && row.deleteAt <= now;
 const meta = (row: SecretRow): SecretMeta =>
   Object.freeze({
     name: row.name,
@@ -91,9 +92,11 @@ export class SecretVault {
     await this.rows.write(row, { key: input.key, fingerprint: request, result });
     return result;
   }
-  async list(blueprintId: string, owner: string): Promise<readonly SecretMeta[]> {
+  // Fifth audit (2026-10-11): a key past its deletion deadline is gone to every reader, even before the purge job
+  // removes the row.
+  async list(blueprintId: string, owner: string, now = Date.now()): Promise<readonly SecretMeta[]> {
     await this.owned(blueprintId, owner);
-    return (await this.rows.active(blueprintId)).map(meta);
+    return (await this.rows.active(blueprintId)).filter((r) => !expired(r, now)).map(meta);
   }
   async revoke(blueprintId: string, owner: string, name: string, now: number): Promise<void> {
     await this.owned(blueprintId, owner);
@@ -114,7 +117,7 @@ export class SecretVault {
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(use.deployId ?? '') || !Number.isSafeInteger(use.now))
       throw new SecretError('INVALID');
     const row = await this.rows.current(blueprintId, name);
-    if (!row || row.revokedAt !== null) throw new SecretError('NOT_FOUND');
+    if (!row || row.revokedAt !== null || expired(row, use.now)) throw new SecretError('NOT_FOUND');
     let value: string;
     try {
       const dataKey = this.keys.unwrap(row.wrappedKey, row.kekId);
