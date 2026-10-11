@@ -10,17 +10,26 @@ type Config = Readonly<{
 const decimals = (currency: string) => (['JPY', 'HUF', 'TWD'].includes(currency) ? 0 : 2);
 const object = (v: unknown) =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+// PayPal's payout item transaction_status enum (Payouts v1 schema, transaction_enum).
 const ITEM: Record<string, PayoutItemStatus> = {
   SUCCESS: 'PAID_OUT',
   UNCLAIMED: 'UNCLAIMED',
   RETURNED: 'RETURNED',
-  FAILED: 'FAILED',
-  BLOCKED: 'FAILED',
   REFUNDED: 'RETURNED',
   REVERSED: 'RETURNED',
+  FAILED: 'FAILED',
+  BLOCKED: 'REVIEW',
   PENDING: 'PENDING',
   ONHOLD: 'PENDING',
-  NEW: 'PENDING',
+};
+// The original batch's id from a duplicate rejection's HATEOAS link (.../v1/payments/payouts/{payout_batch_id}).
+const originalBatch = (body: Record<string, unknown> | null): string | null => {
+  const links = Array.isArray(body?.links) ? body.links : [];
+  for (const link of links) {
+    const id = /\/v1\/payments\/payouts\/([A-Z0-9]{8,40})(?:[/?]|$)/.exec(String(object(link)?.href ?? ''))?.[1];
+    if (id) return id;
+  }
+  return null;
 };
 
 // ADR-0027: PayPal Payouts from Yard's own account. One batch, one item, per paid work order. The batch id is also
@@ -84,20 +93,24 @@ export class PayPalPayouts implements PayoutProvider {
         signal: AbortSignal.timeout(30_000),
       });
     } catch {
-      return { outcome: 'UNKNOWN' };
+      return { outcome: 'UNKNOWN', reason: 'no_answer' };
     }
     const body = object(await response.json().catch(() => null));
     const id = object(body?.batch_header)?.payout_batch_id;
     if (response.status === 201 && typeof id === 'string' && id) return { outcome: 'SENT', payoutBatchId: id };
-    // PayPal refused the batch (a 4xx with its debug id, not a conflict): nothing was paid.
-    if (
-      response.status >= 400 &&
-      response.status < 500 &&
-      response.status !== 409 &&
-      typeof body?.debug_id === 'string'
-    )
-      return { outcome: 'REFUSED', reference: body.debug_id };
-    return { outcome: 'UNKNOWN' };
+    // A token PayPal no longer accepts is fetched again on the next try.
+    if (response.status === 401) this.token = null;
+    if (response.status >= 400 && response.status < 500 && ![401, 408, 409, 429].includes(response.status)) {
+      // About this batch id: PayPal already has a batch with it. Its link names the original, which is what was sent.
+      if (/sender_batch_id/i.test(JSON.stringify(body ?? {}))) {
+        const original = originalBatch(body);
+        return original
+          ? { outcome: 'SENT', payoutBatchId: original }
+          : { outcome: 'REVIEW', reason: 'duplicate_without_link' };
+      }
+      if (typeof body?.debug_id === 'string' && body.debug_id) return { outcome: 'REFUSED', reference: body.debug_id };
+    }
+    return { outcome: 'UNKNOWN', reason: `http_${response.status}` };
   }
   async status(payoutBatchId: string) {
     if (!/^[A-Z0-9]{8,40}$/.test(payoutBatchId)) return { status: 'UNKNOWN' as const };

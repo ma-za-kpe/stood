@@ -47,31 +47,70 @@ describe('PayPalPayouts', () => {
     expect(h.calls.filter((c) => c.url.endsWith('/oauth2/token'))).toHaveLength(1);
   });
 
-  it('pays a merchant id as a PayPal id, and never guesses: a refusal is final, anything else unknown', async () => {
-    const refused = paypal({
+  // Third audit (2026-10-11): PayPal's contract, not a guess. A reused sender_batch_id is rejected with a HATEOAS link
+  // to the original payout (which was sent); 5xx, 401 and 429 are retryable; only a validated refusal is final.
+  it('recovers the original batch from a duplicate, retries what is retryable, and fails only a real refusal', async () => {
+    const duplicate = {
+      name: 'USER_BUSINESS_ERROR',
+      message: 'User business error.',
+      debug_id: 'dbg-dup',
+      details: [{ field: 'SENDER_BATCH_ID', issue: `Batch with given sender_batch_id already exists: ${batchId}` }],
+      links: [{ href: 'https://api-m.sandbox.paypal.com/v1/payments/payouts/PBORIGINAL1', rel: 'self', method: 'GET' }],
+    };
+    const send = async (answer: { status: number; body: unknown } | 'drop') =>
+      paypal({ '/v1/oauth2/token': token, '/v1/payments/payouts': answer }).payouts.send(request);
+    expect(await send({ status: 400, body: duplicate })).toEqual({ outcome: 'SENT', payoutBatchId: 'PBORIGINAL1' });
+    expect(await send({ status: 400, body: { ...duplicate, links: [] } })).toEqual({
+      outcome: 'REVIEW',
+      reason: 'duplicate_without_link',
+    });
+    expect(
+      await send({
+        status: 422,
+        body: { name: 'UNPROCESSABLE_ENTITY', debug_id: 'dbg123', details: [{ issue: 'RECEIVER_UNREGISTERED' }] },
+      }),
+    ).toEqual({ outcome: 'REFUSED', reference: 'dbg123' });
+    for (const [answer, reason] of [
+      ['drop', 'no_answer'],
+      [{ status: 500, body: { debug_id: 'x' } }, 'http_500'],
+      [{ status: 503, body: {} }, 'http_503'],
+      [{ status: 401, body: { name: 'AUTHENTICATION_FAILURE', debug_id: 'x' } }, 'http_401'],
+      [{ status: 429, body: { name: 'RATE_LIMIT_REACHED', debug_id: 'x' } }, 'http_429'],
+      [{ status: 409, body: { debug_id: 'x' } }, 'http_409'],
+      [{ status: 201, body: {} }, 'http_201'],
+      [{ status: 422, body: { name: 'UNPROCESSABLE_ENTITY' } }, 'http_422'],
+    ] as const)
+      expect(await send(answer)).toEqual({ outcome: 'UNKNOWN', reason });
+  });
+
+  it('pays a merchant id as a PayPal id, fetches a new token after a 401, and maps every PayPal item status', async () => {
+    const h = paypal({
       '/v1/oauth2/token': token,
-      '/v1/payments/payouts': { status: 422, body: { name: 'UNPROCESSABLE_ENTITY', debug_id: 'dbg123' } },
+      '/v1/payments/payouts': { status: 401, body: { name: 'AUTHENTICATION_FAILURE' } },
     });
-    expect(await refused.payouts.send({ ...request, payee: 'ABCDEFGHJKLMN' })).toEqual({
-      outcome: 'REFUSED',
-      reference: 'dbg123',
-    });
-    expect(JSON.parse(String(refused.calls[1]?.init.body)).items[0].recipient_type).toBe('PAYPAL_ID');
-    for (const answer of [
-      'drop',
-      { status: 500, body: {} },
-      { status: 409, body: { debug_id: 'x' } },
-      { status: 201, body: {} },
-    ] as const) {
-      const h = paypal({ '/v1/oauth2/token': token, '/v1/payments/payouts': answer });
-      expect(await h.payouts.send(request)).toEqual({ outcome: 'UNKNOWN' });
+    await h.payouts.send({ ...request, payee: 'ABCDEFGHJKLMN' });
+    expect(JSON.parse(String(h.calls[1]?.init.body)).items[0].recipient_type).toBe('PAYPAL_ID');
+    await h.payouts.send(request);
+    expect(h.calls.filter((c) => c.url.endsWith('/oauth2/token'))).toHaveLength(2);
+    for (const [paypalStatus, ours] of [
+      ['SUCCESS', 'PAID_OUT'],
+      ['UNCLAIMED', 'UNCLAIMED'],
+      ['RETURNED', 'RETURNED'],
+      ['REFUNDED', 'RETURNED'],
+      ['REVERSED', 'RETURNED'],
+      ['FAILED', 'FAILED'],
+      ['BLOCKED', 'REVIEW'],
+      ['PENDING', 'PENDING'],
+      ['ONHOLD', 'PENDING'],
+      ['SOMETHING_NEW', 'UNKNOWN'],
+    ]) {
+      const r = paypal({
+        '/v1/oauth2/token': token,
+        status: { status: 200, body: { items: [{ transaction_status: paypalStatus }] } },
+      });
+      expect((await r.payouts.status('PB12345678')).status, paypalStatus).toBe(ours);
     }
-    const unread = paypal({
-      '/v1/oauth2/token': token,
-      status: { status: 200, body: { items: [{ transaction_status: 'WEIRD' }] } },
-    });
-    expect(await unread.payouts.status('PB12345678')).toEqual({ status: 'UNKNOWN' });
-    expect(await unread.payouts.status('../etc')).toEqual({ status: 'UNKNOWN' });
-    await expect(refused.payouts.send({ ...request, batchId: 'other' })).rejects.toThrow('INVALID_PAYOUT');
+    expect(await h.payouts.status('../etc')).toEqual({ status: 'UNKNOWN' });
+    await expect(h.payouts.send({ ...request, batchId: 'other' })).rejects.toThrow('INVALID_PAYOUT');
   });
 });
