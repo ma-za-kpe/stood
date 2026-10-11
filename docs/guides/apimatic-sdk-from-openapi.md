@@ -158,6 +158,19 @@ These are real: a page of the generated reference as GitHub renders it, the gene
 
 ![oasdiff reporting two breaking changes and the push being refused, then the fix](images/apimatic/apimatic-3-breaking-change-refused.png)
 
+## 7b. Publish a developer portal from the same contract (11 October 2026)
+
+The SDK and the portal come from one file, `openapi/stood.json`, so they cannot disagree. Live: <https://ma-za-kpe.github.io/stood/api/>.
+
+1. **Add a build file beside the spec.** `apimatic/src/APIMATIC-BUILD.json` with `generatePortal`: `apiSpecs: ["stood"]` (the file name in `src/spec/`), `languageConfig` for `http` and `typescript`, and `baseUrl` plus `indexable: {}` so the portal ships a sitemap and `robots.txt`.
+2. **Turn Try It off** (`portalSettings.enableConsoleCalls: false`). Every Stood request is HMAC-signed with the platform secret; a browser console could only do that by exposing the secret.
+3. **Write the one page developers need most.** `src/content/guides/signing-requests.md`, listed in `src/content/toc.yml` with `page:` and `file:` (custom pages never use `generate:`).
+4. **Build it:** `scripts/dev portal` (CLI 1.5.0, key from `.env`, never printed), into `apimatic/portal/` (git-ignored). About 3 MB of static files.
+5. **Check the SDK is unaffected:** `scripts/dev sdk` and confirm `git status sdk/` is clean. APIMatic rewrites its own change-tracking file on every run; restore it if the SDK did not change.
+6. **Publish in CI.** The Pages workflow runs the same command with the `APIMATIC_API_KEY` repository secret, into `_site/api`, on every merge to `main`. Without the secret it skips the portal and publishes the rest of the site.
+
+We chose GitHub Pages over Render because the portal is static: it costs nothing there, and it ships with the website it is linked from.
+
 ## 8. How it works
 
 1. **Contract first.** Zod schemas in `contract.ts` describe each request and response; each schema with a `meta({ id })` becomes a named component. `openApiDocument()` builds the OpenAPI 3.1 document deterministically, and a test fails if the committed file differs.

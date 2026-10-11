@@ -33,7 +33,7 @@
 
 ---
 
-> **Live PayPal sandbox. No real money.** Stood's hosted API and reconciler connect to the real PayPal sandbox, including saved-account signing and milestone funding. `/health` reports current readiness. Yard's hosted app uses owner-issued access codes for its Board, events, site log and private intake. The Foreman, repository/preview adapters and Yard-to-Stood payment connection are the next integration work. Illustrative examples and the isolated local test network remain labelled separately.
+> **Live PayPal sandbox. No real money.** Stood's hosted API and reconciler connect to the real PayPal sandbox, including saved-account signing and milestone funding; `/health` reports current readiness. Stood's runner judges code milestones live on Vercel Sandbox, but **settlement is off** until the owner switches it on, so decisions are recorded and nothing is captured or voided. Yard's hosted app (owner-issued access codes) runs its Board, events, site log, private intake, the Foreman and its payment connection to Stood; builder payouts are off until Yard's own sandbox PayPal app is set. What would have to be true before real money: [docs/real-money.md](docs/real-money.md).
 
 ## Public links
 
@@ -44,6 +44,8 @@
 | Changelog | <https://ma-za-kpe.github.io/stood/changelog.html> | Live |
 | Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**. `/health` says whether sandbox payments are on and, if not, what is missing ([setup record](docs/SETUP.md)). Free tier: the first request after idle can take about a minute |
 | Hosted Yard app | <https://stood-yard-api.onrender.com/app/> | Owner-issued access code; Board, events, site log and private intake |
+| Stood API contract (OpenAPI 3.1) | <https://stood-api.onrender.com/v1/openapi.json> | Served by `stood-api` from API 1.3.0; the same file is [`openapi/stood.json`](openapi/stood.json) |
+| Stood API reference (APIMatic portal) | <https://ma-za-kpe.github.io/stood/api/> | Generated from the same contract by APIMatic on every merge to `main`; HTTP and TypeScript examples, a signing guide, no Try It (requests need your secret) |
 | Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake is connected; the Foreman and Yard payments remain off until their adapters are connected |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |

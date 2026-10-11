@@ -6,6 +6,7 @@ import { allowanceDraft } from '../application/allowance-draft.js';
 import { codeTerms } from '../application/code-terms.js';
 import { commitPackage } from '../application/commit-package.js';
 import { mandateTermsHash } from '../application/mandate-terms.js';
+import { platformRequest, signInBlocked, signInFailed } from '../application/rate-limit.js';
 import { acceptUsage, type UsageAuthority } from '../application/usage-intake.js';
 import { trancheSentences } from '../domain/recipient-sentences.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
@@ -14,6 +15,7 @@ import { CommitPackageError, type CommitPackageStore } from '../ports/commit-pac
 import { type FundingStore, FundingStoreError } from '../ports/funding-store.js';
 import { type MandateStore, MandateStoreError } from '../ports/mandate-store.js';
 import { type PlatformApiStore, PlatformApiStoreError } from '../ports/platform-api-store.js';
+import type { RateLimiter } from '../ports/rate-limiter.js';
 import { type UsageStore, UsageStoreError } from '../ports/usage-store.js';
 
 export type PlatformApiConfig = Readonly<{
@@ -27,6 +29,8 @@ export type PlatformApiConfig = Readonly<{
   key: string;
   secret: string;
   clock(): number;
+  // T-0156: per-platform write and read budgets and failed sign-ins per client, shared across instances.
+  limiter?: RateLimiter;
   // T-0260: saved-PayPal mandates and tranche funding. HTTP records intent; the worker makes the PayPal calls.
   signing?: Readonly<{
     mode: 'sim' | 'live';
@@ -62,6 +66,24 @@ export function platformApi(config: PlatformApiConfig): Hono {
   );
   app.use('*', async (c, next) => {
     const now = config.clock();
+    const limiter = config.limiter;
+    // The first address Render's proxy recorded is the client's.
+    const client = (c.req.header('X-Forwarded-For') ?? '').split(',')[0]?.trim().slice(0, 64) || 'unknown';
+    const report = (reason: string) =>
+      process.stderr.write(`${JSON.stringify({ code: 'RATE_LIMIT_UNAVAILABLE', reason })}\n`);
+    const tooMany = (retryAfterSeconds: number) => {
+      const response = problem(429, 'rate_limited', `Too many requests. Retry after ${retryAfterSeconds} seconds.`);
+      response.headers.set('Retry-After', String(retryAfterSeconds));
+      return response;
+    };
+    if (limiter && Number.isSafeInteger(now)) {
+      const blocked = await signInBlocked(limiter, client, now, report);
+      if (blocked.limited) return tooMany(blocked.retryAfterSeconds);
+    }
+    const unauthorized = async () => {
+      if (limiter && Number.isSafeInteger(now)) await signInFailed(limiter, client, now, report);
+      return problem(401, 'unauthorized', 'A valid platform key and signature are required.');
+    };
     const signature = /^t=(\d{1,12}),v2=([a-f0-9]{64})$/.exec(c.req.header('Stood-Signature') ?? '');
     const token = c.req.header('Authorization') ?? '';
     if (
@@ -71,7 +93,7 @@ export function platformApi(config: PlatformApiConfig): Hono {
       !signature ||
       Math.abs(now / 1000 - Number(signature[1])) > 300
     )
-      return problem(401, 'unauthorized', 'A valid platform key and signature are required.');
+      return unauthorized();
     const body = await c.req.text();
     const url = new URL(c.req.url);
     const expected = createHmac('sha256', config.secret)
@@ -88,8 +110,12 @@ export function platformApi(config: PlatformApiConfig): Hono {
         ]),
       )
       .digest();
-    if (!timingSafeEqual(expected, Buffer.from(signature[2]!, 'hex')))
-      return problem(401, 'unauthorized', 'A valid platform key and signature are required.');
+    if (!timingSafeEqual(expected, Buffer.from(signature[2]!, 'hex'))) return unauthorized();
+    if (limiter) {
+      const write = !['GET', 'HEAD'].includes(c.req.method);
+      const budget = await platformRequest(limiter, config.platformId, write, now, report);
+      if (budget.limited) return tooMany(budget.retryAfterSeconds);
+    }
     await next();
   });
   app.onError((error) =>

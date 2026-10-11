@@ -365,6 +365,19 @@ export const runClaims = pgTable(
     check('run_claim_kind', sql`${table.kind} IN ('baseline', 'package') AND ${table.attempts} >= 0`),
   ],
 );
+// T-0156: one fixed-window counter per scope (a platform's writes or reads, or a client's failed sign-ins).
+export const rateWindows = pgTable(
+  'rate_windows',
+  {
+    scope: text().notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true, mode: 'date' }).notNull(),
+    count: integer().notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.scope, table.windowStart] }),
+    check('rate_window_count', sql`${table.count} >= 0 AND length(${table.scope}) <= 200`),
+  ],
+);
 export const apiRequests = pgTable(
   'api_requests',
   {

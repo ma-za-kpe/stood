@@ -100,10 +100,15 @@ type Code =
   | 'CONFLICT'
   | 'VALIDATION'
   | 'UNAVAILABLE'
+  // T-0156: over the platform's per-minute budget; retryAfterSeconds says when the window ends.
+  | 'RATE_LIMITED'
   | 'UNKNOWN_OUTCOME'
   | 'TIMEOUT';
 export class StoodClientError extends Error {
-  constructor(readonly code: Code) {
+  constructor(
+    readonly code: Code,
+    readonly retryAfterSeconds?: number,
+  ) {
     super('Stood request failed.');
     this.name = 'StoodClientError';
   }
@@ -383,6 +388,10 @@ export class StoodClient {
       ]);
       if (response.redirected || (response.status >= 300 && response.status < 400))
         throw new StoodClientError('INVALID_RESPONSE');
+      if (response.status === 429) {
+        const wait = Number(response.headers.get('Retry-After'));
+        throw new StoodClientError('RATE_LIMITED', Number.isSafeInteger(wait) && wait > 0 && wait <= 3600 ? wait : 60);
+      }
       if (!response.ok) {
         const code: Code =
           response.status === 401
