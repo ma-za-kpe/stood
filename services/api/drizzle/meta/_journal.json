@@ -183,6 +183,13 @@
       "when": 1791736818078,
       "tag": "0025_run_claim_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791748455027,
+      "tag": "0026_rate_windows",
+      "breakpoints": true
     }
   ]
 }

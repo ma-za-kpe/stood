@@ -125,6 +125,27 @@ describe('Public SDK against the actual local Stood HTTP router (T-0179)', () =>
       message: 'Stood request failed.',
     });
   });
+  // T-0156: a 429 is a typed RATE_LIMITED error carrying how long to wait.
+  it('reports a rate limit with its Retry-After, and a safe default without one', async () => {
+    for (const [header, wait] of [
+      ['17', 17],
+      [null, 60],
+      ['soon', 60],
+    ] as const) {
+      const client = new StoodClient({
+        baseUrl: 'https://stood.fixture',
+        key: 'fixture_key',
+        secret: 'fixture_secret',
+        clock: () => at,
+        transport: async () =>
+          new Response(JSON.stringify({ code: 'rate_limited', status: 429 }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/problem+json', ...(header ? { 'Retry-After': header } : {}) },
+          }),
+      });
+      await expect(client.getDraft('alw_1')).rejects.toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: wait });
+    }
+  });
   it('exposes malformed input and wrong authentication as typed errors', async () => {
     const { client, transport } = contract();
     await expect(client.createDraft({ ...draft, cap: { minor: 1.5, currency: 'USD' } }, 'key')).rejects.toMatchObject({

@@ -9,6 +9,7 @@ import { PostgresMandates } from './adapters/db-postgres/mandates.js';
 import { PostgresOperationsAttention } from './adapters/db-postgres/operations-attention.js';
 import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import { PostgresProviderEvents } from './adapters/db-postgres/provider-events.js';
+import { PostgresRateLimits } from './adapters/db-postgres/rate-limits.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { TokenCipher } from './adapters/db-postgres/token-cipher.js';
 import { PostgresUsageReceipts } from './adapters/db-postgres/usage-receipts.js';
@@ -62,6 +63,7 @@ const app = createApp({
             store: new PostgresUsageReceipts(drizzle(pool, { schema })),
             authorities: usageAuthorities(process.env.USAGE_AUTHORITY_KEYS),
           },
+          limiter: new PostgresRateLimits(drizzle(pool, { schema })),
           platformId: process.env.STOOD_PLATFORM_ID ?? 'local-platform',
           key: process.env.STOOD_API_KEY ?? '',
           secret: process.env.STOOD_HMAC_SECRET ?? '',

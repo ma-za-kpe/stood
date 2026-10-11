@@ -115,6 +115,7 @@ try {
 | 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
 | 413 | Body over 64 KiB | [`ProblemError`](../../doc/models/problem-error.md) |
 | 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -182,6 +183,7 @@ try {
 |  --- | --- | --- |
 | 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
 # Request Mandate
@@ -262,6 +264,7 @@ try {
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
 | 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
 | 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -336,6 +339,7 @@ try {
 |  --- | --- | --- |
 | 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -426,6 +430,7 @@ try {
 | 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
 | 413 | Body over 64 KiB | [`ProblemError`](../../doc/models/problem-error.md) |
 | 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -493,6 +498,7 @@ try {
 |  --- | --- | --- |
 | 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -560,6 +566,7 @@ try {
 |  --- | --- | --- |
 | 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
 # Request Funding
@@ -643,6 +650,7 @@ try {
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
 | 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
 | 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -717,6 +725,7 @@ try {
 |  --- | --- | --- |
 | 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -804,6 +813,7 @@ try {
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
 | 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
 | 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -892,6 +902,7 @@ try {
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
 | 413 | Body over 64 KiB | [`ProblemError`](../../doc/models/problem-error.md) |
 | 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 
 
@@ -966,5 +977,6 @@ try {
 |  --- | --- | --- |
 | 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
 | 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
 | 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
 

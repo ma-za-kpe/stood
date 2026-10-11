@@ -43,7 +43,7 @@ function headers(
     ...(options.ifMatch !== undefined ? { 'If-Match': options.ifMatch } : {}),
   };
 }
-function fixture() {
+function fixture(limiter?: import('../ports/rate-limiter.js').RateLimiter) {
   const store = {
     create: vi.fn(async () => ({
       id: 'alw_fixture',
@@ -58,7 +58,7 @@ function fixture() {
     appEnv: 'ci',
     paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
     demoMode: true,
-    api: { store, platformId: 'platform_a', key, secret, clock: () => now },
+    api: { store, platformId: 'platform_a', key, secret, clock: () => now, ...(limiter ? { limiter } : {}) },
   });
   return { app, store };
 }
@@ -271,5 +271,72 @@ describe('Signed platform API draft foundation', () => {
         (await app.request(path, { method: 'POST', body: '{}', headers: headers('{}', now, { path }) })).status,
       ).toBe(503);
     expect((await app.request('/v1/demo/scenarios/good', { method: 'POST' })).status).toBe(200);
+  });
+});
+
+// T-0156: rate limits on the signed platform API.
+describe('Signed platform API rate limits', () => {
+  const memory = () => {
+    const counts = new Map<string, number>();
+    return {
+      counts,
+      limiter: {
+        hit: vi.fn(async (scope: string, cost: number, windowStart: number) => {
+          const k = `${scope}@${windowStart}`;
+          counts.set(k, (counts.get(k) ?? 0) + cost);
+          return counts.get(k) ?? 0;
+        }),
+      },
+    };
+  };
+  const read = (app: ReturnType<typeof fixture>['app'], extra: Record<string, string> = {}) =>
+    app.request('/v1/allowances/alw_missing', {
+      headers: { ...headers('', now, { path: '/v1/allowances/alw_missing', method: 'GET' }), ...extra },
+    });
+
+  it('answers 429 with Retry-After past a platform budget, counting writes and reads apart', async () => {
+    const m = memory();
+    const { app } = fixture(m.limiter);
+    const body = JSON.stringify(draft);
+    for (let i = 0; i < 120; i++)
+      expect((await app.request('/v1/allowances', { method: 'POST', body, headers: headers(body) })).status).not.toBe(
+        429,
+      );
+    const over = await app.request('/v1/allowances', { method: 'POST', body, headers: headers(body) });
+    expect(over.status).toBe(429);
+    expect(await over.json()).toMatchObject({ code: 'rate_limited', status: 429 });
+    expect(Number(over.headers.get('Retry-After'))).toBeGreaterThan(0);
+    // Reads have their own budget: a burst of writes does not block them.
+    expect((await read(app)).status).toBe(404);
+  });
+
+  it('slows guessing: 30 failed sign-ins from one address block it for the minute, and only it', async () => {
+    const m = memory();
+    const { app } = fixture(m.limiter);
+    const guess = {
+      ...headers('', now, { path: '/v1/allowances/alw_missing', method: 'GET' }),
+      Authorization: 'Bearer wrong',
+    };
+    for (let i = 0; i < 30; i++)
+      expect(
+        (
+          await app.request('/v1/allowances/alw_missing', {
+            headers: { ...guess, 'X-Forwarded-For': '203.0.113.9, 10.0.0.1' },
+          })
+        ).status,
+      ).toBe(401);
+    expect((await read(app, { 'X-Forwarded-For': '203.0.113.9' })).status).toBe(429);
+    expect((await read(app, { 'X-Forwarded-For': '198.51.100.7' })).status).toBe(404);
+  });
+
+  it('never blocks the API when the limiter is unavailable, and reports it', async () => {
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { app } = fixture({ hit: async () => Promise.reject(new Error('db down')) });
+      expect((await read(app)).status).toBe(404);
+      expect(write.mock.calls.some(([line]) => String(line).includes('RATE_LIMIT_UNAVAILABLE'))).toBe(true);
+    } finally {
+      write.mockRestore();
+    }
   });
 });

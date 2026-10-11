@@ -414,7 +414,7 @@ function nullables(value: unknown): unknown {
 
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
-export const API_VERSION = '1.2.0';
+export const API_VERSION = '1.3.0';
 
 export type OpenApiDocument = Readonly<{
   openapi: string;
@@ -476,13 +476,26 @@ export function openApiDocument(version: string = API_VERSION): OpenApiDocument 
           content: { 'application/json': { schema: ref(op.ok.schema) } },
         },
         ...Object.fromEntries(
-          op.problems.map((status) => [
-            status,
-            {
-              description: PROBLEM_TEXT[status] ?? 'Problem',
-              content: { 'application/problem+json': { schema: { $ref: '#/components/schemas/Problem' } } },
-            },
-          ]),
+          // T-0156: every route can answer 429 (per-platform budgets and failed sign-ins per client).
+          [...op.problems, 429]
+            .sort((a, b) => a - b)
+            .map((status) => [
+              status,
+              {
+                description: PROBLEM_TEXT[status] ?? 'Problem',
+                ...(status === 429
+                  ? {
+                      headers: {
+                        'Retry-After': {
+                          description: 'Seconds until the current one-minute window ends',
+                          schema: { type: 'integer', minimum: 1 },
+                        },
+                      },
+                    }
+                  : {}),
+                content: { 'application/problem+json': { schema: { $ref: '#/components/schemas/Problem' } } },
+              },
+            ]),
         ),
       },
     };
@@ -494,7 +507,7 @@ export function openApiDocument(version: string = API_VERSION): OpenApiDocument 
       version,
       summary: 'Milestone payments held on PayPal (sandbox) and released only on evidence',
       description:
-        'Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Stood only talks to the PayPal sandbox.',
+        'Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Each platform may make 120 writes and 600 reads a minute; over that, or after 30 failed sign-ins from one address in a minute, Stood answers 429 with Retry-After. Stood only talks to the PayPal sandbox.',
       license: { name: 'MIT', identifier: 'MIT' },
     },
     servers: [{ url: 'https://stood-api.onrender.com/v1', description: 'Hosted (PayPal sandbox)' }],
@@ -519,6 +532,7 @@ const PROBLEM_TEXT: Readonly<Record<number, string>> = {
   404: 'Not found, or not owned by this platform',
   409: 'Idempotency or version conflict',
   413: 'Body over 64 KiB',
+  429: "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address",
   422: 'Invalid request',
   503: 'Storage or the feature is unavailable; retry with the same idempotency key',
 };
