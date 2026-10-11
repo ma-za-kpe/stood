@@ -50,20 +50,43 @@ describe('PayPalPayouts', () => {
   // Third audit (2026-10-11): PayPal's contract, not a guess. A reused sender_batch_id is rejected with a HATEOAS link
   // to the original payout (which was sent); 5xx, 401 and 429 are retryable; only a validated refusal is final.
   it('recovers the original batch from a duplicate, retries what is retryable, and fails only a real refusal', async () => {
+    // PayPal's real answer, captured live on the sandbox on 2026-10-11 (debug_id removed): the link to the original
+    // batch is inside the error detail, and the top-level links are empty.
     const duplicate = {
       name: 'USER_BUSINESS_ERROR',
       message: 'User business error.',
+      information_link: 'https://developer.paypal.com/docs/api/payments.payouts-batch/#errors',
       debug_id: 'dbg-dup',
-      details: [{ field: 'SENDER_BATCH_ID', issue: `Batch with given sender_batch_id already exists: ${batchId}` }],
-      links: [{ href: 'https://api-m.sandbox.paypal.com/v1/payments/payouts/PBORIGINAL1', rel: 'self', method: 'GET' }],
+      details: [
+        {
+          field: 'SENDER_BATCH_ID',
+          location: 'body',
+          issue: 'Batch with given sender_batch_id already exists',
+          link: [
+            {
+              href: 'https://api.sandbox.paypal.com/v1/payments/payouts/PBORIGINAL1',
+              rel: 'self',
+              method: 'GET',
+              encType: 'application/json',
+            },
+          ],
+        },
+      ],
+      links: [],
     };
     const send = async (answer: { status: number; body: unknown } | 'drop') =>
       paypal({ '/v1/oauth2/token': token, '/v1/payments/payouts': answer }).payouts.send(request);
     expect(await send({ status: 400, body: duplicate })).toEqual({ outcome: 'SENT', payoutBatchId: 'PBORIGINAL1' });
-    expect(await send({ status: 400, body: { ...duplicate, links: [] } })).toEqual({
-      outcome: 'REVIEW',
-      reason: 'duplicate_without_link',
-    });
+    // The schema's own place for the link is read too.
+    expect(
+      await send({
+        status: 400,
+        body: { ...duplicate, details: [{ ...duplicate.details[0], link: [] }], links: duplicate.details[0]?.link },
+      }),
+    ).toEqual({ outcome: 'SENT', payoutBatchId: 'PBORIGINAL1' });
+    expect(
+      await send({ status: 400, body: { ...duplicate, details: [{ ...duplicate.details[0], link: [] }], links: [] } }),
+    ).toEqual({ outcome: 'REVIEW', reason: 'duplicate_without_link' });
     expect(
       await send({
         status: 422,
