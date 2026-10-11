@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILDER,
+  type CleanupFailure,
   HARNESS,
   type RunJob,
   RunnerUnavailable,
@@ -166,5 +167,56 @@ describe('VercelSandboxRunner', () => {
     ])
       await expect(h.runner.run(bad)).rejects.toThrow('INVALID_JOB');
     expect(h.options).toEqual([]);
+  });
+});
+
+// Fifth audit (2026-10-11): an abort stops the VM and rejects; a VM that will not stop is reported with its id.
+describe('VercelSandboxRunner cancellation and cleanup', () => {
+  it('stops the VM and rejects as CANCELLED when the run is aborted, running nothing further', async () => {
+    const h = fakeSandbox();
+    const controller = new AbortController();
+    const session = await (
+      h.runner as unknown as { sandbox: { create: (o: unknown) => Promise<SandboxSession> } }
+    ).sandbox.create({});
+    const run = session.runCommand.bind(session);
+    // Abort while the workspace is being locked.
+    (session as { runCommand: SandboxSession['runCommand'] }).runCommand = async (c) => {
+      if (c.cmd === 'chown') controller.abort();
+      return run(c);
+    };
+    await expect(h.runner.run(job, controller.signal)).rejects.toMatchObject({ stage: 'CANCELLED' });
+    expect(h.log.filter((l) => l === 'stop')).toHaveLength(1);
+    expect(h.log.some((l) => l.includes('node --test'))).toBe(false);
+    const before = new AbortController();
+    before.abort();
+    await expect(fakeSandbox().runner.run(job, before.signal)).rejects.toMatchObject({ stage: 'CANCELLED' });
+  });
+
+  it('reports a VM that could not be stopped, with its id, and still returns the results', async () => {
+    const failures: CleanupFailure[] = [];
+    const runner = new VercelSandboxRunner(
+      {
+        create: async () => ({
+          id: 'sbx_test_1',
+          writeFiles: async () => undefined,
+          update: async () => undefined,
+          runCommand: async ({ args }) => ({
+            exitCode: 0,
+            stdout: async () =>
+              args.includes('--test')
+                ? 'TAP version 13\nok 1 - books\n1..1\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n'
+                : '',
+            stderr: async () => '',
+          }),
+          stop: async () => {
+            throw new Error('503 from Vercel');
+          },
+        }),
+      },
+      (f) => failures.push(f),
+    );
+    const result = await runner.run(job);
+    expect(result.tests.map((t) => t.status)).toEqual(['PASS', 'PASS']);
+    expect(failures).toEqual([{ code: 'SANDBOX_STOP_FAILED', sandboxId: 'sbx_test_1', reason: '503 from Vercel' }]);
   });
 });

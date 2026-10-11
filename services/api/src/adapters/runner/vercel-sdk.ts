@@ -18,6 +18,7 @@ export const vercelSandbox = Object.freeze({
       projectId: process.env.VERCEL_PROJECT_ID ?? '',
     } as never);
     return {
+      id: String((sandbox as { sandboxId?: unknown }).sandboxId ?? ''),
       writeFiles: (files) => sandbox.writeFiles(files.map((f) => ({ path: f.path, content: f.content }))),
       update: ({ networkPolicy }) => sandbox.updateNetworkPolicy(networkPolicy as never).then(() => undefined),
       runCommand: async ({ cmd, args, cwd, sudo }) => {

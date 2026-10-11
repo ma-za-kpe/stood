@@ -1,6 +1,8 @@
 import type { CodeRunner, RunJob, RunResult, TestOutcome } from '../../ports/code-runner.js';
 // The slice of a Vercel Sandbox session the runner uses; the CLI and worker wire the real SDK to it (ADR-0026).
 export type SandboxSession = Readonly<{
+  // The provider's id for this VM, for operators (absent in tests).
+  id?: string;
   writeFiles(files: readonly Readonly<{ path: string; content: Buffer }>[]): Promise<void>;
   update(change: Readonly<{ networkPolicy: NetworkPolicy }>): Promise<void>;
   runCommand(
@@ -80,7 +82,7 @@ export function judgeOutcome(tap: string, exitCode: number, file: string): TestO
 }
 // A failure that decides nothing, named by the stage it happened in, so an operator can tell them apart.
 export class RunnerUnavailable extends Error {
-  constructor(readonly stage: 'CREATE' | 'WRITE' | 'INSTALL' | 'LOCK' | 'NETWORK' | 'TEST') {
+  constructor(readonly stage: 'CREATE' | 'WRITE' | 'INSTALL' | 'LOCK' | 'NETWORK' | 'TEST' | 'CANCELLED') {
     super(`RUNNER_UNAVAILABLE:${stage}`);
   }
 }
@@ -154,10 +156,17 @@ const safe = (path: string) =>
 // process exits 0 within its time limit. A VM that cannot start or dies mid-run, or an
 // install that fails for any reason but a broken submission, is RunnerUnavailable (with its stage): the package
 // waits, it never passes or fails on a missing run.
-export class VercelSandboxRunner implements CodeRunner {
-  constructor(private readonly sandbox: Readonly<{ create(options: SandboxOptions): Promise<SandboxSession> }>) {}
+// Fifth audit (2026-10-11): a VM that could not be stopped is reported with its id, never hidden.
+export type CleanupFailure = Readonly<{ code: 'SANDBOX_STOP_FAILED'; sandboxId: string; reason: string }>;
+const reportToLog = (failure: CleanupFailure) => process.stderr.write(`${JSON.stringify(failure)}\n`);
 
-  async run(job: RunJob): Promise<RunResult> {
+export class VercelSandboxRunner implements CodeRunner {
+  constructor(
+    private readonly sandbox: Readonly<{ create(options: SandboxOptions): Promise<SandboxSession> }>,
+    private readonly onCleanupFailure: (failure: CleanupFailure) => void = reportToLog,
+  ) {}
+
+  async run(job: RunJob, signal?: AbortSignal): Promise<RunResult> {
     const ids = job.frozenTests.map((t) => t.id);
     const paths = job.frozenTests.map((t) => t.path);
     if (
@@ -170,6 +179,7 @@ export class VercelSandboxRunner implements CodeRunner {
       ![...job.source.map((f) => f.path), ...paths].every(safe)
     )
       throw new Error('INVALID_JOB');
+    if (signal?.aborted) throw new RunnerUnavailable('CANCELLED');
     let session: SandboxSession;
     try {
       session = await this.sandbox.create({
@@ -183,6 +193,24 @@ export class VercelSandboxRunner implements CodeRunner {
       throw new RunnerUnavailable('CREATE');
     }
     let stage: RunnerUnavailable['stage'] = 'WRITE';
+    // Fifth audit (2026-10-11): an abort (the queue's deadline) stops the VM at once, which ends whatever command is
+    // running; the run then rejects as CANCELLED instead of waiting for the sandbox's own timeout.
+    let stopping: Promise<void> | null = null;
+    const stop = () => {
+      stopping ??= session.stop().catch((error: unknown) =>
+        this.onCleanupFailure({
+          code: 'SANDBOX_STOP_FAILED',
+          sandboxId: session.id ?? 'unknown',
+          reason: error instanceof Error ? error.message.slice(0, 200) : 'unknown',
+        }),
+      );
+      return stopping;
+    };
+    const abort = () => void stop();
+    signal?.addEventListener('abort', abort, { once: true });
+    const live = () => {
+      if (signal?.aborted) throw new RunnerUnavailable('CANCELLED');
+    };
     try {
       const write = (dir: string, files: readonly { path: string; content: string }[]) =>
         files.length
@@ -199,6 +227,7 @@ export class VercelSandboxRunner implements CodeRunner {
       ]);
       let installExitCode: number | null = null;
       if (job.source.some((f) => f.path === 'package.json')) {
+        live();
         stage = 'INSTALL';
         const install = await session.runCommand({
           cmd: 'npm',
@@ -216,6 +245,7 @@ export class VercelSandboxRunner implements CodeRunner {
       // The builder's workspace becomes root-owned, readable only by the builder's group, writable by nobody; the
       // judge's directory root-owned and read-only. Then both identities must really be refused (permissions alone
       // were fooled once by the default user's capabilities).
+      live();
       stage = 'LOCK';
       const steps = [
         { cmd: 'chown', args: ['-R', 'root:65534', ROOT] },
@@ -241,11 +271,14 @@ export class VercelSandboxRunner implements CodeRunner {
       for (const step of steps)
         if ((await session.runCommand({ ...step, sudo: true })).exitCode !== 0) throw new RunnerUnavailable('LOCK');
       // From here on the code under test is untrusted: no network at all, not even DNS.
+      live();
       stage = 'NETWORK';
       await session.update({ networkPolicy: 'deny-all' });
+      live();
       stage = 'TEST';
       const tests: { id: string; status: 'PASS' | 'FAIL'; outcome: TestOutcome }[] = [];
       for (const test of job.frozenTests) {
+        live();
         // The submission's dependencies did not install: no test could run.
         if (installExitCode !== null && installExitCode !== 0) {
           tests.push({ id: test.id, status: 'FAIL', outcome: 'NOT_RUN' });
@@ -269,11 +302,14 @@ export class VercelSandboxRunner implements CodeRunner {
         const outcome = judgeOutcome(await run.stdout(), run.exitCode, `${JUDGE}/${test.path}`);
         tests.push({ id: test.id, status: outcome === 'PASSED' ? 'PASS' : 'FAIL', outcome });
       }
+      live();
       return { tests, installExitCode };
     } catch (error) {
+      if (signal?.aborted) throw new RunnerUnavailable('CANCELLED');
       throw error instanceof RunnerUnavailable ? error : new RunnerUnavailable(stage);
     } finally {
-      await session.stop().catch(() => undefined);
+      signal?.removeEventListener('abort', abort);
+      await stop();
     }
   }
 }

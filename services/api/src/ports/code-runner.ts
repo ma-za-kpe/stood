@@ -17,5 +17,6 @@ export type RunResult = Readonly<{
   installExitCode: number | null;
 }>;
 export interface CodeRunner {
-  run(job: RunJob): Promise<RunResult>;
+  // Fifth audit (2026-10-11): an aborted run stops its sandbox and rejects promptly; it never yields results.
+  run(job: RunJob, signal?: AbortSignal): Promise<RunResult>;
 }

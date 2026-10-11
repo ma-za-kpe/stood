@@ -92,7 +92,7 @@ if (!missing.length && problem) {
               await jobs.pending(Number.MAX_SAFE_INTEGER),
               (job) => `${job.usageConfirmed ? 'judge-usage' : 'judge'}:${job.packageId}`,
               2,
-              (job) => runCodeJob(job, deps),
+              (job, signal) => runCodeJob(job, deps, signal),
             );
             for (const r of decided) process.stdout.write(`Code runner: package ${r.id} ${r.outcome}.\n`);
           } catch {
@@ -107,7 +107,7 @@ if (!missing.length && problem) {
               await baselines.pending(50),
               (job) => job.id,
               2,
-              (job) => runBaseline(job, { ...deps, store: baselines }),
+              (job, signal) => runBaseline(job, { ...deps, store: baselines }, signal),
             );
             for (const r of ran) process.stdout.write(`Code runner: baseline ${r.id} ${r.outcome}.\n`);
           } catch {

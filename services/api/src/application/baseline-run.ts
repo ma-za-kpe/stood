@@ -22,7 +22,11 @@ type Deps = Readonly<{
 // work (ADR-0026), and records each test's result. Tests missing or changed at the base, or that could not run there,
 // are INVALID; anything
 // unavailable (GitHub, the runner, the evidence bucket) leaves the baseline queued to try again.
-export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' | 'INVALID' | Waiting> {
+export async function runBaseline(
+  job: BaselineJob,
+  deps: Deps,
+  signal?: AbortSignal,
+): Promise<'DONE' | 'INVALID' | Waiting> {
   const t = job.terms;
   let step: Step = 'GITHUB';
   try {
@@ -42,10 +46,10 @@ export async function runBaseline(job: BaselineJob, deps: Deps): Promise<'DONE' 
     const byPath = new Map(frozen.map((f) => [f.path, f.content]));
     const source = await deps.reader.source(t.repository, t.baseCommit);
     step = 'RUNNER';
-    const run = await deps.runner.run({
-      source,
-      frozenTests: t.tests.map((x) => ({ id: x.id, path: x.path, content: byPath.get(x.path) as string })),
-    });
+    const run = await deps.runner.run(
+      { source, frozenTests: t.tests.map((x) => ({ id: x.id, path: x.path, content: byPath.get(x.path) as string })) },
+      signal,
+    );
     const outcome = new Map(run.tests.map((r) => [r.id, r.outcome]));
     // Second audit (2026-10-11): red means an assertion failed against unfinished software. A test that could not
     // run at all (did not load, threw outside an assertion, skipped, timed out, missing from the run) proves nothing

@@ -17,7 +17,7 @@ export async function runClaimed<J>(
   queue: readonly J[],
   idOf: (job: J) => string,
   limit: number,
-  run: (job: J) => Promise<string>,
+  run: (job: J, signal: AbortSignal) => Promise<string>,
 ): Promise<readonly Readonly<{ id: string; outcome: string }>[]> {
   const states = await claims.states(kind, queue.map(idOf));
   const due = queue
@@ -36,11 +36,25 @@ export async function runClaimed<J>(
       else claims.renew(kind, id, lease.token, RUN_LEASE_MS).catch(() => undefined);
     }, RUN_RENEW_MS);
     heartbeat.unref?.();
+    // Fifth audit (2026-10-11): the deadline ends the wait, not just the renewals. The run is told to abort (the
+    // sandbox is stopped) and the queue moves on; a late finisher cannot decide twice.
+    const controller = new AbortController();
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     let outcome: string;
     try {
-      outcome = await run(job).catch(() => 'WAIT:FAILED');
+      outcome = await Promise.race([
+        run(job, controller.signal).catch(() => 'WAIT:FAILED'),
+        new Promise<string>((resolve) => {
+          deadline = setTimeout(() => {
+            controller.abort();
+            resolve('WAIT:DEADLINE');
+          }, RUN_DEADLINE_MS);
+          deadline.unref?.();
+        }),
+      ]);
     } finally {
       clearInterval(heartbeat);
+      clearTimeout(deadline);
     }
     await claims.release(kind, id, lease.token, outcome.startsWith('WAIT') ? outcome : null);
     done.push({ id, outcome });

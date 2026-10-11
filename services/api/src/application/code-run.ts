@@ -65,6 +65,7 @@ function merge(...sets: readonly (readonly CheckResult[])[]): CheckResult[] {
 export async function runCodeJob(
   job: RunnerJob,
   deps: Deps,
+  signal?: AbortSignal,
 ): Promise<'DECIDED' | 'ALREADY_DECIDED' | 'SUPERSEDED' | Waiting> {
   // A final milestone is decided again, once, when its use is confirmed.
   const decisionId = `${job.usageConfirmed ? JUDGE_DECISION.usage : JUDGE_DECISION.run}${job.packageId}`;
@@ -99,10 +100,13 @@ export async function runCodeJob(
       const byPath = new Map(frozen.map((f) => [f.path, f.content]));
       const source = await deps.reader.source(t.repository, job.package.commit);
       step = 'RUNNER';
-      const run = await deps.runner.run({
-        source,
-        frozenTests: t.tests.map((x) => ({ id: x.id, path: x.path, content: byPath.get(x.path) as string })),
-      });
+      const run = await deps.runner.run(
+        {
+          source,
+          frozenTests: t.tests.map((x) => ({ id: x.id, path: x.path, content: byPath.get(x.path) as string })),
+        },
+        signal,
+      );
       const contract: FrozenCodeContract = {
         platformId: job.platformId,
         allowanceId: job.allowanceId,

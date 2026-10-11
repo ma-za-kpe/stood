@@ -68,35 +68,39 @@ describe('runClaimed', () => {
     ]);
   });
 
-  // Second audit (2026-10-11): a long run keeps its lease, but never beyond an overall deadline.
-  it('renews the lease while the run works, and stops renewing at the overall deadline', async () => {
+  // Second and fifth audits (2026-10-11): a long run keeps its lease while it works; at the overall deadline the run
+  // is aborted and the queue moves on, even when the run never finishes.
+  it('renews while the run works, then aborts it at the deadline and moves on', async () => {
     vi.useFakeTimers();
     try {
       const h = fakeClaims();
       const renew = vi.fn(async () => true);
       h.claims.renew = renew;
-      let finish = () => {};
+      let signal: AbortSignal | undefined;
       const running = runClaimed(
         h.claims,
         'baseline',
-        ['slow'],
+        ['stuck', 'next'],
         (j) => j,
-        1,
-        () =>
-          new Promise((r) => {
-            finish = () => r('DONE');
-          }),
+        2,
+        (j, s) => {
+          if (j === 'next') return Promise.resolve('DONE');
+          signal = s;
+          return new Promise<string>(() => {});
+        },
       );
       await vi.advanceTimersByTimeAsync(3 * RUN_RENEW_MS);
       expect(renew).toHaveBeenCalledTimes(3);
-      expect(renew).toHaveBeenCalledWith('baseline', 'slow', 'token-slow', expect.any(Number));
+      expect(renew).toHaveBeenCalledWith('baseline', 'stuck', 'token-stuck', expect.any(Number));
+      expect(signal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(RUN_DEADLINE_MS);
-      const calls = renew.mock.calls.length;
-      await vi.advanceTimersByTimeAsync(5 * RUN_RENEW_MS);
-      expect(renew.mock.calls.length).toBe(calls);
-      expect(calls).toBeLessThanOrEqual(RUN_DEADLINE_MS / RUN_RENEW_MS);
-      finish();
-      expect(await running).toEqual([{ id: 'slow', outcome: 'DONE' }]);
+      expect(signal?.aborted).toBe(true);
+      expect(await running).toEqual([
+        { id: 'stuck', outcome: 'WAIT:DEADLINE' },
+        { id: 'next', outcome: 'DONE' },
+      ]);
+      expect(h.released).toContainEqual(['stuck', 'WAIT:DEADLINE']);
+      expect(renew.mock.calls.length).toBeLessThanOrEqual(RUN_DEADLINE_MS / RUN_RENEW_MS);
     } finally {
       vi.useRealTimers();
     }
