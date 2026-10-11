@@ -18,13 +18,16 @@ import { TribunalCatalog } from './adapters/tribunal-catalog.js';
 import { Board, MAX_ACTIVE_CLAIMS, type Operator } from './application/board.js';
 import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
+import { MandateBridge } from './application/mandate-bridge.js';
 import { runPayouts } from './application/payouts.js';
 import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
 import { StoodWatch } from './application/stood-watch.js';
+import { SubmissionBridge } from './application/submission-bridge.js';
 import { UsageForwarder } from './application/usage-forwarder.js';
 import type { createYardApp } from './http/app.js';
+import { type Repeating, repeat } from './jobs/repeat.js';
 import { startLogRetention } from './jobs/site-log-retention.js';
 import { YardError } from './ports/events.js';
 
@@ -54,7 +57,7 @@ export function yardRuntime(env: Env) {
   const stood = stoodClient(env, notes);
   const previewHost = renderPreviews(env, notes);
   if (notes.some((n) => n.startsWith('Board off')) || !operators || !keys)
-    return { config: { environment } as Config, notes, start: async () => {}, stop: async () => {} };
+    return { config: { environment } as Config, notes, jobs: [], start: async () => {}, stop: async () => {} };
 
   const pool = new pg.Pool({ connectionString: url, max: 5 });
   const clock = async () => Date.now();
@@ -138,80 +141,113 @@ export function yardRuntime(env: Env) {
       "Payouts off: YARD_PAYPAL_CLIENT_ID and YARD_PAYPAL_CLIENT_SECRET (Yard's own PayPal sandbox app) are required.",
     );
   const payees = new Map(operators.flatMap((o) => (o.payeeRef ? [[o.actor.id, o.payeeRef] as const] : [])));
-  let paying: ReturnType<typeof setInterval> | null = null;
-  let watching: ReturnType<typeof setInterval> | null = null;
-  let sweeping: ReturnType<typeof setInterval> | null = null;
-  let forwarding: ReturnType<typeof setInterval> | null = null;
-  let expiring: ReturnType<typeof setInterval> | null = null;
+  // A failure logs its code only (a driver's message can quote stored values); payouts keep their reason, as before.
+  const report = (code: string) => (error: unknown) =>
+    process.stderr.write(
+      `${JSON.stringify(
+        code === 'PAYOUTS_FAILED' ? { code, reason: error instanceof Error ? error.message : 'unknown' } : { code },
+      )}\n`,
+    );
+  // Fifth audit (2026-10-11): every periodic job is listed here, when the runtime is built, so a test can see what the
+  // hosted worker runs. Each runs once at start, then again a fixed time after its previous pass ended.
+  const schedule: { code: string; everyMs: number; task: () => Promise<void> }[] = [];
+  // Expired previews, and incomplete or untracked preview deploys, are deleted from Render every hour.
+  if (previews)
+    schedule.push({
+      code: 'PREVIEW_SWEEP_FAILED',
+      everyMs: 3_600_000,
+      task: async () => {
+        const swept = await previews.sweep(Date.now());
+        if (Object.values(swept).some((n) => n > 0))
+          process.stdout.write(`${JSON.stringify({ code: 'PREVIEWS_SWEPT', ...swept })}\n`);
+      },
+    });
+  // Keys past the seven-day handover deadline are deleted every hour (the vault already refuses them).
+  schedule.push({
+    code: 'SECRET_PURGE_FAILED',
+    everyMs: 3_600_000,
+    task: async () => {
+      const purged = await vault.purge(Date.now());
+      if (purged > 0) process.stdout.write(`${JSON.stringify({ code: 'SECRETS_PURGED', purged })}\n`);
+    },
+  });
+  // A submission or allowance draft interrupted after Yard reserved it (a crash, a lost reply) is delivered by this
+  // worker, which owns recovery; what was delivered and what still waits is counted every pass.
+  const packages = config.board?.packages,
+    drafts = config.board?.mandates;
+  const submissions = packages ? new SubmissionBridge(board, packages) : null;
+  const mandates = drafts ? new MandateBridge(board, drafts) : null;
+  if (submissions || mandates)
+    schedule.push({
+      code: 'RECOVERY_FAILED',
+      everyMs: 60_000,
+      task: async () => {
+        const s = submissions ? await submissions.recover(Date.now()) : [];
+        const m = mandates ? await mandates.recover() : [];
+        const count = (rows: readonly { status: string }[], status: string) =>
+          rows.filter((r) => r.status === status).length;
+        const counts = {
+          submissionsDelivered: count(s, 'DELIVERED'),
+          submissionsWaiting: count(s, 'WAIT'),
+          mandatesDelivered: count(m, 'DELIVERED'),
+          mandatesWaiting: count(m, 'WAIT'),
+        };
+        if (Object.values(counts).some((n) => n > 0))
+          process.stdout.write(`${JSON.stringify({ code: 'RECOVERY', ...counts })}\n`);
+      },
+    });
+  // Stood sends platforms no notifications: read every tranche Yard waits on, once a minute.
+  if (watch) schedule.push({ code: 'STOOD_WATCH_FAILED', everyMs: 60_000, task: async () => void (await watch.run()) });
+  // T-0217: intake drafts nobody touched for 90 days are erased once a day, with the planner's copies.
+  schedule.push({
+    code: 'INTAKE_EXPIRY_FAILED',
+    everyMs: 86_400_000,
+    task: async () =>
+      void (await expireIntakes(
+        Date.now(),
+        foreman ? { intakes, projects: events, foreman } : { intakes, projects: events },
+      )),
+  });
+  if (payouts) {
+    // Third audit (2026-10-11): every run's counts, and each problem with its job, work order and reason.
+    const checked = new Map<string, number>();
+    schedule.push({
+      code: 'PAYOUTS_FAILED',
+      everyMs: 60_000,
+      task: async () => {
+        const { issues, ...counts } = await runPayouts({
+          board,
+          provider: payouts,
+          payeeOf: (id) => payees.get(id),
+          clock: Date.now,
+          checked,
+        });
+        if (Object.values(counts).some((n) => n > 0))
+          process.stdout.write(`${JSON.stringify({ code: 'PAYOUTS', ...counts })}\n`);
+        for (const i of issues) process.stderr.write(`${JSON.stringify(i)}\n`);
+      },
+    });
+  }
+  if (usage)
+    schedule.push({ code: 'USAGE_FORWARD_FAILED', everyMs: 60_000, task: async () => void (await usage.run()) });
+  const running: Repeating[] = [];
   return {
     config,
     notes,
+    jobs: schedule.map(({ code, everyMs }) => ({ code, everyMs })),
     async start() {
       await scanner.ready();
       retention = startLogRetention(logs, clock, (code) => process.stderr.write(`${JSON.stringify({ code })}\n`));
       await retention.run();
-      // Expired previews are deleted from Render every hour.
-      if (previews) {
-        sweeping = setInterval(
-          () =>
-            previews
-              .sweep(Date.now())
-              .catch(() => process.stderr.write(`${JSON.stringify({ code: 'PREVIEW_SWEEP_FAILED' })}\n`)),
-          3_600_000,
-        );
-        sweeping.unref();
-      }
-      // Stood sends platforms no notifications: read every tranche Yard waits on, once a minute.
-      if (watch) {
-        const tick = () =>
-          watch.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'STOOD_WATCH_FAILED' })}\n`));
-        watching = setInterval(tick, 60_000);
-        watching.unref();
-        await tick();
-      }
-      // T-0217: intake drafts nobody touched for 90 days are erased once a day, with the planner's copy.
-      const expire = () =>
-        expireIntakes(
-          Date.now(),
-          foreman ? { intakes, projects: events, foreman } : { intakes, projects: events },
-        ).catch(() => process.stderr.write(`${JSON.stringify({ code: 'INTAKE_EXPIRY_FAILED' })}\n`));
-      expiring = setInterval(expire, 86_400_000);
-      expiring.unref();
-      await expire();
-      if (payouts) {
-        // Third audit (2026-10-11): every run's counts, and each problem with its job, work order and reason.
-        const checked = new Map<string, number>();
-        const pay = () =>
-          runPayouts({ board, provider: payouts, payeeOf: (id) => payees.get(id), clock: Date.now, checked }).then(
-            ({ issues, ...counts }) => {
-              if (Object.values(counts).some((n) => n > 0))
-                process.stdout.write(`${JSON.stringify({ code: 'PAYOUTS', ...counts })}\n`);
-              for (const i of issues) process.stderr.write(`${JSON.stringify(i)}\n`);
-            },
-            (error) =>
-              process.stderr.write(
-                `${JSON.stringify({ code: 'PAYOUTS_FAILED', reason: error instanceof Error ? error.message : 'unknown' })}\n`,
-              ),
-          );
-        paying = setInterval(pay, 60_000);
-        paying.unref();
-        await pay();
-      }
-      if (usage) {
-        const forward = () =>
-          usage.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'USAGE_FORWARD_FAILED' })}\n`));
-        forwarding = setInterval(forward, 60_000);
-        forwarding.unref();
-        await forward();
+      for (const { code, everyMs, task } of schedule) {
+        const job = repeat(task, everyMs, report(code));
+        running.push(job);
+        await job.run();
       }
     },
+    // Waits for every running pass to finish before the pool closes.
     async stop() {
-      retention?.stop();
-      if (watching) clearInterval(watching);
-      if (paying) clearInterval(paying);
-      if (sweeping) clearInterval(sweeping);
-      if (forwarding) clearInterval(forwarding);
-      if (expiring) clearInterval(expiring);
+      await Promise.all([retention?.stop(), ...running.map((job) => job.stop())]);
       await pool.end();
     },
   };

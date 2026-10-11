@@ -196,3 +196,34 @@ it('turns on previews only with a Render preview key and owner, and sweeps expir
   await off.stop();
   expect(yardRuntime(hosted).notes).toContain('Previews off: RENDER_PREVIEW_API_KEY is missing.');
 });
+
+// Fifth audit (2026-10-11): safeguards that exist as methods must also run in the hosted worker.
+it('schedules the secret purge always, recovery with Stood, and the preview sweep with Render', async () => {
+  const codes = (env: Record<string, string>) => {
+    const runtime = yardRuntime(env);
+    const jobs = runtime.jobs;
+    void runtime.stop();
+    return Object.fromEntries(jobs.map((j) => [j.code, j.everyMs]));
+  };
+  const plain = codes(hosted);
+  expect(plain).toEqual({ SECRET_PURGE_FAILED: 3_600_000, INTAKE_EXPIRY_FAILED: 86_400_000 });
+  const full = codes({
+    ...hosted,
+    STOOD_API_KEY: 'platform-key-not-real',
+    STOOD_HMAC_SECRET: 'h'.repeat(40),
+    YARD_PAYPAL_MERCHANT_ID: 'MERCHANTID123',
+    YARD_PAYPAL_CLIENT_ID: 'yard-client',
+    YARD_PAYPAL_CLIENT_SECRET: 'yard-secret',
+    RENDER_PREVIEW_API_KEY: 'rnd_not_real',
+    RENDER_PREVIEW_OWNER_ID: 'tea-previews',
+  });
+  expect(full).toMatchObject({
+    PREVIEW_SWEEP_FAILED: 3_600_000,
+    SECRET_PURGE_FAILED: 3_600_000,
+    RECOVERY_FAILED: 60_000,
+    STOOD_WATCH_FAILED: 60_000,
+    INTAKE_EXPIRY_FAILED: 86_400_000,
+    PAYOUTS_FAILED: 60_000,
+  });
+  expect(yardRuntime({}).jobs).toEqual([]);
+});
