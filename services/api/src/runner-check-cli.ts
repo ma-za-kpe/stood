@@ -47,6 +47,8 @@ const expected: Record<string, 'PASS' | 'FAIL'> = {
   forged: 'FAIL',
   tamper: 'PASS',
   'no-import': 'PASS',
+  'judge-skipped': 'FAIL',
+  'judge-broken': 'FAIL',
 };
 const started = Date.now();
 const result = await new VercelSandboxRunner(vercelSandbox).run({
@@ -117,6 +119,17 @@ const result = await new VercelSandboxRunner(vercelSandbox).run({
       content: test(
         `test('the judge cannot load the builder code', async () => { await assert.rejects(import('/vercel/run/src/add.js')); });`,
       ),
+    },
+    // Second audit (2026-10-11): exit 0 is not a pass when the file skipped its test or could not load at all.
+    {
+      id: 'judge-skipped',
+      path: 'tests/judge-skipped.test.js',
+      content: test(`test('adds', { skip: true }, () => assert.equal(${run('add')}.stdout, '5\\n'));`),
+    },
+    {
+      id: 'judge-broken',
+      path: 'tests/judge-broken.test.js',
+      content: test("import { missing } from 'not-installed';\ntest('never loads', () => {});"),
     },
   ],
 });
