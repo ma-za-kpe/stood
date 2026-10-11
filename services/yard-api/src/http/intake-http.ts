@@ -94,14 +94,18 @@ export function intakeHttp(
     c.header('Cache-Control', 'private, no-store');
     return c.json(record);
   });
-  // T-0217: the owning buyer erases their draft and the planner's copy. A draft that became a project is refused (409).
+  // T-0217: the owning buyer erases their draft and the planner's copies. A draft that became a project is refused (409).
   const { erase, idle } = config.store;
   if (config.erasure && erase && idle) {
     const erasure = config.erasure;
     app.delete('/yard/v1/intakes/:id', async (c) => {
       const owner = buyer(c);
       const result = await eraseIntake(c.req.param('id'), owner, config.request(c).now, {
-        intakes: { erase: erase.bind(config.store), idle: idle.bind(config.store) },
+        intakes: {
+          erase: erase.bind(config.store),
+          idle: idle.bind(config.store),
+          load: config.store.load.bind(config.store),
+        },
         ...erasure,
       });
       c.header('Cache-Control', 'private, no-store');

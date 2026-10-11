@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { MemoryEvents } from '../../test/fakes/events.js';
 import { Board } from '../application/board.js';
+import { intakePlanId } from '../application/intake-planner.js';
 import { YardError } from '../ports/events.js';
 import { createYardApp } from './app.js';
 
@@ -9,7 +10,12 @@ const now = 1791158400000;
 // T-0217: the owning buyer deletes an intake over signed HTTP; anyone else, or a draft that is now a project, cannot.
 it('erases an intake for its owning buyer and refuses everyone else', async () => {
   const events = new MemoryEvents();
-  await events.create('project', 'buyer', { blueprint: {}, buyerRoot: 'r', orders: {} }, 'k');
+  // A project made from an intake's plan carries the plan's id, not the intake's.
+  await events.create(intakePlanId('buyer', 'project', 1), 'buyer', { blueprint: {}, buyerRoot: 'r', orders: {} }, 'k');
+  const load = vi.fn(async (id: string) => {
+    if (id === 'gone') throw new YardError('NOT_FOUND');
+    return { id, owner: 'buyer', version: 1 } as never;
+  });
   const erase = vi.fn(async (id: string, owner: string) => {
     if (owner !== 'buyer') throw new YardError('FORBIDDEN');
     return id === 'gone' ? ('ALREADY' as const) : ('ERASED' as const);
@@ -20,7 +26,7 @@ it('erases an intake for its owning buyer and refuses everyone else', async () =
     board: {
       board: new Board(events),
       clock: async () => now,
-      intakes: { load: vi.fn(), read: vi.fn(async () => []), save: vi.fn(), erase, idle: vi.fn(async () => []) },
+      intakes: { load, read: vi.fn(async () => []), save: vi.fn(), erase, idle: vi.fn(async () => []) },
       foreman: { forget } as never,
       operators: ['buyer', 'foreign', 'builder'].map((id) => ({
         key: `${id}-key`,
@@ -61,7 +67,8 @@ it('erases an intake for its owning buyer and refuses everyone else', async () =
   expect(erased.status).toBe(200);
   expect(await erased.json()).toEqual({ id: 'idea', erased: true, already: false });
   expect(erased.headers.get('Cache-Control')).toBe('private, no-store');
-  expect(forget).toHaveBeenCalledWith('idea');
+  expect(forget).toHaveBeenCalledWith(intakePlanId('buyer', 'idea', 1));
+  expect(forget).not.toHaveBeenCalledWith('idea');
   expect(await (await del('/yard/v1/intakes/gone')).json()).toMatchObject({ already: true });
   expect((await del('/yard/v1/intakes/idea', 'foreign')).status).toBe(403);
   expect((await del('/yard/v1/intakes/idea', 'builder')).status).toBe(403);

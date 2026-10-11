@@ -7,7 +7,13 @@ import type { IntakeStore } from '../ports/intakes.js';
 export interface IntakeRepositories {
   resolve(buyer: string, repository: string): Promise<Readonly<{ repository: string; baseCommit: string }>>;
 }
-// A version is a snapshot: subsequent draft edits start a different planning thread.
+// A version is a snapshot: subsequent draft edits start a different planning thread. The thread id is also the id of
+// the Board project made from that plan, so erasure derives both from the intake's owner and versions.
+export function intakePlanId(buyer: string, id: string, version: number): string {
+  return `intake-${createHash('sha256')
+    .update(JSON.stringify([buyer, id, version]))
+    .digest('hex')}`;
+}
 export class IntakePlanner {
   constructor(
     private readonly store: IntakeStore,
@@ -20,9 +26,7 @@ export class IntakePlanner {
     const record = await this.store.load(id);
     if (record.owner !== buyer) throw new YardError('FORBIDDEN');
     if (record.version !== version) throw new YardError('CONFLICT');
-    const planId = `intake-${createHash('sha256')
-      .update(JSON.stringify([buyer, id, version]))
-      .digest('hex')}`;
+    const planId = intakePlanId(buyer, id, version);
     let existing: Plan | undefined;
     try {
       existing = await this.foreman.read(planId);

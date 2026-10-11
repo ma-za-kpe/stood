@@ -5,7 +5,8 @@ import { MemorySaver } from '../../../yard-foreman/test/fakes/checkpoint.js';
 import { ScriptedPlannerModel } from '../../../yard-foreman/test/fakes/model.js';
 import { YardError } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
-import { IntakePlanner } from './intake-planner.js';
+import { eraseIntake } from './intake-erasure.js';
+import { IntakePlanner, intakePlanId } from './intake-planner.js';
 
 const now = 1791158400000;
 function setup() {
@@ -81,4 +82,27 @@ it('keeps a repository outage explicit and does not create a planning checkpoint
   repositories.resolve.mockRejectedValue(new Error('Repository unavailable'));
   await expect(planner.create('idea', 'buyer', 2, now)).rejects.toThrow('Repository unavailable');
   expect(draft).not.toHaveBeenCalled();
+});
+
+// Fifth audit (2026-10-11): erasing an intake must remove what the real planner stored for every version.
+it("erasing the intake removes the real planner's plans for every version", async () => {
+  const { store, repositories, record } = setup();
+  const foreman = new Foreman(new ScriptedPlannerModel('ci'), new MemorySaver());
+  const planner = new IntakePlanner(store, foreman, repositories);
+  Object.assign(record, { version: 1 });
+  await planner.create('idea', 'buyer', 1, now);
+  Object.assign(record, { version: 2 });
+  await planner.create('idea', 'buyer', 2, now);
+  const ids = [1, 2].map((v) => intakePlanId('buyer', 'idea', v));
+  for (const id of ids) expect((await foreman.read(id)).blueprint.id).toBe(id);
+  const erase = vi.fn(async () => 'ERASED' as const);
+  const projects = {
+    load: vi.fn(async (): Promise<never> => {
+      throw new YardError('NOT_FOUND');
+    }),
+  };
+  expect(
+    await eraseIntake('idea', 'buyer', now, { intakes: { ...store, erase, idle: vi.fn() }, projects, foreman }),
+  ).toBe('ERASED');
+  for (const id of ids) await expect(foreman.read(id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
