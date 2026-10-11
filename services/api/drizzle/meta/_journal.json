@@ -176,6 +176,13 @@
       "when": 1791646400682,
       "tag": "0024_run_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791736818078,
+      "tag": "0025_run_claim_tokens",
+      "breakpoints": true
     }
   ]
 }

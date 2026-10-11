@@ -26,9 +26,11 @@ afterAll(async () => {
 it('grants one lease per job among racing runners, backs off a waiting job and forgets a finished one', async () => {
   const store = new PostgresRunClaims(drizzle(pool, { schema }));
   const racers = await Promise.all(Array.from({ length: 8 }, () => store.claim('baseline', 'bl_a', 60_000)));
-  expect(racers.filter((r) => r !== null)).toEqual([1]);
+  const winners = racers.filter((r) => r !== null);
+  expect(winners.map((w) => w?.attempts)).toEqual([1]);
+  const lease = winners[0] as { attempts: number; token: string };
   expect((await store.states('baseline', ['bl_a', 'bl_new'])).get('bl_a')).toEqual({ attempts: 1, due: false });
-  await store.release('baseline', 'bl_a', 'WAIT:GITHUB_UNAVAILABLE');
+  await store.release('baseline', 'bl_a', lease.token, 'WAIT:GITHUB_UNAVAILABLE');
   expect(await store.claim('baseline', 'bl_a', 60_000)).toBeNull();
   const [row] = (
     await pool.query(
@@ -37,11 +39,23 @@ it('grants one lease per job among racing runners, backs off a waiting job and f
   ).rows;
   expect(row).toEqual({ last_reason: 'WAIT:GITHUB_UNAVAILABLE', later: true });
   // The same id under another kind is another job.
-  expect(await store.claim('package', 'bl_a', 60_000)).toBe(1);
-  await store.release('package', 'bl_a', null);
+  const other = await store.claim('package', 'bl_a', 60_000);
+  expect(other?.attempts).toBe(1);
+  await store.release('package', 'bl_a', other?.token ?? '', null);
   expect((await store.states('package', ['bl_a'])).size).toBe(0);
-  // A runner that died mid-run: its lease runs out and the job is taken again, counting the attempt.
-  expect(await store.claim('baseline', 'bl_dead', 1)).toBe(1);
+});
+
+// Second audit (2026-10-11): a runner whose lease ran out must not release or renew the next owner's lease.
+it('fences an expired owner: only the current token renews or releases', async () => {
+  const store = new PostgresRunClaims(drizzle(pool, { schema }));
+  const a = await store.claim('baseline', 'bl_dead', 1);
   await new Promise((r) => setTimeout(r, 20));
-  expect(await store.claim('baseline', 'bl_dead', 60_000)).toBe(2);
+  const b = await store.claim('baseline', 'bl_dead', 60_000);
+  expect([a?.attempts, b?.attempts]).toEqual([1, 2]);
+  expect(await store.renew('baseline', 'bl_dead', a?.token ?? '', 60_000)).toBe(false);
+  await store.release('baseline', 'bl_dead', a?.token ?? '', null);
+  expect((await store.states('baseline', ['bl_dead'])).get('bl_dead')).toEqual({ attempts: 2, due: false });
+  expect(await store.renew('baseline', 'bl_dead', b?.token ?? '', 60_000)).toBe(true);
+  await store.release('baseline', 'bl_dead', b?.token ?? '', null);
+  expect((await store.states('baseline', ['bl_dead'])).size).toBe(0);
 });

@@ -1,7 +1,12 @@
 import type { RunClaims, RunKind } from '../ports/run-claims.js';
 
-// Long enough for the slowest run (a ten-minute sandbox) to finish before another runner may take the job over.
+// A lease lasts 15 minutes and is renewed every 5 while its run is still working, up to an overall deadline of 45
+// minutes (repository reads plus a ten-minute sandbox fit well inside). After that it is no longer renewed, so another
+// runner can take the job over; a late finisher cannot decide twice (decisions are idempotent and bound to the
+// latest package).
 export const RUN_LEASE_MS = 15 * 60_000;
+export const RUN_RENEW_MS = 5 * 60_000;
+export const RUN_DEADLINE_MS = 45 * 60_000;
 
 // Audit 2026-10-10, finding 4: runs up to `limit` due jobs, fewest attempts first (oldest first among equals), each
 // under a claim. Two stuck jobs at the head of the queue no longer block every job behind them, and a job another
@@ -23,9 +28,21 @@ export async function runClaimed<J>(
   for (const { job } of due) {
     if (done.length >= limit) break;
     const id = idOf(job);
-    if ((await claims.claim(kind, id, RUN_LEASE_MS)) === null) continue;
-    const outcome = await run(job).catch(() => 'WAIT:FAILED');
-    await claims.release(kind, id, outcome.startsWith('WAIT') ? outcome : null);
+    const lease = await claims.claim(kind, id, RUN_LEASE_MS);
+    if (lease === null) continue;
+    const started = Date.now();
+    const heartbeat = setInterval(() => {
+      if (Date.now() - started >= RUN_DEADLINE_MS) clearInterval(heartbeat);
+      else claims.renew(kind, id, lease.token, RUN_LEASE_MS).catch(() => undefined);
+    }, RUN_RENEW_MS);
+    heartbeat.unref?.();
+    let outcome: string;
+    try {
+      outcome = await run(job).catch(() => 'WAIT:FAILED');
+    } finally {
+      clearInterval(heartbeat);
+    }
+    await claims.release(kind, id, lease.token, outcome.startsWith('WAIT') ? outcome : null);
     done.push({ id, outcome });
   }
   return done;

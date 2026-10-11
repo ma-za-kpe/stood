@@ -357,6 +357,8 @@ export const runClaims = pgTable(
       .notNull()
       .default(sql`clock_timestamp()`),
     lastReason: text('last_reason'),
+    // The owning attempt's token; release and renewal must present it.
+    token: text(),
   },
   (table) => [
     primaryKey({ columns: [table.kind, table.jobId] }),

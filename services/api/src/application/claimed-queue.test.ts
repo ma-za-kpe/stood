@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ClaimState, RunClaims } from '../ports/run-claims.js';
-import { runClaimed } from './claimed-queue.js';
+import { RUN_DEADLINE_MS, RUN_RENEW_MS, runClaimed } from './claimed-queue.js';
 
 function fakeClaims(initial: Record<string, ClaimState & { held?: boolean }> = {}) {
   const rows = new Map(Object.entries(initial).map(([k, v]) => [k, { ...v }]));
@@ -12,9 +12,11 @@ function fakeClaims(initial: Record<string, ClaimState & { held?: boolean }> = {
       const row = rows.get(id) ?? { attempts: 0, due: true };
       if (!row.due || row.held) return null;
       rows.set(id, { attempts: row.attempts + 1, due: false });
-      return row.attempts + 1;
+      return { attempts: row.attempts + 1, token: `token-${id}` };
     },
-    release: async (_kind, id, waited) => {
+    renew: async () => true,
+    release: async (_kind, id, token, waited) => {
+      if (token !== `token-${id}`) throw new Error('not the owner');
       released.push([id, waited]);
       if (waited === null) rows.delete(id);
       else rows.set(id, { attempts: rows.get(id)?.attempts ?? 1, due: false });
@@ -64,5 +66,39 @@ describe('runClaimed', () => {
       ['a', 'WAIT:GITHUB_UNAVAILABLE'],
       ['b', 'WAIT:FAILED'],
     ]);
+  });
+
+  // Second audit (2026-10-11): a long run keeps its lease, but never beyond an overall deadline.
+  it('renews the lease while the run works, and stops renewing at the overall deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = fakeClaims();
+      const renew = vi.fn(async () => true);
+      h.claims.renew = renew;
+      let finish = () => {};
+      const running = runClaimed(
+        h.claims,
+        'baseline',
+        ['slow'],
+        (j) => j,
+        1,
+        () =>
+          new Promise((r) => {
+            finish = () => r('DONE');
+          }),
+      );
+      await vi.advanceTimersByTimeAsync(3 * RUN_RENEW_MS);
+      expect(renew).toHaveBeenCalledTimes(3);
+      expect(renew).toHaveBeenCalledWith('baseline', 'slow', 'token-slow', expect.any(Number));
+      await vi.advanceTimersByTimeAsync(RUN_DEADLINE_MS);
+      const calls = renew.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(5 * RUN_RENEW_MS);
+      expect(renew.mock.calls.length).toBe(calls);
+      expect(calls).toBeLessThanOrEqual(RUN_DEADLINE_MS / RUN_RENEW_MS);
+      finish();
+      expect(await running).toEqual([{ id: 'slow', outcome: 'DONE' }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
