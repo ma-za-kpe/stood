@@ -35,8 +35,14 @@ export function signingWorker(deps: {
       fundings: funding,
       mandate: async (key) => {
         const now = await deps.clock();
-        return advanceMandate(mandates, { load: (p, id) => terms.allowance(p, id) }, vault, key, () => now);
+        const before = (await mandates.load(key)).status;
+        await advanceMandate(mandates, { load: (p, id) => terms.allowance(p, id) }, vault, key, () => now);
+        return { before, after: (await mandates.load(key)).status };
       },
-      fund: (key) => advanceFunding(funding, deps.tranches, provider, mandates, key, deps.clock),
+      fund: async (key) => {
+        const before = (await funding.load(key)).status;
+        await advanceFunding(funding, deps.tranches, provider, mandates, key, deps.clock);
+        return { before, after: (await funding.load(key)).status };
+      },
     });
 }
