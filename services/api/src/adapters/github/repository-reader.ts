@@ -2,8 +2,9 @@ import { gunzipSync } from 'node:zlib';
 import type { RepoFile, RepositoryReader } from '../../ports/repository-reader.js';
 
 type Config = Readonly<{
-  // Optional read-only token for private repositories. Public ones need none. Stood has no write access anywhere.
-  token?: string;
+  // Optional read-only token, fixed or issued per call (a GitHub App installation token): private repositories and
+  // GitHub's higher rate limit. Public ones need none. Stood has no write access anywhere.
+  token?: string | (() => Promise<string>);
   fetch?: typeof globalThis.fetch;
   maxSourceBytes?: number;
   maxFiles?: number;
@@ -77,11 +78,12 @@ export class GitHubRepositoryReader implements RepositoryReader {
   private async get(url: string) {
     let response: Response;
     try {
+      const token = typeof this.config.token === 'function' ? await this.config.token() : this.config.token;
       response = await this.http(url, {
         headers: {
           Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          ...(this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         signal: AbortSignal.timeout(30_000),
       });

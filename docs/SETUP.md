@@ -194,14 +194,28 @@ Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler t
 | `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Committed in `render.yaml` (the `stood-runner` project) |
 | `RUNNER_KEY_ID`, `RUNNER_SIGNING_KEY` | From `scripts/dev runner-key`, which writes them to `.env` without printing; copy both to Render |
 | `STOOD_EVIDENCE_S3_ENDPOINT`, `STOOD_EVIDENCE_S3_ACCESS_KEY_ID`, `STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY` | Cloudflare R2: the account's S3 endpoint and a token scoped to the `stood-evidence` bucket only (set 2026-10-10). `STOOD_EVIDENCE_S3_BUCKET=stood-evidence` is committed in `render.yaml`. The runner stays off without all four |
-| `GITHUB_READ_TOKEN` | Optional, read-only, for private repositories |
+| `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64` | GitHub reads through the Yard GitHub App: short-lived installation tokens limited to reading contents and metadata, renewed before they expire. The two ids are committed in `render.yaml`; Render prompts for the key (the same one `stood-yard-api` uses). The log names which access is in use |
+| `GITHUB_READ_TOKEN` | Fallback while the App key is not set: a read-only token (private repositories, GitHub's higher rate limit) |
 | `SETTLEMENT_EXECUTOR` | `on` to capture or void decided tranches; anything else keeps settlement off |
 
 ```bash
 scripts/dev runner-check   # qualify the judge on real Vercel Sandbox: pass, fail, no network, no credentials, nobody with no capabilities, runaway stopped; the builder's early exit and forged report FAIL, its tampering is refused, the judge cannot import its code
 scripts/dev release-review # list, read-only, every code decision the old in-process runner recorded (void for payment); needs DATABASE_URL
+scripts/dev funding-recover <funding key> <PayPal order id>  # recover a funding stuck in CREATING: Stood only reads the order (any PayPal write is refused) and accepts it only if PayPal shows it is that funding
 scripts/dev runner-key     # create the signing key (refuses to replace one; --rotate to replace)
 scripts/dev evidence-check # qualify the evidence bucket: write once by hash, read back, retry is the same object
+```
+
+**Builder payouts (ADR-0027).** Yard's PayPal account receives each released milestone (builder price plus Yard's fee, `YARD_FEE_BPS`), and pays the builder out of its own PayPal sandbox app with PayPal Payouts: 48 hours after release (the buyer can dispute inside that window, which holds the money), or at release for the final milestone. Each payout is reserved in the job's ledger before PayPal is called and sent with a fixed batch id that is also its `PayPal-Request-Id`, so a resend after a lost answer cannot pay twice; its status is then read until it is paid out, unclaimed, returned or failed. On `stood-yard-api` set `YARD_PAYPAL_CLIENT_ID` and `YARD_PAYPAL_CLIENT_SECRET` (prompted) from a **separate** sandbox REST app with Payouts enabled, never Stood's; without them the log says `Payouts off`. A builder is paid at the `payeeRef` (PayPal email or merchant id) on their `YARD_OPERATORS` entry; a builder without one is skipped and counted. The buyer reads the job's ledger at `GET /yard/v1/blueprints/{id}/ledger` and disputes with `POST /yard/v1/blueprints/{id}/work-orders/{wo}/dispute`. Following PayPal's Payouts contract, a reused batch id is recovered from PayPal's link to the original batch; 5xx, 401 and 429 are retried with the same batch id for at most 7 days (PayPal refuses a reused id for 30), after which the payout goes to REVIEW. Paid-out payouts are read daily for 180 days, so a refund or reversal reaches the ledger. The log carries each run's counts and each problem with its job and work order. Nothing is a dead end: the owner runs
+
+```bash
+scripts/dev yard-payout list                                            # what needs the owner: disputes, REVIEW, failed, returned, unclaimed, refunds owed
+scripts/dev yard-payout <job> <wo> pay-builder|refund-buyer "<note>"   # decide a dispute
+scripts/dev yard-payout <job> <wo> retry <payee> "<note>"              # pay a failed or returned payout again (new batch id)
+scripts/dev yard-payout <job> <wo> refund "<note>"                     # owe the buyer a refund instead
+scripts/dev yard-payout <job> <wo> refunded <reference> "<note>"       # record the refund made in PayPal
+scripts/dev yard-payout <job> <wo> settle paid <payout batch id> <reference> "<note>"   # PayPal shows it paid (still monitored)
+scripts/dev yard-payout <job> <wo> settle not-sent <reference> "<note>"                 # PayPal shows nothing sent
 ```
 
 Baselines use the same runner: a platform asks `POST /v1/baselines` to run a milestone's frozen tests on the base commit before work is posted, and reads which failed with `GET /v1/baselines/{id}` (C4). Every signed run is stored in the evidence bucket before it can decide, at `runs/<platform>/<tranche>/<package>/<sha256>` (write-once: an object is never replaced). If the bucket cannot be reached, the package waits and nothing is decided.

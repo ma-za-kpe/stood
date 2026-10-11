@@ -14,13 +14,14 @@ import { advancePending } from './application/pending-work.js';
 
 // T-0260: the worker step for saved-PayPal mandates and tranche funding, as the reconciler runs it.
 // Throws when the transport cannot save accounts or fund orders, or the sealed-token keys are missing.
-export function signingWorker(deps: {
+type WorkerDeps = {
   db: NodePgDatabase<typeof schema>;
   transport: unknown;
   tranches: PostgresTranches;
   vaultKeys: string;
   clock(): Promise<number>;
-}) {
+};
+export function signingWorker(deps: WorkerDeps) {
   const sdk = deps.transport as Partial<PayPalFundingTransport & PayPalVaultTransport>;
   if (typeof sdk.fund !== 'function' || typeof sdk.vault !== 'function')
     throw new Error('PayPal transport cannot save accounts or fund orders');
@@ -45,4 +46,36 @@ export function signingWorker(deps: {
         return { before, after: (await funding.load(key)).status };
       },
     });
+}
+
+// #77 operations: recovers a funding stuck in CREATING (PayPal's answer to the create was lost) from the PayPal order
+// id an operator found. Nothing is created or re-sent: Stood reads that order from PayPal, and it counts only if PayPal
+// shows it carries this funding's key and tranche (reference_id, custom_id) and the exact amount; then the funding
+// moves on exactly as if the original answer had arrived. Anything else leaves it unchanged.
+export function fundingRecovery(deps: WorkerDeps) {
+  const sdk = deps.transport as Partial<PayPalFundingTransport>;
+  if (typeof sdk.fund !== 'function') throw new Error('PayPal transport cannot fund orders');
+  const mandates = new PostgresMandates(deps.db, new TokenCipher(deps.vaultKeys));
+  const funding = new PostgresFunding(deps.db);
+  const adapter = new PayPalFundingAdapter(sdk as PayPalFundingTransport, mandates);
+  // A provider that can only read: any write would throw, so recovery can never create or authorize anything.
+  const provider: typeof adapter = Object.assign(Object.create(adapter) as typeof adapter, {
+    create: async () => {
+      throw new Error('RECOVERY_READ_ONLY');
+    },
+    authorize: async () => {
+      throw new Error('RECOVERY_READ_ONLY');
+    },
+    read: adapter.read.bind(adapter),
+  });
+  return async (key: string, orderId: string) => {
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(orderId)) throw new Error('INVALID_ORDER_ID');
+    const before = await funding.load(key);
+    // Third and fourth audits (2026-10-11): recovery only reads PayPal. Only CREATING (the create's answer was lost)
+    // is recovered: from there the flow reads the order and records it locally, and calls PayPal for nothing else.
+    // RESERVED would create an order and AWAITING_APPROVAL would authorize one, so every other state is refused.
+    if (before.status !== 'CREATING') throw new Error('NOT_RECOVERABLE');
+    const outcome = await advanceFunding(funding, deps.tranches, provider, mandates, key, deps.clock, orderId);
+    return { before: before.status, outcome };
+  };
 }

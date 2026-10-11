@@ -100,7 +100,14 @@ services:
         sync: false
       - key: STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY
         sync: false
-      # Optional read-only token for private repositories; public ones need none.
+      # GitHub reads (#77): the Yard GitHub App's short-lived, read-only installation tokens. The App's private key is
+      # prompted (the same one stood-yard-api uses). GITHUB_READ_TOKEN is the fallback while the key is not set.
+      - key: GITHUB_APP_ID
+        value: "5230872"
+      - key: GITHUB_APP_INSTALLATION_ID
+        value: "169056228"
+      - key: GITHUB_APP_PRIVATE_KEY_BASE64
+        sync: false
       - key: GITHUB_READ_TOKEN
         sync: false
       # The owner's switch: captures or voids decided tranches only when set to "on".
@@ -153,6 +160,17 @@ services:
       - key: STOOD_API_KEY
         sync: false
       - key: STOOD_HMAC_SECRET
+        sync: false
+      # ADR-0027: Yard's PayPal merchant id, the payee of every allowance (builders are paid out after release).
+      - key: YARD_PAYPAL_MERCHANT_ID
+        sync: false
+      # ADR-0027: Yard's fee on top of each milestone, in basis points (500 is 5%), paid by the buyer in the same hold.
+      - key: YARD_FEE_BPS
+        value: "500"
+      # ADR-0027: Yard's own PayPal sandbox REST app (never Stood's), used only to pay builders out (PayPal Payouts).
+      - key: YARD_PAYPAL_CLIENT_ID
+        sync: false
+      - key: YARD_PAYPAL_CLIENT_SECRET
         sync: false
       # C4 (#77): Yard's Ed25519 usage key; Stood lists its public half in USAGE_AUTHORITY_KEYS.
       - key: YARD_USAGE_KEY_ID

@@ -10,13 +10,15 @@ import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
+import { PayPalPayouts } from './adapters/paypal/payouts.js';
 import { RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodPackageGateway } from './adapters/stood/package-gateway.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
-import { Board, type Operator } from './application/board.js';
+import { Board, MAX_ACTIVE_CLAIMS, type Operator } from './application/board.js';
 import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
+import { runPayouts } from './application/payouts.js';
 import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
 import { SiteLog } from './application/site-log.js';
@@ -57,7 +59,18 @@ export function yardRuntime(env: Env) {
   const pool = new pg.Pool({ connectionString: url, max: 5 });
   const clock = async () => Date.now();
   const events = new PostgresYardEvents(pool, clock);
-  const board = new Board(events);
+  // ADR-0027: with the real Stood, Yard's PayPal merchant id is the payee of every allowance.
+  const merchant = env.YARD_PAYPAL_MERCHANT_ID?.trim() ?? '';
+  const payee = /^[A-Z0-9]{13}$/.test(merchant) ? merchant : null;
+  if (stood && !payee) notes.push("Payments off: YARD_PAYPAL_MERCHANT_ID (Yard's PayPal merchant id) is required.");
+  // ADR-0027: Yard's fee on top of each milestone, in basis points (500 is 5%); 0 to 2000, otherwise no fee.
+  const feeText = env.YARD_FEE_BPS?.trim() ?? '';
+  const feeBps = /^\d{1,4}$/.test(feeText) && Number(feeText) <= 2000 ? Number(feeText) : 0;
+  if (feeText && String(feeBps) !== feeText) notes.push('Fee off: YARD_FEE_BPS must be 0 to 2000 basis points.');
+  const board = new Board(
+    events,
+    payee || feeBps ? { maxActiveClaims: MAX_ACTIVE_CLAIMS, ...(payee ? { payee } : {}), feeBps } : undefined,
+  );
   const logs = new PostgresSiteLogs(pool, events);
   const scanner = new GitleaksScanner();
   let retention: ReturnType<typeof startLogRetention> | null = null;
@@ -99,7 +112,7 @@ export function yardRuntime(env: Env) {
       siteLog: new SiteLog(logs, board, scanner),
       // T-0189: allowance drafts through Stood's signed API.
       ...(previews ? { previews } : {}),
-      ...(stood ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
+      ...(stood && payee ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
       // T-0189: submitted work goes to Stood, whose own runner runs the buyer's frozen tests on the exact commit.
       ...(stood ? { packages: new StoodPackageGateway(stood) } : {}),
     },
@@ -109,6 +122,23 @@ export function yardRuntime(env: Env) {
   const signer = usageSigner(env.YARD_USAGE_KEY_ID, env.YARD_USAGE_SIGNING_KEY);
   if (stood && !signer) notes.push('Usage off: YARD_USAGE_KEY_ID and YARD_USAGE_SIGNING_KEY (Ed25519) are required.');
   const usage = stood && signer ? new UsageForwarder(board, stood, signer, Date.now) : null;
+  // ADR-0027: builders are paid out of Yard's own PayPal account (its own REST app, never Stood's), sandbox only.
+  const payoutClient = env.YARD_PAYPAL_CLIENT_ID?.trim() ?? '';
+  const payoutSecret = env.YARD_PAYPAL_CLIENT_SECRET?.trim() ?? '';
+  const payouts =
+    payoutClient && payoutSecret
+      ? new PayPalPayouts({
+          clientId: payoutClient,
+          clientSecret: payoutSecret,
+          baseUrl: 'https://api-m.sandbox.paypal.com',
+        })
+      : null;
+  if (!payouts)
+    notes.push(
+      "Payouts off: YARD_PAYPAL_CLIENT_ID and YARD_PAYPAL_CLIENT_SECRET (Yard's own PayPal sandbox app) are required.",
+    );
+  const payees = new Map(operators.flatMap((o) => (o.payeeRef ? [[o.actor.id, o.payeeRef] as const] : [])));
+  let paying: ReturnType<typeof setInterval> | null = null;
   let watching: ReturnType<typeof setInterval> | null = null;
   let sweeping: ReturnType<typeof setInterval> | null = null;
   let forwarding: ReturnType<typeof setInterval> | null = null;
@@ -148,6 +178,25 @@ export function yardRuntime(env: Env) {
       expiring = setInterval(expire, 86_400_000);
       expiring.unref();
       await expire();
+      if (payouts) {
+        // Third audit (2026-10-11): every run's counts, and each problem with its job, work order and reason.
+        const checked = new Map<string, number>();
+        const pay = () =>
+          runPayouts({ board, provider: payouts, payeeOf: (id) => payees.get(id), clock: Date.now, checked }).then(
+            ({ issues, ...counts }) => {
+              if (Object.values(counts).some((n) => n > 0))
+                process.stdout.write(`${JSON.stringify({ code: 'PAYOUTS', ...counts })}\n`);
+              for (const i of issues) process.stderr.write(`${JSON.stringify(i)}\n`);
+            },
+            (error) =>
+              process.stderr.write(
+                `${JSON.stringify({ code: 'PAYOUTS_FAILED', reason: error instanceof Error ? error.message : 'unknown' })}\n`,
+              ),
+          );
+        paying = setInterval(pay, 60_000);
+        paying.unref();
+        await pay();
+      }
       if (usage) {
         const forward = () =>
           usage.run().catch(() => process.stderr.write(`${JSON.stringify({ code: 'USAGE_FORWARD_FAILED' })}\n`));
@@ -159,6 +208,7 @@ export function yardRuntime(env: Env) {
     async stop() {
       retention?.stop();
       if (watching) clearInterval(watching);
+      if (paying) clearInterval(paying);
       if (sweeping) clearInterval(sweeping);
       if (forwarding) clearInterval(forwarding);
       if (expiring) clearInterval(expiring);

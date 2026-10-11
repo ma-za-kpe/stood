@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { expect, it } from 'vitest';
-import { runnerSettings } from './runner-runtime.js';
+import { githubReadAccess, runnerSettings } from './runner-runtime.js';
 
 const pem = generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
 const env = {
@@ -48,4 +48,26 @@ it('turns the runner on only with Vercel settings and a valid Ed25519 signing ke
     .privateKey.export({ type: 'pkcs8', format: 'pem' })
     .toString();
   expect(runnerSettings({ ...env, RUNNER_SIGNING_KEY: Buffer.from(rsa).toString('base64') }).runner).toBeNull();
+});
+
+// #77 operations: the reconciler prefers the Yard GitHub App's short-lived tokens, and says which access it uses.
+it('reads GitHub through the App when configured, else the read token, else anonymously, naming which', () => {
+  const rsa = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const app = {
+    GITHUB_APP_ID: '5230872',
+    GITHUB_APP_INSTALLATION_ID: '169056228',
+    GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from(rsa).toString('base64'),
+  };
+  const viaApp = githubReadAccess({ ...app, GITHUB_READ_TOKEN: 'read-not-real' });
+  expect(typeof viaApp.token).toBe('function');
+  expect(viaApp.note).toContain('Yard GitHub App');
+  const broken = githubReadAccess({
+    ...app,
+    GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from('not a key').toString('base64'),
+  });
+  expect(broken).toEqual({ note: expect.stringContaining('incomplete or invalid') });
+  expect(githubReadAccess({ GITHUB_READ_TOKEN: 'read-not-real' })).toMatchObject({ token: 'read-not-real' });
+  expect(githubReadAccess({})).toEqual({ note: expect.stringContaining('anonymous') });
+  for (const access of [viaApp, broken, githubReadAccess({ GITHUB_READ_TOKEN: 'read-not-real' })])
+    expect(access.note).not.toContain('not-real');
 });
