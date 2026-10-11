@@ -10,6 +10,7 @@ import { Nonce } from '../domain/nonce.js';
 import { recipientAssessment, trancheSentences } from '../domain/recipient-sentences.js';
 import { Tranche } from '../domain/tranche.js';
 import type { OperationsAttention } from '../ports/operations-attention.js';
+import { openApiDocument } from './contract.js';
 import { type PlatformApiConfig, platformApi } from './platform-api.js';
 
 export type AppConfig = Readonly<{
@@ -223,6 +224,13 @@ export function createApp(config: AppConfig) {
       };
     return { ready: false, sentence: paymentGuidance(config.paymentKeys).detail };
   };
+  // T-0331: the platform API's own contract, public, built once from the same Zod contract as openapi/stood.json.
+  const contract = JSON.stringify(openApiDocument());
+  app.get('/v1/openapi.json', (c) => {
+    c.header('Cache-Control', 'public, max-age=300');
+    c.header('Access-Control-Allow-Origin', '*');
+    return c.body(contract, 200, { 'Content-Type': 'application/json' });
+  });
   app.get('/health', (c) =>
     c.json({
       status: 'ok',

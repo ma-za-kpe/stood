@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 
@@ -82,4 +84,17 @@ describe('API bootstrap and fixture preview', () => {
     if (state === 'EXPIRED')
       expect(payload.settlement).toMatchObject({ effect: 'EXPIRE', reference: 'fixture_expiry' });
   });
+});
+
+// T-0331: the live contract is public, identical to the generated openapi/stood.json, and cacheable.
+it('serves the platform API contract at /v1/openapi.json without a signature', async () => {
+  const app = createApp({ appEnv: 'ci', paypalBaseUrl: 'https://api-m.sandbox.paypal.com', demoMode: true });
+  const response = await app.request('/v1/openapi.json');
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Content-Type')).toContain('application/json');
+  expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  const served = await response.json();
+  const committed = JSON.parse(readFileSync(resolve('openapi/stood.json'), 'utf8'));
+  expect(served).toEqual(committed);
+  expect(served.info.version).toBe('1.3.0');
 });
