@@ -60,8 +60,8 @@ it('tears previews down after their TTL and on project close, and reuses a live 
   expect(await h.previews.deploy(h.id, 'one', image, leaseAt + 1)).toEqual(first);
   expect(h.render.services()).toHaveLength(1);
   expect((await h.board.room(h.id, leaseBuyer)).previews).toHaveLength(1);
-  expect(await h.previews.sweep(leaseAt + 30 * day - 1)).toBe(0);
-  expect(await h.previews.sweep(leaseAt + 30 * day)).toBe(1);
+  expect(await h.previews.sweep(leaseAt + 30 * day - 1)).toEqual({ expired: 0, abandoned: 0, orphaned: 0 });
+  expect(await h.previews.sweep(leaseAt + 30 * day)).toEqual({ expired: 1, abandoned: 0, orphaned: 0 });
   expect(h.render.services()).toEqual([]);
   expect((await h.board.room(h.id, leaseBuyer)).previews).toEqual([]);
   expect((await h.board.events.read(h.id, 0)).map((e) => e.type)).toContain('preview.expired');
@@ -99,4 +99,56 @@ it('speaks Render-shaped HTTP with the API key and refuses an unauthenticated ca
   const wrong = new RenderPreviewHost({ apiKey: 'rnd_wrong', ownerId: 'tea-yard', transport: render.fetch });
   await expect(wrong.deploy({ name: 'yard-preview-x', image, env: {} })).rejects.toThrow();
   expect(() => new RenderPreviewHost({ apiKey: '', ownerId: 'tea-yard' })).toThrow();
+});
+
+// Fifth audit (2026-10-11): a deploy is reserved before Render is called, so races and crashes leave nothing behind.
+it('lets only one of two racing deploys create a service', async () => {
+  const h = await harness();
+  const results = await Promise.allSettled([
+    h.previews.deploy(h.id, 'one', image, leaseAt),
+    h.previews.deploy(h.id, 'one', image, leaseAt),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { code: 'CONFLICT' } });
+  expect(h.render.services()).toHaveLength(1);
+  expect(await h.board.previewIntents(h.id)).toEqual([]);
+});
+
+it('deletes the service of a deploy that crashed before it was recorded, and its reservation', async () => {
+  const h = await harness();
+  // The process dies after Render created the service: the record is never written.
+  const record = h.board.recordPreview.bind(h.board);
+  h.board.recordPreview = async () => {
+    throw new Error('process died');
+  };
+  await expect(h.previews.deploy(h.id, 'one', image, leaseAt)).rejects.toThrow('process died');
+  h.board.recordPreview = record;
+  expect(h.render.services()).toHaveLength(1);
+  // A fresh reservation's service is spared: its deploy may still be finishing.
+  expect(await h.previews.sweep(leaseAt + 60_000)).toEqual({ expired: 0, abandoned: 0, orphaned: 0 });
+  expect(h.render.services()).toHaveLength(1);
+  // Fifteen minutes on, the reservation is abandoned and the untracked service deleted.
+  expect(await h.previews.sweep(leaseAt + 15 * 60_000)).toEqual({ expired: 0, abandoned: 1, orphaned: 1 });
+  expect(h.render.services()).toEqual([]);
+  expect(await h.board.previewIntents(h.id)).toEqual([]);
+  // The work order can be previewed again.
+  await h.previews.deploy(h.id, 'one', image, leaseAt + 15 * 60_000 + 1);
+  expect(h.render.services()).toHaveLength(1);
+});
+
+it('releases the reservation when Render refuses, and deletes a service Render made despite an error', async () => {
+  const h = await harness();
+  const host = (h.previews as unknown as { host: { deploy: (i: unknown) => Promise<unknown> } }).host;
+  const deploy = host.deploy.bind(host);
+  // A lost reply: Render made the service, Yard saw an error.
+  host.deploy = async (input) => {
+    await deploy(input);
+    throw new Error('Render POST timeout');
+  };
+  await expect(h.previews.deploy(h.id, 'one', image, leaseAt)).rejects.toThrow('Render POST timeout');
+  host.deploy = deploy;
+  expect(await h.board.previewIntents(h.id)).toEqual([]);
+  expect(h.render.services()).toHaveLength(1);
+  expect(await h.previews.sweep(leaseAt + 1)).toEqual({ expired: 0, abandoned: 0, orphaned: 1 });
+  expect(h.render.services()).toEqual([]);
 });

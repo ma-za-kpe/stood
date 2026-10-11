@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { claimedFixture, leaseAt, leaseBuilder, leaseBuyer } from '../../test/fakes/board-fixture.js';
 import { MemoryNoticeLog } from '../../test/fakes/notices.js';
 import type { Notice } from '../ports/notifications.js';
-import { notifyAll } from './notifications.js';
+import { NOTICE_LEASE_MS, notifyAll } from './notifications.js';
 
 const contacts = { buyer: 'buyer@example.invalid', builder: 'crew@example.invalid' };
 it('sends paid, punch-list, closed and lease-ending notices exactly once (T-0213)', async () => {
@@ -81,4 +81,27 @@ it('keeps notifying other projects when one recipient has no contact, and never 
   // A failed send releases nothing: the next run retries the same key once delivery works.
   await notifyAll(board, fresh, { send: async (n) => void sent.push(n) }, contacts, leaseAt + 42 * 3600000 + 1);
   expect(sent.map((n) => n.subject)).toEqual(['Lease ending soon: "one"']);
+});
+
+// Fifth audit (2026-10-11): a worker that dies after claiming a notice must not lose it, and another worker must not
+// move the cursor past it while that lease is live.
+it('resends a notice whose worker died mid-send once its lease runs out, holding the cursor until then', async () => {
+  const { board, id } = await claimedFixture();
+  const at = leaseAt + 42 * 3600000 + 1;
+  const { notices } = await board.notices(id, 0, at);
+  const lease = notices.find((n) => n.subject.startsWith('Lease ending'));
+  if (!lease) throw new Error('fixture has no lease notice');
+  const log = new MemoryNoticeLog();
+  // The first worker claimed it, then the process died before sending.
+  expect(await log.claim(lease.key, at, NOTICE_LEASE_MS)).toBe('CLAIMED');
+  const sent: Notice[] = [];
+  const notifier = { send: async (n: Notice) => void sent.push(n) };
+  await notifyAll(board, log, notifier, contacts, at + 1);
+  expect(sent).toEqual([]);
+  expect(await log.cursor(id)).toBe(0);
+  await notifyAll(board, log, notifier, contacts, at + NOTICE_LEASE_MS);
+  expect(sent.map((n) => n.key)).toEqual([lease.key]);
+  // Delivered is permanent: no repeat on a later run.
+  await notifyAll(board, log, notifier, contacts, at + 2 * NOTICE_LEASE_MS);
+  expect(sent).toHaveLength(1);
 });
