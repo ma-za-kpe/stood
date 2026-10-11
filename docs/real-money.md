@@ -5,7 +5,7 @@
 ## What runs today (sandbox)
 
 - **Stood** holds a buyer's money per milestone as a PayPal authorization, decides from evidence, then captures (release) or voids (refuse). Settlement is a separate owner switch, and it is **off** in production until the owner has reviewed the runner's past decisions ([ADR-0026 amendment](adr/0026-isolated-code-runner-on-vercel-sandbox.md)).
-- **Yard** is the payee of every allowance; it would pay builders out of its own PayPal account with PayPal Payouts, 48 hours after release (on release for the final milestone), and charges the buyer a fee on top ([ADR-0027](adr/0027-platform-receipt-then-payout.md)). Payouts are **off** until Yard's own sandbox PayPal app is configured.
+- **Yard** is the payee of every allowance; it would pay builders out of its own PayPal account with PayPal Payouts, 48 hours after release (on release for the final milestone), and charges the buyer a fee on top ([ADR-0027](adr/0027-platform-receipt-then-payout.md)). Payouts run from Yard's own sandbox PayPal app (qualified live on 11 October 2026), but none are due while settlement is off.
 
 ## Before any real money
 
