@@ -15,8 +15,16 @@ const draft = (tests = 2): EditableDraft => ({
     budgetMinor: 1001,
     deadline: Date.parse('2026-11-01T10:00:00Z'),
     tests: [
-      { id: 'a', path: 'tests/a.test.ts', content: 'expect(a()).toBe(true);' },
-      { id: 'b', path: 'tests/b.test.ts', content: 'expect(b()).toBe(true);' },
+      {
+        id: 'a',
+        path: 'tests/a.test.ts',
+        cases: [{ name: 'a', args: ['a'], input: '', status: 0, output: 'ok\n', match: 'exact' as const }],
+      },
+      {
+        id: 'b',
+        path: 'tests/b.test.ts',
+        cases: [{ name: 'b', args: ['b'], input: '', status: 0, output: 'ok\n', match: 'exact' as const }],
+      },
     ].slice(0, tests),
   })),
 });
@@ -44,9 +52,16 @@ describe('BlueprintEditor (T-0275)', () => {
     fireEvent.change(screen.getByLabelText('Deadline (UTC)', { selector: '#edit-deadline-m1' }), {
       target: { value: '2026-11-02T09:30' },
     });
-    fireEvent.change(screen.getByLabelText('tests/a.test.ts', { selector: '#edit-test-m1-0' }), {
-      target: { value: 'expect(book()).toBe(true);' },
-    });
+    // Second audit (2026-10-11): tests are acceptance cases (data). Saving waits until every test is a JSON list.
+    const cases = screen.getByLabelText('tests/a.test.ts (acceptance cases, JSON)', { selector: '#edit-test-m1-0' });
+    fireEvent.change(cases, { target: { value: 'expect(book()).toBe(true);' } });
+    expect(screen.getByText('Not a JSON list of cases yet.')).toBeTruthy();
+    expect(cases.getAttribute('aria-invalid')).toBe('true');
+    const booking = [
+      { name: 'books', args: ['book', '10:00'], input: '', status: 0, output: 'booked\n', match: 'exact' },
+    ];
+    fireEvent.change(cases, { target: { value: JSON.stringify(booking) } });
+    expect(screen.queryByText('Not a JSON list of cases yet.')).toBeNull();
     const budget = screen.getByLabelText('Budget (USD, minor units)', { selector: '#edit-budget-m1' });
     fireEvent.change(budget, { target: { value: '1000' } });
     const save = screen.getByRole('button', { name: 'Save draft for fresh review' });
@@ -70,7 +85,16 @@ describe('BlueprintEditor (T-0275)', () => {
     expect(second?.[1]).toBe(first?.[1]);
     expect(first?.[0]).toMatchObject({
       summary: 'Bookings for a salon',
-      milestones: [{ name: 'Setup', deadline: Date.parse('2026-11-02T09:30:00Z') }, {}, {}, {}],
+      milestones: [
+        {
+          name: 'Setup',
+          deadline: Date.parse('2026-11-02T09:30:00Z'),
+          tests: [{ id: 'a', cases: booking }, { id: 'b' }],
+        },
+        {},
+        {},
+        {},
+      ],
     });
     // After a save is sent the form is locked; further typing changes nothing.
     fireEvent.change(screen.getByLabelText('Project summary'), { target: { value: 'Changed later' } });
@@ -81,7 +105,9 @@ describe('BlueprintEditor (T-0275)', () => {
 
   it('merges and splits milestones, and explains a merge that cannot keep the tests', () => {
     const conflicting = draft();
-    conflicting.milestones[1]!.tests[0]!.content = 'Different';
+    conflicting.milestones[1]!.tests[0]!.cases = [
+      { name: 'different', args: [], input: '', status: 1, output: '', match: 'exact' },
+    ];
     const props = editor({ initial: conflicting });
     const merges = screen.getAllByRole('button', { name: 'Merge with next' });
     expect(merges.at(-1)).toHaveProperty('disabled', true);

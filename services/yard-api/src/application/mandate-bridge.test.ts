@@ -1,11 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { leaseAt, leaseBuyer } from '../../test/fakes/board-fixture.js';
 import { MemoryEvents } from '../../test/fakes/events.js';
-import { Board } from './board.js';
+import { Board, yardFee } from './board.js';
 import { type DraftGateway, MandateBridge } from './mandate-bridge.js';
 
-async function frozen(id = 'p') {
-  const board = new Board(new MemoryEvents());
+async function frozen(id = 'p', limits?: ConstructorParameters<typeof Board>[1]) {
+  const board = new Board(new MemoryEvents(), limits);
   const milestones = ['one', 'two'].map((m, i) => ({
     id: m,
     name: i ? 'Buyer uses the app' : 'Build the booking app',
@@ -204,4 +204,30 @@ it('creates the mandate over signed HTTP for the owning buyer only', async () =>
   expect(created.status).toBe(200);
   expect(await created.json()).toMatchObject({ allowanceId: 'alw_1', status: 'DRAFT', tranches: { one: 'trn_1' } });
   expect((await call('buyer', '/yard/v1/blueprints/p/work-orders', { milestone: 'one' }, 4, 'post')).status).toBe(200);
+});
+
+// ADR-0027: the buyer pays Yard's fee on top of each milestone, in the same hold; the builder's price is unchanged.
+it('holds each milestone as the builder price plus Yard fee, and returns both lines to the buyer', async () => {
+  const board = await frozen('fee', { maxActiveClaims: 2, payee: 'ABCDEFGHJKLMN', feeBps: 500 });
+  let sent: Parameters<DraftGateway['createDraft']>[0] | undefined;
+  const bridge = new MandateBridge(board, {
+    createDraft: async (input) => {
+      sent = input;
+      return draft(input);
+    },
+  });
+  const result = await bridge.create('fee', leaseBuyer, 2, 'mandate', leaseAt);
+  expect(result.lines).toEqual([
+    { milestoneId: 'one', builderMinor: 2500, feeMinor: 125 },
+    { milestoneId: 'two', builderMinor: 1500, feeMinor: 75 },
+  ]);
+  expect(sent?.payee_ref).toBe('ABCDEFGHJKLMN');
+  expect(sent?.cap).toEqual({ minor: 4200, currency: 'USD' });
+  expect(sent?.milestones.map((m) => m.amount.minor)).toEqual([2625, 1575]);
+  // The example in ADR-0027: £500 to the builder, £25 to Yard, a £525 hold. Rounded to the nearest minor unit.
+  expect(yardFee(50_000, 500)).toBe(2500);
+  expect(yardFee(333, 500)).toBe(17);
+  expect(yardFee(1000, 0)).toBe(0);
+  // A retry returns the same lines.
+  expect((await bridge.create('fee', leaseBuyer, 2, 'mandate', leaseAt)).lines).toEqual(result.lines);
 });

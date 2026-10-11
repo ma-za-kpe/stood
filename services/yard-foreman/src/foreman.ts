@@ -6,6 +6,7 @@ import { Blueprint, type Plan, type PlannerErrorCode, type PlannerIntake } from 
 
 export type { Plan, PlannerIntake } from '@stood/yard-domain';
 
+import { type AcceptanceCase, acceptanceCases, renderAcceptanceTest } from './acceptance-cases.js';
 import { type ForemanCoordinator, memoryCoordinator } from './coordinator.js';
 export class PlannerError extends Error {
   constructor(readonly code: PlannerErrorCode) {
@@ -106,21 +107,23 @@ export function validateDraft(input: PlannerIntake, value: unknown, simulated: b
   }
   const d = object(value, ['summary', 'requirements', 'milestones', 'risks']);
   if (!text(d.summary)) throw new PlannerError('INVALID');
-  const tests: { milestoneId: string; id: string; path: string; content: string }[] = [];
+  const tests: { milestoneId: string; id: string; path: string; content: string; cases: AcceptanceCase[] }[] = [];
   const milestones = list(d.milestones, 3, 6).map((raw, index, all) => {
     const m = object(raw, ['id', 'name', 'budgetMinor', 'deadline', 'tests']);
     if (!text(m.id) || !/^[A-Za-z0-9_-]{1,100}$/.test(m.id) || !text(m.name)) throw new PlannerError('INVALID');
     const bundle = list(m.tests, 1, 100).map((rawTest) => {
-      const t = object(rawTest, ['id', 'path', 'content']);
+      // Second audit (2026-10-11): the model gives acceptance cases (data); Yard renders the test file itself.
+      const t = object(rawTest, ['id', 'path', 'cases']);
       if (
         !text(t.id) ||
         !text(t.path) ||
-        !/^tests\/[A-Za-z0-9_./-]+\.(ts|js)$/.test(t.path) ||
-        t.path.split('/').some((p) => p === '.' || p === '..' || !p) ||
-        !text(t.content)
+        !/^tests\/[A-Za-z0-9_./-]+\.test\.js$/.test(t.path) ||
+        t.path.split('/').some((p) => p === '.' || p === '..' || !p)
       )
         throw new PlannerError('INVALID');
-      return { id: t.id, path: t.path, content: t.content };
+      const cases = acceptanceCases(t.cases);
+      if (!cases) throw new PlannerError('INVALID');
+      return { id: t.id, path: t.path, content: renderAcceptanceTest(cases), cases };
     });
     if (new Set(bundle.map((t) => t.path)).size !== bundle.length) throw new PlannerError('INVALID');
     bundle.sort((a, b) => a.path.localeCompare(b.path));

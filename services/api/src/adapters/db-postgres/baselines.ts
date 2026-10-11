@@ -54,12 +54,22 @@ export class PostgresBaselines implements BaselineStore {
       .where(and(eq(baselines.platformId, platformId), eq(baselines.id, id)));
     return row ? view(row) : null;
   }
+  // Second audit (2026-10-11): fairness is decided here, not after a fixed page of the oldest. Only baselines that are
+  // due (never tried, or past their backoff and not leased) are listed, fewest attempts first, then oldest; so fifty
+  // baselines backing off never hide the fifty-first.
   async pending(limit: number): Promise<readonly BaselineJob[]> {
+    const { runClaims: claims } = schema;
     const rows = await this.db
       .select({ id: baselines.id, platformId: baselines.platformId, terms: baselines.terms })
       .from(baselines)
-      .where(eq(baselines.status, 'QUEUED'))
-      .orderBy(asc(baselines.createdAt), asc(baselines.id))
+      .leftJoin(claims, and(eq(claims.kind, 'baseline'), eq(claims.jobId, baselines.id)))
+      .where(
+        and(
+          eq(baselines.status, 'QUEUED'),
+          sql`(${claims.jobId} IS NULL OR (${claims.claimedUntil} <= clock_timestamp() AND ${claims.nextAttemptAt} <= clock_timestamp()))`,
+        ),
+      )
+      .orderBy(sql`coalesce(${claims.attempts}, 0)`, asc(baselines.createdAt), asc(baselines.id))
       .limit(Math.max(1, Math.min(limit, 50)));
     return rows.map((r) => Object.freeze({ id: r.id, platformId: r.platformId, terms: codeTerms(r.terms) }));
   }

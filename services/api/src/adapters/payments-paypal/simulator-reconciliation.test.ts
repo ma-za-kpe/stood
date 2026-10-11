@@ -38,7 +38,7 @@ describe('Domain recovery through actual simulator HTTP', () => {
             profileId: 'code.milestone@1',
             ruleSetVersion: RULE_SET_VERSION,
           },
-          'decision',
+          'judge:decision',
           at,
         ],
       });

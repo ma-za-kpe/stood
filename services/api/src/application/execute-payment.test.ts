@@ -103,6 +103,27 @@ describe('Durable payment dispatch', () => {
       expect(execute).toHaveBeenCalledOnce();
     }
   });
+  // Owner decision 2026-10-10: a code milestone released by the old in-process runner is void for payment.
+  it('never captures a code milestone unless the judge recorded its release', async () => {
+    for (const [decisionId, submitted] of [
+      ['run:pkg_1', false],
+      ['usage:pkg_1', false],
+      ['judge:pkg_1', true],
+    ] as const) {
+      const store = fixture();
+      const before = await store.load('dispatch');
+      const doc = JSON.parse(before.record);
+      doc.definition.profileId = 'code.milestone@1';
+      doc.commands[2].args[0].profileId = 'code.milestone@1';
+      doc.commands[2].args[1] = decisionId;
+      const snapshot = { ...before, record: JSON.stringify(doc) };
+      store.load = async () => snapshot;
+      const execute = vi.fn(async () => null);
+      const result = await executePayment(store, { execute }, 'dispatch', 'worker', () => at);
+      expect(execute.mock.calls.length, decisionId).toBe(submitted ? 1 : 0);
+      if (!submitted) expect(result).toBe('WAIT');
+    }
+  });
   it('never submits a renewal after its safe window has closed', async () => {
     const store = fixture(true);
     const execute = vi.fn(async () => null);

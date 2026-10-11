@@ -76,6 +76,13 @@ type Order = {
   closed?: 'REFUSED';
   holds?: { attempt: number; expiresAt: number; eventId: string }[];
   usage?: { confirmedAt: number; forwarded?: { at: number; status: 'ACCEPTED' | 'REFUSED'; reason: string | null } };
+  // ADR-0027: when the capture was recorded, the buyer's dispute in the review window, and the builder's payout.
+  releasedAt?: number;
+  dispute?: { openedAt: number; reason: string; resolved?: { outcome: 'PAY_BUILDER' | 'REFUND_BUYER'; at: number } };
+  payout?: Payout;
+  // The buyer's money owed back (a dispute decided for the buyer, or a payout the owner chose not to retry). Yard's
+  // owner refunds it in PayPal and records the refund's reference.
+  refund?: { status: 'DUE' | 'REFUNDED'; at: number; reference?: string };
 };
 export type MandateRequest = Readonly<{
   payee_ref: string;
@@ -103,7 +110,59 @@ export type MandateIntent = Readonly<{
   status: 'RESERVED' | 'CREATED';
   allowanceId: string | null;
   tranches: Readonly<Record<string, string>> | null;
+  // ADR-0027: what the buyer authorizes per milestone, the builder's price plus Yard's fee on top. Absent on mandates
+  // made before the fee existed (no fee).
+  lines?: readonly MandateLine[];
 }>;
+// ADR-0027: a builder's payout, one PayPal Payouts batch per attempt. RESERVED is written before PayPal is called (the
+// batch id is also PayPal-Request-Id and sender_batch_id, so a resend after a lost answer cannot pay twice); SENT once
+// PayPal accepted it; then PayPal's item status: PAID_OUT, UNCLAIMED, RETURNED (unclaimed, cancelled, refunded or
+// reversed: the money is back with Yard) or FAILED (never deducted). REVIEW: Yard cannot tell from PayPal whether it
+// paid (no answer within the resend window, a duplicate with no link to the original, or a blocked item); the owner
+// reconciles it in PayPal and records the result.
+export type PayoutStatus = 'RESERVED' | 'SENT' | 'PAID_OUT' | 'UNCLAIMED' | 'RETURNED' | 'FAILED' | 'REVIEW';
+export type Payout = {
+  batchId: string;
+  attempt: number;
+  payee: string;
+  builderMinor: number;
+  currency: string;
+  status: PayoutStatus;
+  reservedAt: number;
+  payoutBatchId?: string;
+  reference?: string;
+  reason?: string;
+  settledAt?: number;
+  // Earlier attempts that failed or came back, newest last.
+  history?: { batchId: string; status: PayoutStatus; reference?: string }[];
+};
+// Third audit (2026-10-11): owner actions, so no money is ever stuck. Each is recorded with the owner's note.
+export type PayoutAction =
+  | Readonly<{ type: 'RESOLVE_DISPUTE'; outcome: 'PAY_BUILDER' | 'REFUND_BUYER'; note: string }>
+  | Readonly<{ type: 'RETRY_PAYOUT'; payee: string; note: string }>
+  | Readonly<{ type: 'REFUND_BUYER'; note: string }>
+  | Readonly<{ type: 'REFUNDED'; reference: string; note: string }>
+  // PAID_OUT needs PayPal's payout batch id (from the PayPal activity), so the payout stays monitored afterwards.
+  | Readonly<{
+      type: 'SETTLE_REVIEW';
+      outcome: 'PAID_OUT' | 'NOT_SENT';
+      reference: string;
+      payoutBatchId?: string;
+      note: string;
+    }>;
+// A PayPal email or a 13-character PayPal merchant id.
+const payee = (v: string) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,24}$/.test(v) || /^[A-Z0-9]{13}$/.test(v);
+const batchIdFor = (id: string, wo: string, attempt: number) =>
+  `yard-${createHash('sha256')
+    .update(attempt === 1 ? `${id}\0${wo}` : `${id}\0${wo}\0${attempt}`)
+    .digest('hex')
+    .slice(0, 40)}`;
+// ADR-0027: a release on the runner's evidence alone is paid out after a 48-hour review window; the final milestone,
+// released on the buyer's own confirmation of use, is paid out on release.
+export const HOLDBACK_MS = 48 * 3_600_000;
+export type MandateLine = Readonly<{ milestoneId: string; builderMinor: number; feeMinor: number }>;
+// ADR-0027: Yard's fee, in basis points of the builder's price (500 is 5%), rounded to the nearest minor unit.
+export const yardFee = (builderMinor: number, feeBps: number) => Math.round((builderMinor * feeBps) / 10_000);
 export type MilestoneChange = Readonly<{ milestoneId: string; name: string; budgetMinor: number; deadline: number }>;
 type ChangeOrder = {
   id: string;
@@ -121,6 +180,14 @@ type Data = {
   changes?: ChangeOrder[];
   previews?: { wo: string; serviceId: string; url: string; expiresAt: number }[];
 };
+// ADR-0027: when a paid work order may be paid out: at release for the final milestone, 48 hours later otherwise.
+function payoutDueAt(d: Data, order: Order): number | null {
+  if (!order.payment || order.releasedAt === undefined || order.refund) return null;
+  // A dispute holds the payout until the owner decides it for the builder; then it is due at once.
+  if (order.dispute) return order.dispute.resolved?.outcome === 'PAY_BUILDER' ? order.dispute.resolved.at : null;
+  const final = terms(d, order.milestone)?.profileId === 'code.final@1';
+  return final ? order.releasedAt : order.releasedAt + HOLDBACK_MS;
+}
 // Effective milestone terms: the immutable signed milestone with approved change orders applied in order.
 function terms(d: Data, milestoneId: string) {
   const base = d.blueprint.milestones.find((m) => m.id === milestoneId);
@@ -278,7 +345,9 @@ export const MAX_ACTIVE_CLAIMS = 2;
 export class Board {
   constructor(
     readonly events: YardEvents,
-    private readonly limits: Readonly<{ maxActiveClaims: number }> = { maxActiveClaims: MAX_ACTIVE_CLAIMS },
+    private readonly limits: Readonly<{ maxActiveClaims: number; payee?: string; feeBps?: number }> = {
+      maxActiveClaims: MAX_ACTIVE_CLAIMS,
+    },
   ) {}
   // Active, unexpired leases held by an operator root across every project (paged).
   async activeClaims(root: string, now: number, except?: Readonly<{ id: string; wo: string }>): Promise<number> {
@@ -638,17 +707,28 @@ export class Board {
           throw new YardError('CONFLICT');
         const effective = d.blueprint.milestones.map((m) => terms(d, m.id) ?? m);
         const latest = Math.max(...effective.map((m) => m.deadline));
+        // ADR-0027: the buyer pays Yard's fee on top of each milestone, in the same hold, so a refusal voids both and
+        // the builder receives exactly their price.
+        const feeBps = this.limits.feeBps ?? 0;
+        const lines = effective.map((m) => ({
+          milestoneId: m.id,
+          builderMinor: m.budgetMinor,
+          feeMinor: yardFee(m.budgetMinor, feeBps),
+        }));
+        const hold = (i: number) => (lines[i] as MandateLine).builderMinor + (lines[i] as MandateLine).feeMinor;
         const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
         const request: MandateRequest = {
-          payee_ref: `yard:${id}`,
-          // Stood's cap covers builder milestones only; Yard and provider costs are never captured through it.
+          // ADR-0027: Yard's PayPal merchant receives the capture; builders are paid out after release. Without a
+          // configured merchant (local simulations) the payee is a project reference only a simulator accepts.
+          payee_ref: this.limits.payee ?? `yard:${id}`,
+          // Stood's cap covers the milestones as the buyer authorizes them: each builder price plus Yard's fee.
           cap: {
-            minor: effective.reduce((n, m) => n + m.budgetMinor, 0),
+            minor: effective.reduce((n, _m, i) => n + hold(i), 0),
             currency: d.blueprint.currency,
           },
-          milestones: effective.map((m) => ({
+          milestones: effective.map((m, i) => ({
             name: m.name,
-            amount: { minor: m.budgetMinor, currency: d.blueprint.currency },
+            amount: { minor: hold(i), currency: d.blueprint.currency },
             profile: m.profileId,
             // T-0159: the frozen code terms Stood checks and later binds the runner and verifier to.
             params: {
@@ -670,6 +750,7 @@ export class Board {
           status: 'RESERVED',
           allowanceId: null,
           tranches: null,
+          lines,
         };
         return { state: 'RESERVED', simulated: true };
       },
@@ -1231,11 +1312,13 @@ export class Board {
     return { trancheId: order.trancheId, repository: d.blueprint.repository, baseCommit: d.blueprint.baseCommit };
   }
   // Only an authenticated Stood integration calls this after matching provider-backed read proof.
-  settlement(id: string, wo: string, proof: SettlementProof, version: number) {
+  settlement(id: string, wo: string, proof: SettlementProof, version: number, now = Date.now()) {
     return this.events.mutate(id, version, 'stood', `stood:${proof.eventId}`, fingerprint({ wo, proof }), (raw) => {
       const d = data(raw);
       const { work, order } = workOrder(d, wo);
       const m = terms(d, order.milestone)!;
+      const line = d.mandate?.lines?.find((l) => l.milestoneId === order.milestone);
+      const feeMinor = line?.feeMinor ?? 0;
       if (
         work.snapshot.state !== 'CHECKING' ||
         order.payment ||
@@ -1245,16 +1328,290 @@ export class Board {
         proof.effect !== 'CAPTURE' ||
         !proof.reference.trim() ||
         !proof.eventId.trim() ||
-        proof.minor !== m.budgetMinor ||
+        proof.minor !== m.budgetMinor + feeMinor ||
         proof.currency !== d.blueprint.currency ||
         proof.simulated !== true
       )
         throw new YardError('INVALID');
       order.payment = structuredClone(proof);
+      order.releasedAt = now;
       return {
         data: d,
         type: 'stood.released',
-        payload: { wo, state: 'PAID', reference: proof.reference, payment: structuredClone(proof), simulated: true },
+        // ADR-0027: the capture splits into the builder's line (paid out later) and Yard's fee.
+        payload: {
+          wo,
+          state: 'PAID',
+          reference: proof.reference,
+          payment: structuredClone(proof),
+          builderMinor: m.budgetMinor,
+          feeMinor,
+          simulated: true,
+        },
+      };
+    });
+  }
+  // ADR-0027: the buyer opens a dispute on a paid milestone inside its review window, before any payout is reserved.
+  // The money stays in this job's ledger until the dispute is closed by the owner.
+  dispute(id: string, wo: string, actor: Operator, version: number, key: string, now: number, reason: string) {
+    return this.events.mutate(id, version, actor.id, `dispute:${key}`, fingerprint({ wo, reason }), (raw) => {
+      const d = data(raw);
+      const { order } = workOrder(d, wo);
+      if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
+        throw new YardError('FORBIDDEN');
+      const text = reason.trim();
+      if (!text || text.length > 2000) throw new YardError('INVALID');
+      const dueAt = payoutDueAt(d, order);
+      if (!order.payment || order.payout || order.dispute || dueAt === null || now >= dueAt)
+        throw new YardError('CONFLICT');
+      order.dispute = { openedAt: now, reason: text };
+      return { data: d, type: 'payout.disputed', payload: { wo, openedAt: now } };
+    });
+  }
+  // ADR-0027: paid work orders whose payout is due now: released, past the review window (none for the final
+  // milestone), not disputed and not yet reserved. Each comes with the builder who did the work.
+  async payoutsDue(now: number) {
+    const due: { projectId: string; wo: string; builderId: string; builderMinor: number; currency: string }[] = [];
+    await this.eachProject((id, d) => {
+      for (const [wo, order] of Object.entries(d.orders)) {
+        const dueAt = payoutDueAt(d, order);
+        const builderId = workOrder(d, wo).work.snapshot.currentClaim?.builderId;
+        if (!order.payment || order.payout || dueAt === null || now < dueAt || !builderId) continue;
+        const builderMinor = terms(d, order.milestone)!.budgetMinor;
+        due.push({ projectId: id, wo, builderId, builderMinor, currency: d.blueprint.currency });
+      }
+    });
+    return due;
+  }
+  // Written before PayPal is called. The batch id is fixed per work order and attempt, so a second reservation is the
+  // same one.
+  reservePayout(id: string, wo: string, version: number, payee: string, now: number) {
+    return this.events.mutate(
+      id,
+      version,
+      'yard-payouts',
+      `payout:reserve:${wo}`,
+      fingerprint({ wo, payee }),
+      (raw) => {
+        const d = data(raw);
+        const { order } = workOrder(d, wo);
+        const dueAt = payoutDueAt(d, order);
+        if (!order.payment || order.payout || dueAt === null || now < dueAt) throw new YardError('CONFLICT');
+        order.payout = {
+          batchId: batchIdFor(id, wo, 1),
+          attempt: 1,
+          payee,
+          builderMinor: terms(d, order.milestone)!.budgetMinor,
+          currency: d.blueprint.currency,
+          status: 'RESERVED',
+          reservedAt: now,
+        };
+        return { data: d, type: 'payout.reserved', payload: { wo, batchId: order.payout.batchId, attempt: 1 } };
+      },
+    );
+  }
+  // PayPal's answer to the payout, then its item status as reconciliation reads it. Only moves PayPal's contract allows
+  // are recorded, and only for the attempt (batch id) the caller read.
+  payoutUpdate(
+    id: string,
+    wo: string,
+    version: number,
+    batchId: string,
+    update: Readonly<{
+      status: Exclude<PayoutStatus, 'RESERVED'>;
+      payoutBatchId?: string;
+      reference?: string;
+      reason?: string;
+    }>,
+    now = Date.now(),
+  ) {
+    const key = `payout:${update.status}:${wo}:${batchId}`;
+    return this.events.mutate(id, version, 'yard-payouts', key, fingerprint({ wo, batchId, update }), (raw) => {
+      const d = data(raw);
+      const { order } = workOrder(d, wo);
+      const payout = order.payout;
+      const from: Record<string, readonly PayoutStatus[]> = {
+        SENT: ['RESERVED'],
+        FAILED: ['RESERVED', 'SENT', 'UNCLAIMED'],
+        PAID_OUT: ['SENT', 'UNCLAIMED'],
+        UNCLAIMED: ['SENT'],
+        RETURNED: ['SENT', 'UNCLAIMED', 'PAID_OUT'],
+        REVIEW: ['RESERVED', 'SENT', 'UNCLAIMED'],
+      };
+      if (!payout || payout.batchId !== batchId || !from[update.status]?.includes(payout.status))
+        throw new YardError('CONFLICT');
+      if (update.status === 'SENT' && !update.payoutBatchId) throw new YardError('INVALID');
+      payout.status = update.status;
+      if (update.payoutBatchId) payout.payoutBatchId = update.payoutBatchId;
+      if (update.reference) payout.reference = update.reference;
+      if (update.reason) payout.reason = update.reason.slice(0, 200);
+      if (update.status === 'PAID_OUT') payout.settledAt = now;
+      return {
+        data: d,
+        type: `payout.${update.status.toLowerCase()}`,
+        payload: { wo, batchId, status: update.status, ...(update.reason ? { reason: payout.reason } : {}) },
+      };
+    });
+  }
+  // Third audit (2026-10-11): the owner's actions on a job's money, so nothing is ever a dead end. Each is checked
+  // against the work order's state and recorded with the owner's note.
+  payoutAction(id: string, wo: string, version: number, key: string, now: number, action: PayoutAction) {
+    return this.events.mutate(id, version, 'yard-owner', `owner:${key}`, fingerprint({ wo, action }), (raw) => {
+      const d = data(raw);
+      const { order } = workOrder(d, wo);
+      const note = action.note.trim();
+      if (!note || note.length > 2000) throw new YardError('INVALID');
+      const payout = order.payout;
+      switch (action.type) {
+        case 'RESOLVE_DISPUTE':
+          if (!order.dispute || order.dispute.resolved || payout) throw new YardError('CONFLICT');
+          order.dispute.resolved = { outcome: action.outcome, at: now };
+          if (action.outcome === 'REFUND_BUYER') order.refund = { status: 'DUE', at: now };
+          break;
+        case 'RETRY_PAYOUT':
+          if (!payout || !['FAILED', 'RETURNED'].includes(payout.status) || order.refund)
+            throw new YardError('CONFLICT');
+          if (!payee(action.payee)) throw new YardError('INVALID');
+          order.payout = {
+            ...payout,
+            history: [
+              ...(payout.history ?? []),
+              {
+                batchId: payout.batchId,
+                status: payout.status,
+                ...(payout.reference ? { reference: payout.reference } : {}),
+              },
+            ],
+            batchId: batchIdFor(id, wo, payout.attempt + 1),
+            attempt: payout.attempt + 1,
+            payee: action.payee,
+            status: 'RESERVED',
+            reservedAt: now,
+          };
+          delete order.payout.payoutBatchId;
+          delete order.payout.reference;
+          delete order.payout.reason;
+          break;
+        case 'REFUND_BUYER':
+          if (!order.payment || order.refund || (payout && !['FAILED', 'RETURNED'].includes(payout.status)))
+            throw new YardError('CONFLICT');
+          order.refund = { status: 'DUE', at: now };
+          break;
+        case 'REFUNDED':
+          if (order.refund?.status !== 'DUE' || !action.reference.trim()) throw new YardError('CONFLICT');
+          order.refund = { status: 'REFUNDED', at: now, reference: action.reference.trim().slice(0, 200) };
+          break;
+        case 'SETTLE_REVIEW':
+          if (payout?.status !== 'REVIEW' || !action.reference.trim()) throw new YardError('CONFLICT');
+          if (action.outcome === 'PAID_OUT') {
+            if (!/^[A-Z0-9]{8,40}$/.test(action.payoutBatchId ?? '')) throw new YardError('INVALID');
+            payout.payoutBatchId = action.payoutBatchId as string;
+          }
+          payout.status = action.outcome === 'PAID_OUT' ? 'PAID_OUT' : 'FAILED';
+          payout.reference = action.reference.trim().slice(0, 200);
+          if (payout.status === 'PAID_OUT') payout.settledAt = now;
+          break;
+      }
+      return { data: d, type: `owner.${action.type.toLowerCase()}`, payload: { wo, action: action.type, note } };
+    });
+  }
+  // Payouts the worker still watches: in flight (reserved, sent, unclaimed), and paid out within the last 180 days,
+  // because PayPal can still report those refunded or reversed.
+  async payoutsOpen(now = Date.now()) {
+    const open: { projectId: string; wo: string; payout: Payout }[] = [];
+    await this.eachProject((id, d) => {
+      for (const [wo, order] of Object.entries(d.orders)) {
+        const p = order.payout;
+        if (!p) continue;
+        const watched =
+          ['RESERVED', 'SENT', 'UNCLAIMED'].includes(p.status) ||
+          (p.status === 'PAID_OUT' && p.payoutBatchId && now - (p.settledAt ?? now) < 180 * 86_400_000);
+        if (watched) open.push({ projectId: id, wo, payout: structuredClone(p) });
+      }
+    });
+    return open;
+  }
+  // Third audit (2026-10-11): every work order whose money needs the owner: an open dispute, a payout to reconcile,
+  // failed, returned or unclaimed, or a refund still owed to the buyer.
+  async payoutAttention() {
+    const items: {
+      projectId: string;
+      wo: string;
+      state: string;
+      builderMinor: number;
+      currency: string;
+      reason?: string;
+    }[] = [];
+    await this.eachProject((id, d) => {
+      for (const [wo, order] of Object.entries(d.orders)) {
+        const state =
+          order.refund?.status === 'DUE'
+            ? 'REFUND_DUE'
+            : order.dispute && !order.dispute.resolved
+              ? 'DISPUTED'
+              : order.payout && ['REVIEW', 'FAILED', 'RETURNED', 'UNCLAIMED'].includes(order.payout.status)
+                ? order.payout.status
+                : null;
+        if (!state) continue;
+        const reason = order.payout?.reason ?? order.dispute?.reason;
+        items.push({
+          projectId: id,
+          wo,
+          state,
+          builderMinor: terms(d, order.milestone)!.budgetMinor,
+          currency: d.blueprint.currency,
+          ...(reason ? { reason } : {}),
+        });
+      }
+    });
+    return items;
+  }
+  // Every project once, a hundred at a time (a page of 101 means there is another page).
+  private async eachProject(visit: (id: string, d: Data) => void) {
+    let after = '';
+    do {
+      const projects = await this.events.list(after);
+      const page = projects.slice(0, 100);
+      for (const p of page) visit(p.id, data(p.data));
+      after = projects.length > 100 ? (page.at(-1)?.id ?? '') : '';
+    } while (after);
+  }
+  // ADR-0027: the job's ledger, one line per work order, never a general balance. Buyer only.
+  async ledger(id: string, actor: Operator) {
+    const snapshot = await this.read(id, actor);
+    const d = data(snapshot.data);
+    if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
+    return Object.entries(d.orders).map(([wo, order]) => {
+      const line = d.mandate?.lines?.find((l) => l.milestoneId === order.milestone);
+      const builderMinor = terms(d, order.milestone)!.budgetMinor;
+      const dueAt = payoutDueAt(d, order);
+      const state = order.refund
+        ? order.refund.status === 'DUE'
+          ? 'REFUND_DUE'
+          : 'REFUNDED'
+        : order.payout
+          ? order.payout.status
+          : order.dispute && !order.dispute.resolved
+            ? 'DISPUTED'
+            : order.payment
+              ? 'HELD_BACK'
+              : order.closed
+                ? 'VOIDED'
+                : 'AUTHORIZED';
+      return {
+        wo,
+        milestoneId: order.milestone,
+        currency: d.blueprint.currency,
+        builderMinor,
+        feeMinor: line?.feeMinor ?? 0,
+        state,
+        capturedMinor: order.payment?.minor ?? 0,
+        payoutDueAt: order.payment ? dueAt : null,
+        disputedAt: order.dispute?.openedAt ?? null,
+        payoutReference: order.payout?.reference ?? order.payout?.payoutBatchId ?? null,
+        payoutAttempts: order.payout?.attempt ?? 0,
+        refundReference: order.refund?.reference ?? null,
+        simulated: true as const,
       };
     });
   }

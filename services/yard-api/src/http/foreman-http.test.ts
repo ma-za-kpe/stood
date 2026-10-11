@@ -19,7 +19,22 @@ const fixture = () => {
         name,
         budgetMinor: 1000,
         deadline: intake.createdAt + 7 * 86400000,
-        tests: [{ id: 'book', path: 'tests/book.test.ts', content: 'expect(await book()).toBe(true);' }],
+        tests: [
+          {
+            id: 'book',
+            path: 'tests/book.test.js',
+            cases: [
+              {
+                name: 'books a slot',
+                args: ['book', '10:00'],
+                input: '',
+                status: 0,
+                output: 'booked 10:00\n',
+                match: 'exact',
+              },
+            ],
+          },
+        ],
       })),
     })),
   };

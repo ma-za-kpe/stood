@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { advanceTrancheRecord, restoreTrancheRecord, type TrancheCommand } from '../../domain/tranche-record.js';
 import type { OperationIntent, OperationStatus, StoredOperation } from '../../ports/payment-operation-store.js';
@@ -49,6 +49,26 @@ export class PostgresTranches implements TrancheStore {
     command: TrancheCommand,
   ): Promise<StoredTranche> {
     return this.db.transaction((tx) => this.applyInTransaction(tx, trancheId, expectedVersion, commandId, command));
+  }
+  async applyIfLatest(
+    trancheId: string,
+    expectedVersion: number,
+    commandId: string,
+    command: TrancheCommand,
+    packageId: string,
+  ): Promise<StoredTranche> {
+    return this.db.transaction(async (tx) => {
+      // The same row lock a package submission takes, so no newer package can arrive between this check and the write.
+      await tx.select({ id: streams.trancheId }).from(streams).where(eq(streams.trancheId, trancheId)).for('update');
+      const [latest] = await tx
+        .select({ id: schema.commitPackages.id })
+        .from(schema.commitPackages)
+        .where(eq(schema.commitPackages.trancheId, trancheId))
+        .orderBy(desc(schema.commitPackages.createdAt), desc(schema.commitPackages.id))
+        .limit(1);
+      if (latest?.id !== packageId) throw new TrancheStoreError('STALE_PACKAGE');
+      return this.applyInTransaction(tx, trancheId, expectedVersion, commandId, command);
+    });
   }
   async applyInTransaction(
     tx: Transaction,

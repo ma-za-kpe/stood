@@ -3,7 +3,7 @@
 - Status: accepted
 - Date: 2026-10-10
 - Deciders: product owner (payee model, holdback and fees, 2026-10-10) and engineer
-- Tasks: payee configuration, per-job ledger, Payouts, payout reconciliation, holdback, buyer fee line (#77, #78)
+- Tasks: payee configuration (T-0297), buyer fee line (T-0312), per-job ledger, Payouts, payout reconciliation, holdback (#77, #78)
 - Found by: the live end-to-end run (T-0296), which showed Yard sending `payee_ref: yard:<project>` where Stood pays `payee_ref` as the PayPal merchant
 
 ## Context
@@ -53,6 +53,7 @@ Example: a builder prices a milestone at £500. The allowance the buyer signs sh
   - Yard's fee is a line on the allowance the buyer signs.
 - **Limits:**
   - PayPal enables Payouts for real money only on approval; until then everything is sandbox.
+  - **Yard needs its own PayPal REST app for Payouts** (its own client id and secret, with Payouts enabled), separate from Stood's. Stood holds and settles; Yard pays builders out of its own account. The two credentials never share a service: Stood never holds Yard's Payouts credentials, and Yard never holds Stood's.
   - Taking buyers' money and paying third parties makes Yard the merchant of record for real money: builder verification and tax reporting come before any real launch, and public docs say so.
   - A dispute opened after a payout (beyond the 48 hours) remains a loss Yard carries; the window keeps that rare.
 - **Alternatives rejected:**

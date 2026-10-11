@@ -2,8 +2,9 @@ import { gunzipSync } from 'node:zlib';
 import type { RepoFile, RepositoryReader } from '../../ports/repository-reader.js';
 
 type Config = Readonly<{
-  // Optional read-only token for private repositories. Public ones need none. Stood has no write access anywhere.
-  token?: string;
+  // Optional read-only token, fixed or issued per call (a GitHub App installation token): private repositories and
+  // GitHub's higher rate limit. Public ones need none. Stood has no write access anywhere.
+  token?: string | (() => Promise<string>);
   fetch?: typeof globalThis.fetch;
   maxSourceBytes?: number;
   maxFiles?: number;
@@ -18,6 +19,47 @@ const safe = (path: string) =>
   !/[\\\0]/.test(path) &&
   path.split('/').every((part) => part && part !== '.' && part !== '..');
 const unavailable = () => new Error('REPOSITORY_UNAVAILABLE');
+// A response body, read at most `max` bytes: past that the stream is cancelled at once and nothing is kept.
+async function capped(response: Response, max: number): Promise<Buffer> {
+  const reader = response.body?.getReader();
+  if (!reader) throw unavailable();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > max) {
+        await reader.cancel().catch(() => undefined);
+        throw unavailable();
+      }
+      chunks.push(value);
+    }
+  } catch {
+    throw unavailable();
+  }
+  return Buffer.concat(chunks);
+}
+// PAX extended header records: "<length> <key>=<value>\n", length counting the whole record.
+function pax(body: Buffer): Record<string, string> {
+  const records: Record<string, string> = {};
+  let at = 0;
+  while (at < body.length) {
+    const space = body.indexOf(0x20, at);
+    const length = Number(body.subarray(at, space).toString('ascii'));
+    if (space < 0 || !Number.isSafeInteger(length) || length <= 0 || at + length > body.length) {
+      if (body.subarray(at).every((b) => b === 0)) break;
+      throw unavailable();
+    }
+    const record = body.subarray(space + 1, at + length - 1).toString('utf8');
+    const eq = record.indexOf('=');
+    if (eq < 1) throw unavailable();
+    records[record.slice(0, eq)] = record.slice(eq + 1);
+    at += length;
+  }
+  return records;
+}
 
 // T-0159: Stood's read-only view of a builder's repository, pinned to exact commits (GitHub REST and the commit
 // tarball). Anything it cannot read safely throws REPOSITORY_UNAVAILABLE, so the package waits; it never passes.
@@ -36,11 +78,12 @@ export class GitHubRepositoryReader implements RepositoryReader {
   private async get(url: string) {
     let response: Response;
     try {
+      const token = typeof this.config.token === 'function' ? await this.config.token() : this.config.token;
       response = await this.http(url, {
         headers: {
           Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          ...(this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         signal: AbortSignal.timeout(30_000),
       });
@@ -116,8 +159,8 @@ export class GitHubRepositoryReader implements RepositoryReader {
         : `https://codeload.github.com/${repository}/tar.gz/${commit}`,
     );
     if (!response.ok) throw unavailable();
-    const packed = Buffer.from(await response.arrayBuffer());
-    if (packed.length > this.maxBytes) throw unavailable();
+    // Fifth audit (2026-10-11): the size limit bounds memory while downloading, not after.
+    const packed = await capped(response, this.maxBytes);
     let archive: Buffer;
     try {
       archive = gunzipSync(packed, { maxOutputLength: this.maxBytes });
@@ -126,6 +169,9 @@ export class GitHubRepositoryReader implements RepositoryReader {
     }
     const files: { path: string; content: string }[] = [];
     const decoder = new TextDecoder('utf-8', { fatal: true });
+    // Fifth audit: long paths live in PAX ('x') or GNU ('L') headers that apply to the next entry. They are honoured;
+    // metadata Stood does not understand is refused, never guessed at.
+    let next: { path?: string; size?: number } = {};
     for (let offset = 0; offset + 512 <= archive.length; ) {
       const header = archive.subarray(offset, offset + 512);
       if (header.every((b) => b === 0)) break;
@@ -135,14 +181,38 @@ export class GitHubRepositoryReader implements RepositoryReader {
           .toString('utf8')
           .replace(/\0.*$/s, '');
       const prefix = field(345, 155);
-      const name = prefix ? `${prefix}/${field(0, 100)}` : field(0, 100);
-      const size = Number.parseInt(field(124, 12).trim() || '0', 8);
       const type = field(156, 1) || '0';
-      if (!Number.isSafeInteger(size) || size < 0) throw unavailable();
+      const headerSize = Number.parseInt(field(124, 12).trim() || '0', 8);
+      if (!Number.isSafeInteger(headerSize) || headerSize < 0) throw unavailable();
+      const size = type === 'x' || type === 'g' || type === 'L' ? headerSize : (next.size ?? headerSize);
       const body = archive.subarray(offset + 512, offset + 512 + size);
+      if (body.length !== size) throw unavailable();
       offset += 512 + Math.ceil(size / 512) * 512;
-      // GitHub's archives hold one top-level directory, and pax headers that carry metadata only.
-      if (type === 'g' || type === 'x') continue;
+      if (type === 'g') {
+        // GitHub's global header carries the commit id as a comment; a global path or size would be a guess.
+        if (Object.keys(pax(body)).some((key) => key !== 'comment')) throw unavailable();
+        continue;
+      }
+      if (type === 'x') {
+        const records = pax(body);
+        if (Object.keys(records).some((key) => !['path', 'size', 'mtime', 'atime', 'ctime', 'linkpath'].includes(key)))
+          throw unavailable();
+        const paxSize = records.size === undefined ? undefined : Number(records.size);
+        if (paxSize !== undefined && (!Number.isSafeInteger(paxSize) || paxSize < 0)) throw unavailable();
+        next = {
+          ...(records.path !== undefined ? { path: records.path } : {}),
+          ...(paxSize !== undefined ? { size: paxSize } : {}),
+        };
+        continue;
+      }
+      if (type === 'L') {
+        next = { ...next, path: body.toString('utf8').replace(/\0.*$/s, '') };
+        continue;
+      }
+      if (type === 'K') continue;
+      if (!['0', '1', '2', '5'].includes(type)) throw unavailable();
+      const name = next.path ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
+      next = {};
       const path = name.split('/').slice(1).join('/').replace(/\/$/, '');
       if (!path) continue;
       if (!safe(path)) throw unavailable();

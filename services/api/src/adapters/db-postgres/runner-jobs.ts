@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { RunnerJob } from '../../application/code-run.js';
 import { codeTerms } from '../../application/code-terms.js';
+import { JUDGE_DECISION } from '../../domain/judged-release.js';
 import { restoreTrancheRecord } from '../../domain/tranche-record.js';
 import * as schema from './schema.js';
 
@@ -13,7 +14,7 @@ const {
   usageReceipts: usage,
 } = schema;
 
-// T-0159: the runner's queue. For each code tranche that is held (or waiting after an earlier package), the latest
+// T-0159: the runner's queue. For each code tranche that is held (or deciding, or waiting after an earlier package), the latest
 // package not yet decided, with the terms the buyer signed on the allowance and the commits submitted before it,
 // and a final milestone again once its use is confirmed.
 // A tranche whose stored terms no longer check is skipped rather than run against guessed terms.
@@ -42,16 +43,17 @@ export class PostgresRunnerJobs {
       const latest = list.at(-1) as (typeof rows)[number];
       if (!latest.record) continue;
       const tranche = restoreTrancheRecord(latest.record);
-      if (!['HELD', 'WAITING'].includes(tranche.state)) continue;
+      // DECIDING: a run stopped between starting and recording its decision, so it is run again.
+      if (!['HELD', 'DECIDING', 'WAITING'].includes(tranche.state)) continue;
       // C4 (#77): a final milestone that waited only for usage runs again once a verified receipt for its commit exists.
-      const run = tranche.decisions.find((d) => d.id === `run:${latest.packageId}`);
+      const run = tranche.decisions.find((d) => d.id === `${JUDGE_DECISION.run}${latest.packageId}`);
       let confirmed = false;
       if (run) {
         if (
           tranche.state !== 'WAITING' ||
           run.decision.outcome !== 'WAIT' ||
           !run.decision.reason.includes('usage_release') ||
-          tranche.decisions.some((d) => d.id === `usage:${latest.packageId}`)
+          tranche.decisions.some((d) => d.id === `${JUDGE_DECISION.usage}${latest.packageId}`)
         )
           continue;
         const [receipt] = await this.db

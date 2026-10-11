@@ -82,7 +82,10 @@ it('refuses recognised keys in model output without returning or checkpointing t
     { ...output, risks: [credential] },
     {
       ...output,
-      milestones: output.milestones.map((m) => ({ ...m, tests: m.tests.map((t) => ({ ...t, content: credential })) })),
+      milestones: output.milestones.map((m) => ({
+        ...m,
+        tests: m.tests.map((t) => ({ ...t, cases: t.cases.map((c) => ({ ...c, output: credential })) })),
+      })),
     },
   ]) {
     const saver = new MemorySaver();

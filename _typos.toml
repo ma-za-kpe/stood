@@ -13,6 +13,8 @@ Magentic = "Magentic"
 RTO = "RTO"
 wdth = "wdth"
 opsz = "opsz"
+# setpriv --inh-caps (inheritable capabilities)
+inh = "inh"
 
 [default]
 # STRIDE-style bold initials: **I**nformation, **R**epudiation

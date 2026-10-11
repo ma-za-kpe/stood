@@ -269,6 +269,19 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
     );
   });
   app.get('/yard/v1/blueprints/:id', async (c) => c.json(await config.board.read(c.req.param('id'), request(c).actor)));
+  // ADR-0027: the job's ledger (buyer only): per work order, the builder's price, Yard's fee and where the money is.
+  app.get('/yard/v1/blueprints/:id/ledger', async (c) =>
+    c.json({ lines: await config.board.ledger(c.req.param('id'), request(c).actor), simulated: true }),
+  );
+  // ADR-0027: the buyer disputes a paid milestone inside its 48-hour review window; its payout waits.
+  app.post('/yard/v1/blueprints/:id/work-orders/:wo/dispute', async (c) => {
+    const { key, version, actor, now } = command(c);
+    const { reason } = body(c, ['reason']) as { reason: unknown };
+    if (typeof reason !== 'string') throw new YardError('INVALID');
+    return c.json(
+      ack(await config.board.dispute(c.req.param('id'), c.req.param('wo'), actor, version, key, now, reason)),
+    );
+  });
   app.get('/yard/v1/blueprints/:id/export', async (c) => {
     const { actor, now } = request(c),
       id = c.req.param('id');

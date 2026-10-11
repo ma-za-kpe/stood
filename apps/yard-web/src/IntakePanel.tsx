@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { assign, createActor, createMachine } from 'xstate';
 import { z } from 'zod';
 import { BlueprintEditor } from './BlueprintEditor.js';
-import type { EditableDraft } from './blueprint-edit.js';
+import type { AcceptanceCase, EditableDraft } from './blueprint-edit.js';
 import { CostBreakdown } from './CostBreakdown.js';
 import { browserRequestKey } from './claim-keys.js';
 import { ApiError, api } from './http.js';
@@ -47,7 +47,15 @@ const planSchema = z.object({
     ),
     costLines: z.array(z.custom<CostLine>()).optional(),
   }),
-  tests: z.array(z.object({ milestoneId: z.string(), id: z.string(), path: z.string(), content: z.string() })),
+  tests: z.array(
+    z.object({
+      milestoneId: z.string(),
+      id: z.string(),
+      path: z.string(),
+      content: z.string(),
+      cases: z.array(z.custom<AcceptanceCase>()).optional(),
+    }),
+  ),
   requirements: z.array(z.object({ id: z.string(), text: z.string(), testIds: z.array(z.string()) })),
   risks: z.array(z.string()),
 });
@@ -746,7 +754,8 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                       ...m,
                       tests: plan.tests
                         .filter((t) => t.milestoneId === m.id)
-                        .map(({ id, path, content }) => ({ id, path, content })),
+                        // Second audit (2026-10-11): the buyer edits the cases; Yard renders the test file from them.
+                        .map(({ id, path, cases }) => ({ id, path, cases: structuredClone([...(cases ?? [])]) })),
                     })),
                   }}
                   currency={plan.blueprint.currency}
