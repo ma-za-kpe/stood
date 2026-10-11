@@ -153,13 +153,24 @@ describe('builder payouts', () => {
     expect(paypal.sent.length).toBe(sentBefore);
     expect((await board.ledger(id, leaseBuyer))[0]).toMatchObject({ state: 'REVIEW' });
     // The owner finds it in PayPal and records it; or finds nothing, and it can be retried or refunded.
+    // Fourth audit: settling it paid needs PayPal's payout batch id, so it stays monitored for refunds and reversals.
+    await expect(
+      board.payoutAction(id, 'one', await v(), 'settle-bad', due + 31 * 86_400_000, {
+        type: 'SETTLE_REVIEW',
+        outcome: 'PAID_OUT',
+        reference: 'TXN-FOUND',
+        note: 'Found in the PayPal activity log',
+      }),
+    ).rejects.toThrow('INVALID');
     await board.payoutAction(id, 'one', await v(), 'settle', due + 31 * 86_400_000, {
       type: 'SETTLE_REVIEW',
       outcome: 'PAID_OUT',
+      payoutBatchId: 'PBFOUND123',
       reference: 'TXN-FOUND',
       note: 'Found in the PayPal activity log',
     });
     expect((await board.ledger(id, leaseBuyer))[0]).toMatchObject({ state: 'PAID_OUT', payoutReference: 'TXN-FOUND' });
+    expect((await board.payoutsOpen(due + 32 * 86_400_000)).map((o) => o.payout.payoutBatchId)).toEqual(['PBFOUND123']);
   });
 
   it('records refunds and reversals after a payout, and lets the owner retry under a new batch id or refund', async () => {
@@ -244,5 +255,32 @@ describe('builder payouts', () => {
         }),
       ).rejects.toThrow('CONFLICT');
     }
+  });
+
+  // Fourth audit (2026-10-11): an unreadable status is reported, and does not count as the day's check.
+  it('reports a paid-out payout PayPal would not show, and reads it again on the next run', async () => {
+    const { board } = await paid();
+    const paypal = fakePayPal();
+    const due = leaseAt + HOLDBACK_MS;
+    await run(board, paypal.provider, due);
+    paypal.item('PAID_OUT');
+    await run(board, paypal.provider, due + 1);
+    const checked = new Map<string, number>();
+    let reads = 0;
+    const flaky: PayoutProvider = {
+      ...paypal.provider,
+      status: async () => {
+        reads++;
+        return { status: 'UNKNOWN' };
+      },
+    };
+    const tick = (at: number, provider: PayoutProvider) =>
+      runPayouts({ board, provider, payeeOf: () => 'builder@example.com', clock: () => at, checked });
+    expect((await tick(due + 2 * 86_400_000, flaky)).issues[0]).toMatchObject({ code: 'PAYOUT_CHECK_FAILED' });
+    await tick(due + 2 * 86_400_000 + 60_000, flaky);
+    expect(reads).toBe(2);
+    expect((await tick(due + 2 * 86_400_000 + 120_000, paypal.provider)).issues).toEqual([]);
+    expect((await tick(due + 2 * 86_400_000 + 180_000, flaky)).issues).toEqual([]);
+    expect(reads).toBe(2);
   });
 });

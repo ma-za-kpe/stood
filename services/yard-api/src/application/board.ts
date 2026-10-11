@@ -142,7 +142,14 @@ export type PayoutAction =
   | Readonly<{ type: 'RETRY_PAYOUT'; payee: string; note: string }>
   | Readonly<{ type: 'REFUND_BUYER'; note: string }>
   | Readonly<{ type: 'REFUNDED'; reference: string; note: string }>
-  | Readonly<{ type: 'SETTLE_REVIEW'; outcome: 'PAID_OUT' | 'NOT_SENT'; reference: string; note: string }>;
+  // PAID_OUT needs PayPal's payout batch id (from the PayPal activity), so the payout stays monitored afterwards.
+  | Readonly<{
+      type: 'SETTLE_REVIEW';
+      outcome: 'PAID_OUT' | 'NOT_SENT';
+      reference: string;
+      payoutBatchId?: string;
+      note: string;
+    }>;
 // A PayPal email or a 13-character PayPal merchant id.
 const payee = (v: string) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,24}$/.test(v) || /^[A-Z0-9]{13}$/.test(v);
 const batchIdFor = (id: string, wo: string, attempt: number) =>
@@ -1496,6 +1503,10 @@ export class Board {
           break;
         case 'SETTLE_REVIEW':
           if (payout?.status !== 'REVIEW' || !action.reference.trim()) throw new YardError('CONFLICT');
+          if (action.outcome === 'PAID_OUT') {
+            if (!/^[A-Z0-9]{8,40}$/.test(action.payoutBatchId ?? '')) throw new YardError('INVALID');
+            payout.payoutBatchId = action.payoutBatchId as string;
+          }
           payout.status = action.outcome === 'PAID_OUT' ? 'PAID_OUT' : 'FAILED';
           payout.reference = action.reference.trim().slice(0, 200);
           if (payout.status === 'PAID_OUT') payout.settledAt = now;

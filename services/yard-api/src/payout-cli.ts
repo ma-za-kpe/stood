@@ -8,7 +8,8 @@ import { Board, type PayoutAction } from './application/board.js';
 //   payout-cli.js <project> <wo> retry <payee> "<note>"                 pay a failed or returned payout again
 //   payout-cli.js <project> <wo> refund "<note>"                        owe the buyer a refund instead
 //   payout-cli.js <project> <wo> refunded <reference> "<note>"          record the refund made in PayPal
-//   payout-cli.js <project> <wo> settle paid|not-sent <reference> "<note>"   record what PayPal shows for a REVIEW
+//   payout-cli.js <project> <wo> settle paid <payout batch id> <reference> "<note>"   PayPal shows it paid
+//   payout-cli.js <project> <wo> settle not-sent <reference> "<note>"                 PayPal shows nothing sent
 // Uses YARD_DATABASE_URL. Prints ids, states and amounts only.
 const [first, wo, verb, ...rest] = process.argv.slice(2);
 const url = process.env.YARD_DATABASE_URL?.trim() ?? '';
@@ -24,13 +25,16 @@ const action = ((): PayoutAction | null => {
   if (verb === 'retry' && rest.length === 2) return { type: 'RETRY_PAYOUT', payee: rest[0] as string, note };
   if (verb === 'refund') return { type: 'REFUND_BUYER', note };
   if (verb === 'refunded' && rest.length === 2) return { type: 'REFUNDED', reference: rest[0] as string, note };
-  if (verb === 'settle' && rest.length === 3 && ['paid', 'not-sent'].includes(rest[0] as string))
+  if (verb === 'settle' && rest[0] === 'paid' && rest.length === 4)
     return {
       type: 'SETTLE_REVIEW',
-      outcome: rest[0] === 'paid' ? 'PAID_OUT' : 'NOT_SENT',
-      reference: rest[1] as string,
+      outcome: 'PAID_OUT',
+      payoutBatchId: rest[1] as string,
+      reference: rest[2] as string,
       note,
     };
+  if (verb === 'settle' && rest[0] === 'not-sent' && rest.length === 3)
+    return { type: 'SETTLE_REVIEW', outcome: 'NOT_SENT', reference: rest[1] as string, note };
   return null;
 })();
 if (first !== 'list' && (!wo || !action)) usage();

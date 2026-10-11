@@ -57,13 +57,24 @@ export function fundingRecovery(deps: WorkerDeps) {
   if (typeof sdk.fund !== 'function') throw new Error('PayPal transport cannot fund orders');
   const mandates = new PostgresMandates(deps.db, new TokenCipher(deps.vaultKeys));
   const funding = new PostgresFunding(deps.db);
-  const provider = new PayPalFundingAdapter(sdk as PayPalFundingTransport, mandates);
+  const adapter = new PayPalFundingAdapter(sdk as PayPalFundingTransport, mandates);
+  // A provider that can only read: any write would throw, so recovery can never create or authorize anything.
+  const provider: typeof adapter = Object.assign(Object.create(adapter) as typeof adapter, {
+    create: async () => {
+      throw new Error('RECOVERY_READ_ONLY');
+    },
+    authorize: async () => {
+      throw new Error('RECOVERY_READ_ONLY');
+    },
+    read: adapter.read.bind(adapter),
+  });
   return async (key: string, orderId: string) => {
     if (!/^[A-Za-z0-9_-]{1,200}$/.test(orderId)) throw new Error('INVALID_ORDER_ID');
     const before = await funding.load(key);
-    // Third audit (2026-10-11): recovery only reads. Every state but these would let the normal state machine act
-    // (RESERVED creates an order); a finished funding has nothing to recover.
-    if (!['CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING'].includes(before.status)) throw new Error('NOT_RECOVERABLE');
+    // Third and fourth audits (2026-10-11): recovery only reads PayPal. Only CREATING (the create's answer was lost)
+    // is recovered: from there the flow reads the order and records it locally, and calls PayPal for nothing else.
+    // RESERVED would create an order and AWAITING_APPROVAL would authorize one, so every other state is refused.
+    if (before.status !== 'CREATING') throw new Error('NOT_RECOVERABLE');
     const outcome = await advanceFunding(funding, deps.tranches, provider, mandates, key, deps.clock, orderId);
     return { before: before.status, outcome };
   };

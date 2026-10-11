@@ -119,6 +119,8 @@ export class PayPalPayouts implements PayoutProvider {
         headers: { Authorization: `Bearer ${await this.bearer()}` },
         signal: AbortSignal.timeout(20_000),
       });
+      // A token PayPal no longer accepts is fetched again on the next read, as on a send.
+      if (response.status === 401) this.token = null;
       const item = object((object(await response.json())?.items as unknown[] | undefined)?.[0]);
       const status = ITEM[String(item?.transaction_status)] ?? 'UNKNOWN';
       const reference = typeof item?.transaction_id === 'string' ? item.transaction_id : undefined;

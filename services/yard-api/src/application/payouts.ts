@@ -87,12 +87,22 @@ export async function runPayouts(
         }
         continue;
       }
-      if (payout.status === 'PAID_OUT') {
-        if (now - (checked.get(payout.batchId) ?? 0) < RECHECK_MS) continue;
-        checked.set(payout.batchId, now);
-      }
+      if (payout.status === 'PAID_OUT' && now - (checked.get(payout.batchId) ?? 0) < RECHECK_MS) continue;
       const read = await deps.provider.status(payout.payoutBatchId ?? '');
-      if (read.status === 'PENDING' || read.status === 'UNKNOWN' || read.status === payout.status) {
+      // Fourth audit (2026-10-11): a read that failed is a problem to report, never a quiet check.
+      if (read.status === 'UNKNOWN') {
+        result.waiting++;
+        issue(
+          projectId,
+          wo,
+          'PAYOUT_CHECK_FAILED',
+          `PayPal status unreadable for ${payout.status.toLowerCase()} payout`,
+        );
+        continue;
+      }
+      // Only a read that worked counts as this day's check of a paid-out payout.
+      if (payout.status === 'PAID_OUT') checked.set(payout.batchId, now);
+      if (read.status === 'PENDING' || read.status === payout.status) {
         if (payout.status !== 'PAID_OUT') result.waiting++;
         continue;
       }

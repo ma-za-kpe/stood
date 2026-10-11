@@ -111,6 +111,14 @@ describe('PayPalPayouts', () => {
       expect((await r.payouts.status('PB12345678')).status, paypalStatus).toBe(ours);
     }
     expect(await h.payouts.status('../etc')).toEqual({ status: 'UNKNOWN' });
+    // Fourth audit: a status read that gets a 401 also drops the token.
+    const reads = paypal({
+      '/v1/oauth2/token': token,
+      status: { status: 401, body: { name: 'AUTHENTICATION_FAILURE' } },
+    });
+    expect(await reads.payouts.status('PB12345678')).toEqual({ status: 'UNKNOWN' });
+    await reads.payouts.status('PB12345678');
+    expect(reads.calls.filter((c) => c.url.endsWith('/oauth2/token'))).toHaveLength(2);
     await expect(h.payouts.send({ ...request, batchId: 'other' })).rejects.toThrow('INVALID_PAYOUT');
   });
 });
