@@ -160,6 +160,14 @@ PY
     grep -E '^YARD_DATABASE_URL=' .env >"$keys" || true
     docker compose run --rm --no-deps --env-from-file "$keys" app \
       sh -c 'pnpm --filter "@stood/yard-api..." build >/dev/null && node services/yard-api/dist/payout-cli.js "$@"' sh "$@" ;;
+  payout-check)
+    # ADR-0027: qualify builder payouts on the real PayPal sandbox with Yard's own app (sandbox money only): pay $1.00
+    # to the sandbox buyer, read it to paid out, retry without paying twice, and recover a duplicate from its link.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(YARD_PAYPAL_CLIENT_ID|YARD_PAYPAL_CLIENT_SECRET|PAYPAL_SANDBOX_BUYER_EMAIL)=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter "@stood/yard-api..." build >/dev/null && node services/yard-api/dist/payout-check-cli.js' ;;
   release-review)
     # Owner decision 2026-10-10: list, read-only, every code decision the old in-process runner recorded. Prints ids and
     # outcomes only, never a setting. Run it against production before settlement is switched back on.

@@ -23,15 +23,26 @@ const ITEM: Record<string, PayoutItemStatus> = {
   ONHOLD: 'PENDING',
 };
 // The original batch's id from a duplicate rejection's HATEOAS link (.../v1/payments/payouts/{payout_batch_id}).
+// Live sandbox, 2026-10-11: PayPal puts that link inside the error detail (`details[].link[]`), not in the top-level
+// `links` its schema describes; both places are read.
 const originalBatch = (body: Record<string, unknown> | null): string | null => {
-  const links = Array.isArray(body?.links) ? body.links : [];
-  for (const link of links) {
+  const details = Array.isArray(body?.details) ? body.details : [];
+  const candidates = [
+    ...(Array.isArray(body?.links) ? body.links : []),
+    ...details.flatMap((d) => {
+      const detail = object(d);
+      return [
+        ...(Array.isArray(detail?.link) ? detail.link : []),
+        ...(Array.isArray(detail?.links) ? detail.links : []),
+      ];
+    }),
+  ];
+  for (const link of candidates) {
     const id = /\/v1\/payments\/payouts\/([A-Z0-9]{8,40})(?:[/?]|$)/.exec(String(object(link)?.href ?? ''))?.[1];
     if (id) return id;
   }
   return null;
 };
-
 // ADR-0027: PayPal Payouts from Yard's own account. One batch, one item, per paid work order. The batch id is also
 // PayPal-Request-Id, so a resend after a lost answer returns the first result instead of paying again.
 export class PayPalPayouts implements PayoutProvider {

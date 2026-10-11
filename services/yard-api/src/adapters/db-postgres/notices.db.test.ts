@@ -13,15 +13,22 @@ beforeAll(async () => {
 afterAll(async () => {
   if (f) await f.close();
 });
-it('claims each notice key once across racing workers and only moves cursors forward (T-0213)', async () => {
+it('leases each notice key to one worker, retries expired leases, keeps deliveries, and only moves cursors forward', async () => {
   const second = f.connectRuntime();
   const a = new PostgresNoticeLog(f.limited),
     b = new PostgresNoticeLog(second);
   try {
-    const claims = await Promise.all([a.claim('p:7:buyer'), b.claim('p:7:buyer')]);
-    expect(claims.filter(Boolean)).toHaveLength(1);
+    const claims = await Promise.all([a.claim('p:7:buyer', 1000, 60_000), b.claim('p:7:buyer', 1000, 60_000)]);
+    expect(claims.sort()).toEqual(['BUSY', 'CLAIMED']);
+    // A failed send releases the lease at once; a crashed worker's lease expires.
     await a.release('p:7:buyer');
-    expect(await b.claim('p:7:buyer')).toBe(true);
+    expect(await b.claim('p:7:buyer', 1001, 60_000)).toBe('CLAIMED');
+    expect(await a.claim('p:7:buyer', 61_000, 60_000)).toBe('BUSY');
+    expect(await a.claim('p:7:buyer', 61_001, 60_000)).toBe('CLAIMED');
+    // Only delivery is permanent, and a late release cannot undo it.
+    await a.delivered('p:7:buyer', 61_002);
+    await b.release('p:7:buyer');
+    expect(await b.claim('p:7:buyer', 999_999_999, 60_000)).toBe('DELIVERED');
     await a.advance('p', 9);
     await b.advance('p', 4);
     expect(await a.cursor('p')).toBe(9);
