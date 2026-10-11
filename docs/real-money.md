@@ -17,7 +17,7 @@
    - **Tax reporting.** Payment-platform reporting for builders paid through Yard, in each country where builders and buyers are.
    - **Refunds and disputes.** A process, staffed by people, for disputes opened after a payout (beyond the 48-hour review window), which Yard carries as a loss.
 3. **Stood's own gates.**
-   - The runner qualified live, settlement switched on deliberately by the owner, and every release from the old in-process runner reviewed (they can never be paid: [`scripts/dev release-review`](SETUP.md)).
+   - The runner qualified live, settlement switched on deliberately by the owner, and every release from the old in-process runner reviewed (they can never be paid: [`scripts/dev release-review`](SETUP.md)). Done on 11 October 2026: the judge qualified live, and production had no releases from the old runner. Settlement itself is still off.
    - A full live end-to-end run on the sandbox, each step confirmed in PayPal.
    - A human approves every change to the money path ([ADR-0024](adr/0024-ci-gate-reviews-agent-code-in-the-sandbox.md)).
 4. **Legal review.** Terms for buyers and builders, privacy, and the licences a payments intermediary needs where it operates.
