@@ -19,9 +19,9 @@ export function checkPortal(root) {
         if (html.includes('class="portal-footer"')) {
           assert.match(html, /mailto:makpalyy@gmail\.com/, `Missing owner support in ${file}`);
           assert.match(html, /Maku Mazakpe/, `Missing creator in ${file}`);
-          assert.match(
-            html,
-            /https:\/\/ma-za-kpe\.github\.io\/stood\/api\/static\/css\/creator\.css/,
+          const links = [...html.matchAll(/<link\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
+          assert.ok(
+            links.includes('https://ma-za-kpe.github.io/stood/api/static/css/creator.css'),
             `Missing footer styles in ${file}`,
           );
           pages++;

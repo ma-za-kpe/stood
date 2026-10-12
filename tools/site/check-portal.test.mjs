@@ -18,6 +18,14 @@ test('finds a placeholder in a nested generated page and requires working owner 
     assert.throws(() => checkPortal(root), /Contact placeholder/);
     writeFileSync(page, html.replace('static/css/creator.css', 'missing.css'));
     assert.throws(() => checkPortal(root), /Missing footer styles/);
+    writeFileSync(
+      page,
+      html.replace(
+        'https://ma-za-kpe.github.io/stood/api/static/css/creator.css',
+        'https://untrusted.example/?stylesheet=https://ma-za-kpe.github.io/stood/api/static/css/creator.css',
+      ),
+    );
+    assert.throws(() => checkPortal(root), /Missing footer styles/);
     writeFileSync(page, html);
     assert.throws(() => checkPortal(root), /ENOENT/);
     writeFileSync(join(root, 'static/css/creator.css'), '.creator-footer { padding: 24px; }');
