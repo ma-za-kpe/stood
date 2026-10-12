@@ -18,7 +18,8 @@ export async function reconciliationTick(
   if (!options.owner.trim() || !Number.isFinite(now) || !Number.isInteger(limit) || limit < 1 || limit > 100)
     throw new RangeError('Invalid reconciliation configuration');
   await queue.seed();
-  const result = { processed: 0, waiting: 0, failed: 0 };
+  // Why each waiting settlement waits, by effect and reason code (counts only, never an id or amount).
+  const result = { processed: 0, waiting: 0, failed: 0, reasons: {} as Record<string, number> };
   for (let index = 0; index < limit; index++) {
     const job = await queue.claim();
     if (!job) break;
@@ -42,16 +43,18 @@ export async function reconciliationTick(
           });
       };
       await cancelSafeHold();
-      await reconcile(store, reader, job.trancheId, options.clock());
+      let read = await reconcile(store, reader, job.trancheId, options.clock());
       await cancelSafeHold();
       if (options.executor) {
         await executePayment(store, options.executor, job.trancheId, job.token, options.clock);
-        await reconcile(store, reader, job.trancheId, options.clock());
+        read = await reconcile(store, reader, job.trancheId, options.clock());
         await retryCapture(store, reader, options.executor, job.trancheId, job.token, options.clock);
       }
       const snapshot = await store.load(job.trancheId);
       if (snapshot.pending) {
         result.waiting++;
+        const why = `${snapshot.pending.operation.effect}:${read.reason ?? 'PENDING'}`;
+        result.reasons[why] = (result.reasons[why] ?? 0) + 1;
         const alert = { trancheId: job.trancheId, operationKey: snapshot.pending.operation.key, owner: options.owner };
         await queue.alert({ ...alert, code: 'PROVIDER_UNKNOWN' });
         if (options.clock() - Date.parse(snapshot.pending.createdAt) >= 3 * 3600000)

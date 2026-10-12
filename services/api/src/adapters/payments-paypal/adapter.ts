@@ -11,7 +11,8 @@ type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue | null =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as ObjectValue) : null;
 const text = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
-const unknown = Object.freeze({ complete: false });
+// Not proof. The reason is a fixed code, never a provider value, so the reconciler can say why a settlement waits.
+const unknown = (reason: string) => Object.freeze({ complete: false, reason });
 function inputFor(snapshot: StoredTranche): PayPalInput | null {
   const pending = snapshot.pending;
   if (!pending || !['RESERVED', 'AMBIGUOUS'].includes(pending.status)) return null;
@@ -136,7 +137,7 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
         pending.operation.key !== operation.operation.key ||
         pending.providerRequestId !== operation.providerRequestId
       )
-        return unknown;
+        return unknown('NOT_PENDING');
       const authResponse = await this.transport.call('GET_AUTHORIZATION', input);
       const authorization = object(authResponse.body);
       const orderId = object(object(authorization?.supplementary_data)?.related_ids)?.order_id;
@@ -146,7 +147,7 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
         !text(orderId) ||
         !matchesAmount(authorization.amount, input)
       )
-        return unknown;
+        return unknown('AUTHORIZATION_UNREADABLE');
       const orderResponse = await this.transport.call('GET_ORDER', { ...input, authorizationId: orderId });
       const order = object(orderResponse.body);
       if (
@@ -156,7 +157,7 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
         !Array.isArray(order.purchase_units) ||
         order.purchase_units.length !== 1
       )
-        return unknown;
+        return unknown('ORDER_UNREADABLE');
       const unit = object(order.purchase_units[0]);
       const payments = object(unit?.payments);
       if (
@@ -165,13 +166,13 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
         !Array.isArray(payments?.authorizations) ||
         !Array.isArray(payments.captures)
       )
-        return unknown;
+        return unknown('ORDER_MISMATCH');
       const authorizations = payments.authorizations.map(object);
       if (
         !authorizations.some((auth) => auth?.id === input.authorizationId) ||
         authorizations.some((auth) => !text(auth?.id))
       )
-        return unknown;
+        return unknown('AUTHORIZATION_NOT_IN_ORDER');
       const tranche = restoreTrancheRecord(snapshot.record);
       const known = new Set([
         ...tranche.attempts.map((hold) => hold.authorizationId),
@@ -196,7 +197,7 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
           !capture ||
           !captureMatches(capture, input)
         )
-          return unknown;
+          return unknown('CAPTURE_MISMATCH');
         if (capture.status === 'COMPLETED' && authorization.status === 'CAPTURED')
           return {
             ...proof,
@@ -207,10 +208,11 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
           };
         if (capture.status === 'DECLINED' && authorization.status === 'CREATED')
           return { ...proof, reference: capture.id, outcome: 'DECLINED' };
-        return unknown;
+        return unknown('CAPTURE_NOT_FINAL');
       }
       if (renewed.length) {
-        if (pending.operation.effect !== 'REAUTHORIZE' || renewed.length !== 1 || !renewed[0]) return unknown;
+        if (pending.operation.effect !== 'REAUTHORIZE' || renewed.length !== 1 || !renewed[0])
+          return unknown('RENEWAL_MISMATCH');
         const response = await this.transport.call('GET_AUTHORIZATION', {
           ...input,
           authorizationId: renewed[0].id as string,
@@ -225,7 +227,7 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
           typeof body.create_time !== 'string' ||
           typeof body.expiration_time !== 'string'
         )
-          return unknown;
+          return unknown('RENEWAL_UNREADABLE');
         return {
           ...proof,
           outcome: 'RENEWED',
@@ -264,9 +266,9 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
             amount: tranche.amount.toJSON(),
           };
       }
-      return unknown;
+      return unknown('NO_PROOF');
     } catch {
-      return unknown;
+      return unknown('READ_FAILED');
     }
   }
 }

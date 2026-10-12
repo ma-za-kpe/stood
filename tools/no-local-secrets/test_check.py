@@ -51,8 +51,8 @@ class NoLocalSecrets(unittest.TestCase):
         self.assertNotIn(SECRET, result.stdout + result.stderr)
 
     def test_passes_clean_files_and_ignores_public_or_short_values(self):
-        env = f"PAYPAL_CLIENT_SECRET={SECRET}\nSTOOD_SANDBOX_PAYEE_ID=NSBFV7E76WDQL\nAPP_ENV=local\n"
-        result = run(env, {"ok.md": "Payee NSBFV7E76WDQL in local mode."})
+        env = f"PAYPAL_CLIENT_SECRET={SECRET}\nSTOOD_SANDBOX_PAYEE_ID=TESTPAYEE0001\nAPP_ENV=local\n"
+        result = run(env, {"ok.md": "Payee TESTPAYEE0001 in local mode."})
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_blocks_lines_of_the_github_app_private_key(self):
