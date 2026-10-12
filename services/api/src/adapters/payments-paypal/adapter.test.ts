@@ -301,7 +301,10 @@ describe("PayPal's real order shapes", () => {
   };
   it('confirms a capture nested in its order by the "up" link to this authorization', async () => {
     const f = fixture('CAPTURE');
-    f.unit.payments = { captures: [nested(f.capture, ['auth_fixture'])], authorizations: [{ id: 'auth_fixture' }] };
+    f.unit.payments = {
+      captures: [nested(f.capture, ['auth_fixture'])],
+      authorizations: [{ id: 'auth_fixture' }],
+    } as never;
     expect(await f.adapter.read(f.snapshot.pending!)).toMatchObject({
       complete: true,
       outcome: 'CAPTURED',
@@ -311,7 +314,7 @@ describe("PayPal's real order shapes", () => {
   it('refuses a nested capture linked to another authorization, or ambiguously', async () => {
     for (const up of [['auth_other'], [], ['auth_fixture', 'auth_other']]) {
       const f = fixture('CAPTURE');
-      f.unit.payments = { captures: [nested(f.capture, up)], authorizations: [{ id: 'auth_fixture' }] };
+      f.unit.payments = { captures: [nested(f.capture, up)], authorizations: [{ id: 'auth_fixture' }] } as never;
       expect(await f.adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason: 'CAPTURE_MISMATCH' });
     }
     // An explicit link to another authorization wins over a matching "up" link.
@@ -320,7 +323,7 @@ describe("PayPal's real order shapes", () => {
       ...nested(f.capture, ['auth_fixture']),
       supplementary_data: { related_ids: { authorization_id: 'auth_other' } },
     };
-    f.unit.payments = { captures: [both], authorizations: [{ id: 'auth_fixture' }] };
+    f.unit.payments = { captures: [both], authorizations: [{ id: 'auth_fixture' }] } as never;
     expect(await f.adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason: 'CAPTURE_MISMATCH' });
   });
   it('confirms a void on an order that PayPal returns without a captures key', async () => {
