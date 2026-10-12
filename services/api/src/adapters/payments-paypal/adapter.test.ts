@@ -280,8 +280,8 @@ it('derives a retry proof only from an entirely matched empty capture history an
     amount: { minor: 1000, currency: 'GBP' },
   });
   authorization.status = 'PENDING';
-  expect(await adapter.read(f.snapshot.pending!)).toEqual({ complete: false });
+  expect(await adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason: 'NO_PROOF' });
   authorization.status = 'CREATED';
   authorization.expiration_time = 'invalid';
-  expect(await adapter.read(f.snapshot.pending!)).toEqual({ complete: false });
+  expect(await adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason: 'NO_PROOF' });
 });

@@ -127,7 +127,13 @@ if (!missing.length && problem) {
         ...(settings.settle ? { executor: reader } : {}),
       });
       process.stdout.write(
-        `Reconciliation: ${result.processed} processed, ${result.waiting} waiting, ${result.failed} failed.\n`,
+        `Reconciliation: ${result.processed} processed, ${result.waiting} waiting, ${result.failed} failed.${
+          result.waiting
+            ? ` Waiting: ${Object.entries(result.reasons)
+                .map(([why, n]) => `${n} ${why}`)
+                .join(', ')}.`
+            : ''
+        }\n`,
       );
       if (pending) {
         const moved = await pending();

@@ -2,7 +2,13 @@ import { advanceTrancheRecord, restoreTrancheRecord, type TrancheCommand } from 
 import type { ProviderStatusReader } from '../ports/provider-status-reader.js';
 import { type StoredTranche, type TrancheStore, TrancheStoreError } from '../ports/tranche-store.js';
 
-type Result = Readonly<{ status: 'WAIT' | 'RETRY' | 'RESOLVED' | 'IDLE' | 'EXPIRED_RESERVED'; alert?: boolean }>;
+// A WAIT says why, as a fixed code: the provider's own reason when it gave no proof, else what Stood refused.
+type Result = Readonly<{
+  status: 'WAIT' | 'RETRY' | 'RESOLVED' | 'IDLE' | 'EXPIRED_RESERVED';
+  alert?: boolean;
+  reason?: string;
+}>;
+const CODE = /^[A-Z][A-Z0-9_]{0,40}$/;
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue | null =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as ObjectValue) : null;
@@ -98,7 +104,7 @@ export async function reconcile(
   trancheId: string,
   now: number,
 ): Promise<Result> {
-  if (!Number.isFinite(now)) return { status: 'WAIT', alert: true };
+  if (!Number.isFinite(now)) return { status: 'WAIT', alert: true, reason: 'CLOCK' };
   const snapshot = await store.load(trancheId);
   try {
     if (!snapshot.pending) return { status: (await expireIfDue(store, snapshot, now)) ? 'EXPIRED_RESERVED' : 'IDLE' };
@@ -106,16 +112,19 @@ export async function reconcile(
     try {
       value = await reader.read(snapshot.pending);
     } catch {
-      return { status: 'WAIT', alert: true };
+      return { status: 'WAIT', alert: true, reason: 'READ_FAILED' };
     }
     const command = commandFor(snapshot, value, now);
-    if (!command) return { status: 'WAIT', alert: true };
+    if (!command) {
+      const said = object(value)?.reason;
+      return { status: 'WAIT', alert: true, reason: typeof said === 'string' && CODE.test(said) ? said : 'NOT_PROVEN' };
+    }
     // Validate the untrusted candidate without writes; malformed provider times,
     // identities and impossible transitions retain the existing reservation.
     try {
       advanceTrancheRecord(snapshot.record, command);
     } catch {
-      return { status: 'WAIT', alert: true };
+      return { status: 'WAIT', alert: true, reason: 'IMPOSSIBLE_TRANSITION' };
     }
     const proof = value as ObjectValue;
     const next = await store.apply(
