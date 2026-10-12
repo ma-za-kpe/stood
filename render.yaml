@@ -8,7 +8,9 @@ services:
     name: stood-api
     runtime: docker
     region: frankfurt
-    plan: free
+    # Starter, always on (owner's choice, 2026-10-12): on the free plan it slept when idle and took up to 11 minutes to
+    # wake, so signed requests held that long outlived their 5-minute signature and were refused.
+    plan: starter
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health

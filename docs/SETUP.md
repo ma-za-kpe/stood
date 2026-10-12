@@ -8,7 +8,7 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 
 | Piece | Where | Plan | Region | Notes |
 |---|---|---|---|---|
-| `stood-api` | Render web service (Docker, `Dockerfile` target `api`) | Free | Frankfurt | `https://stood-api.onrender.com`, health at `/health`. Sleeps after about 15 minutes idle; waking took up to 11 minutes on 2026-10-12, and a signed request held longer than 5 minutes is refused `401` (its signature is too old), so retry it |
+| `stood-api` | Render web service (Docker, `Dockerfile` target `api`) | **Starter (paid, about $7/month)** | Frankfurt | `https://stood-api.onrender.com`, health at `/health`. Always on since 2026-10-12: on the free plan it slept when idle and took up to 11 minutes to wake, and a signed request held longer than 5 minutes is refused `401` (its signature is too old) |
 | `stood-reconciler` | Render background worker (same image, `dist/reconcile-cli.js`) | **Starter (paid, about $7/month)** | Frankfurt | Render has no free background workers. The owner chose to pay rather than fold it into `stood-api` |
 | `stood-yard-api` | Render web service (Docker, `services/yard-api/Dockerfile`) | **Starter (paid, about $7/month)** | Frankfurt | `https://stood-yard-api.onrender.com/health`. Always on for lease-expiry and log-retention jobs. Owner's choice (2026-10-08). The Yard web app is served by this image at `/app/`; sign-in uses an owner-issued operator access code |
 | Postgres | Neon | Free | AWS eu-central-1 (Frankfurt) | **Direct (unpooled) URL**, because Stood uses `LISTEN` |

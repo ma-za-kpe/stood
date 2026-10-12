@@ -92,15 +92,16 @@ const reads: Record<string, readonly string[]> = {
 };
 const stood = (s: Service) => s.name.startsWith('stood-') && s.name !== 'stood-yard-api';
 
-it('declares Stood services in Frankfurt (free web, Starter worker) with health checks and release-only deploys (T-0214)', () => {
+it('declares Stood services in Frankfurt (Starter web and worker) with health checks and release-only deploys (T-0214, T-0348)', () => {
   expect(blueprint.services.map((s) => s.name).sort()).toEqual(Object.keys(reads).sort());
   for (const s of blueprint.services) {
-    // Render has no free background workers; the owner chose Starter for the reconciler (2026-10-07).
+    // Render has no free background workers; the owner chose Starter for the reconciler (2026-10-07), and for the API
+    // (2026-10-12), whose free plan slept long enough that signed requests expired.
     // The owner chose Starter for the reconciler (2026-10-07) and for Yard (2026-10-08, always on for its jobs).
     expect(s).toMatchObject({
       runtime: 'docker',
       region: 'frankfurt',
-      plan: s.type === 'worker' || !stood(s) ? 'starter' : 'free',
+      plan: 'starter',
       dockerfilePath: stood(s) ? './Dockerfile' : './services/yard-api/Dockerfile',
     });
     // Render deploys from main only after GitHub checks pass: no Actions minutes, no untested release.
