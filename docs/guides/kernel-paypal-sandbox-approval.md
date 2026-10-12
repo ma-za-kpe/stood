@@ -216,3 +216,25 @@ Stood's selectors accept both the new and the older layout.
 ## 13. Cost
 
 Each approval opens one headless browser for under a minute and deletes it. The whole qualification (three runs plus four probes) used a handful of browser-minutes. Set a usage cap in the Kernel dashboard if it offers one.
+
+## 14. KERNEL team review: unattended retry and capacity handling
+
+On 12 October 2026 the KERNEL team reviewed this guide, confirmed that its API usage is intended, and recommended retrying browser creation on 429/529, honouring Retry-After, and waiting for a free session on org/project concurrency limits. That feedback is now implemented in the adapter; the first regression reproduced the old immediate `KERNEL_UNAVAILABLE 429` failure.
+
+### What the adapter does
+
+- Retries only explicit HTTP 429 and 529 rejections from `POST /browsers`. A network exception or timeout is `KERNEL_CREATE_UNKNOWN` and is not automatically replayed: the server may have allocated a session before the reply was lost.
+- Honours Retry-After as a minimum wait, accepting non-negative integer seconds and HTTP dates. Missing, negative or malformed values use backoff. A valid hint beyond the remaining budget ends this run rather than sending an early retry.
+- Uses exponential backoff with jitter: the first wait is 0.5–1 second, then 1–2, 2–4 and so on, capped at 15–30 seconds. A provider hint can require a longer wait.
+- Stops after ten creation attempts or a two-minute monotonic-clock budget, whichever is reached first. Each HTTP attempt is limited to 30 seconds or the remaining budget. These are Stood's chosen limits, not a KERNEL recommendation.
+- Preserves `org_limit_exceeded` and `project_limit_exceeded` as safe reasons in retry diagnostics and exhausted-run errors. It waits and tries again; it never enumerates existing sessions or deletes another run's browser to make room.
+- Uses the browser session returned by the successful request only once. Page approval is never retried by this allocation loop. PayPal's API remains the authority for whether the buyer approved.
+- Attempts owned-session deletion in `finally`, including a known session with an invalid CDP URL or a failed connection/page step. A missing session ID cannot be safely deleted by guess. Local browser closure and cloud deletion remain separate cleanup steps; deletion is best effort, and the created browser retains its 300-second server timeout.
+
+Diagnostics contain only attempt number, HTTP status, delay and a fixed reason. They do not contain the API key, buyer login, CDP URL, approval URL or arbitrary provider error messages.
+
+### Verification and limits
+
+The deterministic tests simulate 429 then 529 then success, both concurrency-limit codes, persistent exhaustion, a Retry-After larger than the budget, slow rejected requests, non-retryable HTTP failures, ambiguous network failure, malformed CDP replies, connection failure and page failure. They also check integer/date hints and capped jitter. They verify one connected approval session and deletion of that owned session after eventual success.
+
+No live account was deliberately saturated and no new PayPal order was created for these error-path tests. The prior live PayPal/KERNEL evidence in this guide remains the separate happy-path qualification. Questions for KERNEL are whether the chosen retry ceiling fits its recommendation and whether a 429/529 response can leave an allocated session that needs reconciliation. The published [browser-creation reference](https://www.kernel.sh/docs/api-reference/browsers/create-a-browser-session) and [OpenAPI specification](https://www.kernel.sh/openapi.json) document the two status codes, Retry-After seconds on 429, and the structured error code.
