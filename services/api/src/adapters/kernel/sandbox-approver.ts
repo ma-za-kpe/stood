@@ -75,9 +75,10 @@ export class KernelSandboxApprover {
     };
     const started = runtime.clock();
     let status: number | undefined;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    let reason: string | undefined;
+    for (let attempt = 0; attempt < 10; attempt++) {
       const remaining = 120000 - (runtime.clock() - started);
-      if (remaining <= 0) throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status);
+      if (remaining <= 0) throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status, reason);
       let response: Response;
       try {
         response = await this.http(`${this.base}/browsers`, {
@@ -93,7 +94,13 @@ export class KernelSandboxApprover {
       if (response.ok) return response;
       status = response.status;
       if (status !== 429 && status !== 529) throw new KernelBrowserError('KERNEL_UNAVAILABLE', status);
-      await response.body?.cancel().catch(() => undefined);
+      const error = (await response.json().catch(() => null)) as { code?: unknown } | null;
+      reason =
+        error?.code === 'org_limit_exceeded' || error?.code === 'project_limit_exceeded'
+          ? error.code
+          : status === 429
+            ? 'RATE_LIMIT'
+            : 'CAPACITY';
       const delayMs = retryDelay(
         attempt,
         response.headers.get('Retry-After'),
@@ -101,15 +108,15 @@ export class KernelSandboxApprover {
         120000 - (runtime.clock() - started),
         runtime.random(),
       );
-      if (attempt === 5 || delayMs === null) throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status);
+      if (attempt === 9 || delayMs === null) throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status, reason);
       try {
-        runtime.onRetry({ attempt: attempt + 1, status, delayMs, reason: status === 429 ? 'RATE_LIMIT' : 'CAPACITY' });
+        runtime.onRetry({ attempt: attempt + 1, status, delayMs, reason });
       } catch {
         /* Diagnostics do not own the approval. */
       }
       await runtime.sleep(delayMs);
     }
-    throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status);
+    throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status, reason);
   }
   async approve(link: string): Promise<void> {
     const target = URL.canParse(link) ? new URL(link) : null;
