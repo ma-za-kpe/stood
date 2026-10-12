@@ -81,3 +81,5 @@ This is the original credential-dependent checklist. Completed slices include re
 3. Set the provider mode (for example `PROVIDER_PAYPAL=live`, which still means the PayPal **sandbox**).
 4. Start the service. `/health` must report the provider as `live` and ready. A missing key or failed readiness is a named startup error.
 5. Run the deferred tests for that provider, and record their evidence in [`TASKS.md`](../TASKS.md) before relying on it.
+
+C4 continuation (2026-10-12): the T-0354 operator close-out now requires `--provider-create-rejected` and a note identifying privately reviewed definitive provider rejection evidence. Its 72-hour delay is an operator policy, not evidence of provider absence. Invalid timestamps are refused, and the failure write compares the funding version, CREATING state and absent order under the store's transaction lock. Leave the two October 10 fundings open until rejection evidence is reconciled; do not close ambiguous lost replies. The [project erasure proposal](yard/Y22-project-erasure-proposal.md) is design only; Board event deletion remains unavailable.
