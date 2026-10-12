@@ -18,7 +18,7 @@ inh = "inh"
 
 [default]
 # STRIDE-style bold initials: **I**nformation, **R**epudiation
-extend-ignore-re = ["\\*\\*[A-Z]\\*\\*[a-z]+"]
+extend-ignore-re = ["\\*\\*[A-Z]\\*\\*[a-z]+", "(?:pkg_|trn_|alw_|bl_|upl_)[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"]
 
 [files]
 extend-exclude = ["docs/brand/**/*.svg", "*.lock", "CHANGELOG.md", "packages/yard-contracts/test/fakes/startup-tribunal.json"]

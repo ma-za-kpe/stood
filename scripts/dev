@@ -69,6 +69,13 @@ PY
       cat "$next" >"$f" && rm -f "$next" && chmod 600 "$f"   # writes through a symlinked .env
     done
     echo "Saved RUNNER_KEY_ID=$id and RUNNER_SIGNING_KEY to .env (not printed)." ;;
+  yard-live-e2e) shift
+    # T-0189: real hosted app sessions, Stood runner/usage and PayPal sandbox capture; private recording in .sandbox.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^(YARD_OPERATORS|STOOD_API_KEY|STOOD_HMAC_SECRET|KERNEL_API_KEY|PAYPAL_SANDBOX_BUYER_EMAIL|PAYPAL_SANDBOX_BUYER_PASSWORD)=' .env >"$keys" || true
+    docker compose run --rm --no-deps -T --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/yard-live-e2e-cli.js "$@"' yard-live-e2e "$@" ;;
   live-e2e)
     # C4 (#77): one live end-to-end run against the deployed Stood API on the PayPal SANDBOX (capture, void, and a
     # final milestone released by a signed usage receipt). Only the keys it needs reach the container; none printed.
