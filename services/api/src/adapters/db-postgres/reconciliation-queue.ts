@@ -7,6 +7,13 @@ export class PostgresReconciliationQueue implements ReconciliationQueue {
     await this.pool.query(
       'INSERT INTO reconciliation_jobs (tranche_id) SELECT tranche_id FROM payment_streams WHERE record IS NOT NULL ON CONFLICT DO NOTHING',
     );
+    // Live run, 2026-10-12: a settled tranche is next checked an hour later, so a capture its new decision reserved
+    // waited up to an hour before reaching PayPal. An operation reserved and not yet sent makes its job due now.
+    await this.pool.query(
+      `UPDATE reconciliation_jobs AS jobs SET next_run_at = clock_timestamp()
+       WHERE jobs.next_run_at > clock_timestamp() AND (jobs.leased_until IS NULL OR jobs.leased_until <= clock_timestamp())
+         AND EXISTS (SELECT 1 FROM payment_operations AS ops WHERE ops.tranche_id = jobs.tranche_id AND ops.status = 'RESERVED')`,
+    );
   }
   async claim(): Promise<ReconciliationJob | null> {
     const result = await this.pool.query<ReconciliationJob>(

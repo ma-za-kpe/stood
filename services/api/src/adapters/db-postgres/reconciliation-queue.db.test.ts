@@ -114,4 +114,17 @@ describe('Durable reconciliation jobs and owned alerts', () => {
     expect(alerts).toContainEqual({ code: 'SAFE_CANCEL_REQUESTED', owner: 'local-reviewer' });
     expect(alerts).toContainEqual({ code: 'UNRESOLVED_3H', owner: 'local-reviewer' });
   });
+  // Live run, 2026-10-12: a reserved operation must not wait out a settled tranche's one-hour schedule.
+  it('makes a job due as soon as its tranche has an operation reserved, and leaves the rest scheduled', async () => {
+    // The test above reserved a real cancellation on trn_old; queue_a has nothing reserved.
+    expect((await store.load('trn_old')).pending?.status).toBe('RESERVED');
+    await pool.query(
+      "UPDATE reconciliation_jobs SET next_run_at = clock_timestamp() + interval '1 hour', leased_until = NULL, lease_token = NULL WHERE tranche_id IN ('trn_old', 'queue_a', 'queue_b')",
+    );
+    expect(await queue.claim()).toBeNull();
+    await queue.seed();
+    const due = await queue.claim();
+    expect(due?.trancheId).toBe('trn_old');
+    expect(await queue.claim()).toBeNull();
+  });
 });
