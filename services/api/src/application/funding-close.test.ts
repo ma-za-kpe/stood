@@ -8,19 +8,35 @@ const operation = (patch: Partial<FundingOperation> = {}) =>
     key: 'f',
     trancheId: 't',
     status: 'CREATING',
+    version: 1,
     orderId: null,
     createdAt: new Date(created).toISOString(),
     ...patch,
   }) as FundingOperation;
 const store = (row: FundingOperation) => ({ load: vi.fn(async () => row), fail: vi.fn(async () => row) });
-const input = { by: 'owner', note: 'PayPal refused the payee before T-0295', now: created + CLOSE_AFTER_MS };
+const input = {
+  by: 'owner',
+  note: 'PayPal refused the payee before T-0295',
+  now: created + CLOSE_AFTER_MS,
+  providerOutcome: 'CREATE_REJECTED' as const,
+};
 
 // #77: closing a funding that never got a PayPal order, without calling PayPal.
 describe('closing a stuck funding', () => {
   it('fails a CREATING funding with no order after 72 hours, keeping who and why', async () => {
     const s = store(operation());
     expect(await closeStuckFunding(s, 'f', input)).toEqual({ before: 'CREATING', outcome: 'FAILED' });
-    expect(s.fail).toHaveBeenCalledWith('f', 'closed by owner: PayPal refused the payee before T-0295');
+    expect(s.fail).toHaveBeenCalledWith('f', 'closed by owner: PayPal refused the payee before T-0295', {
+      version: 1,
+      status: 'CREATING',
+      orderId: null,
+    });
+  });
+  it('requires an explicit provider rejection attestation before changing state', async () => {
+    const s = store(operation());
+    const { providerOutcome: _outcome, ...withoutProof } = input;
+    expect(await closeStuckFunding(s, 'f', withoutProof)).toEqual({ refused: 'NEEDS_PROVIDER_REJECTION' });
+    expect(s.fail).not.toHaveBeenCalled();
   });
   it('refuses anything that might have a PayPal order or is still recent, and never writes', async () => {
     const cases: [FundingOperation, typeof input, string][] = [
@@ -29,6 +45,10 @@ describe('closing a stuck funding', () => {
       [operation(), { ...input, now: created + CLOSE_AFTER_MS - 1 }, 'TOO_RECENT'],
       [operation(), { ...input, by: '' }, 'NEEDS_NAME_AND_REASON'],
       [operation(), { ...input, note: 'short' }, 'NEEDS_NAME_AND_REASON'],
+      [operation(), { ...input, now: Number.NaN }, 'INVALID_TIME'],
+      [operation(), { ...input, now: Infinity }, 'INVALID_TIME'],
+      [operation(), { ...input, now: -1 }, 'INVALID_TIME'],
+      [operation({ createdAt: 'invalid' }), input, 'INVALID_TIME'],
     ];
     for (const [row, given, refused] of cases) {
       const s = store(row);

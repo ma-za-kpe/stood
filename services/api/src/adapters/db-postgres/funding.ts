@@ -4,6 +4,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Nonce } from '../../domain/nonce.js';
 import { restoreTrancheRecord } from '../../domain/tranche-record.js';
 import {
+  type FundingFailureGuard,
   type FundingHold,
   type FundingOperation,
   type FundingReservation,
@@ -289,9 +290,19 @@ export class PostgresFunding implements FundingStore {
       });
     });
   }
-  fail(key: string, reference: string) {
+  fail(key: string, reference: string, guard?: FundingFailureGuard) {
     return this.locked(key, async (tx, row) => {
       if (!text(reference)) throw new FundingStoreError('INVALID');
+      if (
+        guard &&
+        (!Number.isSafeInteger(guard.version) ||
+          guard.version < 0 ||
+          guard.status !== 'CREATING' ||
+          guard.orderId !== null)
+      )
+        throw new FundingStoreError('INVALID');
+      if (guard && (row.version !== guard.version || row.status !== guard.status || row.orderId !== guard.orderId))
+        throw new FundingStoreError('STALE_VERSION');
       if (row.status === 'FAILED') {
         if (row.reference !== reference) throw new FundingStoreError('IDENTITY_CONFLICT');
         return snapshot(row);

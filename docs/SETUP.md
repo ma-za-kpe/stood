@@ -202,7 +202,7 @@ Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler t
 scripts/dev runner-check   # qualify the judge on real Vercel Sandbox: pass, fail, no network, no credentials, nobody with no capabilities, runaway stopped; the builder's early exit and forged report FAIL, its tampering is refused, the judge cannot import its code
 scripts/dev release-review # list, read-only, every code decision the old in-process runner recorded (void for payment); needs DATABASE_URL
 scripts/dev funding-recover <funding key> <PayPal order id>  # recover a funding stuck in CREATING: Stood only reads the order (any PayPal write is refused) and accepts it only if PayPal shows it is that funding
-scripts/dev funding-close <funding key> --by <name> --note "<reason>"  # close a funding stuck in CREATING that never got a PayPal order: refused unless no order id was recorded, it is older than 72 hours and a person gives a reason; calls nothing at PayPal
+scripts/dev funding-close <funding key> --by <name> --note "<rejection evidence>" --provider-create-rejected  # reviewed definitive PayPal create rejection only; no recorded order, 72-hour operator delay, atomic version guard; calls nothing at PayPal
 scripts/dev runner-key     # create the signing key (refuses to replace one; --rotate to replace)
 scripts/dev evidence-check # qualify the evidence bucket: write once by hash, read back, retry is the same object
 ```
@@ -314,3 +314,5 @@ scripts/dev github-check
 7. Mint the MCP token for the PayPal AI Toolkit and run `/paypal:setup` ([T16](tech/T16-paypal-ai-toolkit.md)).
 
 Postman is deferred by the owner as of 2026-10-09. No upgrade or API key is needed for this phase or C2 closure. Existing Render health checks and GitHub Actions remain in use; see [the operational decision](tech/T10-deployment.md#postman-deferred).
+
+Funding close-out requires private provider rejection evidence bound to that funding request (for example a definitive create error and its PayPal debug id). A missing local order id or elapsed 72 hours cannot establish that PayPal created no order. `--provider-create-rejected` records the operator attestation; the tool does not independently verify it. Do not use it for a timeout, lost reply or ambiguous provider outcome: recover a known order instead, or keep the funding waiting for reconciliation. The transaction refuses closure if a worker advanced the funding after the operator read it.

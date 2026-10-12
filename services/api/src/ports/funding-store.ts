@@ -43,6 +43,7 @@ export type FundingOperation = Readonly<{
   reference: string | null;
   createdAt: string;
 }>;
+export type FundingFailureGuard = Readonly<{ version: number; status: 'CREATING'; orderId: null }>;
 export interface FundingStore {
   reserve(input: FundingReservation): Promise<FundingOperation>;
   load(key: string): Promise<FundingOperation>;
@@ -51,7 +52,7 @@ export interface FundingStore {
   beginAuthorize(key: string, version: number): Promise<FundingOperation>;
   confirm(key: string, hold: FundingHold): Promise<FundingOperation>;
   expire(key: string, hold: FundingHold, now: number): Promise<FundingOperation>;
-  fail(key: string, reference: string): Promise<FundingOperation>;
+  fail(key: string, reference: string, guard?: FundingFailureGuard): Promise<FundingOperation>;
 }
 export class FundingStoreError extends Error {
   constructor(readonly code: 'INVALID' | 'NOT_FOUND' | 'STALE_VERSION' | 'IDENTITY_CONFLICT' | 'CONFLICT') {
