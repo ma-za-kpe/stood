@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -8,6 +8,7 @@ import { FaultController } from '../../../../simulators/src/faults.js';
 import { simulatorServer } from '../../../test/contracts/paypal-simulator.js';
 import { codeParams } from '../../../test/fixtures/code-terms.js';
 import { advanceMandate } from '../../application/mandate-signing.js';
+import { createApp } from '../../http/app.js';
 import { ServerSdkTransport } from '../payments-paypal/sdk.js';
 import { PayPalVaultAdapter } from '../payments-paypal/vault.js';
 import { PostgresFunding } from './funding.js';
@@ -523,4 +524,55 @@ it('keeps queue scheduling outside consent history and rejects backward or mixed
   ).rejects.toThrow();
   await expect(store.unresolved(Number.NaN)).rejects.toThrow('INVALID');
   await expect(store.unresolved(-1)).rejects.toThrow('INVALID');
+});
+
+it('replays a signed HTTP mandate request across clock changes with real storage and rejects malformed JSON', async () => {
+  const { input, draft } = await setup();
+  let at = now;
+  const apiKey = 'fixture_platform_key',
+    secret = 'fixture_signing_secret';
+  const app = createApp({
+    appEnv: 'ci',
+    demoMode: false,
+    paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
+    api: {
+      store: new PostgresPlatformApi(db),
+      platformId: 'buyer',
+      key: apiKey,
+      secret,
+      clock: () => at,
+      signing: { mode: 'sim', mandates: store, funding: new PostgresFunding(db) },
+    },
+  });
+  const path = `/v1/allowances/${draft.id}/mandate`;
+  const request = (body: string, key = input.key) => {
+    const timestamp = String(Math.floor(at / 1000));
+    const signature = createHmac('sha256', secret)
+      .update(JSON.stringify(['stood.request@2', timestamp, 'POST', path, key, '', 'application/json', body]))
+      .digest('hex');
+    return app.request(path, {
+      method: 'POST',
+      body,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': key,
+        'Stood-Signature': `t=${timestamp},v2=${signature}`,
+      },
+    });
+  };
+  const first = await request('{}');
+  expect(first.status).toBe(202);
+  const original = await first.json();
+  at += 1000;
+  const retried = await request('{}');
+  expect(retried.status).toBe(202);
+  expect(await retried.json()).toEqual(original);
+  expect((await store.load(input.key)).acceptedAt).toBe(now);
+  expect(await store.events(input.key)).toHaveLength(1);
+  const badKey = randomUUID();
+  const invalid = await request('{invalid', badKey);
+  expect(invalid.status).toBe(422);
+  expect(await invalid.json()).toMatchObject({ code: 'validation' });
+  await expect(store.load(badKey)).rejects.toThrow('NOT_FOUND');
 });
