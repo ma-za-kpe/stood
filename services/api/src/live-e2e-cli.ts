@@ -40,6 +40,13 @@ async function call(method: 'GET' | 'POST', path: string, body?: unknown, idempo
     try {
       return await once(method, path, body, idempotency);
     } catch (error) {
+      // A read refused as unauthorized once (seen live on 2026-10-12, cause not found) is retried once and logged, so a
+      // repeat still fails and shows.
+      if (method === 'GET' && attempt === 1 && String(error).includes(' 401 ')) {
+        log(`auth: ${String(error)}; retrying ${method} ${path} once`);
+        await setTimeout(2_000);
+        continue;
+      }
       if (!(error instanceof TypeError) || attempt >= 6) throw error;
       log(`network: ${error.message}; retrying ${method} ${path} (${attempt})`);
       await setTimeout(5_000 * attempt);
@@ -252,6 +259,13 @@ for (const [name, commit] of [
   ['final', passing],
 ] as const) {
   const trancheId = tranches[name] as string;
+  // A resumed run whose package was already submitted waits for that one instead of submitting again.
+  const current = await call('GET', `/tranches/${trancheId}`);
+  if (typeof current.package_id === 'string') {
+    packages[name] = current.package_id;
+    note('package', { milestone: name, id: current.package_id, resumed: true });
+    continue;
+  }
   const pkg = await call(
     'POST',
     `/tranches/${trancheId}/packages`,
