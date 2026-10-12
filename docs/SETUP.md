@@ -338,3 +338,7 @@ The mandate POST requires an empty JSON object. A retry with the same idempotenc
 When consent expires in `RESERVED` or `AWAITING_APPROVAL`, the signing worker records terminal `REVOKED` locally, with the original consent and provider references retained in history. This does not cancel a PayPal object. `CREATING` and `TOKENIZING` may describe an ambiguous provider write; they retain read-only historical recovery, and expiry never permits a new write. Funding authority still requires a matching, signed, unexpired mandate.
 
 Migration 0028 extends the guarded local revocation path; migration 0029 stores polling order separately from the consent facts. The worker gives unexpired work priority and rotates requests that keep waiting, using its own clock. Polling does not change the mandate version or append consent events. The API's public status enum remains unchanged.
+
+### KERNEL browser capacity
+
+Sandbox approval now retries explicit browser-creation 429/529 responses, respecting Retry-After and using jittered backoff. Allocation is bounded by ten attempts and two minutes; exhausted org/project limits require capacity to free up before another run. Do not delete sessions belonging to other runs. A network timeout is an unknown create outcome and is not blindly retried. See the [KERNEL team feedback implementation](guides/kernel-paypal-sandbox-approval.md#14-kernel-team-review-unattended-retry-and-capacity-handling).
