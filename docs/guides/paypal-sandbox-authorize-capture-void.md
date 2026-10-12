@@ -110,6 +110,8 @@ tools/paypal-witness/witness.py disputes
 
 **Lesson 12: an audit needs a way for a person to close a finding.** A capture made outside your app (we captured `3WS56911LU245183B` with an operator tool) is real money PayPal reports and your ledger never saw, so it is flagged every hour. Stood lets a named person resolve it with a reason (`scripts/dev findings resolve <id> --by <name> --note "<reason>"`); the audit then never reopens it (T-0257).
 
+**Lesson 15: a capture nested in an order does not carry its authorization id.** Read on its own (`GET /v2/payments/captures/{id}`), a capture has `supplementary_data.related_ids.authorization_id`. The same capture inside its order (`GET /v2/checkout/orders/{id}`, `purchase_units[].payments.captures[]`) has no `supplementary_data` at all, only `links`, one of which is `rel: up` to `/v2/payments/authorizations/{id}`. Stood's reader checked the nested copy for `supplementary_data`, so it could never confirm a capture by looking it up: on 12 October 2026 a real $2.00 sandbox capture (`69M74068D7399832H`) sat as "ambiguous" for hours. It now accepts either link, still requiring the exact authorization, `invoice_id` and amount (T-0347).
+
 ## 4b. How the sandbox says no (probed)
 
 [`tools/paypal-probe/probe.py`](../../tools/paypal-probe/probe.py) places one 1.00 USD hold from the saved test buyer, tries the edge cases below against it, and voids it (nothing is captured). It prints statuses and PayPal's error names only. What it found on 8 October 2026, recorded in [`services/simulators/fidelity/`](../../services/simulators/fidelity/paypal-sandbox-errors-2026-10-08.json):

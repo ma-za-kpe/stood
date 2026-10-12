@@ -32,12 +32,26 @@ function matchesAmount(value: unknown, input: PayPalInput): boolean {
   const amount = object(value);
   return amount?.currency_code === input.amount.currencyCode && amount?.value === input.amount.value;
 }
-function captureMatches(capture: ObjectValue, input: PayPalInput): boolean {
+// PayPal links a capture to its authorization in two shapes, both seen live on 2026-10-12: a capture read on its
+// own carries supplementary_data.related_ids.authorization_id; the same capture nested in an order carries no
+// supplementary_data, only an "up" link to /v2/payments/authorizations/{id}. Either must name this authorization.
+function linkedTo(capture: ObjectValue, authorizationId: string): boolean {
   const related = object(object(capture.supplementary_data)?.related_ids);
+  if (related?.authorization_id !== undefined) return related.authorization_id === authorizationId;
+  const links = Array.isArray(capture.links) ? capture.links.map(object) : [];
+  const up = links.filter((link) => link?.rel === 'up');
+  if (up.length !== 1) return false;
+  try {
+    return new URL(String(up[0]?.href)).pathname === `/v2/payments/authorizations/${authorizationId}`;
+  } catch {
+    return false;
+  }
+}
+function captureMatches(capture: ObjectValue, input: PayPalInput): boolean {
   return (
     text(capture.id) &&
     capture.invoice_id === input.operationKey &&
-    related?.authorization_id === input.authorizationId &&
+    linkedTo(capture, input.authorizationId) &&
     matchesAmount(capture.amount, input)
   );
 }
@@ -160,13 +174,13 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
         return unknown('ORDER_UNREADABLE');
       const unit = object(order.purchase_units[0]);
       const payments = object(unit?.payments);
-      if (
-        unit?.custom_id !== operation.trancheId ||
-        !matchesAmount(unit.amount, input) ||
-        !Array.isArray(payments?.authorizations) ||
-        !Array.isArray(payments.captures)
-      )
-        return unknown('ORDER_MISMATCH');
+      if (unit?.custom_id !== operation.trancheId) return unknown('ORDER_TRANCHE_MISMATCH');
+      if (!matchesAmount(unit.amount, input)) return unknown('ORDER_AMOUNT_MISMATCH');
+      if (!Array.isArray(payments?.authorizations)) return unknown('ORDER_WITHOUT_AUTHORIZATIONS');
+      // PayPal leaves out an empty list: an order nobody captured has no "captures" key at all.
+      if (payments.captures !== undefined && !Array.isArray(payments.captures))
+        return unknown('ORDER_CAPTURES_INVALID');
+      const captures: unknown[] = Array.isArray(payments.captures) ? payments.captures : [];
       const authorizations = payments.authorizations.map(object);
       if (
         !authorizations.some((auth) => auth?.id === input.authorizationId) ||
@@ -188,12 +202,12 @@ export class PayPalAdapter implements PaymentExecutor, ProviderStatusReader {
         noCapture: true,
         noRenewal: renewed.length === 0,
       };
-      if (payments.captures.length) {
-        const capture = object(payments.captures[0]);
+      if (captures.length) {
+        const capture = object(captures[0]);
         if (
           pending.operation.effect !== 'CAPTURE' ||
           renewed.length ||
-          payments.captures.length !== 1 ||
+          captures.length !== 1 ||
           !capture ||
           !captureMatches(capture, input)
         )
