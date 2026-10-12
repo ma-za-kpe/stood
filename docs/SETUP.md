@@ -202,6 +202,7 @@ Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler t
 scripts/dev runner-check   # qualify the judge on real Vercel Sandbox: pass, fail, no network, no credentials, nobody with no capabilities, runaway stopped; the builder's early exit and forged report FAIL, its tampering is refused, the judge cannot import its code
 scripts/dev release-review # list, read-only, every code decision the old in-process runner recorded (void for payment); needs DATABASE_URL
 scripts/dev funding-recover <funding key> <PayPal order id>  # recover a funding stuck in CREATING: Stood only reads the order (any PayPal write is refused) and accepts it only if PayPal shows it is that funding
+scripts/dev funding-close <funding key> --by <name> --note "<reason>"  # close a funding stuck in CREATING that never got a PayPal order: refused unless no order id was recorded, it is older than 72 hours and a person gives a reason; calls nothing at PayPal
 scripts/dev runner-key     # create the signing key (refuses to replace one; --rotate to replace)
 scripts/dev evidence-check # qualify the evidence bucket: write once by hash, read back, retry is the same object
 ```

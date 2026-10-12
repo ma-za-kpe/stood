@@ -153,6 +153,15 @@ PY
     grep -E '^(DATABASE_URL|APP_ENV|PROVIDER_PAYPAL|PAYPAL_CLIENT_ID|PAYPAL_CLIENT_SECRET|PAYPAL_BASE_URL|VAULT_TOKEN_KEYS)=' .env >"$keys" || true
     docker compose run --rm --no-deps --env-from-file "$keys" app \
       sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/funding-recover-cli.js "$0" "$1"' "$1" "$2" ;;
+  funding-close) shift
+    # #77 operations: close a funding stuck in CREATING that never got a PayPal order (older than 72 hours, no order
+    # id, a named person and a reason). Calls nothing at PayPal. Prints the status only.
+    [ $# -ge 1 ] || { echo 'Usage: scripts/dev funding-close <funding key> --by <name> --note "<reason>"' >&2; exit 2; }
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^DATABASE_URL=' .env >"$keys" || true
+    docker compose run --rm --no-deps --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/funding-close-cli.js "$@"' sh "$@" ;;
   yard-payout) shift
     # Third audit (2026-10-11), ADR-0027: list builder payouts that need the owner, or record the owner's decision.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
