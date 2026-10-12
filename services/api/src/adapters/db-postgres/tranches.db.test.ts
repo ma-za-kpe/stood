@@ -196,7 +196,7 @@ describe('Atomic tranche persistence', () => {
       await held(id);
       const before = await store.apply(id, 1, 'renew', cmd('beginReauthorization', [at + 3 * 86400000]));
       const unknown = await reconcile(store, { read: async () => ({ outcome: 'UNKNOWN' }) }, id, expiry);
-      expect(unknown).toEqual({ status: 'WAIT', alert: true });
+      expect(unknown).toMatchObject({ status: 'WAIT', alert: true, reason: expect.stringMatching(/^[A-Z_]+$/) });
       expect(await store.load(id)).toEqual(before);
       const proof = {
         complete: true,
