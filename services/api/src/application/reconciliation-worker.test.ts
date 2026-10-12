@@ -75,7 +75,7 @@ describe('Owned reconciliation scheduling', () => {
         owner: 'local-reviewer',
         clock: () => at + 4 * 3600000,
       }),
-    ).toMatchObject({ processed: 1, waiting: 1, failed: 0 });
+    ).toMatchObject({ processed: 1, waiting: 1, failed: 0, reasons: { 'VOID:NOT_PROVEN': 1 } });
     expect((await store.load('trn_old')).pending?.operation).toMatchObject({ effect: 'VOID', target: 'CANCELLED' });
     expect(queue.alert).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'SAFE_CANCEL_REQUESTED', owner: 'local-reviewer' }),
@@ -83,6 +83,20 @@ describe('Owned reconciliation scheduling', () => {
     expect(queue.alert).toHaveBeenCalledWith(expect.objectContaining({ code: 'UNRESOLVED_3H' }));
     expect(queue.finish).toHaveBeenCalledTimes(1);
   });
+  // 2026-10-12 live run: two settlements waited with no reason in the log. Each wait now says why, as a fixed code.
+  it('says why a settlement waits, by effect and reason code, and never echoes provider text', async () => {
+    const options = { owner: 'reviewer', clock: () => at + 4 * 3600000 };
+    const said = (reason: string) => ({ read: async () => ({ complete: false, reason }) });
+    const first = fixture();
+    expect((await reconciliationTick(first.store, said('NO_PROOF'), first.queue, options)).reasons).toEqual({
+      'VOID:NO_PROOF': 1,
+    });
+    const second = fixture();
+    expect((await reconciliationTick(second.store, said('card 4111 declined'), second.queue, options)).reasons).toEqual(
+      { 'VOID:NOT_PROVEN': 1 },
+    );
+  });
+
   it('resolves complete matching cancellations and clears only the open alert state', async () => {
     const { store, queue } = fixture();
     const reader = {
