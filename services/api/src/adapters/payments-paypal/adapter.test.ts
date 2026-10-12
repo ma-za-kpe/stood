@@ -285,3 +285,64 @@ it('derives a retry proof only from an entirely matched empty capture history an
   authorization.expiration_time = 'invalid';
   expect(await adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason: 'NO_PROOF' });
 });
+
+// Live run 2026-10-12: PayPal's own shapes, read from the sandbox. A capture nested in an order has no
+// supplementary_data, only an "up" link to its authorization; an order nobody captured has no "captures" key.
+describe("PayPal's real order shapes", () => {
+  const nested = (capture: Record<string, unknown>, up: string[]) => {
+    const { supplementary_data: _linked, ...rest } = capture;
+    return {
+      ...rest,
+      links: [
+        { rel: 'self', href: `https://api.sandbox.paypal.com/v2/payments/captures/${String(capture.id)}` },
+        ...up.map((id) => ({ rel: 'up', href: `https://api.sandbox.paypal.com/v2/payments/authorizations/${id}` })),
+      ],
+    };
+  };
+  it('confirms a capture nested in its order by the "up" link to this authorization', async () => {
+    const f = fixture('CAPTURE');
+    f.unit.payments = {
+      captures: [nested(f.capture, ['auth_fixture'])],
+      authorizations: [{ id: 'auth_fixture' }],
+    } as never;
+    expect(await f.adapter.read(f.snapshot.pending!)).toMatchObject({
+      complete: true,
+      outcome: 'CAPTURED',
+      reference: 'capture_fixture',
+    });
+  });
+  it('refuses a nested capture linked to another authorization, or ambiguously', async () => {
+    for (const up of [['auth_other'], [], ['auth_fixture', 'auth_other']]) {
+      const f = fixture('CAPTURE');
+      f.unit.payments = { captures: [nested(f.capture, up)], authorizations: [{ id: 'auth_fixture' }] } as never;
+      expect(await f.adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason: 'CAPTURE_MISMATCH' });
+    }
+    // An explicit link to another authorization wins over a matching "up" link.
+    const f = fixture('CAPTURE');
+    const both = {
+      ...nested(f.capture, ['auth_fixture']),
+      supplementary_data: { related_ids: { authorization_id: 'auth_other' } },
+    };
+    f.unit.payments = { captures: [both], authorizations: [{ id: 'auth_fixture' }] } as never;
+    expect(await f.adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason: 'CAPTURE_MISMATCH' });
+  });
+  it('confirms a void on an order that PayPal returns without a captures key', async () => {
+    const f = fixture('VOID');
+    f.authorization.status = 'VOIDED';
+    f.unit.payments = { authorizations: [{ id: 'auth_fixture' }] } as never;
+    expect(await f.adapter.read(f.snapshot.pending!)).toMatchObject({ complete: true, outcome: 'VOIDED' });
+  });
+  it('names which order check failed', async () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [{ custom_id: 'other' }, 'ORDER_TRANCHE_MISMATCH'],
+      [{ amount: { currency_code: 'GBP', value: '9.99' } }, 'ORDER_AMOUNT_MISMATCH'],
+      [{ payments: { captures: [] } }, 'ORDER_WITHOUT_AUTHORIZATIONS'],
+      [{ payments: { authorizations: [{ id: 'auth_fixture' }], captures: {} } }, 'ORDER_CAPTURES_INVALID'],
+    ];
+    for (const [patch, reason] of cases) {
+      const f = fixture('VOID');
+      Object.assign(f.unit, patch);
+      expect(await f.adapter.read(f.snapshot.pending!)).toEqual({ complete: false, reason });
+    }
+  });
+});
