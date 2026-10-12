@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "license": "MIT",
   "sideEffects": false,
   "main": "dist/cjs/index.js",
@@ -29,7 +29,9 @@
   "name": "stood-platform-apilib",
   "description": "Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Each platform may make 120 writes and 600 reads a minute; over that, or after 30 failed sign-ins from one address in a minute, Stood answers 429 with Retry-After. Stood only talks to the PayPal sandbox.",
   "author": {
-    "name": "APIMATIC SDK Generator"
+    "name": "Maku Mazakpe",
+    "email": "makpalyy@gmail.com",
+    "url": "https://startuptribunal.com/maku"
   },
   "devDependencies": {
     "@types/jest": "^29.4.0",
@@ -49,7 +51,8 @@
     "tslib": "^2.5.0"
   },
   "bugs": {
-    "email": "support@apimatic.io"
+    "url": "https://startuptribunal.com/maku",
+    "email": "makpalyy@gmail.com"
   },
   "exports": {
     ".": {

@@ -1,7 +1,7 @@
 /**
  * Stood platform APILib
  *
- * This file was automatically generated for Stood by APIMATIC v3.0 ( https://www.apimatic.io ).
+ * This file was automatically generated for Stood by Maku Mazakpe by APIMATIC v3.0 ( https://www.apimatic.io ).
  */
 
 import { createAuthProviderFromConfig } from './authProvider.js';
@@ -59,7 +59,7 @@ export class Client implements ClientInterface {
         ? this._config.httpClientOptions.timeout
         : this._config.timeout;
     this._userAgent = updateUserAgent(
-      'TypeScript-SDK/1.4.0 (OS: {os-info}, Engine: {engine}/{engine-version})'
+      'TypeScript-SDK/1.4.1 (OS: {os-info}, Engine: {engine}/{engine-version})'
     );
     this._requestBuilderFactory = createRequestHandlerFactory(
       (server) => getBaseUri(server, this._config),

@@ -485,7 +485,7 @@ function nullables(value: unknown): unknown {
 
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
-export const API_VERSION = '1.4.0';
+export const API_VERSION = '1.4.1';
 
 export type OpenApiDocument = Readonly<{
   openapi: string;
@@ -581,6 +581,7 @@ export function openApiDocument(version: string = API_VERSION): OpenApiDocument 
       summary: 'Milestone payments held on PayPal (sandbox) and released only on evidence',
       description:
         'Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Each platform may make 120 writes and 600 reads a minute; over that, or after 30 failed sign-ins from one address in a minute, Stood answers 429 with Retry-After. Stood only talks to the PayPal sandbox.',
+      contact: { name: 'Maku Mazakpe', email: 'makpalyy@gmail.com', url: 'https://startuptribunal.com/maku' },
       license: { name: 'MIT', identifier: 'MIT' },
     },
     servers: [{ url: 'https://stood-api.onrender.com/v1', description: 'Hosted (PayPal sandbox)' }],
