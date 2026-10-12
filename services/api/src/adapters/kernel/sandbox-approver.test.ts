@@ -3,7 +3,7 @@ import { type ApprovalPage, KernelSandboxApprover } from './sandbox-approver.js'
 
 const link = 'https://www.sandbox.paypal.com/checkoutnow?token=EC-TEST-TOKEN';
 const english = `${link}&locale.x=en_US`;
-function harness(over: { returnTo?: string; loginShown?: boolean } = {}) {
+function harness(over: { returnTo?: string; loginShown?: boolean; responses?: Response[] } = {}) {
   const calls: string[] = [];
   let url = '';
   const page: ApprovalPage = {
@@ -34,22 +34,35 @@ function harness(over: { returnTo?: string; loginShown?: boolean } = {}) {
   const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init);
     kernel.push(`${request.method} ${new URL(request.url).pathname} ${request.headers.get('Authorization')}`);
+    if (request.method === 'POST' && over.responses?.length) return over.responses.shift() as Response;
     if (request.method === 'POST')
       return Response.json({ session_id: 'ses_1', cdp_ws_url: 'wss://cdp.kernel.test/ses_1' }, { status: 201 });
     return new Response(null, { status: 204 });
   };
   const connected: string[] = [];
+  const waits: number[] = [];
+  let clock = 0;
   const approver = new KernelSandboxApprover({
     apiKey: 'kernel-key',
     buyerEmail: 'buyer@personal.example.com',
     buyerPassword: 'sandbox-password',
     fetch,
+    retryRuntime: {
+      clock: () => clock,
+      wallClock: () => Date.parse('2026-10-12T00:00:00Z'),
+      random: () => 0,
+      sleep: async (ms: number) => {
+        waits.push(ms);
+        clock += ms;
+      },
+      onRetry: () => undefined,
+    },
     connect: async (cdp) => {
       connected.push(cdp);
       return { page, close: async () => void calls.push('close') };
     },
   });
-  return { approver, calls, kernel, connected };
+  return { approver, calls, kernel, connected, waits };
 }
 
 // C3: judges replay every sandbox outcome unattended. Kernel's cloud browser signs in as the SANDBOX buyer and
@@ -106,4 +119,18 @@ describe('KernelSandboxApprover', () => {
     await lookalike.approver.approve(link);
     expect(() => new KernelSandboxApprover({ apiKey: '', buyerEmail: 'b@x.co', buyerPassword: 'p' })).toThrow();
   });
+});
+
+it('waits for Retry-After on 429 and backs off on 529 before approving once', async () => {
+  const h = harness({
+    responses: [
+      new Response(null, { status: 429, headers: { 'Retry-After': '3' } }),
+      new Response(null, { status: 529 }),
+    ],
+  });
+  await h.approver.approve(link);
+  expect(h.waits).toEqual([3000, 1000]);
+  expect(h.kernel.filter((x) => x.startsWith('POST'))).toHaveLength(3);
+  expect(h.connected).toHaveLength(1);
+  expect(h.kernel.filter((x) => x.startsWith('DELETE'))).toEqual(['DELETE /browsers/ses_1 Bearer kernel-key']);
 });

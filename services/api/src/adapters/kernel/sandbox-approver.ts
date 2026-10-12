@@ -1,3 +1,6 @@
+import { setTimeout as pause } from 'node:timers/promises';
+import { retryDelay } from './browser-retry.js';
+
 // The slice of a Playwright page the approval needs; the CLI connects a real one over CDP.
 export type ApprovalPage = Readonly<{
   goto(url: string): Promise<unknown>;
@@ -10,12 +13,30 @@ export type ApprovalPage = Readonly<{
   // Optional evidence: a screenshot of the current step, with the buyer's login masked by the caller.
   capture?(step: string): Promise<void>;
 }>;
+type RetryEvent = Readonly<{ attempt: number; status: number; delayMs: number; reason: string }>;
+export type KernelRetryRuntime = Readonly<{
+  clock(): number;
+  wallClock(): number;
+  random(): number;
+  sleep(ms: number): Promise<void>;
+  onRetry(event: RetryEvent): void;
+}>;
+export class KernelBrowserError extends Error {
+  constructor(
+    readonly code: 'KERNEL_CREATE_UNKNOWN' | 'KERNEL_UNAVAILABLE' | 'KERNEL_RETRY_EXHAUSTED',
+    readonly status?: number,
+    readonly reason?: string,
+  ) {
+    super(`${code}${status === undefined ? '' : ` ${status}`}`);
+  }
+}
 type Config = Readonly<{
   apiKey: string;
   buyerEmail: string;
   buyerPassword: string;
   baseUrl?: string;
   fetch?: typeof globalThis.fetch;
+  retryRuntime?: Partial<KernelRetryRuntime>;
   connect?: (cdpUrl: string) => Promise<Readonly<{ page: ApprovalPage; close(): Promise<void> }>>;
 }>;
 // PayPal's sandbox checkout (2026-10, the /pay flow, forced to English with locale.x): email, Next, password,
@@ -40,16 +61,60 @@ export class KernelSandboxApprover {
     this.http = config.fetch ?? fetch;
     this.base = config.baseUrl ?? 'https://api.onkernel.com';
   }
+  private async createBrowser(): Promise<Response> {
+    const runtime: KernelRetryRuntime = {
+      clock: () => performance.now(),
+      wallClock: () => Date.now(),
+      random: () => Math.random(),
+      sleep: async (ms) => {
+        await pause(ms);
+      },
+      onRetry: (event) =>
+        process.stderr.write(`${JSON.stringify({ code: 'KERNEL_BROWSER_CREATE_RETRY', ...event })}\n`),
+      ...this.config.retryRuntime,
+    };
+    const started = runtime.clock();
+    let status: number | undefined;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const remaining = 120000 - (runtime.clock() - started);
+      if (remaining <= 0) throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status);
+      let response: Response;
+      try {
+        response = await this.http(`${this.base}/browsers`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.config.apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ headless: true, timeout_seconds: 300 }),
+          signal: AbortSignal.timeout(Math.max(1, Math.floor(Math.min(30000, remaining)))),
+        });
+      } catch {
+        // A lost create reply may have allocated a browser. Do not create another blindly.
+        throw new KernelBrowserError('KERNEL_CREATE_UNKNOWN');
+      }
+      if (response.ok) return response;
+      status = response.status;
+      if (status !== 429 && status !== 529) throw new KernelBrowserError('KERNEL_UNAVAILABLE', status);
+      await response.body?.cancel().catch(() => undefined);
+      const delayMs = retryDelay(
+        attempt,
+        response.headers.get('Retry-After'),
+        runtime.wallClock(),
+        120000 - (runtime.clock() - started),
+        runtime.random(),
+      );
+      if (attempt === 5 || delayMs === null) throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status);
+      try {
+        runtime.onRetry({ attempt: attempt + 1, status, delayMs, reason: status === 429 ? 'RATE_LIMIT' : 'CAPACITY' });
+      } catch {
+        /* Diagnostics do not own the approval. */
+      }
+      await runtime.sleep(delayMs);
+    }
+    throw new KernelBrowserError('KERNEL_RETRY_EXHAUSTED', status);
+  }
   async approve(link: string): Promise<void> {
     const target = URL.canParse(link) ? new URL(link) : null;
     if (target?.protocol !== 'https:' || target.hostname !== 'www.sandbox.paypal.com') throw new Error('NOT_SANDBOX');
-    const created = await this.http(`${this.base}/browsers`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.config.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ headless: true, timeout_seconds: 300 }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!created.ok) throw new Error(`KERNEL_UNAVAILABLE ${created.status}`);
+    const created = await this.createBrowser();
     const session = (await created.json()) as { session_id?: string; cdp_ws_url?: string };
     if (!session.session_id || !session.cdp_ws_url?.startsWith('wss://')) throw new Error('KERNEL_UNEXPECTED');
     try {
