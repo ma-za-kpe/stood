@@ -6,12 +6,13 @@ import { usageSigner } from './adapters/crypto/usage-signer.js';
 import { PostgresYardEvents } from './adapters/db-postgres/events.js';
 import { PostgresIntakes } from './adapters/db-postgres/intakes.js';
 import { PostgresPlannerSpend } from './adapters/db-postgres/planner-spend.js';
+import { PostgresPreviewSlots } from './adapters/db-postgres/preview-slots.js';
 import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
 import { PayPalPayouts } from './adapters/paypal/payouts.js';
-import { RenderPreviewHost } from './adapters/render/render-host.js';
+import { PREVIEW_CAP, RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodPackageGateway } from './adapters/stood/package-gateway.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
@@ -95,7 +96,10 @@ export function yardRuntime(env: Env) {
       )
     : null;
   const vault = new SecretVault(new PostgresSecretRows(pool), new LocalKeyWrapper(keys.keys, keys.current));
-  const previews = previewHost ? new Previews(board, vault, previewHost) : null;
+  // The cap is reserved in Postgres before Render is called, so concurrent deploys cannot both take the last slot.
+  const previews = previewHost
+    ? new Previews(board, vault, previewHost, { slots: new PostgresPreviewSlots(pool), max: PREVIEW_CAP })
+    : null;
   const config: Config = {
     environment,
     research: new TribunalCatalog(),

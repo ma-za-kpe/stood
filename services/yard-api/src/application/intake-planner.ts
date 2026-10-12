@@ -56,7 +56,7 @@ export class IntakePlanner {
       { ...context, handover: { ...context.handover, baseCommit: source.baseCommit } },
       now,
     );
-    return this.foreman.draft({
+    const plan = await this.foreman.draft({
       id: planId,
       buyerOperatorId: buyer,
       repository: source.repository,
@@ -67,5 +67,18 @@ export class IntakePlanner {
       context: JSON.stringify(withheldForPlanner(snapshot)),
       createdAt: now,
     });
+    // Sixth audit (2026-10-11): the intake may have been erased while the repository was resolved. Half of a deletion
+    // fence with intake erasure, which forgets every plan again after the draft is gone: re-check the intake after
+    // writing, and forget this plan if it is gone, so no ordering of the two leaves a plan behind.
+    try {
+      await this.store.load(id);
+    } catch (error) {
+      if (error instanceof YardError && error.code === 'NOT_FOUND') {
+        await this.foreman.forget?.(planId);
+        throw new YardError('NOT_FOUND');
+      }
+      throw error;
+    }
+    return plan;
   }
 }

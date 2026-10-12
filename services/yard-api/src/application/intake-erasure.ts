@@ -36,7 +36,7 @@ async function planIds(deps: Deps, id: string): Promise<Readonly<{ owner: string
 }
 
 // The planner's copies go first: erasing the intake removes the versions they are derived from, and forgetting is
-// idempotent, so a crash between the two is finished by a retry.
+// idempotent, so a crash between the two is finished by a retry. They are forgotten again after the erase (the fence).
 async function erase(
   id: string,
   owner: string,
@@ -50,7 +50,11 @@ async function erase(
     for (const plan of plans.ids) if (await exists(deps, plan)) return 'PROJECT';
     if (deps.foreman?.forget) for (const plan of plans.ids) await deps.foreman.forget(plan);
   }
-  return deps.intakes.erase(id, owner, reason, now);
+  const result = await deps.intakes.erase(id, owner, reason, now);
+  // Sixth audit (2026-10-11), the other half of the deletion fence: a plan written while the draft was being erased
+  // is forgotten here, and one written after the draft is gone is forgotten by the planner's own re-check.
+  if (plans && deps.foreman?.forget) for (const plan of plans.ids) await deps.foreman.forget(plan);
+  return result;
 }
 
 // T-0217: the buyer erases their intake draft and the planner's copies of it. A draft that became a Board project is

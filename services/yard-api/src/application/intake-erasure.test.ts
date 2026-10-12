@@ -60,12 +60,15 @@ describe('intake erasure', () => {
   it("forgets the planner's thread for every version before erasing the draft", async () => {
     const d = deps();
     expect(await eraseIntake('mine', 'buyer', now, d.deps)).toBe('ERASED');
-    expect(d.forgotten).toEqual([1, 2, 3].map((v) => intakePlanId('buyer', 'mine', v)));
+    const ids = [1, 2, 3].map((v) => intakePlanId('buyer', 'mine', v));
+    // Forgotten before the draft goes, and again after it (the deletion fence with planning).
+    expect(d.forgotten).toEqual([...ids, ...ids]);
     expect(d.forgotten).not.toContain('mine');
     expect(d.erased).toEqual([['mine', 'buyer', 'BUYER_REQUEST']]);
-    expect(d.deps.foreman.forget.mock.invocationCallOrder.at(-1)).toBeLessThan(
-      d.deps.intakes.erase.mock.invocationCallOrder[0] ?? 0,
-    );
+    const order = d.deps.foreman.forget.mock.invocationCallOrder;
+    const erasedAt = d.deps.intakes.erase.mock.invocationCallOrder[0] ?? 0;
+    expect(order.slice(0, 3).every((at) => at < erasedAt)).toBe(true);
+    expect(order.slice(3).every((at) => at > erasedAt)).toBe(true);
   });
 
   it('refuses a draft whose plan became a project, by the plan id, and touches nothing', async () => {
@@ -94,6 +97,7 @@ describe('intake erasure', () => {
     const d = deps([intakePlanId('buyer', 'project', 1)]);
     expect(await expireIntakes(now, d.deps)).toBe(1);
     expect(d.erased).toEqual([['old', 'buyer', 'EXPIRED']]);
-    expect(d.forgotten).toEqual([1, 2].map((v) => intakePlanId('buyer', 'old', v)));
+    const ids = [1, 2].map((v) => intakePlanId('buyer', 'old', v));
+    expect(d.forgotten).toEqual([...ids, ...ids]);
   });
 });

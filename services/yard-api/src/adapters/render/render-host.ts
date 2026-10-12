@@ -1,5 +1,7 @@
 import type { PreviewHost } from '../../ports/previews.js';
 
+// At most this many live Yard previews by default (free plan only). Render has no spend cap of its own.
+export const PREVIEW_CAP = 3;
 // Render-shaped preview services in Yard's own workspace (Y20 option C). Live use needs a Render API
 // key with a spend cap; tests and the demo use the in-process Render API fake.
 export class RenderPreviewHost implements PreviewHost {
@@ -15,7 +17,7 @@ export class RenderPreviewHost implements PreviewHost {
       maxActive?: number;
     }>,
   ) {
-    const max = config.maxActive ?? 3;
+    const max = config.maxActive ?? PREVIEW_CAP;
     if (
       !config.apiKey.trim() ||
       !/^[a-z0-9-]{3,64}$/.test(config.ownerId) ||
@@ -41,11 +43,12 @@ export class RenderPreviewHost implements PreviewHost {
         signal: AbortSignal.timeout(15000),
       }),
     );
-    if (!response.ok) throw new Error(`Render ${method} ${response.status}`);
+    if (!response.ok)
+      throw Object.assign(new Error(`Render ${method} ${response.status}`), { status: response.status });
     return response.status === 204 ? null : ((await response.json()) as Record<string, unknown>);
   }
   async deploy(input: Readonly<{ name: string; image: string; env: Readonly<Record<string, string>> }>) {
-    if (input.name.startsWith('yard-preview-') && (await this.list()).length >= (this.config.maxActive ?? 3))
+    if (input.name.startsWith('yard-preview-') && (await this.list()).length >= (this.config.maxActive ?? PREVIEW_CAP))
       throw new Error('PREVIEW_CAP');
     const created = (await this.call('POST', '/v1/services', {
       type: 'web_service',
@@ -81,10 +84,23 @@ export class RenderPreviewHost implements PreviewHost {
     }
     throw new Error('Render returned too many services');
   }
+  // Sixth audit (2026-10-11): a service Render reports as absent is already deleted. A sweep that deleted it, then
+  // failed to record that, must not stop on Render's 404 the next time.
   async destroy(serviceId: string) {
     if (!/^srv-[a-z0-9]+$/.test(serviceId)) throw new RangeError('Invalid service id');
-    const service = (await this.call('GET', `/v1/services/${serviceId}`)) as { name?: unknown } | null;
+    const absent = (error: unknown) => (error as { status?: unknown })?.status === 404;
+    let service: { name?: unknown } | null;
+    try {
+      service = (await this.call('GET', `/v1/services/${serviceId}`)) as { name?: unknown } | null;
+    } catch (error) {
+      if (absent(error)) return;
+      throw error;
+    }
     if (!String(service?.name ?? '').startsWith('yard-preview-')) throw new Error('NOT_A_PREVIEW');
-    await this.call('DELETE', `/v1/services/${serviceId}`);
+    try {
+      await this.call('DELETE', `/v1/services/${serviceId}`);
+    } catch (error) {
+      if (!absent(error)) throw error;
+    }
   }
 }
