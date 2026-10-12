@@ -51,6 +51,7 @@ export const mandateSignatures = pgTable(
     // T-0227: token_id holds the sealed token; this SHA-256 fingerprint keeps one token to one mandate.
     tokenFingerprint: text('token_fingerprint').unique(),
     approvalUrl: text('approval_url'),
+    lastPolledAt: bigint('last_polled_at', { mode: 'number' }).notNull().default(0),
     acceptedAt: bigint('accepted_at', { mode: 'number' }).notNull(),
     expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
@@ -63,6 +64,7 @@ export const mandateSignatures = pgTable(
       foreignColumns: [apiAllowances.id, apiAllowances.platformId],
     }),
     uniqueIndex('one_active_mandate').on(table.allowanceId).where(sql`${table.status} <> 'REVOKED'`),
+    check('mandate_poll_time_valid', sql`${table.lastPolledAt} >= 0 AND ${table.lastPolledAt} <= 9007199254740991`),
     check(
       'mandate_identity_valid',
       sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.termsVersion} = 1 AND ${table.termsHash} ~ '^[a-f0-9]{64}$' AND ${table.customerRef} ~ '^[a-f0-9]{64}$' AND ${table.setupRequestId} <> ${table.tokenRequestId} AND ${table.mode} IN ('sim', 'live')`,

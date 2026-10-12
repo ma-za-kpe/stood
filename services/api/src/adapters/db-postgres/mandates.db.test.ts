@@ -474,3 +474,53 @@ it('expiry cannot overwrite a provider write that already claimed the mandate ve
   expect(['REVOKED', 'TOKENIZING']).toContain(after.status);
   expect(after.setupId).toBe(awaiting.setupId);
 });
+
+it('gives unexpired signing work a slot past 100 older expired reservations', async () => {
+  const at = now + 30 * 86400000;
+  const old: string[] = [];
+  for (let i = 0; i < 100; i++) {
+    const { input } = await setup();
+    old.push(input.key);
+    await store.reserve(input);
+  }
+  const { input } = await setup();
+  await store.reserve({ ...input, acceptedAt: at });
+  expect(await store.unresolved(at)).toContain(input.key);
+  await store.beginCreate(input.key, 0);
+  await store.setupCreated(input.key, receipt(input.key));
+  expect(await store.unresolved(at)).toContain(input.key);
+  expect((await store.unresolved(at)).length).toBeLessThanOrEqual(100);
+});
+
+it('rotates still-waiting mandates durably so a later reservation gets a turn', async () => {
+  const at = now + 60 * 86400000;
+  for (let i = 0; i < 100; i++) {
+    const { input } = await setup();
+    await store.reserve({ ...input, acceptedAt: at });
+  }
+  expect(await store.unresolved(at)).toHaveLength(100);
+  const { input } = await setup();
+  await store.reserve({ ...input, acceptedAt: at });
+  const restarted = new PostgresMandates(db, cipher);
+  expect(await restarted.unresolved(at)).toContain(input.key);
+});
+
+it('keeps queue scheduling outside consent history and rejects backward or mixed scheduling writes', async () => {
+  const { input } = await setup();
+  const first = await store.reserve(input);
+  await store.unresolved(now);
+  const after = await store.load(input.key);
+  expect(after).toEqual(first);
+  expect(await store.events(input.key)).toHaveLength(1);
+  await expect(
+    pool.query('UPDATE mandate_signatures SET last_polled_at = -1 WHERE key = $1', [input.key]),
+  ).rejects.toThrow();
+  await expect(
+    pool.query('UPDATE mandate_signatures SET last_polled_at = last_polled_at + 1, terms_hash = $2 WHERE key = $1', [
+      input.key,
+      'b'.repeat(64),
+    ]),
+  ).rejects.toThrow();
+  await expect(store.unresolved(Number.NaN)).rejects.toThrow('INVALID');
+  await expect(store.unresolved(-1)).rejects.toThrow('INVALID');
+});

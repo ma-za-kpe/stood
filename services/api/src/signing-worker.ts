@@ -32,7 +32,7 @@ export function signingWorker(deps: WorkerDeps) {
   const provider = new PayPalFundingAdapter(sdk as PayPalFundingTransport, mandates);
   return () =>
     advancePending({
-      mandates,
+      mandates: { unresolved: async () => mandates.unresolved(await deps.clock()) },
       fundings: funding,
       mandate: async (key) => {
         const now = await deps.clock();
