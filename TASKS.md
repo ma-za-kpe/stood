@@ -962,3 +962,9 @@ T-0360 source evidence: both resume PDFs in the owner's `androidresumemaku` work
 - `[~]` T-0361 Upload capability privacy: authenticated upload create/read/complete responses currently have no cache policy, although they can contain temporary write capabilities. Reproduce with HTTP, then require `Cache-Control: private, no-store` on these responses so browsers and intermediaries are told not to retain them. Keep the public OpenAPI document cacheable.
 
 - `[x]` T-0361 upload capability responses now instruct clients with `Cache-Control: private, no-store`. The HTTP regression failed first on the missing header, then passed on creation, read and completion; all 16 contract-error conformance cases remain green. The public API contract keeps its separate cache policy.
+
+- `[~]` T-0362 Seventh audit (#77): mandate retries must preserve the original acceptance timestamp and identity under the existing reservation lock. Reproduce against Postgres before fixing; changed tenant, terms and mode still conflict.
+- `[~]` T-0363 Seventh audit (#77): reject malformed and non-empty mandate JSON before storage. Exercise signed requests against a configured router, including null, arrays and unknown fields.
+- `[~]` T-0364 Seventh audit (#77): persist terminal consent expiry for mandates that have not started an ambiguous provider write. Preserve read-only recovery of historical CREATING/TOKENIZING facts; expiry never authorizes a new provider write.
+- `[~]` T-0365 Seventh audit (#77): eligible signing work must progress beyond an expired prefix of 100 records. Qualify the queue using real Postgres and the worker clock.
+- `[~]` T-0366 Owner contact follow-up: scan the published/generated portal and prevent support/company placeholders from reaching future Pages deployments. Public creator/support identity stays Maku Mazakpe / <makpalyy@gmail.com>.
