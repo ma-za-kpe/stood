@@ -170,3 +170,9 @@ Subscribed events:
 ## Rate limits (hackathon)
 
 60 requests/min per platform key. 10 packages/min. A `429` comes with `Retry-After`.
+
+## Implemented site-visit upload intake (T-0358, API 1.4.0)
+
+`construction.stage@1` now has separate signed `/tranches/{id}/uploads` creation, owned `/uploads/{uploadId}` read, and `/uploads/{uploadId}/complete` routes. Creation declares up to ten JPEG/HEIC/WebP photos, each at most 8 MiB with SHA-256 and byte length. Fifteen-minute S3 PUT capabilities bind type, size, checksum and a conditional create. Completion streams owned objects with a byte cap, checks size/hash and format headers, rechecks expiry and stores an immutable receipt. It accepts no caller-selected source URL, assessment, location verdict or payment command. Tenant ownership, HMAC, rate limits and typed conflicts apply to every route; durable session identities and completions are in migration 0027.
+
+This completes the upload-session intake slice, not the planned site-visit package processing above. A full image decode, trusted capture-window/location/novelty/model checks, attestations and payment decisions still require T-0359. Existing `/packages` routes retain their code-commit contract. See [operator setup and limits](../SETUP.md#site-visit-upload-sessions-t-0156), the [Zod contract](../../services/api/src/http/contract.ts) and the [generated public contract](../../openapi/stood.json).

@@ -1,7 +1,7 @@
 /**
  * Stood platform APILib
  *
- * This file was automatically generated for Stood by APIMATIC v3.0 ( https://www.apimatic.io ).
+ * This file was automatically generated for Stood by Maku Mazakpe by APIMATIC v3.0 ( https://www.apimatic.io ).
  */
 
 import { ApiResponse, RequestOptions } from '../core.js';
@@ -27,6 +27,8 @@ import {
 } from '../models/fundingRequest.js';
 import { Mandate, mandateSchema } from '../models/mandate.js';
 import { Tranche, trancheSchema } from '../models/tranche.js';
+import { UploadInput, uploadInputSchema } from '../models/uploadInput.js';
+import { UploadSession, uploadSessionSchema } from '../models/uploadSession.js';
 import {
   UsageAcceptance,
   usageAcceptanceSchema,
@@ -373,6 +375,136 @@ export class Api extends BaseApi {
     );
     req.authenticate([{ platformKey: true, requestSignature: true }]);
     return req.callAsJson(fundingSchema, requestOptions);
+  }
+
+  /**
+   * @param id
+   * @param idempotencyKey  Same key and body keep the same upload session and expiry; current
+   *                                              URLs and status are derived on each read. A different body is 409.
+   * @param body
+   * @return Response from the API call
+   */
+  async createUpload(
+    id: string,
+    idempotencyKey: string,
+    body: UploadInput,
+    requestOptions?: RequestOptions
+  ): Promise<ApiResponse<UploadSession>> {
+    const req = this.createRequest('POST');
+    const mapped = req.prepareArgs({
+      id: [id, string()],
+      idempotencyKey: [idempotencyKey, string()],
+      body: [body, uploadInputSchema],
+    });
+    req.header('Idempotency-Key', mapped.idempotencyKey);
+    req.header('Content-Type', 'application/json');
+    req.json(mapped.body);
+    req.appendTemplatePath`/tranches/${mapped.id}/uploads`;
+    req.throwOn(
+      401,
+      ProblemError,
+      'Missing or invalid platform key or signature'
+    );
+    req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
+    req.throwOn(409, ProblemError, 'Idempotency or version conflict');
+    req.throwOn(413, ProblemError, 'Body over 64 KiB');
+    req.throwOn(422, ProblemError, 'Invalid request');
+    req.throwOn(
+      429,
+      ProblemError,
+      "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
+    );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
+    req.authenticate([{ platformKey: true, requestSignature: true }]);
+    return req.callAsJson(uploadSessionSchema, requestOptions);
+  }
+
+  /**
+   * @param id
+   * @param uploadId
+   * @return Response from the API call
+   */
+  async getUpload(
+    id: string,
+    uploadId: string,
+    requestOptions?: RequestOptions
+  ): Promise<ApiResponse<UploadSession>> {
+    const req = this.createRequest('GET');
+    const mapped = req.prepareArgs({
+      id: [id, string()],
+      uploadId: [uploadId, string()],
+    });
+    req.appendTemplatePath`/tranches/${mapped.id}/uploads/${mapped.uploadId}`;
+    req.throwOn(
+      401,
+      ProblemError,
+      'Missing or invalid platform key or signature'
+    );
+    req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
+    req.throwOn(
+      429,
+      ProblemError,
+      "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
+    );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
+    req.authenticate([{ platformKey: true, requestSignature: true }]);
+    return req.callAsJson(uploadSessionSchema, requestOptions);
+  }
+
+  /**
+   * @param id
+   * @param uploadId
+   * @param idempotencyKey  Same key and body return the same response; a different body is 409
+   * @param body
+   * @return Response from the API call
+   */
+  async completeUpload(
+    id: string,
+    uploadId: string,
+    idempotencyKey: string,
+    body: unknown,
+    requestOptions?: RequestOptions
+  ): Promise<ApiResponse<UploadSession>> {
+    const req = this.createRequest('POST');
+    const mapped = req.prepareArgs({
+      id: [id, string()],
+      uploadId: [uploadId, string()],
+      idempotencyKey: [idempotencyKey, string()],
+      body: [body, optional(unknown())],
+    });
+    req.header('Idempotency-Key', mapped.idempotencyKey);
+    req.header('Content-Type', 'application/json');
+    req.json(mapped.body);
+    req.appendTemplatePath`/tranches/${mapped.id}/uploads/${mapped.uploadId}/complete`;
+    req.throwOn(
+      401,
+      ProblemError,
+      'Missing or invalid platform key or signature'
+    );
+    req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
+    req.throwOn(409, ProblemError, 'Idempotency or version conflict');
+    req.throwOn(413, ProblemError, 'Body over 64 KiB');
+    req.throwOn(422, ProblemError, 'Invalid request');
+    req.throwOn(
+      429,
+      ProblemError,
+      "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
+    );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
+    req.authenticate([{ platformKey: true, requestSignature: true }]);
+    return req.callAsJson(uploadSessionSchema, requestOptions);
   }
 
   /**

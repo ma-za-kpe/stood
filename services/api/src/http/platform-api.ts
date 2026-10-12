@@ -16,11 +16,14 @@ import { type FundingStore, FundingStoreError } from '../ports/funding-store.js'
 import { type MandateStore, MandateStoreError } from '../ports/mandate-store.js';
 import { type PlatformApiStore, PlatformApiStoreError } from '../ports/platform-api-store.js';
 import type { RateLimiter } from '../ports/rate-limiter.js';
+import type { UploadObjects, UploadStore } from '../ports/upload-store.js';
 import { type UsageStore, UsageStoreError } from '../ports/usage-store.js';
+import { uploadRoutes } from './uploads.js';
 
 export type PlatformApiConfig = Readonly<{
   store: PlatformApiStore;
   packages?: CommitPackageStore;
+  uploads?: Readonly<{ store: UploadStore; objects: UploadObjects }>;
   // C4 (#77): baselines that prove a milestone's frozen tests fail on the base commit.
   baselines?: Pick<BaselineStore, 'request' | 'get'>;
   // C4 (#77): the buyer's signed confirmation that a final milestone is in use, and who may sign it.
@@ -145,6 +148,7 @@ export function platformApi(config: PlatformApiConfig): Hono {
               ? problem(409, 'idempotency_conflict', 'This key was used for a different request.')
               : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
   );
+  uploadRoutes(app, config, problem);
   app.post('/tranches/:id/packages', async (c) => {
     if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
     const key = c.req.header('Idempotency-Key') ?? '';

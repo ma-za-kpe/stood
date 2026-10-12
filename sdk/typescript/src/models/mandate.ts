@@ -1,7 +1,7 @@
 /**
  * Stood platform APILib
  *
- * This file was automatically generated for Stood by APIMATIC v3.0 ( https://www.apimatic.io ).
+ * This file was automatically generated for Stood by Maku Mazakpe by APIMATIC v3.0 ( https://www.apimatic.io ).
  */
 
 import { nullable, number, object, Schema, string } from '../schema.js';

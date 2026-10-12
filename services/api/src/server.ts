@@ -12,7 +12,9 @@ import { PostgresProviderEvents } from './adapters/db-postgres/provider-events.j
 import { PostgresRateLimits } from './adapters/db-postgres/rate-limits.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { TokenCipher } from './adapters/db-postgres/token-cipher.js';
+import { PostgresUploads } from './adapters/db-postgres/uploads.js';
 import { PostgresUsageReceipts } from './adapters/db-postgres/usage-receipts.js';
+import { S3EvidenceStore } from './adapters/evidence/s3-evidence-store.js';
 import { PAYMENT_KEYS } from './application/payment-readiness.js';
 import { usageAuthorities } from './application/usage-intake.js';
 import { createApp } from './http/app.js';
@@ -50,6 +52,23 @@ if (pool && signedApi && (paypalMode === 'sim' || paypalMode === 'live')) {
     process.stderr.write('Signing and funding off: VAULT_TOKEN_KEYS is missing or invalid. See docs/SETUP.md.\n');
   }
 }
+// Site-visit uploads use the same private evidence bucket, independently of the runner's signing key.
+let uploads: { store: PostgresUploads; objects: S3EvidenceStore } | undefined;
+if (pool && signedApi) {
+  try {
+    uploads = {
+      store: new PostgresUploads(drizzle(pool, { schema })),
+      objects: new S3EvidenceStore({
+        endpoint: process.env.STOOD_EVIDENCE_S3_ENDPOINT?.trim() ?? '',
+        bucket: process.env.STOOD_EVIDENCE_S3_BUCKET?.trim() ?? '',
+        accessKeyId: process.env.STOOD_EVIDENCE_S3_ACCESS_KEY_ID?.trim() ?? '',
+        secretAccessKey: process.env.STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY?.trim() ?? '',
+      }),
+    };
+  } catch {
+    process.stderr.write('Uploads off: STOOD_EVIDENCE_S3_* settings are missing or invalid. See docs/SETUP.md.\n');
+  }
+}
 const app = createApp({
   ...(providerEvents ? { providerEvents } : {}),
   ...(pool ? { attention: new PostgresOperationsAttention(drizzle(pool, { schema })) } : {}),
@@ -57,6 +76,7 @@ const app = createApp({
     ? {
         api: {
           store: new PostgresPlatformApi(drizzle(pool, { schema })),
+          ...(uploads ? { uploads } : {}),
           packages: new PostgresCommitPackages(drizzle(pool, { schema })),
           baselines: new PostgresBaselines(drizzle(pool, { schema })),
           usage: {

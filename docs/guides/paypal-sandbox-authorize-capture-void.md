@@ -172,3 +172,15 @@ One allowance with three code milestones (`scripts/dev live-e2e`), against the d
 | final | wait, then release after the buyer's signed usage receipt | `7FP80420P88337917` | authorization `55C84489YL9183908` `CAPTURED`; one capture `1GN539895Y624020S` `COMPLETED`, 2.00 USD |
 
 What it took to get there is the point of this run. The first capture and the void reached PayPal but Stood could not confirm them by looking them up (lessons 15 and 16), so both sat "ambiguous" for hours. The reconciler logged no reason until we added one; once the reasons were logged, the cause took minutes to find. A reserved capture also waited up to an hour for the reconciler's next scheduled check. The fixes are T-0345 to T-0349 in [`TASKS.md`](../../TASKS.md). Each capture is exactly one: retries reuse the same request id and `invoice_id`, so no milestone was paid twice.
+
+## Results through hosted Yard (12 October 2026)
+
+T-0189 now has a real hosted Yard payment: `scripts/dev yard-live-e2e` signed in the owning buyer and builder through `/app/api/session`, created and approved the frozen blueprint, and asked Yard to create its Stood allowance. Stood ran the baseline on Vercel Sandbox, Kernel approved the saved-PayPal mandate, and Stood confirmed the hold. The builder claimed, built and submitted commit `5ba5a5a4f65a929f6cac039c379fc48d9bb736ee` through Yard's hosted session proxy. Stood waited for `usage_release`; the buyer confirmed use through Yard, which forwarded its signed usage receipt. Stood then captured, and Yard's fresh Stood read projected PAID for the same package, tranche, capture reference and amount.
+
+| Project | Stood package | PayPal order | Capture |
+|---|---|---|---|
+| `yard-live-2026-10-12T10-43-11-089Z` | `pkg_3bbe6afe-8381-4202-a48a-385fbda927a2` | `4XJ85690KH1357017` | `2LU70160P0502522L`, COMPLETED, 1.05 USD (1.00 builder price + 0.05 Yard fee) |
+
+An independent, read-only PayPal sandbox API lookup confirmed the capture and read its parent order: exactly one capture, with the same id and amount. The [sanitized recording](../../services/api/test/scenarios/sandbox/yard-hosted-2026-10-12.json) contains no operator access codes, payer details or tokens. Evidence tier: hosted sandbox end to end through the app session HTTP API; this run does not claim Yard UI clicks or a completed builder payout.
+
+Two harness mistakes were corrected without creating another funded allowance: Yard supplies `createdAt` itself, and the final usage wait currently reports `missing_result:usage_release`. The completed run resumed the same project and package. `scripts/dev yard-live-e2e --resume <project id>` reads the private recording under `.sandbox/yard-live/`, skips an existing hold and package, and retains the first capture. Reconcile that recording before resuming a failed run; do not start a fresh project to recover an ambiguous funding.

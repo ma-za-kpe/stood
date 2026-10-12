@@ -1,5 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import { type EvidenceStore, EvidenceStoreError, type StoredEvidence } from '../../ports/evidence-store.js';
+import type { StoredUploadPhoto } from '../../ports/upload-store.js';
 
 type Config = Readonly<{
   // S3-compatible endpoint, e.g. Cloudflare R2's https://<account>.r2.cloudflarestorage.com. Path-style requests.
@@ -107,11 +108,94 @@ export class S3EvidenceStore implements EvidenceStore {
     return { key, sha256: hash, bytes: body.length };
   }
 
-  async get(key: string): Promise<Buffer | null> {
-    if (!KEY.test(key)) throw new EvidenceStoreError('INVALID_KEY');
+  presignPut(photo: StoredUploadPhoto, expiresAt: number) {
+    const now = this.clock(),
+      expires = Math.floor((expiresAt - now) / 1000);
+    if (
+      !KEY.test(photo.key) ||
+      !/^[a-f0-9]{64}$/.test(photo.sha256) ||
+      !['image/jpeg', 'image/heic', 'image/webp'].includes(photo.contentType) ||
+      !Number.isSafeInteger(photo.bytes) ||
+      photo.bytes < 1 ||
+      photo.bytes > 8 * 1024 * 1024 ||
+      !Number.isSafeInteger(expiresAt) ||
+      expires < 1 ||
+      expiresAt - now > 900000
+    )
+      throw new EvidenceStoreError('INVALID_KEY');
+    const url = new URL(`/${this.config.bucket}/${photo.key}`, this.base);
+    const headers = {
+      'content-length': String(photo.bytes),
+      'content-type': photo.contentType,
+      'if-none-match': '*',
+      'x-amz-checksum-sha256': Buffer.from(photo.sha256, 'hex').toString('base64'),
+    };
+    const amzDate = new Date(now).toISOString().replace(/[-:]|\.\d{3}/g, ''),
+      day = amzDate.slice(0, 8);
+    const scope = `${day}/${this.config.region ?? 'auto'}/s3/aws4_request`;
+    const signedHeaders = Object.entries({ ...headers, host: url.host }).sort(([a], [b]) => (a < b ? -1 : 1));
+    const encode = (v: string) =>
+      encodeURIComponent(v).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+    const params = {
+      'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+      'X-Amz-Credential': `${this.config.accessKeyId}/${scope}`,
+      'X-Amz-Date': amzDate,
+      'X-Amz-Expires': String(expires),
+      'X-Amz-SignedHeaders': signedHeaders.map(([k]) => k).join(';'),
+    };
+    const query = Object.entries(params)
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([k, v]) => `${encode(k)}=${encode(v)}`)
+      .join('&');
+    const canonical = [
+      'PUT',
+      url.pathname,
+      query,
+      ...signedHeaders.map(([k, v]) => `${k}:${v}`),
+      '',
+      params['X-Amz-SignedHeaders'],
+      'UNSIGNED-PAYLOAD',
+    ].join('\n');
+    const toSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256(canonical)].join('\n');
+    const signingKey = hmac(
+      hmac(hmac(hmac(`AWS4${this.config.secretAccessKey}`, day), this.config.region ?? 'auto'), 's3'),
+      'aws4_request',
+    );
+    url.search = `${query}&X-Amz-Signature=${createHmac('sha256', signingKey).update(toSign).digest('hex')}`;
+    return { url: url.toString(), headers };
+  }
+
+  async get(key: string, maxBytes?: number): Promise<Buffer | null> {
+    if (!KEY.test(key) || (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1)))
+      throw new EvidenceStoreError('INVALID_KEY');
     const response = await this.send('GET', key);
     if (response.status === 404) return null;
     if (!response.ok) throw new EvidenceStoreError('UNAVAILABLE');
-    return Buffer.from(await response.arrayBuffer());
+    if (maxBytes === undefined) return Buffer.from(await response.arrayBuffer());
+    if (Number(response.headers.get('content-length')) > maxBytes) {
+      await response.body?.cancel();
+      throw new EvidenceStoreError('CONFLICT');
+    }
+    if (!response.body) throw new EvidenceStoreError('UNAVAILABLE');
+    const reader = response.body.getReader(),
+      chunks: Buffer[] = [];
+    let bytes = 0;
+    try {
+      for (;;) {
+        const part = await reader.read();
+        if (part.done) return Buffer.concat(chunks, bytes);
+        bytes += part.value.byteLength;
+        if (bytes > maxBytes) {
+          await reader.cancel();
+          throw new EvidenceStoreError('CONFLICT');
+        }
+        chunks.push(Buffer.from(part.value));
+      }
+    } catch (error) {
+      if (error instanceof EvidenceStoreError) throw error;
+      throw new EvidenceStoreError('UNAVAILABLE');
+    } finally {
+      reader.releaseLock();
+    }
   }
 }

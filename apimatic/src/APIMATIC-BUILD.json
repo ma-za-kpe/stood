@@ -4,7 +4,9 @@
   "generatePortal": {
     "pageTitle": "Stood API reference",
     "navTitle": "Stood platform API",
-    "apiSpecs": ["stood"],
+    "apiSpecs": [
+      "stood"
+    ],
     "baseUrl": "https://ma-za-kpe.github.io/stood/api",
     "indexable": {},
     "languageConfig": {

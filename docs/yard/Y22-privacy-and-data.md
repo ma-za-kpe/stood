@@ -43,3 +43,5 @@ Status: hosted sandbox pilot. Owner-issued browser sessions protect buyer-owned 
 - **Legal review** of the consent copy and of the lawful basis for keeping payment records.
 
 Copied public research is sanitized before schema validation: owner/viewer identifiers, private storage-pointer fields and named credential metadata are removed recursively, and the preview reports the removal without echoing values. Explicitly private reports, embedded credentials in research prose, unsafe URLs, prototype keys and oversized/deep input remain blocked. The original string remains local input; only sanitized source data and a buyer-confirmed bounded brief can proceed. No URL in pasted research is fetched.
+
+The [project erasure proposal](Y22-project-erasure-proposal.md) (T-0356) describes the content/financial separation, financial fences, resumable cleanup and backup controls needed before project deletion can ship. It is a proposal only; the current 409 restriction remains enforced.

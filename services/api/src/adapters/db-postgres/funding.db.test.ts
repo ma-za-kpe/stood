@@ -461,3 +461,24 @@ it('lists only funding the worker still has to move (T-0260)', async () => {
   await store.confirm(input.key, proof(input.key));
   expect(await store.unresolved()).not.toContain(input.key);
 });
+
+it('operator close refuses a funding advanced since the operator read, leaving its order and tranche intact', async () => {
+  const input = await setup();
+  await store.reserve(input);
+  const before = await store.beginCreate(input.key, 0);
+  const advanced = await store.orderCreated(input.key, {
+    orderId: `ORDER-${input.key}`,
+    approvalUrl: `http://paypal-sim:8080/__sim/approve/ORDER-${input.key}`,
+  });
+  await store.beginAuthorize(input.key, advanced.version);
+  await expect(
+    store.fail(input.key, 'operator reviewed rejection', {
+      version: before.version,
+      status: 'CREATING',
+      orderId: null,
+    }),
+  ).rejects.toThrow('STALE_VERSION');
+  expect((await store.load(input.key)).status).toBe('AUTHORIZING');
+  expect((await store.load(input.key)).orderId).toBe(`ORDER-${input.key}`);
+  expect(restoreTrancheRecord((await new PostgresTranches(db).load(input.trancheId)).record).state).toBe('PENDING');
+});

@@ -96,5 +96,5 @@ it('serves the platform API contract at /v1/openapi.json without a signature', a
   const served = await response.json();
   const committed = JSON.parse(readFileSync(resolve('openapi/stood.json'), 'utf8'));
   expect(served).toEqual(committed);
-  expect(served.info.version).toBe('1.3.0');
+  expect(served.info.version).toBe('1.4.1');
 });

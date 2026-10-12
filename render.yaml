@@ -50,6 +50,15 @@ services:
       # T-0227/T-0260: keys that seal saved PayPal tokens; signing and funding stay off without them.
       - key: VAULT_TOKEN_KEYS
         sync: false
+      # T-0156: the API issues bounded upload URLs and checks site-visit bytes in Stood's private bucket.
+      - key: STOOD_EVIDENCE_S3_ENDPOINT
+        sync: false
+      - key: STOOD_EVIDENCE_S3_BUCKET  # gitleaks:allow (a variable name, no value)
+        value: stood-evidence
+      - key: STOOD_EVIDENCE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY
+        sync: false
   - type: worker
     name: stood-reconciler
     runtime: docker
