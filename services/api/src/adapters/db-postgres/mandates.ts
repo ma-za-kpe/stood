@@ -32,7 +32,7 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
     private readonly cipher: TokenCipher,
   ) {}
   private reveal(row: Row): Mandate {
-    const { tokenFingerprint: _fingerprint, ...mandate } = structuredClone(row);
+    const { tokenFingerprint: _fingerprint, lastPolledAt: _polled, ...mandate } = structuredClone(row);
     return { ...mandate, tokenId: row.tokenId === null ? null : this.cipher.open(row.tokenId, row.key) };
   }
   async reserve(value: MandateReservation): Promise<Mandate> {
@@ -64,7 +64,10 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
         .from(schema.mandateSignatures)
         .where(eq(schema.mandateSignatures.key, input.key));
       if (prior) {
-        if (Object.entries(input).some(([key, v]) => prior[key as keyof MandateReservation] !== v))
+        // acceptedAt is assigned by the server on first acceptance, not part of the caller's retry identity.
+        if (
+          Object.entries(input).some(([key, v]) => key !== 'acceptedAt' && prior[key as keyof MandateReservation] !== v)
+        )
           fail('IDENTITY_CONFLICT');
         return this.reveal(prior);
       }
@@ -241,6 +244,15 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       return { status: 'REVOKED' as const };
     });
   }
+  async expire(key: string, version: number, now: number): Promise<Mandate> {
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(version) || version < 0) fail('INVALID');
+    return this.mutate(key, (row) => {
+      if (row.status === 'REVOKED') return null;
+      if (row.version !== version) fail('STALE_VERSION');
+      if (now < row.expiresAt || !['RESERVED', 'AWAITING_APPROVAL'].includes(row.status)) fail('CONFLICT');
+      return { status: 'REVOKED' as const };
+    });
+  }
   private async mutate(key: string, action: (row: Mandate) => Partial<Mandate> | null): Promise<Mandate> {
     return this.db.transaction(async (tx) => {
       const [row] = await tx
@@ -264,15 +276,30 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       return this.reveal(updated as Row);
     });
   }
-  // T-0260: mandates the worker still has to move, oldest first.
-  async unresolved(): Promise<string[]> {
-    const rows = await this.db
-      .select({ key: schema.mandateSignatures.key })
-      .from(schema.mandateSignatures)
-      .where(inArray(schema.mandateSignatures.status, ['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'TOKENIZING']))
-      .orderBy(asc(schema.mandateSignatures.createdAt))
-      .limit(100);
-    return rows.map((r) => r.key);
+  // Durable round-robin polling: consent that can still progress precedes expired cleanup.
+  async unresolved(now = Date.now()): Promise<string[]> {
+    if (!Number.isSafeInteger(now) || now < 0) fail('INVALID');
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ key: schema.mandateSignatures.key })
+        .from(schema.mandateSignatures)
+        .where(inArray(schema.mandateSignatures.status, ['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'TOKENIZING']))
+        .orderBy(
+          asc(sql`CASE WHEN ${schema.mandateSignatures.expiresAt} <= ${now} THEN 1 ELSE 0 END`),
+          asc(schema.mandateSignatures.lastPolledAt),
+          asc(schema.mandateSignatures.createdAt),
+          asc(schema.mandateSignatures.key),
+        )
+        .limit(100)
+        .for('update', { skipLocked: true });
+      const keys = rows.map((r) => r.key);
+      if (keys.length)
+        await tx
+          .update(schema.mandateSignatures)
+          .set({ lastPolledAt: sql`GREATEST(${now}, ${schema.mandateSignatures.lastPolledAt} + 1)` })
+          .where(inArray(schema.mandateSignatures.key, keys));
+      return keys;
+    });
   }
   // T-0227: re-seal every token not under the newest key. Same token, same fingerprint, one history event each.
   async rotateTokens(): Promise<number> {
@@ -302,8 +329,7 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
     return rotated;
   }
   private async event(tx: Tx, row: Row) {
-    await tx
-      .insert(schema.mandateEvents)
-      .values({ key: row.key, version: row.version, status: row.status, snapshot: row });
+    const { lastPolledAt: _polled, ...snapshot } = row;
+    await tx.insert(schema.mandateEvents).values({ key: row.key, version: row.version, status: row.status, snapshot });
   }
 }

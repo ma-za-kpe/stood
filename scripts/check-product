@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")/.."
 docker compose run --rm app pnpm validate
 scripts/check-migrations
-docker compose run --rm app node --test tools/site/serve.test.mjs
+docker compose run --rm app node --test tools/site/serve.test.mjs tools/site/check-portal.test.mjs
 docker compose up -d --wait db
 scripts/check-openapi
 scripts/check-sdk

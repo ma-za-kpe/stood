@@ -208,3 +208,16 @@ it('records a funding request for a tranche version and reports the hold without
   );
   expect(other.status).toBe(404);
 });
+
+it('rejects malformed or non-empty mandate bodies before touching storage', async () => {
+  const { app, mandates } = fixture();
+  for (const body of ['{invalid', 'null', '[]', '1', '"text"', '{"unknown":true}']) {
+    const r = await app.request(
+      '/v1/allowances/alw_1/mandate',
+      signed('POST', '/allowances/alw_1/mandate', body, 'invalid-body'),
+    );
+    expect(r.status).toBe(422);
+    expect(await r.json()).toMatchObject({ code: 'validation' });
+  }
+  expect(mandates.reserve).not.toHaveBeenCalled();
+});

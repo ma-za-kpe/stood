@@ -264,6 +264,14 @@ export function platformApi(config: PlatformApiConfig): Hono {
     if (!config.signing) return problem(503, 'signing_not_configured', 'Saved-PayPal signing is not configured.');
     const key = idempotency(c);
     if (!key) return problem(422, 'validation', 'JSON and an idempotency key are required.');
+    let input: unknown;
+    try {
+      input = JSON.parse(await c.req.text());
+    } catch {
+      return problem(422, 'validation', 'The mandate request must be an empty JSON object.');
+    }
+    if (input === null || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== 0)
+      return problem(422, 'validation', 'The mandate request must be an empty JSON object.');
     const allowance = await config.store.allowance(config.platformId, c.req.param('id'));
     if (!allowance) return problem(404, 'not_found', 'Allowance not found.');
     const reserved = await config.signing.mandates.reserve({
