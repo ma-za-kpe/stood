@@ -64,7 +64,10 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
         .from(schema.mandateSignatures)
         .where(eq(schema.mandateSignatures.key, input.key));
       if (prior) {
-        if (Object.entries(input).some(([key, v]) => prior[key as keyof MandateReservation] !== v))
+        // acceptedAt is assigned by the server on first acceptance, not part of the caller's retry identity.
+        if (
+          Object.entries(input).some(([key, v]) => key !== 'acceptedAt' && prior[key as keyof MandateReservation] !== v)
+        )
           fail('IDENTITY_CONFLICT');
         return this.reveal(prior);
       }

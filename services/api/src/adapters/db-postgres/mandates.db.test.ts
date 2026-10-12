@@ -431,3 +431,11 @@ it('lists only mandates the worker still has to move (T-0260)', async () => {
   const rows = await pool.query("SELECT key FROM mandate_signatures WHERE status IN ('SIGNED', 'REVOKED')");
   for (const row of rows.rows) expect(await store.unresolved()).not.toContain(row.key);
 });
+
+it('replays a reservation with its original acceptance time after a later identical request', async () => {
+  const { input } = await setup();
+  const first = await store.reserve(input);
+  expect(await store.reserve({ ...input, acceptedAt: now + 1000 })).toEqual(first);
+  expect(await store.events(input.key)).toHaveLength(1);
+  await expect(store.reserve({ ...input, mode: 'live', acceptedAt: now + 1000 })).rejects.toThrow('IDENTITY_CONFLICT');
+});
