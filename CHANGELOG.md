@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.12.0](https://github.com/ma-za-kpe/stood/compare/v0.11.0...v0.12.0) (2026-10-12)
+
+
+### Features
+
+* **api:** rate limits on the signed platform API (T-0330) ([d3ef57d](https://github.com/ma-za-kpe/stood/commit/d3ef57da49c033feaaa2a3c7023b958c050714ba))
+* **api:** rate limits, live contract, API portal, typed errors on every route ([#77](https://github.com/ma-za-kpe/stood/issues/77), T-0156) ([ff8a552](https://github.com/ma-za-kpe/stood/commit/ff8a552daf2198083ec4ca53194ba94737aadea2))
+* **api:** serve the platform API contract at /v1/openapi.json (T-0331) ([23f5e6b](https://github.com/ma-za-kpe/stood/commit/23f5e6bc69c2a0038a4c38bb7580633f77ac9d5d))
+* **docs:** the APIMatic developer portal, published with the website at /stood/api/ (T-0332) ([49806ca](https://github.com/ma-za-kpe/stood/commit/49806cae8251be75c484003c823dcae3c6ade50a))
+
+
+### Fixes
+
+* **api:** a reserved payment reaches PayPal within one pass, not an hour later (T-0349) ([dadc45a](https://github.com/ma-za-kpe/stood/commit/dadc45a53545c8fa73048c99e9d36f04fea0437d))
+* **api:** a waiting settlement logs why, as a fixed reason code (T-0345) ([7749d4f](https://github.com/ma-za-kpe/stood/commit/7749d4f3e957a6a2af71b729efcbfec4340b3571))
+* **api:** GitHub reads fall back to the read token when the App key is unset ([#77](https://github.com/ma-za-kpe/stood/issues/77)) ([529b175](https://github.com/ma-za-kpe/stood/commit/529b175135343a814ca46248ff15c008f69c1fed))
+* **api:** read PayPal's real order shapes so looked-up captures and voids resolve ([6f3ac61](https://github.com/ma-za-kpe/stood/commit/6f3ac61fde250b4e92aabd114c5d9c315de8f3ad))
+* **api:** read PayPal's real order shapes, so looked-up captures and voids resolve (T-0347) ([a693ed7](https://github.com/ma-za-kpe/stood/commit/a693ed75d47bf0ab511c2e592f4be2553d7a856d))
+* **api:** reserved payments reach PayPal at once; stood-api on Starter; void lesson ([98c643f](https://github.com/ma-za-kpe/stood/commit/98c643f887c7683656353ef789d65ba435311a84))
+* **api:** the live run resumes after packages and retries one refused read (T-0346) ([e036093](https://github.com/ma-za-kpe/stood/commit/e036093ec66726cd4ff501660506972cf61dd398))
+* **api:** waiting settlements log why; the live run resumes after packages ([54cb8dc](https://github.com/ma-za-kpe/stood/commit/54cb8dc5d6c4a4ab7a1e15f024d3889824dacbf6))
+* **ci:** tell checkouts' databases apart by compose folder, not project name ([771df5d](https://github.com/ma-za-kpe/stood/commit/771df5dfd92d255d8bc6047426e2d34be4163ca1))
+* **yard-api:** a deletion fence between planning and intake erasure (T-0351) ([44ef9d3](https://github.com/ma-za-kpe/stood/commit/44ef9d33e2aa17029e3dc3edf69cc08536c6d77e))
+* **yard-api:** complete reserved submissions and drafts against the current version (T-0350) ([589f4f8](https://github.com/ma-za-kpe/stood/commit/589f4f800f07e60d263fcb8e811e80900deb87e2))
+* **yard-api:** erase the planner's thread for every intake version (T-0338) ([89b5c3d](https://github.com/ma-za-kpe/stood/commit/89b5c3d41582e156b7fd147b6a960b0106621077))
+* **yard-api:** fifth audit: erasure, secret deadline, recovery, preview and notice lifecycles, job overlap ([d46a217](https://github.com/ma-za-kpe/stood/commit/d46a21781740971b8b5e28ad7843b97c583826ce))
+* **yard-api:** lease notice keys and mark them delivered only after the send (T-0342) ([80e1cc2](https://github.com/ma-za-kpe/stood/commit/80e1cc26c0c271d0285ed0c9d1eee40febc8ad4d))
+* **yard-api:** payouts recover PayPal's real duplicate answer; settlement on after the release review ([af60015](https://github.com/ma-za-kpe/stood/commit/af60015fa576fec2bc43550948aad3146610ced4))
+* **yard-api:** refuse secrets past their handover deletion deadline (T-0339) ([aeb2fba](https://github.com/ma-za-kpe/stood/commit/aeb2fbab4b19c842236cb52bd380dbb2aef389ac))
+* **yard-api:** reserve preview deploys before Render; sweep incomplete and untracked ones (T-0341) ([78f5be7](https://github.com/ma-za-kpe/stood/commit/78f5be7dfd3e18ffb048fdc3dea1ae329feccbb4))
+* **yard-api:** resumable preview cleanup and an atomic global preview cap (T-0352, T-0353) ([bae7b84](https://github.com/ma-za-kpe/stood/commit/bae7b84520a9d2beb2e251be2a96e96b58ae1458))
+* **yard-api:** run hosted jobs without overlap; schedule secret purge and recovery (T-0339, T-0340, T-0343) ([1e663f3](https://github.com/ma-za-kpe/stood/commit/1e663f3a3fc2b57895e3870224f5671eaa3ae920))
+* **yard-api:** sixth audit: stale recovery, deletion fence, resumable cleanup, atomic preview cap ([7b55254](https://github.com/ma-za-kpe/stood/commit/7b55254766cdec6de75b8b0d26b78b279e7f8bad))
+* **yard:** recover a duplicate payout from where PayPal really puts the link; live payout check (T-0335) ([3822562](https://github.com/ma-za-kpe/stood/commit/38225620fe4568672584b2cc5f63e177f0118d21))
+
+
+### Documentation
+
+* an uncaptured PayPal order has no captures list, confirmed live (T-0347) ([af7ef16](https://github.com/ma-za-kpe/stood/commit/af7ef1610f6d1863ae2259de7989e807fa439425))
+* fifth audit fixes in TASKS and SETUP (T-0338 to T-0343) ([0c2b56b](https://github.com/ma-za-kpe/stood/commit/0c2b56be4928c5a6ceb1d5abef1405bf81238dfe))
+* PayPal Payouts guide from the live run; payouts on in the sandbox (T-0336) ([9c352ac](https://github.com/ma-za-kpe/stood/commit/9c352ac4cbe755d90dc77f7c18310565f1c4dfc9))
+* record the production release review; settlement waits only for the owner's switch (T-0337) ([ef3db43](https://github.com/ma-za-kpe/stood/commit/ef3db43951f39de3b5f13f382062e0ee7fb19fed))
+* settlement is on in production since 2026-10-11 (T-0337) ([16df3d4](https://github.com/ma-za-kpe/stood/commit/16df3d446c1e7f3128580883f4315bb7c23daea1))
+* sixth audit fixes in TASKS and SETUP (T-0350 to T-0353) ([b675c26](https://github.com/ma-za-kpe/stood/commit/b675c26f622d2dfd0607ed80ef846cdb0e819db2))
+* the live end-to-end run, completed and confirmed in PayPal (T-0296) ([cd577e9](https://github.com/ma-za-kpe/stood/commit/cd577e94cedd3978173336cf7eb6c26f8222dfdb))
+* the live end-to-end run, completed and confirmed in PayPal (T-0296) ([4c45414](https://github.com/ma-za-kpe/stood/commit/4c454141dac7eb8f7d7c06199d2d0523e2fb2289))
+* what has to be true before real money; the README says what is live now (T-0334) ([28178da](https://github.com/ma-za-kpe/stood/commit/28178dabc1f17465a11ec0ac04873bde79b5ac55))
+
 ## [0.11.0](https://github.com/ma-za-kpe/stood/compare/v0.10.0...v0.11.0) (2026-10-11)
 
 
