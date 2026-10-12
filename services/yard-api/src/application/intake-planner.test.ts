@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { intakeFixture } from '../../../../packages/yard-contracts/test/fakes/intake.js';
 import { Foreman } from '../../../yard-foreman/src/foreman.js';
 import { MemorySaver } from '../../../yard-foreman/test/fakes/checkpoint.js';
@@ -105,4 +105,84 @@ it("erasing the intake removes the real planner's plans for every version", asyn
     await eraseIntake('idea', 'buyer', now, { intakes: { ...store, erase, idle: vi.fn() }, projects, foreman }),
   ).toBe('ERASED');
   for (const id of ids) await expect(foreman.read(id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+});
+
+// Sixth audit (2026-10-11): planning and erasure race. Every ordering must end with no plan for an erased intake.
+describe('deletion fence between planning and erasure', () => {
+  const race = () => {
+    const { record, repositories } = setup();
+    Object.assign(record, { version: 1 });
+    let erased = false;
+    const store = {
+      load: vi.fn(async () => {
+        if (erased) throw new YardError('NOT_FOUND');
+        return record;
+      }),
+      save: vi.fn(),
+      read: vi.fn(async () => []),
+    };
+    const foreman = new Foreman(new ScriptedPlannerModel('ci'), new MemorySaver());
+    const planner = new IntakePlanner(store, foreman, repositories);
+    const projects = {
+      load: vi.fn(async (): Promise<never> => {
+        throw new YardError('NOT_FOUND');
+      }),
+    };
+    const planId = intakePlanId('buyer', 'idea', 1);
+    return {
+      store,
+      foreman,
+      planner,
+      projects,
+      planId,
+      repositories,
+      erase: () => {
+        erased = true;
+      },
+    };
+  };
+  it('a plan written after the erase finished is forgotten by the planner, which reports the intake gone', async () => {
+    const r = race();
+    let resolveRepository = () => {};
+    r.repositories.resolve.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolveRepository = () => done({ repository: 'buyer/project', baseCommit: 'b'.repeat(40) });
+        }),
+    );
+    const planning = r.planner.create('idea', 'buyer', 1, now);
+    await vi.waitFor(() => expect(r.repositories.resolve).toHaveBeenCalled());
+    const intakes = {
+      ...r.store,
+      idle: vi.fn(),
+      erase: vi.fn(async () => {
+        r.erase();
+        return 'ERASED' as const;
+      }),
+    };
+    expect(await eraseIntake('idea', 'buyer', now, { intakes, projects: r.projects, foreman: r.foreman })).toBe(
+      'ERASED',
+    );
+    resolveRepository();
+    await expect(planning).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(r.foreman.read(r.planId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+  it('a plan written while the draft was being erased is forgotten by the erasure', async () => {
+    const r = race();
+    // The plan lands after erasure's first forget, just before the draft row goes.
+    const intakes = {
+      ...r.store,
+      idle: vi.fn(),
+      erase: vi.fn(async () => {
+        await r.planner.create('idea', 'buyer', 1, now);
+        expect((await r.foreman.read(r.planId)).blueprint.id).toBe(r.planId);
+        r.erase();
+        return 'ERASED' as const;
+      }),
+    };
+    expect(await eraseIntake('idea', 'buyer', now, { intakes, projects: r.projects, foreman: r.foreman })).toBe(
+      'ERASED',
+    );
+    await expect(r.foreman.read(r.planId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
 });
