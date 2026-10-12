@@ -20,6 +20,7 @@ export interface MandateStore {
   setupCreated(key: string, receipt: SetupReceipt): Promise<Mandate>;
   beginTokenize(key: string, version: number, payerId: string): Promise<Mandate>;
   confirm(key: string, receipt: TokenReceipt): Promise<Mandate>;
+  expire(key: string, version: number, now: number): Promise<Mandate>;
   revoke(platformId: string, key: string): Promise<Mandate>;
 }
 export interface MandateTerms {

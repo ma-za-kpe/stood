@@ -45,7 +45,13 @@ export async function advanceMandate(
     if (row.status === 'SIGNED' || row.status === 'REVOKED') return { outcome: row.status, mandate: row };
     const permitted = async (): Promise<Result | null> => {
       const now = clock();
-      if (!Number.isSafeInteger(now) || now < row.acceptedAt || now >= row.expiresAt) return wait('CONSENT_EXPIRED');
+      if (!Number.isSafeInteger(now) || now < row.acceptedAt) return wait('CONSENT_EXPIRED');
+      if (now >= row.expiresAt) {
+        // Ambiguous in-flight provider writes still require read-only recovery of their historical facts.
+        if (row.status === 'RESERVED' || row.status === 'AWAITING_APPROVAL')
+          return { outcome: 'REVOKED', mandate: await store.expire(key, row.version, now) };
+        return wait('CONSENT_EXPIRED');
+      }
       const draft = await terms.load(row.platformId, row.allowanceId);
       return !draft || row.termsVersion !== 1 || mandateTermsHash(draft) !== row.termsHash
         ? wait('TERMS_CHANGED')

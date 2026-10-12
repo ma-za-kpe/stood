@@ -77,6 +77,7 @@ export const mandateSignatures = pgTable(
     (${table.status} IN ('RESERVED', 'CREATING') AND ${table.setupId} IS NULL AND ${table.customerId} IS NULL AND ${table.payerId} IS NULL AND ${table.tokenId} IS NULL AND ${table.approvalUrl} IS NULL) OR
     (${table.status} = 'AWAITING_APPROVAL' AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND ${table.payerId} IS NULL AND ${table.tokenId} IS NULL) OR
     (${table.status} = 'TOKENIZING' AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND length(trim(${table.payerId})) > 0 AND ${table.tokenId} IS NULL) OR
+    (${table.status} = 'REVOKED' AND ${table.tokenId} IS NULL) OR
     (${table.status} IN ('SIGNED', 'REVOKED') AND length(trim(${table.setupId})) > 0 AND length(trim(${table.customerId})) > 0 AND (${table.approvalUrl} IS NULL OR length(trim(${table.approvalUrl})) > 0) AND length(trim(${table.payerId})) > 0 AND length(trim(${table.tokenId})) > 0)) IS TRUE`,
     ),
     check('mandate_token_fingerprint_paired', sql`(${table.tokenId} IS NULL) = (${table.tokenFingerprint} IS NULL)`),

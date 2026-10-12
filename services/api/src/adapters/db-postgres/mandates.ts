@@ -244,6 +244,15 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       return { status: 'REVOKED' as const };
     });
   }
+  async expire(key: string, version: number, now: number): Promise<Mandate> {
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(version) || version < 0) fail('INVALID');
+    return this.mutate(key, (row) => {
+      if (row.status === 'REVOKED') return null;
+      if (row.version !== version) fail('STALE_VERSION');
+      if (now < row.expiresAt || !['RESERVED', 'AWAITING_APPROVAL'].includes(row.status)) fail('CONFLICT');
+      return { status: 'REVOKED' as const };
+    });
+  }
   private async mutate(key: string, action: (row: Mandate) => Partial<Mandate> | null): Promise<Mandate> {
     return this.db.transaction(async (tx) => {
       const [row] = await tx

@@ -439,3 +439,38 @@ it('replays a reservation with its original acceptance time after a later identi
   expect(await store.events(input.key)).toHaveLength(1);
   await expect(store.reserve({ ...input, mode: 'live', acceptedAt: now + 1000 })).rejects.toThrow('IDENTITY_CONFLICT');
 });
+
+it('expires untouched consent atomically and preserves its audit trail without provider calls', async () => {
+  const { input } = await setup();
+  const row = await store.reserve(input);
+  await expect(store.expire(input.key, row.version, row.expiresAt - 1)).rejects.toThrow('CONFLICT');
+  await expect(store.expire(input.key, row.version + 1, row.expiresAt)).rejects.toThrow('STALE_VERSION');
+  const expired = await store.expire(input.key, row.version, row.expiresAt);
+  expect(expired.status).toBe('REVOKED');
+  expect(await store.expire(input.key, row.version, row.expiresAt)).toEqual(expired);
+  expect((await store.events(input.key)).map((e) => e.status)).toEqual(['RESERVED', 'REVOKED']);
+  expect(await store.reserve({ ...input, acceptedAt: row.expiresAt })).toEqual(expired);
+  await expect(store.beginCreate(input.key, expired.version)).rejects.toThrow('CONFLICT');
+  await store.reserve({ ...input, key: randomUUID(), acceptedAt: row.expiresAt });
+});
+
+it('expiry cannot overwrite a provider write that already claimed the mandate version', async () => {
+  const { input } = await setup();
+  const row = await store.reserve(input);
+  await store.beginCreate(input.key, row.version);
+  await expect(store.expire(input.key, row.version, row.expiresAt)).rejects.toThrow('STALE_VERSION');
+  await expect(store.expire(input.key, row.version + 1, row.expiresAt)).rejects.toThrow('CONFLICT');
+  await expect(store.expire(input.key, 1, Number.NaN)).rejects.toThrow('INVALID');
+  await expect(store.expire(input.key, -1, row.expiresAt)).rejects.toThrow('INVALID');
+  expect((await store.load(input.key)).status).toBe('CREATING');
+  await store.setupCreated(input.key, receipt(input.key));
+  const awaiting = await store.load(input.key);
+  const attempts = await Promise.allSettled([
+    store.expire(input.key, awaiting.version, row.expiresAt),
+    store.beginTokenize(input.key, awaiting.version, 'PAYER'),
+  ]);
+  expect(attempts.filter((a) => a.status === 'fulfilled')).toHaveLength(1);
+  const after = await store.load(input.key);
+  expect(['REVOKED', 'TOKENIZING']).toContain(after.status);
+  expect(after.setupId).toBe(awaiting.setupId);
+});
