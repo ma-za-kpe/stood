@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -8,6 +8,7 @@ import { FaultController } from '../../../../simulators/src/faults.js';
 import { simulatorServer } from '../../../test/contracts/paypal-simulator.js';
 import { codeParams } from '../../../test/fixtures/code-terms.js';
 import { advanceMandate } from '../../application/mandate-signing.js';
+import { createApp } from '../../http/app.js';
 import { ServerSdkTransport } from '../payments-paypal/sdk.js';
 import { PayPalVaultAdapter } from '../payments-paypal/vault.js';
 import { PostgresFunding } from './funding.js';
@@ -430,4 +431,148 @@ it('lists only mandates the worker still has to move (T-0260)', async () => {
   expect((await store.unresolved()).length).toBe(open.length + 1);
   const rows = await pool.query("SELECT key FROM mandate_signatures WHERE status IN ('SIGNED', 'REVOKED')");
   for (const row of rows.rows) expect(await store.unresolved()).not.toContain(row.key);
+});
+
+it('replays a reservation with its original acceptance time after a later identical request', async () => {
+  const { input } = await setup();
+  const first = await store.reserve(input);
+  expect(await store.reserve({ ...input, acceptedAt: now + 1000 })).toEqual(first);
+  expect(await store.events(input.key)).toHaveLength(1);
+  await expect(store.reserve({ ...input, mode: 'live', acceptedAt: now + 1000 })).rejects.toThrow('IDENTITY_CONFLICT');
+});
+
+it('expires untouched consent atomically and preserves its audit trail without provider calls', async () => {
+  const { input } = await setup();
+  const row = await store.reserve(input);
+  await expect(store.expire(input.key, row.version, row.expiresAt - 1)).rejects.toThrow('CONFLICT');
+  await expect(store.expire(input.key, row.version + 1, row.expiresAt)).rejects.toThrow('STALE_VERSION');
+  const expired = await store.expire(input.key, row.version, row.expiresAt);
+  expect(expired.status).toBe('REVOKED');
+  expect(await store.expire(input.key, row.version, row.expiresAt)).toEqual(expired);
+  expect((await store.events(input.key)).map((e) => e.status)).toEqual(['RESERVED', 'REVOKED']);
+  expect(await store.reserve({ ...input, acceptedAt: row.expiresAt })).toEqual(expired);
+  await expect(store.beginCreate(input.key, expired.version)).rejects.toThrow('CONFLICT');
+  await store.reserve({ ...input, key: randomUUID(), acceptedAt: row.expiresAt });
+});
+
+it('expiry cannot overwrite a provider write that already claimed the mandate version', async () => {
+  const { input } = await setup();
+  const row = await store.reserve(input);
+  await store.beginCreate(input.key, row.version);
+  await expect(store.expire(input.key, row.version, row.expiresAt)).rejects.toThrow('STALE_VERSION');
+  await expect(store.expire(input.key, row.version + 1, row.expiresAt)).rejects.toThrow('CONFLICT');
+  await expect(store.expire(input.key, 1, Number.NaN)).rejects.toThrow('INVALID');
+  await expect(store.expire(input.key, -1, row.expiresAt)).rejects.toThrow('INVALID');
+  expect((await store.load(input.key)).status).toBe('CREATING');
+  await store.setupCreated(input.key, receipt(input.key));
+  const awaiting = await store.load(input.key);
+  const attempts = await Promise.allSettled([
+    store.expire(input.key, awaiting.version, row.expiresAt),
+    store.beginTokenize(input.key, awaiting.version, 'PAYER'),
+  ]);
+  expect(attempts.filter((a) => a.status === 'fulfilled')).toHaveLength(1);
+  const after = await store.load(input.key);
+  expect(['REVOKED', 'TOKENIZING']).toContain(after.status);
+  expect(after.setupId).toBe(awaiting.setupId);
+});
+
+it('gives unexpired signing work a slot past 100 older expired reservations', async () => {
+  const at = now + 30 * 86400000;
+  const old: string[] = [];
+  for (let i = 0; i < 100; i++) {
+    const { input } = await setup();
+    old.push(input.key);
+    await store.reserve(input);
+  }
+  const { input } = await setup();
+  await store.reserve({ ...input, acceptedAt: at });
+  expect(await store.unresolved(at)).toContain(input.key);
+  await store.beginCreate(input.key, 0);
+  await store.setupCreated(input.key, receipt(input.key));
+  expect(await store.unresolved(at)).toContain(input.key);
+  expect((await store.unresolved(at)).length).toBeLessThanOrEqual(100);
+});
+
+it('rotates still-waiting mandates durably so a later reservation gets a turn', async () => {
+  const at = now + 60 * 86400000;
+  for (let i = 0; i < 100; i++) {
+    const { input } = await setup();
+    await store.reserve({ ...input, acceptedAt: at });
+  }
+  expect(await store.unresolved(at)).toHaveLength(100);
+  const { input } = await setup();
+  await store.reserve({ ...input, acceptedAt: at });
+  const restarted = new PostgresMandates(db, cipher);
+  expect(await restarted.unresolved(at)).toContain(input.key);
+});
+
+it('keeps queue scheduling outside consent history and rejects backward or mixed scheduling writes', async () => {
+  const { input } = await setup();
+  const first = await store.reserve(input);
+  await store.unresolved(now);
+  const after = await store.load(input.key);
+  expect(after).toEqual(first);
+  expect(await store.events(input.key)).toHaveLength(1);
+  await expect(
+    pool.query('UPDATE mandate_signatures SET last_polled_at = -1 WHERE key = $1', [input.key]),
+  ).rejects.toThrow();
+  await expect(
+    pool.query('UPDATE mandate_signatures SET last_polled_at = last_polled_at + 1, terms_hash = $2 WHERE key = $1', [
+      input.key,
+      'b'.repeat(64),
+    ]),
+  ).rejects.toThrow();
+  await expect(store.unresolved(Number.NaN)).rejects.toThrow('INVALID');
+  await expect(store.unresolved(-1)).rejects.toThrow('INVALID');
+});
+
+it('replays a signed HTTP mandate request across clock changes with real storage and rejects malformed JSON', async () => {
+  const { input, draft } = await setup();
+  let at = now;
+  const apiKey = 'fixture_platform_key',
+    secret = 'fixture_signing_secret';
+  const app = createApp({
+    appEnv: 'ci',
+    demoMode: false,
+    paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
+    api: {
+      store: new PostgresPlatformApi(db),
+      platformId: 'buyer',
+      key: apiKey,
+      secret,
+      clock: () => at,
+      signing: { mode: 'sim', mandates: store, funding: new PostgresFunding(db) },
+    },
+  });
+  const path = `/v1/allowances/${draft.id}/mandate`;
+  const request = (body: string, key = input.key) => {
+    const timestamp = String(Math.floor(at / 1000));
+    const signature = createHmac('sha256', secret)
+      .update(JSON.stringify(['stood.request@2', timestamp, 'POST', path, key, '', 'application/json', body]))
+      .digest('hex');
+    return app.request(path, {
+      method: 'POST',
+      body,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': key,
+        'Stood-Signature': `t=${timestamp},v2=${signature}`,
+      },
+    });
+  };
+  const first = await request('{}');
+  expect(first.status).toBe(202);
+  const original = await first.json();
+  at += 1000;
+  const retried = await request('{}');
+  expect(retried.status).toBe(202);
+  expect(await retried.json()).toEqual(original);
+  expect((await store.load(input.key)).acceptedAt).toBe(now);
+  expect(await store.events(input.key)).toHaveLength(1);
+  const badKey = randomUUID();
+  const invalid = await request('{invalid', badKey);
+  expect(invalid.status).toBe(422);
+  expect(await invalid.json()).toMatchObject({ code: 'validation' });
+  await expect(store.load(badKey)).rejects.toThrow('NOT_FOUND');
 });

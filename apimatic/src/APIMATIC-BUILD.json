@@ -16,6 +16,7 @@
     "portalSettings": {
       "enableConsoleCalls": false,
       "enableExport": true
-    }
+    },
+    "headIncludes": "<link rel=\"stylesheet\" href=\"https://ma-za-kpe.github.io/stood/api/static/css/creator.css\">"
   }
 }

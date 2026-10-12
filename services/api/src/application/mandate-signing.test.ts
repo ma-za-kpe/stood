@@ -53,6 +53,7 @@ function harness(status: Mandate['status'] = 'RESERVED') {
     beginTokenize: vi.fn(async (_key, _version, payerId) => update({ status: 'TOKENIZING', payerId })),
     confirm: vi.fn(async (_key, receipt) => update({ ...receipt, status: 'SIGNED' })),
     revoke: vi.fn(),
+    expire: vi.fn(async () => update({ status: 'REVOKED' })),
   };
   const proof = {
     complete: true,
@@ -122,7 +123,8 @@ it('recovers an already-approved setup after a lost create reply without requiri
 it('prevents new writes on expired or mismatched terms but still recovers historical provider facts', async () => {
   for (const status of ['RESERVED', 'AWAITING_APPROVAL'] as const) {
     const h = harness(status);
-    expect(await h.run(undefined, () => 10000)).toMatchObject({ outcome: 'WAIT', reason: 'CONSENT_EXPIRED' });
+    expect(await h.run(undefined, () => 10000)).toMatchObject({ outcome: 'REVOKED' });
+    expect(await h.run()).toMatchObject({ outcome: 'REVOKED' });
     expect(h.provider.createSetup).not.toHaveBeenCalled();
     expect(h.provider.createToken).not.toHaveBeenCalled();
   }

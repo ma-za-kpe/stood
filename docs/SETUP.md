@@ -330,3 +330,15 @@ Set the existing `STOOD_EVIDENCE_S3_ENDPOINT`, `STOOD_EVIDENCE_S3_BUCKET`, `STOO
 `scripts/dev upload-check` qualifies a small synthetic byte probe in the real bucket: signed PUT, bounded read-back, overwrite refusal and changed content-type refusal. It qualifies storage only. Cleanup of abandoned upload objects and legally reviewed photo retention remain follow-up work before real buyers; do not configure a blanket expiry that deletes completed evidence relied on by a dispute.
 
 `scripts/dev yard-live-e2e` qualifies a final work order through hosted Yard buyer/builder sessions and sandbox Stood signing/funding. It uses a $1.00 builder price plus Yard's configured fee; each invocation creates a new project unless `--resume <project id>` is supplied. Keep the private recording in `.sandbox/yard-live/` and reconcile it before resuming an incomplete run. The [October 12 recording](../services/api/test/scenarios/sandbox/yard-hosted-2026-10-12.json) confirms PAID and one real PayPal sandbox capture; it does not claim UI clicks or builder payout completion.
+
+### Mandate retries and expired consent (seventh audit)
+
+The mandate POST requires an empty JSON object. A retry with the same idempotency key and stored terms returns the existing reservation, retaining its first acceptance time and expiry. A changed tenant, allowance, terms hash, version or provider mode conflicts.
+
+When consent expires in `RESERVED` or `AWAITING_APPROVAL`, the signing worker records terminal `REVOKED` locally, with the original consent and provider references retained in history. This does not cancel a PayPal object. `CREATING` and `TOKENIZING` may describe an ambiguous provider write; they retain read-only historical recovery, and expiry never permits a new write. Funding authority still requires a matching, signed, unexpired mandate.
+
+Migration 0028 extends the guarded local revocation path; migration 0029 stores polling order separately from the consent facts. The worker gives unexpired work priority and rotates requests that keep waiting, using its own clock. Polling does not change the mandate version or append consent events. The API's public status enum remains unchanged.
+
+### KERNEL browser capacity
+
+Sandbox approval now retries explicit browser-creation 429/529 responses, respecting Retry-After and using jittered backoff. Allocation is bounded by ten attempts and two minutes; exhausted org/project limits require capacity to free up before another run. Do not delete sessions belonging to other runs. A network timeout is an unknown create outcome and is not blindly retried. See the [KERNEL team feedback implementation](guides/kernel-paypal-sandbox-approval.md#14-kernel-team-review-unattended-retry-and-capacity-handling).
