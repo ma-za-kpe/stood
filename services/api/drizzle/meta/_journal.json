@@ -190,6 +190,13 @@
       "when": 1791748455027,
       "tag": "0026_rate_windows",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791802051077,
+      "tag": "0027_upload_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -192,6 +192,13 @@ PY
     grep -E '^DATABASE_URL=' .env >"$keys" || true
     docker compose run --rm --no-deps --env-from-file "$keys" app \
       sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/release-review-cli.js' ;;
+  upload-check)
+    # T-0156: qualify bounded signed PUTs in the real private bucket, never a financial operation.
+    [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }
+    keys=$(mktemp); chmod 600 "$keys"; trap 'rm -f "$keys"' EXIT
+    grep -E '^STOOD_EVIDENCE_S3_(ENDPOINT|BUCKET|ACCESS_KEY_ID|SECRET_ACCESS_KEY)=' .env >"$keys" || true
+    docker compose run --rm --no-deps -T --env-from-file "$keys" app \
+      sh -c 'pnpm --filter @stood/api build >/dev/null && node services/api/dist/upload-check-cli.js' ;;
   evidence-check)
     # C4 (#77): qualify Stood's evidence bucket (Cloudflare R2) with the reconciler's settings. Prints no setting.
     [ -f .env ] || { echo "Create .env first (cp .env.example .env)" >&2; exit 2; }

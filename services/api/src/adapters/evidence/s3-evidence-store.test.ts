@@ -106,3 +106,59 @@ describe('S3EvidenceStore', () => {
       ).toThrow('EVIDENCE_INVALID_KEY');
   });
 });
+
+it('issues a short-lived write-once URL bound to the declared photo type, size and checksum, without a network call', () => {
+  const b = bucket(),
+    s = store(b);
+  const photo = {
+    key: `uploads/session/0-${'a'.repeat(64)}`,
+    sha256: 'a'.repeat(64),
+    bytes: 4,
+    contentType: 'image/jpeg' as const,
+  };
+  const signed = s.presignPut(photo, now + 900000),
+    url = new URL(signed.url);
+  expect(url.origin).toBe('https://account.r2.example');
+  expect(url.pathname).toBe(`/stood-evidence/${photo.key}`);
+  expect(url.searchParams.get('X-Amz-Expires')).toBe('900');
+  expect(url.searchParams.get('X-Amz-Date')).toBe('20261010T120000Z');
+  expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe(
+    'content-length;content-type;host;if-none-match;x-amz-checksum-sha256',
+  );
+  expect(signed.headers).toEqual({
+    'content-length': '4',
+    'content-type': 'image/jpeg',
+    'if-none-match': '*',
+    'x-amz-checksum-sha256': Buffer.from(photo.sha256, 'hex').toString('base64'),
+  });
+  expect(b.calls).toEqual([]);
+  for (const expiresAt of [now, now - 1, now + 900001, Number.NaN])
+    expect(() => s.presignPut(photo, expiresAt)).toThrow('EVIDENCE_INVALID_KEY');
+  expect(() => s.presignPut({ ...photo, key: '../outside' }, now + 1000)).toThrow('EVIDENCE_INVALID_KEY');
+});
+it('stops reading an oversized stream even when content-length is absent or false', async () => {
+  for (const headers of [{}, { 'content-length': '2' }, { 'content-length': '10' }]) {
+    let cancelled = false;
+    const s = new S3EvidenceStore({
+      endpoint: 'https://account.r2.example',
+      bucket: 'stood-evidence',
+      accessKeyId: 'key-id',
+      secretAccessKey: 'not-real',
+      clock: () => now,
+      fetch: async () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(new Uint8Array(8));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { headers },
+        ),
+    });
+    await expect(s.get('uploads/session/photo', 4)).rejects.toThrow('EVIDENCE_CONFLICT');
+    expect(cancelled).toBe(true);
+  }
+});

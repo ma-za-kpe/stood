@@ -1,10 +1,11 @@
-import { createHmac, generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { vi } from 'vitest';
 import { usageAuthorities } from '../../src/application/usage-intake.js';
 import { decide, getProfile } from '../../src/domain/decision.js';
 import { createTrancheRecord } from '../../src/domain/tranche-record.js';
 import { receiptPayload } from '../../src/domain/usage-receipt.js';
 import { createApp } from '../../src/http/app.js';
+import type { StoredUploadPhoto } from '../../src/ports/upload-store.js';
 import { MemoryTranches } from '../fakes/tranche-store.js';
 import { codeParams } from './code-terms.js';
 
@@ -70,7 +71,22 @@ export function usageReceipt(nonce = 'nonce-contract-000001') {
     signature: sign(null, Buffer.from(receiptPayload(unsigned)), usageKeys.privateKey).toString('base64'),
   };
 }
+export const uploadBody = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+export const uploadPhoto = {
+  sha256: createHash('sha256').update(uploadBody).digest('hex'),
+  bytes: uploadBody.length,
+  contentType: 'image/jpeg' as const,
+};
 export async function harness() {
+  let upload = {
+    id: 'upl_1',
+    trancheId: 'trn_1',
+    status: 'OPEN' as 'OPEN' | 'COMPLETE',
+    photos: [{ ...uploadPhoto, key: `uploads/upl_1/0-${uploadPhoto.sha256}` }],
+    expiresAt: now + 900000,
+    completedAt: null as number | null,
+  };
+
   const tranches = new MemoryTranches();
   await tranches.create(
     createTrancheRecord({ id: 'trn_1', amount: draft.cap, profileId: 'code.milestone@1', maxResubmits: 1 }),
@@ -120,6 +136,24 @@ export async function harness() {
     paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
     demoMode: false,
     api: {
+      uploads: {
+        store: {
+          reserve: async () => structuredClone(upload),
+          get: async (_platform: string, tranche: string, id: string) =>
+            tranche === 'trn_1' && id === 'upl_1' ? structuredClone(upload) : null,
+          complete: async () => {
+            upload = { ...upload, status: 'COMPLETE', completedAt: now };
+            return structuredClone(upload);
+          },
+        },
+        objects: {
+          get: async () => uploadBody,
+          presignPut: (photo: StoredUploadPhoto) => ({
+            url: `https://bucket.example/${photo.key}`,
+            headers: { 'content-type': photo.contentType },
+          }),
+        },
+      },
       store: {
         create: vi.fn(async () => stored),
         allowance: vi.fn(async (_p: string, id: string) => (id === 'alw_1' ? stored : null)),

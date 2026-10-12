@@ -198,6 +198,46 @@ export const Tranche = z
   .strict()
   .meta({ id: 'Tranche' });
 
+// T-0156: site-visit upload sessions are byte-integrity intake, never a trusted assessment.
+export const UploadPhoto = z
+  .object({
+    sha256: sha64,
+    bytes: z
+      .number()
+      .int()
+      .min(1)
+      .max(8 * 1024 * 1024),
+    contentType: z.enum(['image/jpeg', 'image/heic', 'image/webp']).meta({ id: 'PhotoContentType' }),
+  })
+  .strict()
+  .meta({ id: 'UploadPhoto' });
+export const UploadInput = z
+  .object({ photos: z.array(UploadPhoto).min(1).max(10) })
+  .strict()
+  .meta({ id: 'UploadInput' });
+export const StoredUploadPhoto = UploadPhoto.extend({ key: z.string() }).strict().meta({ id: 'StoredUploadPhoto' });
+export const SignedUpload = z
+  .object({ key: z.string(), url: z.string().url(), headers: z.record(z.string(), z.string()) })
+  .strict()
+  .meta({ id: 'SignedUpload' });
+export const UploadSession = z
+  .object({
+    id,
+    trancheId: id,
+    status: z.enum(['OPEN', 'COMPLETE']).meta({ id: 'UploadStatus' }),
+    photos: z.array(StoredUploadPhoto).min(1).max(10),
+    expiresAt: z.number().int(),
+    completedAt: z.number().int().nullable(),
+    uploads: z.array(SignedUpload).max(10),
+  })
+  .strict()
+  .meta({
+    id: 'UploadSession',
+    description:
+      'COMPLETE means owned bytes, size, hash and format header checked; no assessment or payment. URLs are derived short-lived capabilities, not persisted receipts.',
+  });
+export const UploadCompletion = z.object({}).strict().meta({ id: 'UploadCompletion' });
+
 export const BaselineStatus = z.enum(['QUEUED', 'DONE', 'INVALID']).meta({
   id: 'BaselineStatus',
   description: 'QUEUED until Stood has run it; INVALID when the frozen tests are not at the base commit as described',
@@ -274,6 +314,7 @@ type Operation = Readonly<{
   body?: z.ZodType;
   ok: Readonly<{ status: 200 | 201 | 202; schema: z.ZodType }>;
   idempotent?: boolean;
+  idempotencyDescription?: string;
   problems: readonly number[];
 }>;
 export const operations: readonly Operation[] = [
@@ -360,6 +401,36 @@ export const operations: readonly Operation[] = [
   },
   {
     method: 'post',
+    path: '/tranches/{id}/uploads',
+    id: 'createUpload',
+    idempotencyDescription:
+      'Same key and body keep the same upload session and expiry; current URLs and status are derived on each read. A different body is 409.',
+    summary: 'Reserve a bounded site-visit photo upload session; returns temporary write-once URLs',
+    body: UploadInput,
+    ok: { status: 201, schema: UploadSession },
+    idempotent: true,
+    problems: [401, 404, 409, 422, 503],
+  },
+  {
+    method: 'get',
+    path: '/tranches/{id}/uploads/{uploadId}',
+    id: 'getUpload',
+    summary: 'Read an owned upload session and current upload URLs until expiry',
+    ok: { status: 200, schema: UploadSession },
+    problems: [401, 404, 503],
+  },
+  {
+    method: 'post',
+    path: '/tranches/{id}/uploads/{uploadId}/complete',
+    id: 'completeUpload',
+    summary: 'Check the uploaded bytes and complete the evidence intake; creates no decision or payment',
+    body: UploadCompletion,
+    ok: { status: 200, schema: UploadSession },
+    idempotent: true,
+    problems: [401, 404, 409, 422, 503],
+  },
+  {
+    method: 'post',
     path: '/tranches/{id}/packages',
     id: 'submitPackage',
     summary: "Submit a commit package for Stood's runner to judge; returns QUEUED, never a result",
@@ -414,7 +485,7 @@ function nullables(value: unknown): unknown {
 
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
-export const API_VERSION = '1.3.0';
+export const API_VERSION = '1.4.0';
 
 export type OpenApiDocument = Readonly<{
   openapi: string;
@@ -461,7 +532,8 @@ export function openApiDocument(version: string = API_VERSION): OpenApiDocument 
                 name: 'Idempotency-Key',
                 in: 'header',
                 required: true,
-                description: 'Same key and body return the same response; a different body is 409',
+                description:
+                  op.idempotencyDescription ?? 'Same key and body return the same response; a different body is 409',
                 schema: { type: 'string', maxLength: 200 },
               },
             ]

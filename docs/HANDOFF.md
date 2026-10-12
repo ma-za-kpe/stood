@@ -46,7 +46,7 @@ This page lists:
 
 | Account | Needed for | Notes |
 |---|---|---|
-| Render | Deploying the Blueprint, preview services | Frankfurt. `stood-api` free; `stood-reconciler` and `stood-yard-api` Starter (paid; Yard stays on for its jobs). Secrets set through the Render API ([SETUP](SETUP.md#5-render)) |
+| Render | Deploying the Blueprint, preview services | Frankfurt. `stood-api` Starter (paid, always on since 2026-10-12); `stood-reconciler` and `stood-yard-api` Starter (paid; Yard stays on for its jobs). Secrets set through the Render API ([SETUP](SETUP.md#5-render)) |
 | Neon | Postgres | Free tier does not expire |
 | Kernel | Driving the sandbox buyer approval in a cloud browser | Sandbox buyer accounts only |
 | APIMatic, Postman, AG Studio, Bryntum | Partner integrations | Check licence and trial terms before adopting |
@@ -83,3 +83,7 @@ This is the original credential-dependent checklist. Completed slices include re
 5. Run the deferred tests for that provider, and record their evidence in [`TASKS.md`](../TASKS.md) before relying on it.
 
 C4 continuation (2026-10-12): the T-0354 operator close-out now requires `--provider-create-rejected` and a note identifying privately reviewed definitive provider rejection evidence. Its 72-hour delay is an operator policy, not evidence of provider absence. Invalid timestamps are refused, and the failure write compares the funding version, CREATING state and absent order under the store's transaction lock. Leave the two October 10 fundings open until rejection evidence is reconciled; do not close ambiguous lost replies. The [project erasure proposal](yard/Y22-project-erasure-proposal.md) is design only; Board event deletion remains unavailable.
+
+C4 hosted Yard evidence (2026-10-12): T-0189 is qualified through hosted app sessions: project `yard-live-2026-10-12T10-43-11-089Z`, package `pkg_3bbe6afe-8381-4202-a48a-385fbda927a2`, buyer usage forwarded by Yard, PAID projected from the exact Stood capture. A separate read of PayPal confirmed capture `2LU70160P0502522L` COMPLETED at 1.05 USD, and the parent order had exactly one capture. See the [sanitized evidence](../services/api/test/scenarios/sandbox/yard-hosted-2026-10-12.json). The harness resumes this project without another hold/package; no UI-click or payout-completion claim.
+
+T-0156 upload-session implementation needs migration 0027 and the four existing `STOOD_EVIDENCE_S3_*` settings on stood-api. Signed routes reserve and complete owned photo storage only; trusted site-visit processing and abandoned-object cleanup remain open. `scripts/dev upload-check` passed against the private evidence bucket on 2026-10-12. The API/SDK changes are local until this continuation batch merges and deploys.

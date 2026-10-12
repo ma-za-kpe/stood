@@ -518,3 +518,40 @@ export const reconciliationFindings = pgTable(
     check('finding_subject_valid', sql`${t.providerId} IS NOT NULL OR ${t.operationKey} IS NOT NULL`),
   ],
 );
+
+// T-0156: upload metadata and the byte-integrity receipt. No decision or financial authority.
+export const uploadSessions = pgTable(
+  'upload_sessions',
+  {
+    id: text().primaryKey(),
+    platformId: text('platform_id').notNull(),
+    trancheId: text('tranche_id').notNull(),
+    key: text().notNull(),
+    fingerprint: text().notNull(),
+    photos: jsonb().$type<readonly import('../../ports/upload-store.js').StoredUploadPhoto[]>().notNull(),
+    status: text().$type<'OPEN' | 'COMPLETE'>().notNull(),
+    createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+    expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
+    completedAt: bigint('completed_at', { mode: 'number' }),
+  },
+  (t) => [
+    unique('upload_request_identity').on(t.platformId, t.trancheId, t.key),
+    foreignKey({
+      columns: [t.trancheId, t.platformId],
+      foreignColumns: [apiTrancheOwners.trancheId, apiTrancheOwners.platformId],
+    }),
+    check(
+      'upload_identity_valid',
+      sql`length(trim(${t.key})) BETWEEN 1 AND 200 AND ${t.fingerprint} ~ '^[a-f0-9]{64}$'`,
+    ),
+    check(
+      'upload_photos_valid',
+      sql`jsonb_typeof(${t.photos}) = 'array' AND jsonb_array_length(${t.photos}) BETWEEN 1 AND 10`,
+    ),
+    check('upload_time_valid', sql`${t.createdAt} >= 0 AND ${t.expiresAt} = ${t.createdAt} + 900000`),
+    check(
+      'upload_status_valid',
+      sql`(${t.status} = 'OPEN' AND ${t.completedAt} IS NULL) OR (${t.status} = 'COMPLETE' AND ${t.completedAt} >= ${t.createdAt} AND ${t.completedAt} < ${t.expiresAt})`,
+    ),
+  ],
+);
