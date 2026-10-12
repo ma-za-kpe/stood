@@ -10,6 +10,8 @@ function harness(
     responses?: Response[];
     networkFailure?: boolean;
     createDurationMs?: number;
+    connectionFailure?: boolean;
+    pageFailure?: boolean;
   } = {},
 ) {
   const calls: string[] = [];
@@ -18,6 +20,7 @@ function harness(
     goto: async (u) => {
       calls.push(`goto ${u}`);
       url = u;
+      if (over.pageFailure) throw new Error('page failed');
     },
     waitForSelector: async (s) => {
       calls.push(`wait ${s}`);
@@ -74,6 +77,7 @@ function harness(
     },
     connect: async (cdp) => {
       connected.push(cdp);
+      if (over.connectionFailure) throw new Error('connect failed');
       return { page, close: async () => void calls.push('close') };
     },
   });
@@ -192,5 +196,23 @@ it('does not repeat ambiguous network writes or ordinary non-retryable errors', 
     await expect(h.approver.approve(link)).rejects.toMatchObject({ code: 'KERNEL_UNAVAILABLE', status });
     expect(h.kernel).toHaveLength(1);
     expect(h.waits).toEqual([]);
+  }
+});
+
+it('deletes a known owned session even when its CDP reply is malformed', async () => {
+  const h = harness({
+    responses: [Response.json({ session_id: 'ses_owned', cdp_ws_url: 'invalid' }, { status: 201 })],
+  });
+  await expect(h.approver.approve(link)).rejects.toThrow('KERNEL_UNEXPECTED');
+  expect(h.kernel.at(-1)).toBe('DELETE /browsers/ses_owned Bearer kernel-key');
+  expect(h.connected).toEqual([]);
+});
+
+it('attempts owned-session deletion on connection and page failures without retrying approval', async () => {
+  for (const over of [{ connectionFailure: true }, { pageFailure: true }]) {
+    const h = harness(over);
+    await expect(h.approver.approve(link)).rejects.toThrow(/failed/);
+    expect(h.kernel).toEqual(['POST /browsers Bearer kernel-key', 'DELETE /browsers/ses_1 Bearer kernel-key']);
+    if (over.pageFailure) expect(h.calls.at(-1)).toBe('close');
   }
 });

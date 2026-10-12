@@ -123,8 +123,10 @@ export class KernelSandboxApprover {
     if (target?.protocol !== 'https:' || target.hostname !== 'www.sandbox.paypal.com') throw new Error('NOT_SANDBOX');
     const created = await this.createBrowser();
     const session = (await created.json()) as { session_id?: string; cdp_ws_url?: string };
-    if (!session.session_id || !session.cdp_ws_url?.startsWith('wss://')) throw new Error('KERNEL_UNEXPECTED');
+    if (typeof session.session_id !== 'string' || !session.session_id.trim()) throw new Error('KERNEL_UNEXPECTED');
     try {
+      if (typeof session.cdp_ws_url !== 'string' || !session.cdp_ws_url.startsWith('wss://'))
+        throw new Error('KERNEL_UNEXPECTED');
       if (!this.config.connect) throw new Error('KERNEL_NO_BROWSER');
       const browser = await this.config.connect(session.cdp_ws_url);
       try {
