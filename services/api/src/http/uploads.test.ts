@@ -63,16 +63,20 @@ it('reserves an owned session, issues URLs only for its fixed keys and completes
     path = '/tranches/tranche/uploads';
   const created = await f.request(path, 'POST', { photos: [photo] });
   expect(created.status).toBe(201);
+  expect(created.headers.get('Cache-Control')).toBe('private, no-store');
   expect(UploadSession.parse(await created.json())).toMatchObject({
     id: 'session',
     status: 'OPEN',
     uploads: [{ key: 'uploads/session/photo' }],
   });
   expect(f.store.reserve.mock.calls[0]?.slice(0, 3)).toEqual(['platform', 'tranche', 'one']);
-  expect((await f.request(`${path}/session`)).status).toBe(200);
+  const read = await f.request(`${path}/session`);
+  expect(read.status).toBe(200);
+  expect(read.headers.get('Cache-Control')).toBe('private, no-store');
   expect(f.store.get).toHaveBeenCalledWith('platform', 'tranche', 'session');
   const complete = await f.request(`${path}/session/complete`, 'POST', {});
   expect(complete.status).toBe(200);
+  expect(complete.headers.get('Cache-Control')).toBe('private, no-store');
   expect(UploadSession.parse(await complete.json())).toMatchObject({ status: 'COMPLETE', uploads: [] });
   expect(f.objects.get).toHaveBeenCalledWith('uploads/session/photo', 4);
 });

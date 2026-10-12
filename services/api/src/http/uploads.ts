@@ -40,6 +40,7 @@ export function uploadRoutes(app: Hono, config: Config, problem: Problem) {
   };
   app.post('/tranches/:id/uploads', (c) =>
     guarded(async () => {
+      c.header('Cache-Control', 'private, no-store');
       if (!config.uploads) return problem(503, 'evidence_not_configured', 'Upload storage is not configured.');
       const key = c.req.header('Idempotency-Key') ?? '';
       if (!key.trim() || key.length > 200 || !/^application\/json(?:;|$)/i.test(c.req.header('Content-Type') ?? ''))
@@ -67,6 +68,7 @@ export function uploadRoutes(app: Hono, config: Config, problem: Problem) {
   );
   app.get('/tranches/:id/uploads/:uploadId', (c) =>
     guarded(async () => {
+      c.header('Cache-Control', 'private, no-store');
       if (!config.uploads) return problem(503, 'evidence_not_configured', 'Upload storage is not configured.');
       const session = await config.uploads.store.get(config.platformId, c.req.param('id'), c.req.param('uploadId'));
       if (!session) return problem(404, 'upload_not_found', 'Upload session not found.');
@@ -75,6 +77,7 @@ export function uploadRoutes(app: Hono, config: Config, problem: Problem) {
   );
   app.post('/tranches/:id/uploads/:uploadId/complete', (c) =>
     guarded(async () => {
+      c.header('Cache-Control', 'private, no-store');
       if (!config.uploads) return problem(503, 'evidence_not_configured', 'Upload storage is not configured.');
       const key = c.req.header('Idempotency-Key') ?? '';
       if (!key.trim() || key.length > 200 || !/^application\/json(?:;|$)/i.test(c.req.header('Content-Type') ?? ''))
