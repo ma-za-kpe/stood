@@ -160,3 +160,15 @@ Two runs through Stood's production adapter, each confirmed by the independent w
 | Vault refuse (no buyer) | `4EP95447F22898734` | authorized at creation, then `VOIDED`; no capture |
 
 The sanitised recordings (ids, statuses, amounts; no payer data) are in [`services/api/test/scenarios/sandbox/`](../../services/api/test/scenarios/sandbox/). Earlier runs that failed (the Ugandan payee, and the 403 void with a third-party payee) are kept there too, because they are the evidence for lessons 1 and 2.
+
+## Results from the live end-to-end run (11 to 12 October 2026)
+
+One allowance with three code milestones (`scripts/dev live-e2e`), against the deployed Stood API with settlement on. Each milestone was held at $2.00 with the buyer approving through a Kernel cloud browser, then judged on Vercel Sandbox from a real commit. Every result below was confirmed with the PayPal sandbox MCP.
+
+| Milestone | Stood's decision | Order | PayPal |
+|---|---|---|---|
+| one | release: every frozen test passed | `26L3187712795950P` | authorization `1HP29755AU437610F` `CAPTURED`; one capture `69M74068D7399832H` `COMPLETED`, 2.00 USD, `invoice_id` = Stood's operation key |
+| two | refuse: tests failed | `58085949F8216760K` | authorization `32324688NL582212F` `VOIDED`; no capture, nothing charged |
+| final | wait, then release after the buyer's signed usage receipt | `7FP80420P88337917` | authorization `55C84489YL9183908` `CAPTURED`; one capture `1GN539895Y624020S` `COMPLETED`, 2.00 USD |
+
+What it took to get there is the point of this run. The first capture and the void reached PayPal but Stood could not confirm them by looking them up (lessons 15 and 16), so both sat "ambiguous" for hours. The reconciler logged no reason until we added one; once the reasons were logged, the cause took minutes to find. A reserved capture also waited up to an hour for the reconciler's next scheduled check. The fixes are T-0345 to T-0349 in [`TASKS.md`](../../TASKS.md). Each capture is exactly one: retries reuse the same request id and `invoice_id`, so no milestone was paid twice.
