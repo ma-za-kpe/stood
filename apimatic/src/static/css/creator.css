@@ -1,0 +1,46 @@
+/* The outer portal shell does not inherit the embedded API reference theme. */
+.portal-footer {
+  background: #0d0a1e;
+  color: #fff7ec;
+  border-top: 1px solid #3a3360;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.creator-footer {
+  box-sizing: border-box;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px clamp(24px, 4vw, 48px) 24px;
+}
+.creator-footer * { box-sizing: border-box; }
+.creator-footer__top { display: flex; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
+.creator-footer__brand { display: flex; align-items: flex-start; gap: 14px; }
+.creator-footer__mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #c8ff3d;
+  color: #0d0a1e;
+  font-size: 26px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.creator-footer p { margin: 0; line-height: 1.6; }
+.creator-footer__title { font-size: 19px; font-weight: 700; letter-spacing: -0.4px; }
+.creator-footer__byline { color: #a7a2c2; font-size: 14px; margin-top: 4px !important; }
+.creator-footer a { color: #fff7ec; text-decoration: none; }
+.creator-footer a:hover { color: #c8ff3d; text-decoration: underline; text-underline-offset: 4px; }
+.creator-footer a:focus-visible { outline: 3px solid #c8ff3d; outline-offset: 5px; border-radius: 4px; }
+.creator-footer .footer-links { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; list-style: none; margin: 0; padding: 0; }
+.creator-footer .footer-links li { margin: 0; padding: 0; font-size: 14px; font-weight: 500; }
+.creator-footer .footer-links .creator-footer__support { display: inline-block; padding: 9px 15px; border: 1px solid #3a3360; border-radius: 8px; }
+.creator-footer__bottom { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px 24px; margin-top: 28px; padding-top: 20px; border-top: 1px solid #3a3360; font-size: 12px; color: #a7a2c2; }
+.creator-footer__sandbox { display: inline-flex; align-items: center; gap: 8px; }
+.creator-footer__sandbox::before { content: ""; width: 6px; height: 6px; background: #c8ff3d; border-radius: 50%; }
+@media (max-width: 600px) {
+  .creator-footer { padding-top: 28px; }
+  .creator-footer__top { gap: 24px; }
+  .creator-footer .footer-links { gap: 14px 22px; }
+  .creator-footer__bottom { margin-top: 24px; }
+}

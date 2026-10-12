@@ -44,6 +44,7 @@ jobs:
           cp openapi/stood.json apimatic/src/spec/stood.json
           npx -y @apimatic/cli@1.5.0 portal generate --input=apimatic --destination=_site/api --force --auth-key="$APIMATIC_API_KEY"
           test -f _site/api/index.html
+          node tools/site/check-portal.mjs _site/api
       # actions/configure-pages v6.0.0
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
       # actions/upload-pages-artifact v5.0.0
