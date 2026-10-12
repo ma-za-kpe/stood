@@ -1,0 +1,54 @@
+{
+  "scenario": "hosted-yard-final-milestone",
+  "environment": "paypal-sandbox",
+  "transport": "hosted-app-session-api",
+  "run": "2026-10-12T10-43-11-089Z",
+  "qualification": {
+    "at": "2026-10-12T10:52:43.392Z",
+    "step": "qualified",
+    "projectId": "yard-live-2026-10-12T10-43-11-089Z",
+    "allowanceId": "alw_a180aebf-6a39-40a0-aaa1-1ab142c5e3ac",
+    "trancheId": "trn_b65db7ab-25e6-4688-a6ff-3c3c01bcfdf8",
+    "packageId": "pkg_3bbe6afe-8381-4202-a48a-385fbda927a2",
+    "state": "PAID",
+    "settlement": {
+      "effect": "CAPTURE",
+      "reference": "2LU70160P0502522L",
+      "attempt": 1
+    },
+    "amount": {
+      "minor": 105,
+      "currency": "USD"
+    },
+    "usage": "ACCEPTED",
+    "transport": "hosted-app-session-api"
+  },
+  "paypalRead": {
+    "checkedAt": "2026-10-12T10:53:55.793Z",
+    "provider": "paypal-sandbox",
+    "capture": {
+      "id": "2LU70160P0502522L",
+      "status": "COMPLETED",
+      "amount": {
+        "currency_code": "USD",
+        "value": "1.05"
+      }
+    },
+    "orderId": "4XJ85690KH1357017",
+    "captures": [
+      {
+        "id": "2LU70160P0502522L",
+        "status": "COMPLETED",
+        "amount": {
+          "currency_code": "USD",
+          "value": "1.05"
+        }
+      }
+    ]
+  },
+  "limits": [
+    "App session HTTP flow; no claim of clicking the Yard UI",
+    "Confirms a captured final work order, not builder payout completion",
+    "Upload-session API changes were not deployed during this run"
+  ]
+}

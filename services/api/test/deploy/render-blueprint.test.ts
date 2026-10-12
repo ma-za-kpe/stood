@@ -42,6 +42,10 @@ const reads: Record<string, readonly string[]> = {
     'STOOD_PLATFORM_ID',
     'VAULT_TOKEN_KEYS',
     'USAGE_AUTHORITY_KEYS',
+    'STOOD_EVIDENCE_S3_ENDPOINT',
+    'STOOD_EVIDENCE_S3_BUCKET',
+    'STOOD_EVIDENCE_S3_ACCESS_KEY_ID',
+    'STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY',
     ...PAYMENT_KEYS,
   ],
   'stood-reconciler': [

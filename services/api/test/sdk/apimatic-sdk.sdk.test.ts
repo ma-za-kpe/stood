@@ -2,12 +2,15 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { codeParams } from '../fixtures/code-terms.js';
-import { draft, harness, key, now, pkg, secret } from '../fixtures/contract-app.js';
+import { draft, harness, key, now, pkg, secret, uploadPhoto } from '../fixtures/contract-app.js';
 
 // T-0053: the TypeScript SDK that APIMatic generates from openapi/stood.json, with Stood's saved request-signing
 // customization, against the real router over HTTP. Built by scripts/check-sdk before this runs.
 type Call = (...args: unknown[]) => Promise<{ statusCode: number; result: Record<string, unknown> }>;
 type StoodApi = Record<
+  | 'createUpload'
+  | 'getUpload'
+  | 'completeUpload'
   | 'createAllowance'
   | 'getAllowance'
   | 'requestMandate'
@@ -71,6 +74,17 @@ describe('APIMatic-generated Stood SDK', () => {
     expect(baseline.statusCode).toBe(202);
     expect(baseline.result).toMatchObject({ id: 'bl_1', status: 'DONE', evidenceSha256: 'e'.repeat(64) });
     expect((await stood.getBaseline('bl_1')).result).toMatchObject({ baseCommit: codeParams.baseCommit });
+  });
+
+  it('signs upload creation, read and completion and parses the nullable intake receipt', async () => {
+    const stood = api();
+    const created = await stood.createUpload('trn_1', 'upload-key', { photos: [uploadPhoto] });
+    expect(created.statusCode).toBe(201);
+    expect(created.result).toMatchObject({ id: 'upl_1', status: 'OPEN', completedAt: null });
+    expect((await stood.getUpload('trn_1', 'upl_1')).result).toMatchObject({ id: 'upl_1', photos: [uploadPhoto] });
+    const completed = await stood.completeUpload('trn_1', 'upl_1', 'complete-key', {});
+    expect(completed.result).toMatchObject({ status: 'COMPLETE', completedAt: now, uploads: [] });
+    expect((await stood.completeUpload('trn_1', 'upl_1', 'complete-key', {})).result).toEqual(completed.result);
   });
 
   it('surfaces problems as typed errors, and a wrong secret is refused', async () => {

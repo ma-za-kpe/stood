@@ -44,7 +44,7 @@
 | Changelog | <https://ma-za-kpe.github.io/stood/changelog.html> | Live |
 | Hosted sandbox API | <https://stood-api.onrender.com> · health: <https://stood-api.onrender.com/health> | Live on the PayPal **sandbox**. `/health` says whether sandbox payments are on and, if not, what is missing ([setup record](docs/SETUP.md)). Render Starter, always on |
 | Hosted Yard app | <https://stood-yard-api.onrender.com/app/> | Owner-issued access code; Board, events, site log and private intake |
-| Stood API contract (OpenAPI 3.1) | <https://stood-api.onrender.com/v1/openapi.json> | Served by `stood-api` from API 1.3.0; the same file is [`openapi/stood.json`](openapi/stood.json) |
+| Stood API contract (OpenAPI 3.1) | <https://stood-api.onrender.com/v1/openapi.json> | Served by `stood-api` from API 1.4.1; the same file is [`openapi/stood.json`](openapi/stood.json) |
 | Stood API reference (APIMatic portal) | <https://ma-za-kpe.github.io/stood/api/> | Generated from the same contract by APIMatic on every merge to `main`; HTTP and TypeScript examples, a signing guide, no Try It (requests need your secret) |
 | Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake is connected; the Foreman and Yard payments remain off until their adapters are connected |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
@@ -326,3 +326,7 @@ Third-party tools and services (PayPal, AG Grid / AG Studio, Bryntum and the oth
 ### Connected local simulation
 
 Run `scripts/dev demo` to build and check the connected Docker journey, then open <http://localhost:3002/> for Stood or <http://localhost:3002/yard/app/?project=yard-project> for the Yard room. Choose **Buyer**. This uses real local services with simulated providers and synthetic evidence; no real payment is executed. No keys are needed. Stop the disposable demo with `scripts/dev demo:down`. The hosted app is available at <https://stood-yard-api.onrender.com/app/> with owner-issued sign-in, the Board and private StartupTribunal intake. Stood signing/funding and reconciliation are qualified on the real PayPal sandbox. Hosted Foreman and Yard payment integration continue in [#76](https://github.com/ma-za-kpe/stood/issues/76).
+
+Site-visit photo [upload sessions](docs/SETUP.md#site-visit-upload-sessions-t-0156) reserve bounded, tenant-owned storage and complete only after byte-integrity checks. Completion is evidence intake; trusted site-visit assessment remains open. [Hosted Yard payment evidence](docs/guides/paypal-sandbox-authorize-capture-void.md#results-through-hosted-yard-12-october-2026) includes a real sandbox capture driven through Yard app sessions.
+
+Created and maintained by [Maku Mazakpe](https://startuptribunal.com/maku), based in Accra, Ghana. [Support](mailto:makpalyy@gmail.com) · [GitHub](https://github.com/ma-za-kpe) · [LinkedIn](https://linkedin.com/in/maku-mazakpe).
