@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { claimedFixture, leaseAt, leaseBuilder, leaseBuyer } from '../../test/fakes/board-fixture.js';
+import { MemoryPreviewSlots } from '../../test/fakes/preview-slots.js';
 import { renderApiFake } from '../../test/fakes/render-api.js';
 import { MemorySecretRows } from '../../test/fakes/secrets.js';
 import { LocalKeyWrapper } from '../adapters/crypto/local-key-wrapper.js';
@@ -60,8 +61,8 @@ it('tears previews down after their TTL and on project close, and reuses a live 
   expect(await h.previews.deploy(h.id, 'one', image, leaseAt + 1)).toEqual(first);
   expect(h.render.services()).toHaveLength(1);
   expect((await h.board.room(h.id, leaseBuyer)).previews).toHaveLength(1);
-  expect(await h.previews.sweep(leaseAt + 30 * day - 1)).toEqual({ expired: 0, abandoned: 0, orphaned: 0 });
-  expect(await h.previews.sweep(leaseAt + 30 * day)).toEqual({ expired: 1, abandoned: 0, orphaned: 0 });
+  expect(await h.previews.sweep(leaseAt + 30 * day - 1)).toEqual({ expired: 0, abandoned: 0, orphaned: 0, failed: 0 });
+  expect(await h.previews.sweep(leaseAt + 30 * day)).toEqual({ expired: 1, abandoned: 0, orphaned: 0, failed: 0 });
   expect(h.render.services()).toEqual([]);
   expect((await h.board.room(h.id, leaseBuyer)).previews).toEqual([]);
   expect((await h.board.events.read(h.id, 0)).map((e) => e.type)).toContain('preview.expired');
@@ -125,10 +126,10 @@ it('deletes the service of a deploy that crashed before it was recorded, and its
   h.board.recordPreview = record;
   expect(h.render.services()).toHaveLength(1);
   // A fresh reservation's service is spared: its deploy may still be finishing.
-  expect(await h.previews.sweep(leaseAt + 60_000)).toEqual({ expired: 0, abandoned: 0, orphaned: 0 });
+  expect(await h.previews.sweep(leaseAt + 60_000)).toEqual({ expired: 0, abandoned: 0, orphaned: 0, failed: 0 });
   expect(h.render.services()).toHaveLength(1);
   // Fifteen minutes on, the reservation is abandoned and the untracked service deleted.
-  expect(await h.previews.sweep(leaseAt + 15 * 60_000)).toEqual({ expired: 0, abandoned: 1, orphaned: 1 });
+  expect(await h.previews.sweep(leaseAt + 15 * 60_000)).toEqual({ expired: 0, abandoned: 1, orphaned: 1, failed: 0 });
   expect(h.render.services()).toEqual([]);
   expect(await h.board.previewIntents(h.id)).toEqual([]);
   // The work order can be previewed again.
@@ -149,6 +150,47 @@ it('releases the reservation when Render refuses, and deletes a service Render m
   host.deploy = deploy;
   expect(await h.board.previewIntents(h.id)).toEqual([]);
   expect(h.render.services()).toHaveLength(1);
-  expect(await h.previews.sweep(leaseAt + 1)).toEqual({ expired: 0, abandoned: 0, orphaned: 1 });
+  expect(await h.previews.sweep(leaseAt + 1)).toEqual({ expired: 0, abandoned: 0, orphaned: 1, failed: 0 });
   expect(h.render.services()).toEqual([]);
+});
+
+// Sixth audit (2026-10-11): partial deletions and the global cap.
+it('finishes a deletion whose record failed, and keeps sweeping the other previews', async () => {
+  const h = await harness();
+  await h.previews.deploy(h.id, 'one', image, leaseAt);
+  const remove = h.board.removePreview.bind(h.board);
+  let failOnce = true;
+  h.board.removePreview = async (...args) => {
+    if (failOnce) {
+      failOnce = false;
+      throw new Error('database write failed');
+    }
+    return remove(...args);
+  };
+  // Render deleted the service; recording it failed.
+  expect(await h.previews.sweep(leaseAt + 30 * day)).toEqual({ expired: 0, abandoned: 0, orphaned: 0, failed: 1 });
+  expect(h.render.services()).toEqual([]);
+  // Next pass: Render's 404 counts as already deleted, and the record goes.
+  expect(await h.previews.sweep(leaseAt + 30 * day)).toEqual({ expired: 1, abandoned: 0, orphaned: 0, failed: 0 });
+  expect((await h.board.room(h.id, leaseBuyer)).previews).toEqual([]);
+});
+
+it('never lets concurrent deploys from different projects pass the global cap', async () => {
+  const slots = new MemoryPreviewSlots();
+  const render = renderApiFake({ apiKey: 'rnd_fixture', maxServices: 5 });
+  const host = new RenderPreviewHost({
+    apiKey: 'rnd_fixture',
+    ownerId: 'tea-yard',
+    transport: render.fetch,
+    maxActive: 1,
+  });
+  const projects = await Promise.all([harness(), harness()]);
+  const results = await Promise.allSettled(
+    projects.map((h) => new Previews(h.board, h.vault, host, { slots, max: 1 }).deploy(h.id, 'one', image, leaseAt)),
+  );
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { code: 'CONFLICT' } });
+  expect(render.services()).toHaveLength(1);
+  // The refused deploy left no reservation behind.
+  for (const h of projects) expect(await h.board.previewIntents(h.id)).toEqual([]);
 });

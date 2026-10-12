@@ -231,3 +231,28 @@ it('holds each milestone as the builder price plus Yard fee, and returns both li
   // A retry returns the same lines.
   expect((await bridge.create('fee', leaseBuyer, 2, 'mandate', leaseAt)).lines).toEqual(result.lines);
 });
+// Sixth audit (2026-10-11): an unrelated write while the allowance draft is in flight must not strand it.
+it('recovers a lost Stood reply after an unrelated project write made the reserved version stale', async () => {
+  const board = await frozen();
+  let lose = true;
+  const gateway: DraftGateway = {
+    createDraft: async (input) => {
+      if (lose) {
+        lose = false;
+        throw new Error('reply lost');
+      }
+      return draft(input);
+    },
+  };
+  await expect(new MandateBridge(board, gateway).create('p', leaseBuyer, 2, 'mandate', leaseAt)).rejects.toThrow(
+    'reply lost',
+  );
+  const { version } = await board.events.load('p');
+  await board.events.mutate('p', version, 'yard', 'unrelated', 'unrelated', (raw) => ({
+    data: raw,
+    type: 'project.noted',
+    payload: {},
+  }));
+  expect(await new MandateBridge(board, gateway).recover()).toEqual([{ projectId: 'p', status: 'DELIVERED' }]);
+  expect(await new MandateBridge(board, gateway).recover()).toEqual([]);
+});

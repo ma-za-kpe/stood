@@ -827,13 +827,8 @@ export class Board {
     intent: MandateIntent,
     draft: Readonly<{ id: string; tranches: readonly Readonly<{ id: string; name: string }>[] }>,
   ) {
-    return this.events.mutate(
-      id,
-      intent.reservedVersion,
-      'stood',
-      `mandate-complete:${intent.key}`,
-      fingerprint({ draft }),
-      (raw) => {
+    return this.atCurrent(id, (version) =>
+      this.events.mutate(id, version, 'stood', `mandate-complete:${intent.key}`, fingerprint({ draft }), (raw) => {
         const d = data(raw);
         if (
           !same(d.mandate, intent) ||
@@ -852,7 +847,7 @@ export class Board {
           type: 'stood.allowance_created',
           payload: { allowanceId: draft.id, milestones: Object.keys(tranches), simulated: true },
         };
-      },
+      }),
     );
   }
   async pendingMandates(after = '') {
@@ -951,6 +946,18 @@ export class Board {
       });
     });
     return { orders, nextCursor: projects.length > 100 ? page.at(-1)!.id : null };
+  }
+  // Sixth audit (2026-10-11): completing a reserved intent must survive unrelated writes to the project. The write
+  // goes against the current version (its own check proves the intent is unchanged) and retries on a newer one; a
+  // replay of the same key returns the first result before any version is compared.
+  private async atCurrent<T>(id: string, write: (version: number) => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await write((await this.events.load(id)).version);
+      } catch (error) {
+        if (!(error instanceof YardError) || error.code !== 'STALE_VERSION' || attempt === 5) throw error;
+      }
+    }
   }
   private async mutate(
     id: string,
@@ -1313,40 +1320,46 @@ export class Board {
     return structuredClone(workOrder(data(snapshot.data), wo).order.submissionIntent!);
   }
   completeSubmission(id: string, wo: string, intent: SubmissionIntent, packageId: string) {
-    return this.mutate(
-      id,
-      intent.actor,
-      intent.reservedVersion,
-      `submission-complete:${intent.key}`,
-      {
-        wo,
-        requestKey: intent.request.key,
-        claimId: intent.claimId,
-        originalVersion: intent.expectedVersion,
-        packageId,
-      },
-      'wo.submitted',
-      (d) => {
-        const { work, order } = workOrder(d, wo);
-        if (!same(order.submissionIntent, intent) || work.snapshot.currentClaim?.id !== intent.claimId || order.payment)
-          throw new YardError('CONFLICT');
-        work.submit(intent.claimId, intent.request.commit, packageId, intent.requestedAt);
-        work.checking(packageId, intent.requestedAt);
-        order.actions.push({
-          kind: 'submit',
-          claim: intent.claimId,
-          commit: intent.request.commit,
+    return this.atCurrent(id, (version) =>
+      this.mutate(
+        id,
+        intent.actor,
+        version,
+        `submission-complete:${intent.key}`,
+        {
+          wo,
+          requestKey: intent.request.key,
+          claimId: intent.claimId,
+          originalVersion: intent.expectedVersion,
           packageId,
-          now: intent.requestedAt,
-        });
-        order.submissionIntent = {
-          ...intent,
-          status: 'CONFIRMED',
-          packageId,
-          completedVersion: intent.reservedVersion + 1,
-        };
-        return { wo, state: 'CHECKING', packageId, simulated: true };
-      },
+        },
+        'wo.submitted',
+        (d) => {
+          const { work, order } = workOrder(d, wo);
+          if (
+            !same(order.submissionIntent, intent) ||
+            work.snapshot.currentClaim?.id !== intent.claimId ||
+            order.payment
+          )
+            throw new YardError('CONFLICT');
+          work.submit(intent.claimId, intent.request.commit, packageId, intent.requestedAt);
+          work.checking(packageId, intent.requestedAt);
+          order.actions.push({
+            kind: 'submit',
+            claim: intent.claimId,
+            commit: intent.request.commit,
+            packageId,
+            now: intent.requestedAt,
+          });
+          order.submissionIntent = {
+            ...intent,
+            status: 'CONFIRMED',
+            packageId,
+            completedVersion: version + 1,
+          };
+          return { wo, state: 'CHECKING', packageId, simulated: true };
+        },
+      ),
     );
   }
   async submissionTerms(

@@ -3,6 +3,7 @@ import { migrateYardEvents, migrateYardSearch } from './events.js';
 import { migrateYardIntakeErasure, migrateYardIntakes } from './intakes.js';
 import { migrateYardNotices } from './notices.js';
 import { migrateYardCheckpoints, migrateYardPlannerSpend } from './planner-spend.js';
+import { migrateYardPreviewSlots } from './preview-slots.js';
 import { provisionYard } from './schema.js';
 import { migrateYardSecrets } from './secrets.js';
 import { migrateYardSiteLogs } from './site-log.js';
@@ -53,4 +54,5 @@ export async function migrateYard(pool: pg.Pool, roles: Roles): Promise<void> {
   await migrateYardPlannerSpend(pool, roles.owner);
   await migrateYardCheckpoints(pool, roles.owner);
   await migrateYardIntakeErasure(pool, roles.owner);
+  await migrateYardPreviewSlots(pool, roles.owner);
 }

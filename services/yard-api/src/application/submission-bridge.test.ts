@@ -107,3 +107,31 @@ it('retains the reservation when a mismatched package receipt arrives', async ()
   await expect(bridge.submit('p', 'one', 'd'.repeat(40), builder, 6, 'different', now)).rejects.toThrow('CONFLICT');
   expect(submit).toHaveBeenCalledTimes(1);
 });
+// Sixth audit (2026-10-11): an unrelated write while a submission is in flight must not strand it in SUBMITTING.
+it('recovers a submission after an unrelated project write made its reserved version stale', async () => {
+  const { board, store } = await fixture();
+  let lost = true;
+  const provider = {
+    submit: async (input: { trancheId: string; repository: string; baseCommit: string; commit: string }) => {
+      if (lost) {
+        lost = false;
+        throw new Error('response lost after package created');
+      }
+      return { id: 'package', ...input };
+    },
+  };
+  await expect(
+    new SubmissionBridge(board, provider).submit('p', 'one', 'd'.repeat(40), builder, 6, 'submit', now),
+  ).rejects.toThrow('response lost');
+  // The buyer posts the other milestone while the first submission is in flight.
+  const reserved = (await store.load('p')).version;
+  await board.post('p', 'two', 'tranche-two', buyer, reserved, 'post-two', now);
+  const restored = new SubmissionBridge(new Board(store), provider);
+  expect(await restored.recover(now + 1)).toEqual([{ projectId: 'p', wo: 'one', status: 'DELIVERED' }]);
+  expect((await board.view('p', 'one', builder)).state).toBe('CHECKING');
+  const intent = (await store.load('p')).data as {
+    orders: Record<string, { submissionIntent: { completedVersion: number } }>;
+  };
+  expect(intent.orders.one?.submissionIntent.completedVersion).toBe((await store.load('p')).version);
+  expect(await restored.recover(now + 2)).toEqual([]);
+});
