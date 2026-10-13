@@ -1,0 +1,13 @@
+# ADR-0028: immutable allowance versions and fresh consent
+
+Status: proposed implementation, 13 October 2026. This records the C4 amendment boundary; it does not claim an active API.
+
+An accepted version is immutable. A proposed version retains the allowance id and existing tranche identities, and increments a separate terms version. It changes only unfunded milestones. Already held, submitted, decided or settled milestones retain their exact terms. Cap, currency, payee, milestone identities/amounts, window and retry policy remain fixed in this first amendment slice. This supports changing the evidence terms for remaining work without silently changing existing payment obligations.
+
+Store each complete version as an immutable snapshot, with a durable active-version reference, ownership, idempotency receipt and proposing platform identity. Version one remains readable from the original allowance record. Proposals lock the allowance and affected tranche streams using the same lock order as funding reservation; any funding intent already recorded for an affected tranche blocks its change, including an ambiguous provider write. Recheck this fence when committing the version. Two concurrent proposals with the same expected version yield one successor; an exact idempotency retry returns that successor before checking the current version.
+
+The current signing schema and worker enforce version one. The implementation must change reservation, signature constraints, worker consent checks and funding authority together. New consent binds the complete successor snapshot and version. The old signature remains historical evidence; it cannot authorize funding changed terms. New-version consent does not replace reconciliation authority for a provider operation already reserved under the old version.
+
+Runner/package ingestion reads the terms bound to each funded tranche's consent, rather than assuming the newest global snapshot describes historical work. Buyer usage and receipts remain bound to the actual submitted package. SDK and contract expose the current version and an explicit version read; proposing a version does not sign it or move money. Yard clears its amendment fence only after the new mandate and matching tranche terms are confirmed.
+
+Required evidence: immutable old-version reads; exact proposal replay after a lost response; changed-body conflict; stale/concurrent version conflict; cross-tenant refusal; no edits to funded/queued/settled work; proposal racing funding; version-two signing only on its exact hash; old consent unable to fund changed work; historical provider recovery and judging preserved; signed router/Postgres/SDK tests; genuine sandbox qualification before claiming C4 completion.
