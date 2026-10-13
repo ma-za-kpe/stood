@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/ma-za-kpe/stood/compare/v0.12.2...v0.13.0) (2026-10-13)
+
+
+### Features
+
+* **c4:** version allowance consent and Yard amendments ([#165](https://github.com/ma-za-kpe/stood/issues/165)) ([08173f9](https://github.com/ma-za-kpe/stood/commit/08173f934af0e6adbb917e8d009354548fbd4fc2))
+
 ## [0.12.2](https://github.com/ma-za-kpe/stood/compare/v0.12.1...v0.12.2) (2026-10-13)
 
 
