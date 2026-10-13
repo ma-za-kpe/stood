@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.2](https://github.com/ma-za-kpe/stood/compare/v0.12.1...v0.12.2) (2026-10-13)
+
+
+### Fixes
+
+* **api:** qualify hosted Yard recovery and document deployment ([#160](https://github.com/ma-za-kpe/stood/issues/160)) ([1003b7c](https://github.com/ma-za-kpe/stood/commit/1003b7c1760bc30055cb071a70400e7f6e4516e3))
+
 ## [0.12.1](https://github.com/ma-za-kpe/stood/compare/v0.12.0...v0.12.1) (2026-10-12)
 
 
