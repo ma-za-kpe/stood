@@ -63,11 +63,13 @@ export const mandateSignatures = pgTable(
       columns: [table.allowanceId, table.platformId],
       foreignColumns: [apiAllowances.id, apiAllowances.platformId],
     }),
-    uniqueIndex('one_active_mandate').on(table.allowanceId).where(sql`${table.status} <> 'REVOKED'`),
+    uniqueIndex('one_active_mandate')
+      .on(table.allowanceId, table.termsVersion)
+      .where(sql`${table.status} <> 'REVOKED'`),
     check('mandate_poll_time_valid', sql`${table.lastPolledAt} >= 0 AND ${table.lastPolledAt} <= 9007199254740991`),
     check(
       'mandate_identity_valid',
-      sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.termsVersion} = 1 AND ${table.termsHash} ~ '^[a-f0-9]{64}$' AND ${table.customerRef} ~ '^[a-f0-9]{64}$' AND ${table.setupRequestId} <> ${table.tokenRequestId} AND ${table.mode} IN ('sim', 'live')`,
+      sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.termsVersion} >= 1 AND ${table.termsHash} ~ '^[a-f0-9]{64}$' AND ${table.customerRef} ~ '^[a-f0-9]{64}$' AND ${table.setupRequestId} <> ${table.tokenRequestId} AND ${table.mode} IN ('sim', 'live')`,
     ),
     check(
       'mandate_time_valid',

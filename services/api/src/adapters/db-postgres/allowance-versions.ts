@@ -109,7 +109,15 @@ export class PostgresAllowanceVersions implements AllowanceVersionStore {
         .from(schema.fundingOperations)
         .where(inArray(schema.fundingOperations.trancheId, ids));
       // Even failed or ambiguous intents retain their original terms; never infer permission from provider silence.
-      const reserved = new Set(fundings.map((f) => f.trancheId));
+      const packages = await tx
+        .select({ trancheId: schema.commitPackages.trancheId })
+        .from(schema.commitPackages)
+        .where(inArray(schema.commitPackages.trancheId, ids));
+      const uploads = await tx
+        .select({ trancheId: schema.uploadSessions.trancheId })
+        .from(schema.uploadSessions)
+        .where(inArray(schema.uploadSessions.trancheId, ids));
+      const reserved = new Set([...fundings, ...packages, ...uploads].map((f) => f.trancheId));
       for (const stream of streams) if (stream.version > 0) reserved.add(stream.trancheId);
       const body = allowanceAmendment(current.body, input, reserved);
       const version = current.version + 1;

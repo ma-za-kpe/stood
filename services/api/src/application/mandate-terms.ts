@@ -9,5 +9,11 @@ export function canonicalMandate(value: unknown): string {
       .join(',')}}`;
   return JSON.stringify(value) ?? 'null';
 }
-export const mandateTermsHash = (draft: StoredDraft): string =>
-  createHash('sha256').update('stood.allowance.terms@1\n').update(canonicalMandate(draft)).digest('hex');
+export function mandateTermsHash(draft: StoredDraft, version = 1): string {
+  if (!Number.isSafeInteger(version) || version < 1) throw new RangeError('Invalid terms version');
+  // Existing version-one signatures retain their exact historical digest.
+  return createHash('sha256')
+    .update(version === 1 ? 'stood.allowance.terms@1\n' : 'stood.allowance.terms@2\n')
+    .update(canonicalMandate(version === 1 ? draft : { version, draft }))
+    .digest('hex');
+}
