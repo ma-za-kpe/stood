@@ -100,6 +100,8 @@ We skipped Neon's quick-start (Neon CLI, MCP server, Neon Functions, buckets and
 
 ## 5. Render
 
+Step by step: [Render deployment guide](guides/render-stood-yard-deployment.md), including all three services, migration order, health limits and rollback.
+
 1. Add a **payment method** to the workspace (Workspace Settings → Billing). Without it the Blueprint refuses the Starter worker with `need_payment_info`.
 2. **New → Blueprint**, repository `ma-za-kpe/stood`, branch **`main`**. `render.yaml` must already be on `main`.
 3. Create a **Render API key** (Account Settings → API Keys) and store it as `RENDER_API_KEY` in `.env`. The Render CLI cannot set environment variables; the API can: `PUT https://api.render.com/v1/services/{serviceId}/env-vars/{KEY}` with `{"value": "…"}`.
@@ -107,7 +109,7 @@ We skipped Neon's quick-start (Neon CLI, MCP server, Neon Functions, buckets and
    - `render blueprints validate render.yaml` (also reports billing problems)
    - `render services -o json`, `render deploys list <serviceId>`, `render deploys create <serviceId> --confirm`
    - `render logs --resources <serviceId> --limit 200 -o text`
-5. Deploy both services with `render deploys create`. The image build runs the full product gate (`pnpm validate`: lint, types, boundaries, all tests with coverage, build), so a failing test blocks the image.
+5. Deploy the reconciler first and verify its migrations, then deploy Stood API; Yard runs its own pre-deploy migration. The image build runs the full product gate (`pnpm validate`: lint, types, boundaries, all tests with coverage, build), so a failing test blocks the image.
 
 ## 6. PayPal webhook (after the first successful deploy)
 
