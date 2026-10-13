@@ -1003,3 +1003,12 @@ C4 completion continuation (2026-10-12): retain the policy gates on project eras
 
 - `[x]` T-0374 fresh-project null mandate recovery qualified live on the same project after unit regressions passed; the buyer reads before builder claim, and the original signing reservation replays safely on resume.
 - `[x]` T-0378 hosted Yard requalification completed at 2026-10-13 04:05 UTC. Genuine Kernel approval, Vercel judge, buyer usage receipt, Stood CAPTURE and Yard PAID; independent PayPal reads confirm capture `43103345WB005593M`, order `814833703A5715714`, USD 1.05 and exactly one capture. Sanitized recording: `services/api/test/scenarios/sandbox/yard-hosted-2026-10-13.json`. The same project/hold/package survived qualification-script fixes and a redeploy/session interruption. No UI-click, builder-payout or live 429/529 claim. The detailed Kernel feedback issue remains private pending the owner's greenlight.
+Allowance amendment continuation (#77, 2026-10-13): keep existing signed terms immutable and bind historical provider recovery/runner jobs to the version actually accepted, not a mutable latest snapshot.
+
+- `[~]` T-0380 Allowance amendment policy: red-first tests for unchanged financial boundaries, distinct versioned evidence terms, no-op rejection and funded-milestone refusal; record the version/history/funding/runner boundary in ADR-0028.
+- `[ ]` T-0381 Durable immutable allowance versions and proposal receipts, shared funding locks and concurrent/stale/tenant Postgres regressions.
+- `[ ]` T-0382 Version-aware mandate reservation, consent checks and funding authority with preserved historical reconciliation; qualify old-consent refusal and version-two signing races.
+- `[ ]` T-0383 Signed version proposal/read routes, OpenAPI and generated SDK, Yard amendment integration; prove actual router/SDK behavior.
+- `[ ]` T-0384 Full amendment batch gate and hosted sandbox qualification of new consent before funding changed terms. Foundation tests do not close T-0156.
+
+T-0380 foundation evidence: three pure application tests passed after the absent amendment policy failed first. The policy rejects financial/identity changes, no-ops and changes to a tranche with reserved funding; it permits new evidence terms on an unfunded milestone while retaining funded terms. ADR-0028 remains proposed. There is no version persistence, HTTP endpoint or new signing authority in this slice; T-0381 to T-0384 remain queued.
