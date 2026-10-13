@@ -260,6 +260,35 @@ export const apiAllowances = pgTable(
     ),
   ],
 );
+// Complete immutable successors; the original api_allowances body remains version one.
+export const allowanceVersions = pgTable(
+  'allowance_versions',
+  {
+    allowanceId: text('allowance_id').notNull(),
+    platformId: text('platform_id').notNull(),
+    termsVersion: integer('terms_version').notNull(),
+    key: text().notNull(),
+    fingerprint: text().notNull(),
+    body: jsonb().$type<StoredDraft>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.allowanceId, table.termsVersion] }),
+    unique('allowance_version_receipt').on(table.platformId, table.allowanceId, table.key),
+    foreignKey({
+      columns: [table.allowanceId, table.platformId],
+      foreignColumns: [apiAllowances.id, apiAllowances.platformId],
+    }),
+    check(
+      'allowance_version_valid',
+      sql`${table.termsVersion} > 1 AND length(trim(${table.key})) BETWEEN 1 AND 200
+      AND ${table.fingerprint} ~ '^[a-f0-9]{64}$'
+      AND COALESCE(${table.body}->>'id' = ${table.allowanceId} AND ${table.body}->>'status' = 'DRAFT', false)`,
+    ),
+  ],
+);
 export const apiTrancheOwners = pgTable(
   'api_tranche_owners',
   {

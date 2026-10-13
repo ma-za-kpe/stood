@@ -1012,3 +1012,11 @@ Allowance amendment continuation (#77, 2026-10-13): keep existing signed terms i
 - `[ ]` T-0384 Full amendment batch gate and hosted sandbox qualification of new consent before funding changed terms. Foundation tests do not close T-0156.
 
 T-0380 foundation evidence: three pure application tests passed after the absent amendment policy failed first. The policy rejects financial/identity changes, no-ops and changes to a tranche with reserved funding; it permits new evidence terms on an unfunded milestone while retaining funded terms. ADR-0028 remains proposed. There is no version persistence, HTTP endpoint or new signing authority in this slice; T-0381 to T-0384 remain queued.
+
+C4 scope confirmation (2026-10-13): owner explicitly chose both Yard and EyeOnSite. T-0359 remains in C4; photo intake is not trusted assessment. T-0381 starts with durable snapshots, exact replay after restart, tenant isolation, concurrent expected-version conflict, funded-intent refusal and rollback/immutability tests. Policy approval and provider evidence remain required facts, not inferred completion.
+
+- `[~]` T-0381 implementing immutable version snapshots under shared tranche locks; no public amendment route until version-bound funding/signing authority is ready.
+
+T-0381 local implementation evidence: five real-Postgres regressions pass (immutable history and restart replay, stale/concurrent/tenant isolation, atomic rollback, funding race, recorded-intent fence). Migration 0030 adds append-only successor receipts while retaining original version-one bytes. API service type check passes. This is not deployed or exposed through HTTP; T-0382 must bind payment authority before activation.
+
+- `[~]` T-0382 starting version-aware consent and funding, exact signature identity and funded historical runner terms. Tests cover successor consent, old-consent refusal, recovery under an original reserved version and hash mismatch.
