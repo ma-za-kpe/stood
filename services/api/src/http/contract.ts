@@ -84,6 +84,22 @@ export const Allowance = z
   .strict()
   .meta({ id: 'Allowance' });
 
+export const AllowanceVersion = z
+  .object({
+    version: z.number().int().min(1).max(2147483647),
+    body: Allowance,
+    terms_hash: sha64,
+  })
+  .strict()
+  .meta({ id: 'AllowanceVersion' });
+export const AllowanceProposal = z
+  .object({
+    expected_version: z.number().int().min(1).max(2147483646),
+    terms: AllowanceDraft,
+  })
+  .strict()
+  .meta({ id: 'AllowanceProposal' });
+
 export const CommitPackageInput = z
   .object({
     repository: z.string().regex(/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/),
@@ -332,15 +348,43 @@ export const operations: readonly Operation[] = [
     method: 'get',
     path: '/allowances/{id}',
     id: 'getAllowance',
-    summary: 'Read an allowance this platform owns',
+    summary: 'Read the original allowance draft this platform owns; use versions/current for amended terms',
     ok: { status: 200, schema: Allowance },
     problems: [401, 404],
   },
   {
     method: 'post',
+    path: '/allowances/{id}/versions',
+    id: 'proposeAllowanceVersion',
+    summary: 'Propose immutable evidence terms for unreserved work; financial boundaries stay fixed',
+    body: AllowanceProposal,
+    ok: { status: 201, schema: AllowanceVersion },
+    idempotent: true,
+    problems: [401, 404, 409, 422, 503],
+  },
+  {
+    method: 'get',
+    path: '/allowances/{id}/versions/{version}',
+    id: 'getAllowanceVersion',
+    summary: 'Read an immutable terms version, or use current for the latest version',
+    ok: { status: 200, schema: AllowanceVersion },
+    problems: [401, 404, 422, 503],
+  },
+  {
+    method: 'post',
+    path: '/allowances/{id}/versions/{version}/mandate',
+    id: 'requestVersionMandate',
+    summary: 'Start saved-PayPal signing for an explicit terms version (send {})',
+    body: z.object({}).strict(),
+    ok: { status: 202, schema: Mandate },
+    idempotent: true,
+    problems: [401, 404, 409, 422, 503],
+  },
+  {
+    method: 'post',
     path: '/allowances/{id}/mandate',
     id: 'requestMandate',
-    summary: "Start saved-PayPal signing for the allowance's current terms (send {})",
+    summary: 'Start version-one signing (send {}); amended terms require the explicit version signing route',
     body: z.object({}).strict(),
     ok: { status: 202, schema: Mandate },
     idempotent: true,
@@ -485,7 +529,7 @@ function nullables(value: unknown): unknown {
 
 // The contract's own version, independent of release numbers: raise it with any change to the document, and the
 // major part with any breaking change (the breaking-change check compares against main).
-export const API_VERSION = '1.4.1';
+export const API_VERSION = '1.5.0';
 
 export type OpenApiDocument = Readonly<{
   openapi: string;

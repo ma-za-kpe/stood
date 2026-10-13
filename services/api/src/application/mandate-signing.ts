@@ -52,10 +52,8 @@ export async function advanceMandate(
           return { outcome: 'REVOKED', mandate: await store.expire(key, row.version, now) };
         return wait('CONSENT_EXPIRED');
       }
-      const draft = await terms.load(row.platformId, row.allowanceId);
-      return !draft || row.termsVersion !== 1 || mandateTermsHash(draft) !== row.termsHash
-        ? wait('TERMS_CHANGED')
-        : null;
+      const draft = await terms.load(row.platformId, row.allowanceId, row.termsVersion);
+      return !draft || mandateTermsHash(draft, row.termsVersion) !== row.termsHash ? wait('TERMS_CHANGED') : null;
     };
     const attachSetup = async (value: unknown): Promise<Result> => {
       const proof = matching(value, row);

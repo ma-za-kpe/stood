@@ -10,6 +10,14 @@ import {
   AllowanceDraft,
   allowanceDraftSchema,
 } from '../models/allowanceDraft.js';
+import {
+  AllowanceProposal,
+  allowanceProposalSchema,
+} from '../models/allowanceProposal.js';
+import {
+  AllowanceVersion,
+  allowanceVersionSchema,
+} from '../models/allowanceVersion.js';
 import { Baseline, baselineSchema } from '../models/baseline.js';
 import {
   CodeTermsInput,
@@ -109,6 +117,137 @@ export class Api extends BaseApi {
     );
     req.authenticate([{ platformKey: true, requestSignature: true }]);
     return req.callAsJson(allowanceSchema, requestOptions);
+  }
+
+  /**
+   * @param id
+   * @param idempotencyKey  Same key and body return the same response; a different body
+   *                                                    is 409
+   * @param body
+   * @return Response from the API call
+   */
+  async proposeAllowanceVersion(
+    id: string,
+    idempotencyKey: string,
+    body: AllowanceProposal,
+    requestOptions?: RequestOptions
+  ): Promise<ApiResponse<AllowanceVersion>> {
+    const req = this.createRequest('POST');
+    const mapped = req.prepareArgs({
+      id: [id, string()],
+      idempotencyKey: [idempotencyKey, string()],
+      body: [body, allowanceProposalSchema],
+    });
+    req.header('Idempotency-Key', mapped.idempotencyKey);
+    req.header('Content-Type', 'application/json');
+    req.json(mapped.body);
+    req.appendTemplatePath`/allowances/${mapped.id}/versions`;
+    req.throwOn(
+      401,
+      ProblemError,
+      'Missing or invalid platform key or signature'
+    );
+    req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
+    req.throwOn(409, ProblemError, 'Idempotency or version conflict');
+    req.throwOn(413, ProblemError, 'Body over 64 KiB');
+    req.throwOn(422, ProblemError, 'Invalid request');
+    req.throwOn(
+      429,
+      ProblemError,
+      "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
+    );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
+    req.authenticate([{ platformKey: true, requestSignature: true }]);
+    return req.callAsJson(allowanceVersionSchema, requestOptions);
+  }
+
+  /**
+   * @param id
+   * @param version
+   * @return Response from the API call
+   */
+  async getAllowanceVersion(
+    id: string,
+    version: string,
+    requestOptions?: RequestOptions
+  ): Promise<ApiResponse<AllowanceVersion>> {
+    const req = this.createRequest('GET');
+    const mapped = req.prepareArgs({
+      id: [id, string()],
+      version: [version, string()],
+    });
+    req.appendTemplatePath`/allowances/${mapped.id}/versions/${mapped.version}`;
+    req.throwOn(
+      401,
+      ProblemError,
+      'Missing or invalid platform key or signature'
+    );
+    req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
+    req.throwOn(422, ProblemError, 'Invalid request');
+    req.throwOn(
+      429,
+      ProblemError,
+      "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
+    );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
+    req.authenticate([{ platformKey: true, requestSignature: true }]);
+    return req.callAsJson(allowanceVersionSchema, requestOptions);
+  }
+
+  /**
+   * @param id
+   * @param version
+   * @param idempotencyKey  Same key and body return the same response; a different body is 409
+   * @param body
+   * @return Response from the API call
+   */
+  async requestVersionMandate(
+    id: string,
+    version: string,
+    idempotencyKey: string,
+    body: unknown,
+    requestOptions?: RequestOptions
+  ): Promise<ApiResponse<Mandate>> {
+    const req = this.createRequest('POST');
+    const mapped = req.prepareArgs({
+      id: [id, string()],
+      version: [version, string()],
+      idempotencyKey: [idempotencyKey, string()],
+      body: [body, optional(unknown())],
+    });
+    req.header('Idempotency-Key', mapped.idempotencyKey);
+    req.header('Content-Type', 'application/json');
+    req.json(mapped.body);
+    req.appendTemplatePath`/allowances/${mapped.id}/versions/${mapped.version}/mandate`;
+    req.throwOn(
+      401,
+      ProblemError,
+      'Missing or invalid platform key or signature'
+    );
+    req.throwOn(404, ProblemError, 'Not found, or not owned by this platform');
+    req.throwOn(409, ProblemError, 'Idempotency or version conflict');
+    req.throwOn(413, ProblemError, 'Body over 64 KiB');
+    req.throwOn(422, ProblemError, 'Invalid request');
+    req.throwOn(
+      429,
+      ProblemError,
+      "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address"
+    );
+    req.throwOn(
+      503,
+      ProblemError,
+      'Storage or the feature is unavailable; retry with the same idempotency key'
+    );
+    req.authenticate([{ platformKey: true, requestSignature: true }]);
+    return req.callAsJson(mandateSchema, requestOptions);
   }
 
   /**

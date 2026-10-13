@@ -17,6 +17,9 @@ export type FundingReservation = Readonly<{
 export type FundingInstruction = FundingReservation &
   Readonly<{
     allowanceId: string;
+    // Absent only on historical version-one reservations.
+    termsVersion?: number;
+    mandateKey?: string;
     payeeRef: string;
     amount: Readonly<{ minor: number; currency: string }>;
     // T-0154: set when the buyer signed a saved-PayPal mandate. The token itself is never stored here.

@@ -38,12 +38,17 @@ Base: <https://stood-api.onrender.com/v1>. [Health](https://stood-api.onrender.c
 |---|---|---|
 | POST | `/allowances/{id}/mandate` | Reserve saved-PayPal signing for the owned allowance's current terms; send `{}` |
 | GET | `/allowances/{id}/mandate/{key}` | Read signing status and the buyer approval URL when awaiting approval |
+| POST | `/allowances/{id}/versions` | Create an immutable successor from `expected_version` and complete `terms`; only eligible evidence parameters may change |
+| GET | `/allowances/{id}/versions/{version}` | Read a numbered snapshot or the latest snapshot at `current` |
+| POST | `/allowances/{id}/versions/{version}/mandate` | Request new saved-PayPal consent for that exact version |
 | POST | `/tranches/{id}/funding` | Reserve funding using `{"expected_version": 0, "nonce": "K7Q"}`; use the current tranche version, and a three-character nonce from `A-HJ-NP-Z2-9` |
 | GET | `/tranches/{id}/funding/{key}` | Read funding status, approval URL when required, and confirmed hold expiry |
 
 POST returns `202`; that records acceptance, not a completed signature or hold. Mandate views contain `key`, `status`, `approve_url` and `expires_at`. Funding views contain `key`, `status`, `approve_url` and `hold_expires_at`; hold expiry appears only in `HELD`. Views never return saved tokens, setup/customer/order/authorization IDs. Missing or foreign records return the same `404`; a stale funding version returns `409 stale_version`. A missing signing composition returns `503 signing_not_configured`. Source code and route contract tests: [`platform-api.ts`](../../services/api/src/http/platform-api.ts), [`signing-funding-http.test.ts`](../../services/api/src/http/signing-funding-http.test.ts).
 
 Yard's browser does not call these financial routes yet. Hosted Foreman, repository/preview and Yard-to-Stood adapters remain [#76](https://github.com/ma-za-kpe/stood/issues/76). [SETUP](../SETUP.md) records the actual deployment; [#108](https://github.com/ma-za-kpe/stood/issues/108) provides current progress and screenshot guidance.
+
+Amendment support is API 1.5.0. Each successor is immutable and retains the allowance's cap, payee, currency, window, retry policy and tranche identities. It may update evidence terms only for milestones without any recorded funding, package or upload intent. Read `current` before proposing; supply its version and an idempotency key. The returned `terms_hash` is a receipt, not consent. Call the explicit version mandate route and wait for `SIGNED`; the legacy mandate route remains version-one-only. Existing reservations and runner jobs continue to use their historical version. Yard's hosted route is buyer-signed and uses Stood baselines before proposal; its amendment fence stays until matching consent. New-version hosted sandbox qualification remains pending.
 
 ## Conventions
 
