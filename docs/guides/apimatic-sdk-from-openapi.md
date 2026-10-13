@@ -215,3 +215,15 @@ We chose GitHub Pages over Render because the portal is static: it costs nothing
 ## 12. Cost
 
 SDK generation used an APIMatic trial account; Stood's builds and tests do not call APIMatic at all, so CI costs nothing extra. Check APIMatic's current plans before relying on it beyond a trial.
+
+## 13. Creator footer on the published portal
+
+The project's footer uses APIMatic's custom footer component and a scoped stylesheet included by `generatePortal.headIncludes`. The stylesheet URL is absolute so nested reference pages load it correctly. The generator sources are [footer.html](../../apimatic/src/components/footer.html), [creator.css](../../apimatic/src/static/css/creator.css) and [APIMATIC-BUILD.json](../../apimatic/src/APIMATIC-BUILD.json).
+
+The actual published signing-request page was checked on 12 October 2026 at 1440 px and 390 px: the stylesheet returned HTTP 200, the background was `rgb(13, 10, 30)`, the Support link used `mailto:makpalyy@gmail.com`, the creator was Maku Mazakpe and neither viewport overflowed horizontally. These screenshots came from the public site with no local asset replacement.
+
+![Published portal footer on desktop](images/apimatic/portal-footer-live-desktop.png)
+
+![Published portal footer on mobile](images/apimatic/portal-footer-live-mobile.png)
+
+[The generated-page guard](../../tools/site/check-portal.mjs) checks the owner attribution, contact placeholders, exact stylesheet URL and asset before Pages publication. Its tests reject misleading external stylesheet URLs as well as missing assets. Public screenshots confirm the deployed appearance; they are separate from the local styling previews.
