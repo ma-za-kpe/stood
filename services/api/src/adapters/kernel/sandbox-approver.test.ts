@@ -12,6 +12,7 @@ function harness(
     createDurationMs?: number;
     connectionFailure?: boolean;
     pageFailure?: boolean;
+    waitFailure?: boolean;
   } = {},
 ) {
   const calls: string[] = [];
@@ -24,6 +25,7 @@ function harness(
     },
     waitForSelector: async (s) => {
       calls.push(`wait ${s}`);
+      if (over.waitFailure) throw new Error('private page details');
     },
     isVisible: async (s) => (s.includes('email') ? over.loginShown !== false : true),
     fill: async (s, v) => {
@@ -203,15 +205,30 @@ it('deletes a known owned session even when its CDP reply is malformed', async (
   const h = harness({
     responses: [Response.json({ session_id: 'ses_owned', cdp_ws_url: 'invalid' }, { status: 201 })],
   });
-  await expect(h.approver.approve(link)).rejects.toThrow('KERNEL_UNEXPECTED');
+  await expect(h.approver.approve(link)).rejects.toMatchObject({
+    code: 'KERNEL_APPROVAL_BROWSER_FAILED',
+    stage: 'SESSION_RESPONSE',
+  });
   expect(h.kernel.at(-1)).toBe('DELETE /browsers/ses_owned Bearer kernel-key');
   expect(h.connected).toEqual([]);
+});
+
+it('records a safe PayPal page stage when browser approval times out', async () => {
+  const h = harness({ waitFailure: true });
+  await expect(h.approver.approve(link)).rejects.toMatchObject({
+    code: 'KERNEL_APPROVAL_BROWSER_FAILED',
+    stage: 'PAYPAL_INITIAL_PAGE',
+  });
+  expect(h.kernel.at(-1)).toBe('DELETE /browsers/ses_1 Bearer kernel-key');
 });
 
 it('attempts owned-session deletion on connection and page failures without retrying approval', async () => {
   for (const over of [{ connectionFailure: true }, { pageFailure: true }]) {
     const h = harness(over);
-    await expect(h.approver.approve(link)).rejects.toThrow(/failed/);
+    await expect(h.approver.approve(link)).rejects.toMatchObject({
+      code: 'KERNEL_APPROVAL_BROWSER_FAILED',
+      stage: over.connectionFailure ? 'BROWSER_CONNECT' : 'PAYPAL_NAVIGATION',
+    });
     expect(h.kernel).toEqual(['POST /browsers Bearer kernel-key', 'DELETE /browsers/ses_1 Bearer kernel-key']);
     if (over.pageFailure) expect(h.calls.at(-1)).toBe('close');
   }

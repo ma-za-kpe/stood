@@ -2,7 +2,11 @@ import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
-import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
+import {
+  KernelApprovalBrowserError,
+  KernelBrowserError,
+  KernelSandboxApprover,
+} from './adapters/kernel/sandbox-approver.js';
 import { bundleHash } from './application/code-evidence.js';
 import { hostedSession } from './application/hosted-session.js';
 import { existingYardMandate, qualifiedYardPayment } from './application/yard-qualification.js';
@@ -140,6 +144,7 @@ const approver = new KernelSandboxApprover({
     };
   },
 });
+let checkpoint = 'health';
 try {
   const health = await response(
     'GET',
@@ -155,6 +160,7 @@ try {
     throw new Error('Real PayPal sandbox is not ready');
   const buy = await session(buyer.accessCode as string),
     build = await session(builder.accessCode as string);
+  checkpoint = 'project-resume';
   note('sessions', { buyer: true, builder: true, transport: 'hosted-app-session-api' });
   const repository = 'ma-za-kpe/yard-sandbox',
     baseCommit = '8bf97d5c62cfa1a32fbb26573376f9ab560aba1b';
@@ -259,6 +265,7 @@ try {
     trancheId = String(object(mandate.tranches).final);
   const amount = (await stood('GET', `/tranches/${trancheId}`)).amount as { minor: number; currency: string };
   note('allowance', { id: allowanceId, trancheId, amount });
+  checkpoint = 'mandate-reservation';
   const signingKey = `${run}:sign`;
   // Replaying the same reservation also recovers an interruption before its first response was recorded.
   await stood('POST', `/allowances/${allowanceId}/mandate`, {}, signingKey);
@@ -267,7 +274,11 @@ try {
     () => stood('GET', `/allowances/${allowanceId}/mandate/${signingKey}`),
     (v) => ['AWAITING_APPROVAL', 'SIGNED', 'REVOKED'].includes(String(v.status)),
   );
-  if (signing.status === 'AWAITING_APPROVAL') await approver.approve(String(signing.approve_url));
+  if (signing.status === 'AWAITING_APPROVAL') {
+    checkpoint = 'mandate-buyer-approval';
+    await approver.approve(String(signing.approve_url));
+  }
+  checkpoint = 'mandate-confirmation';
   const signed = await until(
     'signed mandate',
     () => stood('GET', `/allowances/${allowanceId}/mandate/${signingKey}`),
@@ -275,6 +286,53 @@ try {
   );
   if (signed.status !== 'SIGNED') throw new Error('Mandate refused');
   note('mandate', { status: signed.status });
+
+  // T-0385: change one evidence identity through Yard's hosted route. Yard obtains a new failing baseline,
+  // creates the durable Stood version and explicit consent reservation, then the buyer signs that version.
+  const amendedTests = [{ id: 'booking-amended', path: 'tests/booking.test.js' }];
+  const amendedManifestHash = createHash('sha256').update(JSON.stringify(amendedTests)).digest('hex');
+  const amendmentPath = `${root}/amendments`;
+  const amendmentChange = {
+    milestoneId: 'final',
+    testBundleHash: terms.testBundleHash,
+    manifestHash: amendedManifestHash,
+    testIds: amendedTests.map((test) => test.id),
+    tests: amendedTests,
+  };
+  checkpoint = 'yard-amendment';
+  const requestAmendment = () => write(buy, amendmentPath, { changes: [amendmentChange] }, 'evidence-amendment');
+  let amendment = await requestAmendment();
+  if (amendment.status === 'BASELINE_RUNNING')
+    amendment = await until(
+      'Yard amendment baseline and consent reservation',
+      requestAmendment,
+      (value) => value.status !== 'BASELINE_RUNNING',
+    );
+  if (amendment.status === 'NEEDS_REVISION') throw new Error('Yard amendment baseline did not fail as required');
+  if (amendment.status === 'AWAITING_APPROVAL') {
+    if (typeof amendment.approveUrl !== 'string') throw new Error('Version-two consent link was missing');
+    await approver.approve(amendment.approveUrl);
+    amendment = await until(
+      'Yard recording the signed version-two consent',
+      requestAmendment,
+      (value) => value.status === 'SIGNED' || value.status === 'NEEDS_REVISION',
+    );
+  }
+  if (amendment.status !== 'SIGNED' || amendment.termsVersion !== 2)
+    throw new Error('Yard did not record the buyer signature for allowance version two');
+  const versionTwo = await stood('GET', `/allowances/${allowanceId}/versions/2`);
+  const versionTwoBody = object(versionTwo.body);
+  const versionTwoMilestone = object((versionTwoBody.milestones as unknown[])[0]);
+  const versionTwoParams = object(versionTwoMilestone.params);
+  if (versionTwo.version !== 2 || versionTwoParams.manifestHash !== amendedManifestHash)
+    throw new Error("Stood version two does not contain Yard's amended evidence terms");
+  note('amendment', {
+    status: amendment.status,
+    termsVersion: amendment.termsVersion,
+    termsHash: versionTwo.terms_hash,
+    manifestHash: amendedManifestHash,
+  });
+
   const tranche = await stood('GET', `/tranches/${trancheId}`),
     fundingKey = `${run}:fund`;
   const nonce = Array.from(randomBytes(3), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
@@ -346,11 +404,23 @@ try {
 } catch (error) {
   // Only errors constructed by this tool are printed; external errors can include credentials or personal details.
   note('incomplete', {
-    reason:
+    checkpoint,
+    failureType:
       error instanceof Error &&
-      /^(GET|POST|Timed out|Real |Final |Payment |Yard |Funding |Mandate )/.test(error.message)
-        ? error.message
-        : 'Qualification stopped; reconcile the private recording before retrying',
+      ['AbortError', 'FetchError', 'ProtocolError', 'TargetClosedError', 'TimeoutError', 'TypeError'].includes(
+        error.name,
+      )
+        ? error.name
+        : undefined,
+    reason:
+      error instanceof KernelApprovalBrowserError
+        ? `${error.code} (${error.stage})`
+        : error instanceof KernelBrowserError
+          ? `${error.code}${error.status === undefined ? '' : ` HTTP ${error.status}`}${error.reason ? ` (${error.reason})` : ''}`
+          : error instanceof Error &&
+              /^(GET|POST|Timed out|Real |Final |Payment |Yard |Funding |Mandate )/.test(error.message)
+            ? error.message
+            : 'Qualification stopped; reconcile the private recording before retrying',
   });
   process.exitCode = 1;
 }

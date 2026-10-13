@@ -160,6 +160,70 @@ it('refuses passing baseline evidence before a successor or consent request', as
   expect(h.gateway.proposeAllowanceVersion).not.toHaveBeenCalled();
 });
 
+it('accepts a manifest identity amendment while retaining the exact frozen test bundle', async () => {
+  const h = await setup();
+  const tests = [{ id: 'works-amended', path: 'tests/works.test.js' }];
+  const manifestHash = createHash('sha256').update(JSON.stringify(tests)).digest('hex');
+  const changes = [
+    {
+      milestoneId: 'two',
+      testBundleHash: 'a'.repeat(64),
+      manifestHash,
+      testIds: ['works-amended'],
+      tests,
+    },
+  ];
+  const result = await h.bridge.propose('p', leaseBuyer, await h.version(), 'identity-only', changes);
+  expect(result.status).toBe('AWAITING_APPROVAL');
+  expect(vi.mocked(h.gateway.requestBaseline).mock.calls[0]?.[0]).toMatchObject({
+    testBundleHash: 'a'.repeat(64),
+    manifestHash,
+    testIds: ['works-amended'],
+    tests,
+  });
+});
+
+it('records the canonical Stood version when code terms materialize minMutation', async () => {
+  const h = await setup();
+  const tests = [{ id: 'works-amended', path: 'tests/works.test.js' }];
+  const manifestHash = createHash('sha256').update(JSON.stringify(tests)).digest('hex');
+  const changes = [
+    {
+      milestoneId: 'two',
+      testBundleHash: 'a'.repeat(64),
+      manifestHash,
+      testIds: ['works-amended'],
+      tests,
+    },
+  ];
+  vi.mocked(h.gateway.proposeAllowanceVersion).mockImplementationOnce(async (_id, version, input) => {
+    const normalized = {
+      ...input,
+      milestones: input.milestones.map((m) => ({ ...m, params: { ...m.params, minMutation: 0 } })),
+    };
+    return {
+      version: version + 1,
+      termsHash: 'd'.repeat(64),
+      body: {
+        ...normalized,
+        id: 'alw_1',
+        status: 'DRAFT',
+        tranches: [
+          { id: 'trn_one', name: 'one' },
+          { id: 'trn_two', name: 'two' },
+        ],
+      },
+    };
+  });
+
+  const result = await h.bridge.propose('p', leaseBuyer, await h.version(), 'normalized-default', changes);
+
+  expect(result.status).toBe('AWAITING_APPROVAL');
+  expect(vi.mocked(h.gateway.proposeAllowanceVersion).mock.calls.at(-1)?.[2].milestones[0]?.params).toMatchObject({
+    minMutation: 0,
+  });
+});
+
 it('keeps the fence on a mismatched Stood response and refuses changes to posted work', async () => {
   const h = await setup();
   vi.mocked(h.gateway.proposeAllowanceVersion).mockImplementation(async (...args) => {

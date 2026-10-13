@@ -4,6 +4,7 @@ import { YardError } from '../ports/events.js';
 import type { AmendmentIntent, EvidenceChange } from './board-amendment-types.js';
 import type { BoardContext } from './board-context.js';
 import { data, fingerprint, type Operator, same, terms } from './board-state.js';
+import { canonicalMandateRequest } from './mandate-request.js';
 export class BoardAmendments {
   constructor(private readonly context: BoardContext) {}
   async reserve(id: string, actor: Operator, version: number, key: string, changes: readonly EvidenceChange[]) {
@@ -44,10 +45,7 @@ export class BoardAmendments {
           new Set(changes.map((c) => c?.milestoneId)).size !== changes.length
         )
           throw new YardError('INVALID');
-        const request = {
-          ...structuredClone(d.mandate.request),
-          milestones: [...structuredClone(d.mandate.request.milestones)],
-        };
+        const requestMilestones = [...structuredClone(d.mandate.request.milestones)];
         const proposed = d.blueprint.milestones.map((m) => terms(d, m.id) ?? m);
         for (const change of changes) {
           if (!change || Object.keys(change).sort().join() !== 'manifestHash,milestoneId,testBundleHash,testIds,tests')
@@ -59,12 +57,16 @@ export class BoardAmendments {
             throw new YardError('CONFLICT');
           const { milestoneId: _id, ...evidence } = change;
           proposed[i] = { ...milestone, ...evidence };
-          const original = request.milestones[i];
+          const original = requestMilestones[i];
           if (!original || original.name !== milestone.name) throw new YardError('CONFLICT');
           const params = { ...original.params, ...evidence };
           if (same(params, original.params)) throw new YardError('INVALID');
-          request.milestones[i] = { ...original, params };
+          requestMilestones[i] = { ...original, params };
         }
+        const request = canonicalMandateRequest({
+          ...structuredClone(d.mandate.request),
+          milestones: requestMilestones,
+        });
         try {
           Blueprint.create({ ...d.blueprint, milestones: proposed });
         } catch {
@@ -107,6 +109,7 @@ export class BoardAmendments {
           const intent = d.amendments?.find((a) => a.key === key);
           if (!intent || !d.mandate?.tranches) throw new YardError('NOT_FOUND');
           if (intent.status !== 'RESERVED') throw new YardError('CONFLICT');
+          const canonicalRequest = canonicalMandateRequest(intent.request);
           if (rejected) {
             if (intent.receipt || signing || receipt) throw new YardError('CONFLICT');
             intent.status = 'NEEDS_REVISION';
@@ -116,7 +119,7 @@ export class BoardAmendments {
               receipt.version !== intent.expectedVersion + 1 ||
               !/^[a-f0-9]{64}$/.test(receipt.termsHash) ||
               !same(receipt.body, {
-                ...intent.request,
+                ...canonicalRequest,
                 id: intent.allowanceId,
                 status: 'DRAFT',
                 tranches: d.blueprint.milestones.map((m, i) => ({
@@ -126,6 +129,7 @@ export class BoardAmendments {
               })
             )
               throw new YardError('INVALID');
+            intent.request = structuredClone(canonicalRequest);
             if (intent.receipt && !same(intent.receipt, { version: receipt.version, termsHash: receipt.termsHash }))
               throw new YardError('CONFLICT');
             intent.receipt = { version: receipt.version, termsHash: receipt.termsHash };
@@ -135,7 +139,7 @@ export class BoardAmendments {
               if (signing.status === 'SIGNED') {
                 if (intent.changes.some((c) => d.orders[c.milestoneId])) throw new YardError('CONFLICT');
                 intent.status = 'SIGNED';
-                d.mandate = { ...d.mandate, request: structuredClone(intent.request), termsVersion: receipt.version };
+                d.mandate = { ...d.mandate, request: structuredClone(canonicalRequest), termsVersion: receipt.version };
               }
             }
           }

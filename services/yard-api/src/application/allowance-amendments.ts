@@ -3,6 +3,7 @@ import { YardError } from '../ports/events.js';
 import type { Board } from './board.js';
 import type { AmendmentIntent, EvidenceChange } from './board-amendment-types.js';
 import { fingerprint, type MandateRequest, type Operator } from './board-state.js';
+import { canonicalMandateRequest } from './mandate-request.js';
 
 export interface AmendmentGateway {
   requestBaseline(input: BaselineInput, key: string): Promise<BaselineView>;
@@ -36,8 +37,9 @@ export class AllowanceAmendments {
   }
   private async deliver(id: string, intent: AmendmentIntent) {
     if (intent.status !== 'RESERVED') return this.view(intent, intent.status);
+    const request = canonicalMandateRequest(intent.request);
     for (const change of intent.changes) {
-      const params = intent.request.milestones.find(
+      const params = request.milestones.find(
         (m) => m.params.testBundleHash === change.testBundleHash && m.params.manifestHash === change.manifestHash,
       )?.params;
       if (!params || typeof params.repository !== 'string' || typeof params.baseCommit !== 'string')
@@ -76,7 +78,7 @@ export class AllowanceAmendments {
     const receipt = await this.gateway.proposeAllowanceVersion(
       intent.allowanceId,
       intent.expectedVersion,
-      structuredClone(intent.request),
+      structuredClone(request),
       intent.key,
     );
     await this.board.recordAmendment(id, intent.key, receipt, null);
