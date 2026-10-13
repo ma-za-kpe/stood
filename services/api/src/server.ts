@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import { PostgresAllowanceVersions } from './adapters/db-postgres/allowance-versions.js';
 import { PostgresBaselines } from './adapters/db-postgres/baselines.js';
 import { PostgresCommitPackages } from './adapters/db-postgres/commit-packages.js';
 import { databaseUrlProblem } from './adapters/db-postgres/connection-policy.js';
@@ -76,6 +77,7 @@ const app = createApp({
     ? {
         api: {
           store: new PostgresPlatformApi(drizzle(pool, { schema })),
+          versions: new PostgresAllowanceVersions(drizzle(pool, { schema })),
           ...(uploads ? { uploads } : {}),
           packages: new PostgresCommitPackages(drizzle(pool, { schema })),
           baselines: new PostgresBaselines(drizzle(pool, { schema })),

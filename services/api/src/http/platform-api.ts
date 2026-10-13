@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { allowanceDraft } from '../application/allowance-draft.js';
@@ -10,6 +10,7 @@ import { platformRequest, signInBlocked, signInFailed } from '../application/rat
 import { acceptUsage, type UsageAuthority } from '../application/usage-intake.js';
 import { trancheSentences } from '../domain/recipient-sentences.js';
 import { restoreTrancheRecord } from '../domain/tranche-record.js';
+import type { AllowanceVersionStore } from '../ports/allowance-version-store.js';
 import { type BaselineStore, BaselineStoreError } from '../ports/baseline-store.js';
 import { CommitPackageError, type CommitPackageStore } from '../ports/commit-package-store.js';
 import { type FundingStore, FundingStoreError } from '../ports/funding-store.js';
@@ -18,29 +19,12 @@ import { type PlatformApiStore, PlatformApiStoreError } from '../ports/platform-
 import type { RateLimiter } from '../ports/rate-limiter.js';
 import type { UploadObjects, UploadStore } from '../ports/upload-store.js';
 import { type UsageStore, UsageStoreError } from '../ports/usage-store.js';
+import { allowanceVersionRoutes, versionNumber } from './allowance-versions.js';
+import type { PlatformApiConfig } from './platform-api-config.js';
 import { uploadRoutes } from './uploads.js';
 
-export type PlatformApiConfig = Readonly<{
-  store: PlatformApiStore;
-  packages?: CommitPackageStore;
-  uploads?: Readonly<{ store: UploadStore; objects: UploadObjects }>;
-  // C4 (#77): baselines that prove a milestone's frozen tests fail on the base commit.
-  baselines?: Pick<BaselineStore, 'request' | 'get'>;
-  // C4 (#77): the buyer's signed confirmation that a final milestone is in use, and who may sign it.
-  usage?: Readonly<{ store: UsageStore; authorities: readonly UsageAuthority[] }>;
-  platformId: string;
-  key: string;
-  secret: string;
-  clock(): number;
-  // T-0156: per-platform write and read budgets and failed sign-ins per client, shared across instances.
-  limiter?: RateLimiter;
-  // T-0260: saved-PayPal mandates and tranche funding. HTTP records intent; the worker makes the PayPal calls.
-  signing?: Readonly<{
-    mode: 'sim' | 'live';
-    mandates: Pick<MandateStore, 'reserve' | 'load'>;
-    funding: Pick<FundingStore, 'reserve' | 'load'>;
-  }>;
-}>;
+export type { PlatformApiConfig } from './platform-api-config.js';
+
 const baselineView = (b: Awaited<ReturnType<BaselineStore['get']>> & object) => ({
   id: b.id,
   status: b.status,
@@ -149,6 +133,7 @@ export function platformApi(config: PlatformApiConfig): Hono {
               : problem(503, 'storage_unavailable', 'Storage is unavailable. Retry with the same idempotency key.'),
   );
   uploadRoutes(app, config, problem);
+  allowanceVersionRoutes(app, config, problem);
   app.post('/tranches/:id/packages', async (c) => {
     if (!config.packages) return problem(503, 'evidence_not_configured', 'Evidence storage is not configured.');
     const key = c.req.header('Idempotency-Key') ?? '';
@@ -260,7 +245,7 @@ export function platformApi(config: PlatformApiConfig): Hono {
     approve_url: f.status === 'AWAITING_APPROVAL' ? f.approvalUrl : null,
     hold_expires_at: f.status === 'HELD' ? (f.hold?.expiresAt ?? null) : null,
   });
-  app.post('/allowances/:id/mandate', async (c) => {
+  const requestMandate = async (c: Context) => {
     if (!config.signing) return problem(503, 'signing_not_configured', 'Saved-PayPal signing is not configured.');
     const key = idempotency(c);
     if (!key) return problem(422, 'validation', 'JSON and an idempotency key are required.');
@@ -272,19 +257,51 @@ export function platformApi(config: PlatformApiConfig): Hono {
     }
     if (input === null || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== 0)
       return problem(422, 'validation', 'The mandate request must be an empty JSON object.');
-    const allowance = await config.store.allowance(config.platformId, c.req.param('id'));
+    const rawVersion = c.req.param('version');
+    // The legacy route means version one, including when it retries an existing idempotency key.
+    const requestedVersion = rawVersion === undefined ? (config.versions ? 1 : undefined) : versionNumber(rawVersion);
+    if (requestedVersion === null) return problem(422, 'validation', 'Use a positive terms version.');
+    if (config.versions) {
+      // A lost response still replays its original consent after a newer proposal becomes current.
+      try {
+        const prior = await config.signing.mandates.load(key);
+        if (prior) {
+          if (
+            prior.platformId !== config.platformId ||
+            prior.allowanceId !== c.req.param('id') ||
+            (requestedVersion !== undefined && prior.termsVersion !== requestedVersion)
+          )
+            return problem(409, 'idempotency_conflict', 'This key was used for a different request.');
+          return c.json(mandateView(prior), 202);
+        }
+      } catch (error) {
+        if (!(error instanceof MandateStoreError && error.code === 'NOT_FOUND')) throw error;
+      }
+    } else if (requestedVersion !== undefined && requestedVersion !== 1)
+      return problem(503, 'versions_not_configured', 'Allowance versions are not configured.');
+    const stored = config.versions
+      ? await config.versions.read(config.platformId, c.req.param('id') ?? '', requestedVersion)
+      : null;
+    const allowance = config.versions
+      ? stored?.body
+      : await config.store.allowance(config.platformId, c.req.param('id') ?? '');
     if (!allowance) return problem(404, 'not_found', 'Allowance not found.');
+    const termsVersion = stored?.version ?? 1;
+    if (requestedVersion === undefined && termsVersion > 1)
+      return problem(409, 'version_required', 'Read and explicitly sign the amended terms version.');
     const reserved = await config.signing.mandates.reserve({
       key,
       platformId: config.platformId,
       allowanceId: allowance.id,
-      termsVersion: 1,
-      termsHash: mandateTermsHash(allowance),
+      termsVersion,
+      termsHash: mandateTermsHash(allowance, termsVersion),
       mode: config.signing.mode,
       acceptedAt: config.clock(),
     });
     return c.json(mandateView(reserved), 202);
-  });
+  };
+  app.post('/allowances/:id/mandate', requestMandate);
+  app.post('/allowances/:id/versions/:version/mandate', requestMandate);
   app.get('/allowances/:id/mandate/:key', async (c) => {
     if (!config.signing) return problem(503, 'signing_not_configured', 'Saved-PayPal signing is not configured.');
     const m = await config.signing.mandates.load(c.req.param('key'));

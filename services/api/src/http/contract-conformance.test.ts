@@ -26,6 +26,7 @@ const app = createApp({
   demoMode: false,
   api: {
     store: down as never,
+    versions: down as never,
     packages: down as never,
     baselines: down as never,
     usage: { store: down as never, authorities: [] },

@@ -153,7 +153,7 @@ Response: `201 { "id": "alw_â€¦", "status": "DRAFT", "tranches": [{ "id": "trn_â
 
 `GET /v1/allowances/{id}` returns the owned draft. `GET /v1/tranches/{id}` returns recovered state, version, amount, profile, decision, hold age/expiry, pending effect/status/creation time, settlement and `sentences.payer` / `sentences.inspector`. A missing or foreign record returns the same 404. Identical POST bytes with the same platform/key replay the stored response across restart; changed bytes return 409. The local implementation retains keys indefinitely (at least the promised 24 hours). JSON formatting changes count as changed bytes.
 
-Saved-account signing and funding intents are available through [the implemented hosted routes](tech/T04-api-spec.md#implemented-hosted-signing-and-funding-t-0260). The legacy dispatch endpoint, version amendments and report uploads remain guarded. The allowance examples and approval URLs in the hosted sections below describe the **planned full API**, not this draft subset. Fixtures remain public synthetic previews and execute no payment.
+Saved-account signing and funding intents are available through [the implemented hosted routes](tech/T04-api-spec.md#implemented-hosted-signing-and-funding-t-0260). Immutable version proposals and explicit version signing are implemented in the current C4 branch; they are not released or hosted yet. The legacy dispatch endpoint and report uploads remain guarded. The allowance examples and approval URLs in the hosted sections below describe the **planned full API**, not this draft subset. Fixtures remain public synthetic previews and execute no payment.
 
 ### A. Calling Stood from your platform (hosted)
 

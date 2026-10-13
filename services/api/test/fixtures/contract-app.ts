@@ -5,6 +5,7 @@ import { decide, getProfile } from '../../src/domain/decision.js';
 import { createTrancheRecord } from '../../src/domain/tranche-record.js';
 import { receiptPayload } from '../../src/domain/usage-receipt.js';
 import { createApp } from '../../src/http/app.js';
+import { MandateStoreError } from '../../src/ports/mandate-store.js';
 import type { StoredUploadPhoto } from '../../src/ports/upload-store.js';
 import { MemoryTranches } from '../fakes/tranche-store.js';
 import { codeParams } from './code-terms.js';
@@ -77,7 +78,7 @@ export const uploadPhoto = {
   bytes: uploadBody.length,
   contentType: 'image/jpeg' as const,
 };
-export async function harness() {
+export async function harness(withVersions = false) {
   let upload = {
     id: 'upl_1',
     trancheId: 'trn_1',
@@ -154,6 +155,18 @@ export async function harness() {
           }),
         },
       },
+      ...(withVersions
+        ? {
+            versions: {
+              read: async (_platform: string, id: string, version?: number) =>
+                id === 'alw_1' ? { version: version ?? 2, body: structuredClone(stored) } : null,
+              propose: async (_platform: string, _id: string, _key: string, version: number, input: typeof draft) => ({
+                version: version + 1,
+                body: { ...structuredClone(stored), ...structuredClone(input) },
+              }),
+            },
+          }
+        : {}),
       store: {
         create: vi.fn(async () => stored),
         allowance: vi.fn(async (_p: string, id: string) => (id === 'alw_1' ? stored : null)),
@@ -195,14 +208,18 @@ export async function harness() {
             approvalUrl: null,
             expiresAt: now + 86400000,
           })),
-          load: vi.fn(async () => ({
-            key: 'm-key',
-            platformId: 'platform_a',
-            allowanceId: 'alw_1',
-            status: 'AWAITING_APPROVAL',
-            approvalUrl: 'https://www.sandbox.paypal.com/agreements/approve?ba_token=fake',
-            expiresAt: now + 86400000,
-          })),
+          load: vi.fn(async (key: string) => {
+            if (key !== 'm-key') throw new MandateStoreError('NOT_FOUND');
+            return {
+              key: 'm-key',
+              platformId: 'platform_a',
+              allowanceId: 'alw_1',
+              termsVersion: 1,
+              status: 'AWAITING_APPROVAL',
+              approvalUrl: 'https://www.sandbox.paypal.com/agreements/approve?ba_token=fake',
+              expiresAt: now + 86400000,
+            };
+          }),
         },
         funding: {
           reserve: vi.fn(async (input: { key: string; trancheId: string }) => ({

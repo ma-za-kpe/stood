@@ -1,10 +1,12 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { StoodClient } from '../../../../../packages/stood-sdk/src/client.js';
 import { codeParams } from '../../../test/fixtures/code-terms.js';
+import { createApp } from '../../http/app.js';
 import { PostgresAllowanceVersions } from './allowance-versions.js';
 import { PostgresCommitPackages } from './commit-packages.js';
 import { PostgresFunding } from './funding.js';
@@ -254,4 +256,79 @@ it('refuses to change terms after evidence intake even when no payment has been 
   await expect(versions.propose('owner', original.id, 'after-upload', 1, proposal('roof'))).rejects.toThrow(
     'Amendment changes funded work',
   );
+});
+
+it('proposes, reads and signs explicit versions through authenticated HTTP with exact retry recovery', async () => {
+  const original = await draft();
+  const now = Date.parse('2026-10-13T08:00:00Z');
+  const secret = 'versions_fixture';
+  const mandates = new PostgresMandates(db, new TokenCipher(`v1:${randomBytes(32).toString('base64')}`));
+  const app = createApp({
+    appEnv: 'ci',
+    paypalBaseUrl: 'https://api-m.sandbox.paypal.com',
+    demoMode: false,
+    api: {
+      store: drafts,
+      versions,
+      platformId: 'owner',
+      key: 'fixture_key',
+      secret,
+      clock: () => now,
+      signing: { mode: 'sim', mandates, funding: new PostgresFunding(db) },
+    },
+  });
+  const call = (method: string, path: string, body = '', key = 'request') =>
+    app.request(path, {
+      method,
+      ...(body ? { body } : {}),
+      headers: {
+        Authorization: 'Bearer fixture_key',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': key,
+        'Stood-Signature': `t=${now / 1000},v2=${createHmac('sha256', secret)
+          .update(
+            JSON.stringify(['stood.request@2', String(now / 1000), method, path, key, '', 'application/json', body]),
+          )
+          .digest('hex')}`,
+      },
+    });
+  const client = new StoodClient({
+    baseUrl: 'https://stood.fixture',
+    key: 'fixture_key',
+    secret,
+    clock: () => now,
+    transport: async (request) => app.fetch(request),
+  });
+  const path = `/v1/allowances/${original.id}/versions`;
+  const body = JSON.stringify({ expected_version: 1, terms: proposal('roof') });
+  const first = await call('POST', path, body);
+  expect(first.status).toBe(201);
+  const receipt = await first.json();
+  expect(receipt).toMatchObject({
+    version: 2,
+    body: { id: original.id },
+    terms_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+  });
+  expect(await (await call('POST', path, body)).json()).toEqual(receipt);
+  expect((await call('POST', path, '{invalid', 'invalid')).status).toBe(422);
+  expect(
+    (await call('POST', path, JSON.stringify({ expected_version: 1, terms: proposal('walls') }), 'stale')).status,
+  ).toBe(409);
+  expect(await (await call('GET', `${path}/1`)).json()).toMatchObject({ version: 1, body: original });
+  expect(await (await call('GET', `${path}/current`)).json()).toEqual(receipt);
+  expect((await call('GET', `${path}/99`)).status).toBe(404);
+  expect((await call('POST', `/v1/allowances/${original.id}/mandate`, '{}', 'implicit')).status).toBe(409);
+  const signPath = `${path}/2/mandate`;
+  expect((await call('POST', signPath, '{}', 'version-two-sign')).status).toBe(202);
+  expect(await mandates.load('version-two-sign')).toMatchObject({ termsVersion: 2, termsHash: receipt.terms_hash });
+  // The version-one compatibility route cannot replay a version-two consent under the same key.
+  expect((await call('POST', `/v1/allowances/${original.id}/mandate`, '{}', 'version-two-sign')).status).toBe(409);
+  await versions.propose('owner', original.id, 'third', 2, proposal('walls'));
+  expect((await call('POST', signPath, '{}', 'version-two-sign')).status).toBe(202);
+  expect((await call('POST', signPath, '{}', 'stale-sign')).status).toBe(409);
+  const fourth = await client.proposeAllowanceVersion(original.id, 3, proposal('fourth'), 'sdk-proposal');
+  expect(fourth.version).toBe(4);
+  expect((await client.getAllowanceVersion(original.id, 'current')).termsHash).toBe(fourth.termsHash);
+  expect((await client.requestVersionMandate(original.id, 4, 'sdk-sign')).status).toBe('RESERVED');
+  expect((await client.getMandate(original.id, 'sdk-sign')).key).toBe('sdk-sign');
 });

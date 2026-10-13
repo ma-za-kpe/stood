@@ -17,6 +17,17 @@ export type DraftView = Readonly<{
   cap: Readonly<{ minor: number; currency: string }>;
   tranches: readonly Readonly<{ id: string; name: string }>[];
 }>;
+export type AllowanceVersionView = Readonly<{
+  version: number;
+  termsHash: string;
+  body: DraftInput & DraftView;
+}>;
+export type MandateView = Readonly<{
+  key: string;
+  status: 'RESERVED' | 'CREATING' | 'AWAITING_APPROVAL' | 'TOKENIZING' | 'SIGNED' | 'REVOKED';
+  approveUrl: string | null;
+  expiresAt: number;
+}>;
 export type PackageInput = Readonly<{
   repository: string;
   base_commit: string;
@@ -143,6 +154,84 @@ function draftView(v: unknown): DraftView {
     status: 'DRAFT',
     cap: Object.freeze({ minor: Number(v.cap.minor), currency: String(v.cap.currency) }),
     tranches: Object.freeze(v.tranches.map((t) => Object.freeze({ id: String(t.id), name: String(t.name) }))),
+  });
+}
+function allowanceVersionView(v: unknown, allowanceId: string): AllowanceVersionView {
+  if (
+    !object(v) ||
+    !Number.isInteger(v.version) ||
+    Number(v.version) < 1 ||
+    Number(v.version) > 2147483647 ||
+    !hex(v.terms_hash, 64) ||
+    !object(v.body)
+  )
+    throw new StoodClientError('INVALID_RESPONSE');
+  const body = v.body;
+  const draft = draftView(body);
+  if (
+    draft.id !== allowanceId ||
+    !id(body.payee_ref) ||
+    !Number.isInteger(body.window_days) ||
+    !Number.isInteger(body.max_resubmits) ||
+    !Array.isArray(body.milestones) ||
+    body.milestones.length !== draft.tranches.length ||
+    !body.milestones.every(
+      (m, i) =>
+        object(m) &&
+        m.name === draft.tranches[i]?.name &&
+        object(m.amount) &&
+        Number.isSafeInteger(m.amount.minor) &&
+        Number(m.amount.minor) > 0 &&
+        m.amount.currency === draft.cap.currency &&
+        id(m.profile) &&
+        object(m.params),
+    )
+  )
+    throw new StoodClientError('INVALID_RESPONSE');
+  return Object.freeze({
+    version: Number(v.version),
+    termsHash: v.terms_hash,
+    body: {
+      ...draft,
+      payee_ref: body.payee_ref,
+      window_days: Number(body.window_days),
+      max_resubmits: Number(body.max_resubmits),
+      milestones: structuredClone(body.milestones) as DraftInput['milestones'],
+    },
+  });
+}
+function mandateView(v: unknown, key: string): MandateView {
+  if (
+    !object(v) ||
+    v.key !== key ||
+    !['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'TOKENIZING', 'SIGNED', 'REVOKED'].includes(String(v.status)) ||
+    !Number.isSafeInteger(v.expires_at) ||
+    Number(v.expires_at) < 0 ||
+    !(v.approve_url === null || typeof v.approve_url === 'string')
+  )
+    throw new StoodClientError('INVALID_RESPONSE');
+  if (v.approve_url !== null) {
+    try {
+      const url = new URL(String(v.approve_url));
+      if (
+        url.username ||
+        url.password ||
+        url.hash ||
+        !(
+          url.origin === 'https://www.sandbox.paypal.com' ||
+          (url.origin === 'http://paypal-sim:8080' && url.pathname.startsWith('/__sim/setup-approve/'))
+        )
+      )
+        throw new Error();
+    } catch {
+      throw new StoodClientError('INVALID_RESPONSE');
+    }
+  }
+  return Object.freeze({
+    key,
+    status: v.status as MandateView['status'],
+    approveUrl: v.approve_url as string | null,
+    expiresAt: Number(v.expires_at),
   });
 }
 function trancheView(v: unknown, trancheId: string): TrancheView {
@@ -420,6 +509,49 @@ export class StoodClient {
     const v = draftView(await this.request('GET', `/allowances/${this.resource(allowanceId)}`));
     if (v.id !== allowanceId) throw new StoodClientError('INVALID_RESPONSE');
     return v;
+  }
+  async proposeAllowanceVersion(
+    allowanceId: string,
+    expectedVersion: number,
+    terms: DraftInput,
+    key: string,
+  ): Promise<AllowanceVersionView> {
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1 || expectedVersion >= 2147483647)
+      throw new StoodClientError('INVALID_INPUT');
+    const value = allowanceVersionView(
+      await this.request(
+        'POST',
+        `/allowances/${this.resource(allowanceId)}/versions`,
+        { expected_version: expectedVersion, terms },
+        key,
+      ),
+      allowanceId,
+    );
+    if (value.version !== expectedVersion + 1) throw new StoodClientError('INVALID_RESPONSE');
+    return value;
+  }
+  async getAllowanceVersion(allowanceId: string, version: number | 'current'): Promise<AllowanceVersionView> {
+    if (version !== 'current' && (!Number.isInteger(version) || version < 1 || version > 2147483647))
+      throw new StoodClientError('INVALID_INPUT');
+    const value = allowanceVersionView(
+      await this.request('GET', `/allowances/${this.resource(allowanceId)}/versions/${version}`),
+      allowanceId,
+    );
+    if (version !== 'current' && value.version !== version) throw new StoodClientError('INVALID_RESPONSE');
+    return value;
+  }
+  async requestVersionMandate(allowanceId: string, version: number, key: string): Promise<MandateView> {
+    if (!Number.isInteger(version) || version < 1 || version > 2147483647) throw new StoodClientError('INVALID_INPUT');
+    return mandateView(
+      await this.request('POST', `/allowances/${this.resource(allowanceId)}/versions/${version}/mandate`, {}, key),
+      key,
+    );
+  }
+  async getMandate(allowanceId: string, key: string): Promise<MandateView> {
+    return mandateView(
+      await this.request('GET', `/allowances/${this.resource(allowanceId)}/mandate/${this.resource(key)}`),
+      key,
+    );
   }
   async submitPackage(trancheId: string, input: PackageInput, key: string): Promise<PackageView> {
     return packageView(
