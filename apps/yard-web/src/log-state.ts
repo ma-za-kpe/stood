@@ -6,11 +6,16 @@ const iso = z.string().refine((v) => {
   const time = Date.parse(v);
   return Number.isFinite(time) && new Date(time).toISOString() === v;
 });
+const checkedLine = (value: unknown): SiteLogLine => {
+  const line = siteLogBatchChecked({ lines: [value] })[0];
+  if (!line) throw new Error('Expected one checked site-log line.');
+  return line;
+};
 const entry = z.strictObject({
   seq: z.number().int().positive(),
   actor: z.string().min(1).max(100),
   at: iso,
-  line: z.unknown().transform((v) => siteLogBatchChecked({ lines: [v] })[0]!),
+  line: z.unknown().transform(checkedLine),
 });
 const summary = z
   .strictObject({

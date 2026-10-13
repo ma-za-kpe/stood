@@ -61,7 +61,9 @@ it('refuses merges that would overflow the budget or mix tests that share an id 
 });
 it('brings tests the first milestone lacks into a merge (T-0275)', () => {
   const draft = fixture();
-  draft.milestones[1]!.tests.push({
+  const second = draft.milestones[1];
+  if (!second) throw new Error('Expected a second milestone in the fixture.');
+  second.tests.push({
     id: 'c',
     path: 'tests/c.test.ts',
     cases: [{ name: 'c', args: ['c'], input: '', status: 0, output: 'ok\n', match: 'exact' as const }],

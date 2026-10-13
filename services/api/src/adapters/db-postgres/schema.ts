@@ -63,11 +63,13 @@ export const mandateSignatures = pgTable(
       columns: [table.allowanceId, table.platformId],
       foreignColumns: [apiAllowances.id, apiAllowances.platformId],
     }),
-    uniqueIndex('one_active_mandate').on(table.allowanceId).where(sql`${table.status} <> 'REVOKED'`),
+    uniqueIndex('one_active_mandate')
+      .on(table.allowanceId, table.termsVersion)
+      .where(sql`${table.status} <> 'REVOKED'`),
     check('mandate_poll_time_valid', sql`${table.lastPolledAt} >= 0 AND ${table.lastPolledAt} <= 9007199254740991`),
     check(
       'mandate_identity_valid',
-      sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.termsVersion} = 1 AND ${table.termsHash} ~ '^[a-f0-9]{64}$' AND ${table.customerRef} ~ '^[a-f0-9]{64}$' AND ${table.setupRequestId} <> ${table.tokenRequestId} AND ${table.mode} IN ('sim', 'live')`,
+      sql`length(trim(${table.key})) BETWEEN 1 AND 200 AND ${table.termsVersion} >= 1 AND ${table.termsHash} ~ '^[a-f0-9]{64}$' AND ${table.customerRef} ~ '^[a-f0-9]{64}$' AND ${table.setupRequestId} <> ${table.tokenRequestId} AND ${table.mode} IN ('sim', 'live')`,
     ),
     check(
       'mandate_time_valid',
@@ -257,6 +259,35 @@ export const apiAllowances = pgTable(
     check(
       'allowance_draft_valid',
       sql`length(trim(${table.platformId})) > 0 AND COALESCE(${table.body}->>'id' = ${table.id} AND ${table.body}->>'status' = 'DRAFT', false)`,
+    ),
+  ],
+);
+// Complete immutable successors; the original api_allowances body remains version one.
+export const allowanceVersions = pgTable(
+  'allowance_versions',
+  {
+    allowanceId: text('allowance_id').notNull(),
+    platformId: text('platform_id').notNull(),
+    termsVersion: integer('terms_version').notNull(),
+    key: text().notNull(),
+    fingerprint: text().notNull(),
+    body: jsonb().$type<StoredDraft>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.allowanceId, table.termsVersion] }),
+    unique('allowance_version_receipt').on(table.platformId, table.allowanceId, table.key),
+    foreignKey({
+      columns: [table.allowanceId, table.platformId],
+      foreignColumns: [apiAllowances.id, apiAllowances.platformId],
+    }),
+    check(
+      'allowance_version_valid',
+      sql`${table.termsVersion} > 1 AND length(trim(${table.key})) BETWEEN 1 AND 200
+      AND ${table.fingerprint} ~ '^[a-f0-9]{64}$'
+      AND COALESCE(${table.body}->>'id' = ${table.allowanceId} AND ${table.body}->>'status' = 'DRAFT', false)`,
     ),
   ],
 );

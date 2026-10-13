@@ -12,6 +12,7 @@ import {
   type SetupReceipt,
   type TokenReceipt,
 } from '../../ports/mandate-store.js';
+import { readAllowanceVersion } from './allowance-versions.js';
 import * as schema from './schema.js';
 import type { TokenCipher } from './token-cipher.js';
 
@@ -44,6 +45,8 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       ) ||
       ![input.key, input.platformId, input.allowanceId].every(text) ||
       !/^[a-f0-9]{64}$/.test(input.termsHash) ||
+      !Number.isSafeInteger(input.termsVersion) ||
+      input.termsVersion < 1 ||
       !Number.isSafeInteger(input.acceptedAt) ||
       input.acceptedAt < 0 ||
       !['sim', 'live'].includes(input.mode)
@@ -71,13 +74,20 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
           fail('IDENTITY_CONFLICT');
         return this.reveal(prior);
       }
-      if (input.termsVersion !== 1 || mandateTermsHash(allowance.body) !== input.termsHash) fail('IDENTITY_CONFLICT');
+      const terms = await readAllowanceVersion(tx, input.platformId, input.allowanceId);
+      if (
+        !terms ||
+        input.termsVersion !== terms.version ||
+        mandateTermsHash(terms.body, terms.version) !== input.termsHash
+      )
+        fail('IDENTITY_CONFLICT');
       const [active] = await tx
         .select()
         .from(schema.mandateSignatures)
         .where(
           and(
             eq(schema.mandateSignatures.allowanceId, input.allowanceId),
+            eq(schema.mandateSignatures.termsVersion, input.termsVersion),
             ne(schema.mandateSignatures.status, 'REVOKED'),
           ),
         );
@@ -124,6 +134,8 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
         and(
           eq(schema.mandateSignatures.allowanceId, instruction.allowanceId),
           eq(schema.mandateSignatures.platformId, instruction.platformId),
+          eq(schema.mandateSignatures.termsVersion, instruction.termsVersion ?? 1),
+          ...(instruction.mandateKey ? [eq(schema.mandateSignatures.key, instruction.mandateKey)] : []),
           eq(schema.mandateSignatures.mode, instruction.mode),
           eq(schema.mandateSignatures.status, 'SIGNED'),
         ),
@@ -138,35 +150,31 @@ export class PostgresMandates implements MandateStore, FundingAuthority {
       .from(schema.fundingOperations)
       .where(eq(schema.fundingOperations.key, input.key));
     if (!funding || canonicalMandate(funding.instruction) !== canonicalMandate(input)) return false;
-    const [row] = await this.db
-      .select({ signature: schema.mandateSignatures, allowance: schema.apiAllowances })
+    const [signature] = await this.db
+      .select()
       .from(schema.mandateSignatures)
-      .innerJoin(
-        schema.apiAllowances,
-        and(
-          eq(schema.apiAllowances.id, schema.mandateSignatures.allowanceId),
-          eq(schema.apiAllowances.platformId, schema.mandateSignatures.platformId),
-        ),
-      )
       .where(
         and(
           eq(schema.mandateSignatures.allowanceId, input.allowanceId),
           eq(schema.mandateSignatures.platformId, input.platformId),
+          eq(schema.mandateSignatures.termsVersion, input.termsVersion ?? 1),
+          ...(input.mandateKey ? [eq(schema.mandateSignatures.key, input.mandateKey)] : []),
           eq(schema.mandateSignatures.status, 'SIGNED'),
         ),
       );
+    const terms = await readAllowanceVersion(this.db, input.platformId, input.allowanceId, input.termsVersion ?? 1);
     if (
-      !row ||
-      row.signature.mode !== input.mode ||
-      row.signature.termsVersion !== 1 ||
-      now < row.signature.acceptedAt ||
-      now >= row.signature.expiresAt ||
-      row.signature.termsHash !== mandateTermsHash(row.allowance.body) ||
-      row.allowance.body.payee_ref !== input.payeeRef
+      !signature ||
+      !terms ||
+      signature.mode !== input.mode ||
+      now < signature.acceptedAt ||
+      now >= signature.expiresAt ||
+      signature.termsHash !== mandateTermsHash(terms.body, terms.version) ||
+      terms.body.payee_ref !== input.payeeRef
     )
       return false;
-    const index = row.allowance.body.tranches.findIndex((tranche) => tranche.id === input.trancheId);
-    const amount = row.allowance.body.milestones[index]?.amount;
+    const index = terms.body.tranches.findIndex((tranche) => tranche.id === input.trancheId);
+    const amount = terms.body.milestones[index]?.amount;
     return amount?.minor === input.amount.minor && amount.currency === input.amount.currency;
   }
   beginCreate(key: string, version: number) {

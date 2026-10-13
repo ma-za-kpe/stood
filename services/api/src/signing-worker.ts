@@ -1,7 +1,7 @@
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { PostgresAllowanceVersions } from './adapters/db-postgres/allowance-versions.js';
 import { PostgresFunding } from './adapters/db-postgres/funding.js';
 import { PostgresMandates } from './adapters/db-postgres/mandates.js';
-import { PostgresPlatformApi } from './adapters/db-postgres/platform-api.js';
 import type * as schema from './adapters/db-postgres/schema.js';
 import { TokenCipher } from './adapters/db-postgres/token-cipher.js';
 import type { PostgresTranches } from './adapters/db-postgres/tranches.js';
@@ -27,7 +27,7 @@ export function signingWorker(deps: WorkerDeps) {
     throw new Error('PayPal transport cannot save accounts or fund orders');
   const mandates = new PostgresMandates(deps.db, new TokenCipher(deps.vaultKeys));
   const funding = new PostgresFunding(deps.db);
-  const terms = new PostgresPlatformApi(deps.db);
+  const terms = new PostgresAllowanceVersions(deps.db);
   const vault = new PayPalVaultAdapter(sdk as PayPalVaultTransport);
   const provider = new PayPalFundingAdapter(sdk as PayPalFundingTransport, mandates);
   return () =>
@@ -37,7 +37,13 @@ export function signingWorker(deps: WorkerDeps) {
       mandate: async (key) => {
         const now = await deps.clock();
         const before = (await mandates.load(key)).status;
-        await advanceMandate(mandates, { load: (p, id) => terms.allowance(p, id) }, vault, key, () => now);
+        await advanceMandate(
+          mandates,
+          { load: async (p, id, version) => (await terms.read(p, id, version))?.body ?? null },
+          vault,
+          key,
+          () => now,
+        );
         return { before, after: (await mandates.load(key)).status };
       },
       fund: async (key) => {

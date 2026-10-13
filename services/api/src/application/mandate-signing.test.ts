@@ -18,13 +18,13 @@ const draft: StoredDraft = {
   max_resubmits: 1,
   tranches: [{ id: 'tranche', name: 'Build' }],
 };
-function harness(status: Mandate['status'] = 'RESERVED') {
+function harness(status: Mandate['status'] = 'RESERVED', termsVersion = 1) {
   let row: Mandate = {
     key: 'mandate',
     platformId: 'buyer',
     allowanceId: draft.id,
-    termsVersion: 1,
-    termsHash: mandateTermsHash(draft),
+    termsVersion,
+    termsHash: mandateTermsHash(draft, termsVersion),
     customerRef: 'b'.repeat(64),
     mode: 'sim',
     status,
@@ -179,4 +179,15 @@ it('preserves unknown outcomes and concurrent claim failures without another pro
   expect(token.row().status).toBe('TOKENIZING');
   expect(await token.run()).toMatchObject({ outcome: 'WAIT' });
   expect(token.provider.createToken).toHaveBeenCalledTimes(1);
+});
+
+it('signs an exact successor snapshot and refuses a version-one digest for it', async () => {
+  const successor = harness('RESERVED', 2);
+  expect(await successor.run()).toMatchObject({ outcome: 'AWAITING_APPROVAL' });
+  expect(successor.terms.load).toHaveBeenCalledWith('buyer', 'allowance', 2);
+  expect(await successor.run()).toMatchObject({ outcome: 'SIGNED' });
+  const wrong = harness('RESERVED', 2);
+  vi.mocked(wrong.store.load).mockResolvedValue({ ...wrong.row(), termsHash: mandateTermsHash(draft) });
+  expect(await wrong.run()).toEqual({ outcome: 'WAIT', reason: 'TERMS_CHANGED' });
+  expect(wrong.provider.createSetup).not.toHaveBeenCalled();
 });

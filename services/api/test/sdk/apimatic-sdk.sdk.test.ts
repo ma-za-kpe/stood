@@ -8,6 +8,9 @@ import { draft, harness, key, now, pkg, secret, uploadPhoto } from '../fixtures/
 // customization, against the real router over HTTP. Built by scripts/check-sdk before this runs.
 type Call = (...args: unknown[]) => Promise<{ statusCode: number; result: Record<string, unknown> }>;
 type StoodApi = Record<
+  | 'proposeAllowanceVersion'
+  | 'getAllowanceVersion'
+  | 'requestVersionMandate'
   | 'createUpload'
   | 'getUpload'
   | 'completeUpload'
@@ -33,7 +36,7 @@ let server: ReturnType<typeof serve>;
 let base = '';
 let sdk: Sdk;
 beforeAll(async () => {
-  const app = await harness();
+  const app = await harness(true);
   server = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' });
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
@@ -85,6 +88,28 @@ describe('APIMatic-generated Stood SDK', () => {
     const completed = await stood.completeUpload('trn_1', 'upl_1', 'complete-key', {});
     expect(completed.result).toMatchObject({ status: 'COMPLETE', completedAt: now, uploads: [] });
     expect((await stood.completeUpload('trn_1', 'upl_1', 'complete-key', {})).result).toEqual(completed.result);
+  });
+
+  it('generates version proposal/read/signing methods with the saved HMAC signer', async () => {
+    const stood = api();
+    const proposed = await stood.proposeAllowanceVersion('alw_1', 'version-key', {
+      expectedVersion: 1,
+      terms: {
+        payeeRef: draft.payee_ref,
+        cap: draft.cap,
+        milestones: draft.milestones,
+        windowDays: draft.window_days,
+        maxResubmits: draft.max_resubmits,
+      },
+    });
+    expect(proposed.statusCode).toBe(201);
+    expect(proposed.result).toMatchObject({
+      version: 2,
+      termsHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      body: { id: 'alw_1' },
+    });
+    expect((await stood.getAllowanceVersion('alw_1', '2')).result).toMatchObject({ version: 2 });
+    expect((await stood.requestVersionMandate('alw_1', '2', 'version-sign-key', {})).statusCode).toBe(202);
   });
 
   it('surfaces problems as typed errors, and a wrong secret is refused', async () => {

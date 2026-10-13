@@ -25,6 +25,8 @@ export { ApiError } from './core.js';
 export * from './errors/problemError.js';
 export type { Allowance } from './models/allowance.js';
 export type { AllowanceDraft } from './models/allowanceDraft.js';
+export type { AllowanceProposal } from './models/allowanceProposal.js';
+export type { AllowanceVersion } from './models/allowanceVersion.js';
 export type { Baseline } from './models/baseline.js';
 export { BaselineStatus } from './models/baselineStatus.js';
 export type { BaselineTest } from './models/baselineTest.js';

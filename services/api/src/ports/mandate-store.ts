@@ -24,7 +24,7 @@ export interface MandateStore {
   revoke(platformId: string, key: string): Promise<Mandate>;
 }
 export interface MandateTerms {
-  load(platformId: string, allowanceId: string): Promise<StoredDraft | null>;
+  load(platformId: string, allowanceId: string, termsVersion?: number): Promise<StoredDraft | null>;
 }
 export class MandateStoreError extends Error {
   constructor(readonly code: 'INVALID' | 'NOT_FOUND' | 'STALE_VERSION' | 'IDENTITY_CONFLICT' | 'CONFLICT') {

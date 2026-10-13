@@ -1,5 +1,6 @@
 import { Blueprint, type BlueprintInput, costDisclosure, type FreezeProof, WorkOrder } from '@stood/yard-domain';
 import { YardError, type YardEvent, type YardEvents, type YardSnapshot } from '../ports/events.js';
+import { BoardAmendments } from './board-amendments.js';
 import type { BoardContext } from './board-context.js';
 import { BoardMandates } from './board-mandates.js';
 import { BoardPayouts } from './board-payouts.js';
@@ -63,6 +64,7 @@ export class Board {
   private readonly previews: BoardPreviews;
   private readonly payouts: BoardPayouts;
   private readonly mandates: BoardMandates;
+  private readonly amendments: BoardAmendments;
   private readonly submissions: BoardSubmissions;
   constructor(
     readonly events: YardEvents,
@@ -84,6 +86,7 @@ export class Board {
     this.previews = new BoardPreviews(events);
     this.payouts = new BoardPayouts(events);
     this.mandates = new BoardMandates(context);
+    this.amendments = new BoardAmendments(context);
     this.submissions = new BoardSubmissions(context);
   }
   // Active, unexpired leases held by an operator root across every project (paged).
@@ -345,7 +348,12 @@ export class Board {
     return this.mutate(id, actor, version, key, { changes }, 'blueprint.change_proposed', (d) => {
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
         throw new YardError('FORBIDDEN');
-      if (d.blueprint.status !== 'FROZEN' || d.handover || d.changes?.some((c) => c.status === 'PROPOSED'))
+      if (
+        d.blueprint.status !== 'FROZEN' ||
+        d.handover ||
+        d.changes?.some((c) => c.status === 'PROPOSED') ||
+        d.amendments?.some((a) => a.status === 'RESERVED')
+      )
         throw new YardError('CONFLICT');
       if (!Array.isArray(changes) || changes.length < 1 || changes.length > d.blueprint.milestones.length)
         throw new YardError('INVALID');
@@ -387,7 +395,12 @@ export class Board {
       if (actor.kind !== 'BUYER' || d.blueprint.buyerOperatorId !== actor.id || d.buyerRoot !== actor.root)
         throw new YardError('FORBIDDEN');
       const order = d.changes?.find((c) => c.id === changeId);
-      if (!order || order.status !== 'PROPOSED' || order.changes.some((c) => Object.hasOwn(d.orders, c.milestoneId)))
+      if (
+        !order ||
+        order.status !== 'PROPOSED' ||
+        order.changes.some((c) => Object.hasOwn(d.orders, c.milestoneId)) ||
+        d.amendments?.some((a) => a.status === 'RESERVED')
+      )
         throw new YardError('CONFLICT');
       order.status = 'APPROVED';
       const changed = order.changes.map((c) => c.milestoneId);
@@ -395,6 +408,18 @@ export class Board {
         d.mandate.amendmentRequired = [...new Set([...(d.mandate.amendmentRequired ?? []), ...changed])];
       return { changeId, milestones: changed, amendmentRequired: d.mandate?.status === 'CREATED', simulated: true };
     });
+  }
+  prepareAmendment(...args: Parameters<BoardAmendments['reserve']>) {
+    return this.amendments.reserve(...args);
+  }
+  recordAmendment(...args: Parameters<BoardAmendments['record']>) {
+    return this.amendments.record(...args);
+  }
+  renewAmendmentConsent(...args: Parameters<BoardAmendments['renew']>) {
+    return this.amendments.renew(...args);
+  }
+  pendingAmendments(...args: Parameters<BoardAmendments['pending']>) {
+    return this.amendments.pending(...args);
   }
   // T-0184: reserve the exact allowance request derived from the frozen terms before any Stood call.
   prepareMandate(...args: Parameters<BoardMandates['prepareMandate']>) {
@@ -571,6 +596,7 @@ export class Board {
         ? {
             allowanceId: d.mandate.allowanceId,
             status: 'DRAFT',
+            ...(d.mandate.termsVersion ? { termsVersion: d.mandate.termsVersion } : {}),
             ...(d.mandate.amendmentRequired?.length ? { amendmentRequired: [...d.mandate.amendmentRequired] } : {}),
           }
         : null,

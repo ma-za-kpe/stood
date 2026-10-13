@@ -11,6 +11,7 @@ import {
   type FundingStore,
   FundingStoreError,
 } from '../../ports/funding-store.js';
+import { readAllowanceVersion } from './allowance-versions.js';
 import * as schema from './schema.js';
 import { PostgresTranches } from './tranches.js';
 
@@ -124,12 +125,7 @@ export class PostgresFunding implements FundingStore {
           ),
         );
       if (active || payment) throw new FundingStoreError('CONFLICT');
-      const [allowance] = await tx
-        .select()
-        .from(schema.apiAllowances)
-        .where(
-          and(eq(schema.apiAllowances.id, owner.allowanceId), eq(schema.apiAllowances.platformId, input.platformId)),
-        );
+      const allowance = await readAllowanceVersion(tx, input.platformId, owner.allowanceId);
       if (!allowance) throw new FundingStoreError('NOT_FOUND');
       // T-0154: a signed saved-PayPal mandate means PayPal authorizes at create, with no buyer present.
       const [mandate] = await tx
@@ -137,12 +133,14 @@ export class PostgresFunding implements FundingStore {
         .from(schema.mandateSignatures)
         .where(
           and(
-            eq(schema.mandateSignatures.allowanceId, allowance.id),
+            eq(schema.mandateSignatures.allowanceId, owner.allowanceId),
+            eq(schema.mandateSignatures.termsVersion, allowance.version),
             eq(schema.mandateSignatures.platformId, input.platformId),
             eq(schema.mandateSignatures.mode, input.mode),
             eq(schema.mandateSignatures.status, 'SIGNED'),
           ),
         );
+      if (allowance.version > 1 && !mandate) throw new FundingStoreError('CONFLICT');
       const [row] = await tx
         .insert(schema.fundingOperations)
         .values({
@@ -152,8 +150,9 @@ export class PostgresFunding implements FundingStore {
             ...input,
             amount: tranche.amount.toJSON(),
             payeeRef: allowance.body.payee_ref,
-            allowanceId: allowance.id,
-            ...(mandate ? { source: 'SAVED_PAYPAL' as const } : {}),
+            allowanceId: owner.allowanceId,
+            termsVersion: allowance.version,
+            ...(mandate ? { source: 'SAVED_PAYPAL' as const, mandateKey: mandate.key } : {}),
           },
           version: 0,
           status: 'RESERVED',

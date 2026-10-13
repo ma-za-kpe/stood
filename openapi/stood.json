@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Stood platform API",
-    "version": "1.4.1",
+    "version": "1.5.0",
     "summary": "Milestone payments held on PayPal (sandbox) and released only on evidence",
     "description": "Every request carries the platform key (Authorization: Bearer) and a Stood-Signature: t=<unix seconds>,v2=<hex HMAC-SHA256 over the canonical request>, within five minutes. Bodies are at most 64 KiB. Each platform may make 120 writes and 600 reads a minute; over that, or after 30 failed sign-ins from one address in a minute, Stood answers 429 with Retry-After. Stood only talks to the PayPal sandbox.",
     "contact": {
@@ -140,7 +140,7 @@
     "/allowances/{id}": {
       "get": {
         "operationId": "getAllowance",
-        "summary": "Read an allowance this platform owns",
+        "summary": "Read the original allowance draft this platform owns; use versions/current for amended terms",
         "security": [
           {
             "platformKey": [],
@@ -220,10 +220,387 @@
         }
       }
     },
+    "/allowances/{id}/versions": {
+      "post": {
+        "operationId": "proposeAllowanceVersion",
+        "summary": "Propose immutable evidence terms for unreserved work; financial boundaries stay fixed",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AllowanceProposal"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllowanceVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the current one-minute window ends",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/allowances/{id}/versions/{version}": {
+      "get": {
+        "operationId": "getAllowanceVersion",
+        "summary": "Read an immutable terms version, or use current for the latest version",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllowanceVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the current one-minute window ends",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/allowances/{id}/versions/{version}/mandate": {
+      "post": {
+        "operationId": "requestVersionMandate",
+        "summary": "Start saved-PayPal signing for an explicit terms version (send {})",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (recorded, not yet done)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the current one-minute window ends",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/allowances/{id}/mandate": {
       "post": {
         "operationId": "requestMandate",
-        "summary": "Start saved-PayPal signing for the allowance's current terms (send {})",
+        "summary": "Start version-one signing (send {}); amended terms require the explicit version signing route",
         "security": [
           {
             "platformKey": [],
@@ -1744,6 +2121,47 @@
           "milestones",
           "window_days",
           "max_resubmits"
+        ],
+        "additionalProperties": false
+      },
+      "AllowanceProposal": {
+        "type": "object",
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483646
+          },
+          "terms": {
+            "$ref": "#/components/schemas/AllowanceDraft"
+          }
+        },
+        "required": [
+          "expected_version",
+          "terms"
+        ],
+        "additionalProperties": false
+      },
+      "AllowanceVersion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "body": {
+            "$ref": "#/components/schemas/Allowance"
+          },
+          "terms_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "version",
+          "body",
+          "terms_hash"
         ],
         "additionalProperties": false
       },

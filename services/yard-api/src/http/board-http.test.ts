@@ -1,8 +1,10 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { expect, it } from 'vitest';
-import { confirmHold } from '../../test/fakes/board-fixture.js';
+import { confirmHold, leaseAt, leaseBuyer } from '../../test/fakes/board-fixture.js';
 import { MemoryEvents } from '../../test/fakes/events.js';
+import type { AmendmentGateway } from '../application/allowance-amendments.js';
 import { Board } from '../application/board.js';
+import { MandateBridge } from '../application/mandate-bridge.js';
 import { createYardApp } from './app.js';
 
 const now = 1791158400000;
@@ -79,6 +81,142 @@ it('binds the operator key ID even when a configuration accidentally shares a se
   };
   expect((await app.request(path, { headers })).status).toBe(200);
   expect((await app.request(path, { headers: { ...headers, 'Yard-Key-Id': 'other-key' } })).status).toBe(401);
+});
+
+it('delivers a signed evidence amendment through the hosted Yard route and requires a separate consent step', async () => {
+  const events = new MemoryEvents();
+  const board = new Board(events);
+  const tests = [{ id: 'works', path: 'tests/works.test.js' }];
+  const manifestHash = createHash('sha256').update(JSON.stringify(tests)).digest('hex');
+  const milestones = ['one', 'two'].map((id) => ({
+    id,
+    name: id,
+    budgetMinor: 1000,
+    deadline: leaseAt + 86400000,
+    profileId: id === 'two' ? ('code.final@1' as const) : ('code.milestone@1' as const),
+    testBundleHash: 'a'.repeat(64),
+    manifestHash,
+    testIds: ['works'],
+    tests,
+  }));
+  await board.create(
+    {
+      id: 'p',
+      buyerOperatorId: leaseBuyer.id,
+      repository: 'buyer/project',
+      baseCommit: 'a'.repeat(40),
+      summary: 'Booking',
+      createdAt: leaseAt,
+      capMinor: 2000,
+      currency: 'USD',
+      milestones,
+    },
+    leaseBuyer,
+    'create',
+  );
+  await board.freeze(
+    'p',
+    {
+      version: 1,
+      buyerOperatorId: leaseBuyer.id,
+      approvalReference: 'approved',
+      baselines: milestones.map((m) => ({
+        milestoneId: m.id,
+        testBundleHash: m.testBundleHash,
+        manifestHash,
+        failedTestIds: m.testIds,
+        reference: 'baseline-original',
+      })),
+    },
+    leaseBuyer,
+    1,
+    'freeze',
+  );
+  await new MandateBridge(board, {
+    createDraft: async () => ({ id: 'alw_1', tranches: milestones.map((m) => ({ id: `trn_${m.id}`, name: m.name })) }),
+  }).create('p', leaseBuyer, 2, 'mandate', leaseAt);
+  const changes = [{ milestoneId: 'two', testBundleHash: 'b'.repeat(64), manifestHash, testIds: ['works'], tests }];
+  const amendmentGateway: AmendmentGateway = {
+    requestBaseline: async (terms: {
+      repository: string;
+      baseCommit: string;
+      testBundleHash: string;
+      testIds: readonly string[];
+    }) => ({
+      id: 'baseline-2',
+      status: 'DONE' as const,
+      repository: terms.repository,
+      baseCommit: terms.baseCommit,
+      testBundleHash: terms.testBundleHash,
+      tests: terms.testIds.map((id) => ({ id, status: 'FAIL' as const })),
+      evidenceSha256: 'c'.repeat(64),
+    }),
+    proposeAllowanceVersion: async (_id, version, body) => ({
+      version: version + 1,
+      termsHash: 'd'.repeat(64),
+      body: {
+        ...body,
+        id: 'alw_1',
+        status: 'DRAFT',
+        tranches: milestones.map((m) => ({ id: `trn_${m.id}`, name: m.name })),
+      },
+    }),
+    requestVersionMandate: async (_id: string, _version: number, key: string) => ({
+      key,
+      status: 'AWAITING_APPROVAL' as const,
+      approveUrl: 'https://www.sandbox.paypal.com/agreements/approve?ba_token=fixture',
+      expiresAt: leaseAt + 86400000,
+    }),
+  };
+  const app = createYardApp({
+    environment: 'ci',
+    board: {
+      board,
+      clock: async () => leaseAt,
+      operators: [{ key: 'buyer-key', secret: 'buyer-secret', actor: leaseBuyer }],
+      amendments: amendmentGateway,
+    },
+  });
+  const send = async (path: string, value: unknown, key: string, version: number) => {
+    const raw = JSON.stringify(value);
+    const timestamp = String(leaseAt / 1000);
+    return app.request(path, {
+      method: 'POST',
+      body: raw,
+      headers: {
+        'Yard-Key-Id': 'buyer-key',
+        'Yard-Signature': `t=${timestamp},v2=${createHmac('sha256', 'buyer-secret')
+          .update(
+            JSON.stringify([
+              'yard.request@2',
+              timestamp,
+              'buyer-key',
+              'POST',
+              path,
+              key,
+              String(version),
+              'application/json',
+              '',
+              raw,
+            ]),
+          )
+          .digest('hex')}`,
+        'Idempotency-Key': key,
+        'Content-Type': 'application/json',
+        'If-Match': String(version),
+      },
+    });
+  };
+  const boardVersion = (await events.load('p')).version;
+  const response = await send('/yard/v1/blueprints/p/amendments', { changes }, 'amend', boardVersion);
+  const result = await response.json();
+  expect({ status: response.status, result }).toMatchObject({
+    status: 200,
+    result: { status: 'AWAITING_APPROVAL', termsVersion: 2 },
+  });
+  expect((await board.room('p', leaseBuyer)).mandate?.amendmentRequired).toEqual(['two']);
+  expect((await events.read('p', 0)).some((event) => event.type === 'stood.amendment_reserved')).toBe(true);
+  expect((await send('/yard/v1/blueprints/p/amendments', { changes }, 'amend', boardVersion)).status).toBe(200);
 });
 
 it('runs signed Board commands, keeps submissions checking and requires matching signed Stood proof', async () => {

@@ -1,9 +1,10 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { RunnerJob } from '../../application/code-run.js';
 import { codeTerms } from '../../application/code-terms.js';
 import { JUDGE_DECISION } from '../../domain/judged-release.js';
 import { restoreTrancheRecord } from '../../domain/tranche-record.js';
+import { readAllowanceVersion } from './allowance-versions.js';
 import * as schema from './schema.js';
 
 const {
@@ -64,8 +65,21 @@ export class PostgresRunnerJobs {
         if (!receipt) continue;
         confirmed = true;
       }
-      const index = latest.body.tranches.findIndex((t) => t.id === trancheId);
-      const milestone = latest.body.milestones[index];
+      const [funding] = await this.db
+        .select()
+        .from(schema.fundingOperations)
+        .where(and(eq(schema.fundingOperations.trancheId, trancheId), eq(schema.fundingOperations.status, 'HELD')))
+        .orderBy(desc(schema.fundingOperations.createdAt))
+        .limit(1);
+      const signed = await readAllowanceVersion(
+        this.db,
+        latest.platformId,
+        latest.allowanceId,
+        funding?.instruction.termsVersion ?? 1,
+      );
+      if (!signed) continue;
+      const index = signed.body.tranches.findIndex((t) => t.id === trancheId);
+      const milestone = signed.body.milestones[index];
       if (!milestone || !milestone.profile.startsWith('code.')) continue;
       let terms: RunnerJob['terms'];
       try {
