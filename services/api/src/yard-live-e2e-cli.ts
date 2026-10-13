@@ -4,7 +4,7 @@ import { setTimeout } from 'node:timers/promises';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
 import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
 import { bundleHash } from './application/code-evidence.js';
-import { qualifiedYardPayment } from './application/yard-qualification.js';
+import { existingYardMandate, qualifiedYardPayment } from './application/yard-qualification.js';
 
 // T-0189: one final work order driven through the deployed Yard app's session proxy. Stood handles sandbox
 // signing/funding; the builder submits and the buyer confirms usage through Yard. Never posts a Stood package,
@@ -243,14 +243,14 @@ try {
     blueprint = object(data.blueprint);
   if (blueprint.repository !== repository || blueprint.baseCommit !== baseCommit)
     throw new Error('Unexpected resume terms');
-  const mandate =
-    object(data.mandate).status === 'CREATED' ? object(data.mandate) : await write(buy, `${root}/mandate`, {}, 'draft');
+  const mandate = existingYardMandate(data.mandate) ?? (await write(buy, `${root}/mandate`, {}, 'draft'));
   const allowanceId = String(mandate.allowanceId),
     trancheId = String(object(mandate.tranches).final);
   const amount = (await stood('GET', `/tranches/${trancheId}`)).amount as { minor: number; currency: string };
   note('allowance', { id: allowanceId, trancheId, amount });
   const signingKey = `${run}:sign`;
-  if (!resume) await stood('POST', `/allowances/${allowanceId}/mandate`, {}, signingKey);
+  // Replaying the same reservation also recovers an interruption before its first response was recorded.
+  await stood('POST', `/allowances/${allowanceId}/mandate`, {}, signingKey);
   const signing = await until(
     'signing link',
     () => stood('GET', `/allowances/${allowanceId}/mandate/${signingKey}`),
@@ -285,7 +285,8 @@ try {
   }
   if (!(object(await room()).orders as { id: string }[]).some((o) => o.id === 'final'))
     await write(buy, `${root}/work-orders`, { milestone: 'final' }, 'post');
-  const work = () => build('GET', `${root}/work-orders/final`);
+  // The buyer owns the work order before a builder claims it; builder-private reads require that claim.
+  const work = () => buy('GET', `${root}/work-orders/final`);
   if ((await work()).state === 'POSTED') await write(build, `${root}/work-orders/final/claim`, {}, 'claim');
   await until('Yard hold projection', work, (v) => !!v.hold);
   if ((await work()).state === 'CLAIMED') await write(build, `${root}/work-orders/final/build`, {}, 'build');
