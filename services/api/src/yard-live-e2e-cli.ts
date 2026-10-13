@@ -4,6 +4,7 @@ import { setTimeout } from 'node:timers/promises';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
 import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
 import { bundleHash } from './application/code-evidence.js';
+import { hostedSession } from './application/hosted-session.js';
 import { existingYardMandate, qualifiedYardPayment } from './application/yard-qualification.js';
 
 // T-0189: one final work order driven through the deployed Yard app's session proxy. Stood handles sandbox
@@ -49,27 +50,37 @@ async function response(method: string, path: string, r: Response): Promise<Reco
   return value;
 }
 async function session(accessCode: string) {
-  const r = await fetch(`${yardOrigin}/app/api/session`, {
-    method: 'POST',
-    headers: { Origin: yardOrigin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ access_code: accessCode }),
-    signal: AbortSignal.timeout(30_000),
+  const login = async () => {
+    const r = await fetch(`${yardOrigin}/app/api/session`, {
+      method: 'POST',
+      headers: { Origin: yardOrigin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_code: accessCode }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    await response('POST', '/app/api/session', r);
+    const cookie = r.headers.get('set-cookie')?.split(';')[0];
+    if (!cookie) throw new Error('Hosted session did not set a cookie');
+    return cookie;
+  };
+  const authenticated = await hostedSession(login, (cookie, path, request) => {
+    const headers = new Headers(request.headers);
+    headers.set('Cookie', cookie);
+    return fetch(`${yardOrigin}/app/api${path}`, {
+      ...request,
+      headers,
+      signal: AbortSignal.timeout(60_000),
+    });
   });
-  await response('POST', '/app/api/session', r);
-  const cookie = r.headers.get('set-cookie')?.split(';')[0];
-  if (!cookie) throw new Error('Hosted session did not set a cookie');
   return async (method: 'GET' | 'POST', path: string, body?: unknown, version?: number, key = '') => {
-    const result = await fetch(`${yardOrigin}/app/api${path}`, {
+    const result = await authenticated(path, {
       method,
       headers: {
-        Cookie: cookie,
         Origin: yardOrigin,
         'Content-Type': 'application/json',
         ...(version === undefined ? {} : { 'If-Match': String(version) }),
         ...(key ? { 'Idempotency-Key': key } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(60_000),
     });
     return response(method, path, result);
   };
