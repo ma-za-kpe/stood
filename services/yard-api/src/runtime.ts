@@ -16,6 +16,7 @@ import { PREVIEW_CAP, RenderPreviewHost } from './adapters/render/render-host.js
 import { StoodPackageGateway } from './adapters/stood/package-gateway.js';
 import { StoodTrancheProofs } from './adapters/stood/tranche-proofs.js';
 import { TribunalCatalog } from './adapters/tribunal-catalog.js';
+import { AllowanceAmendments } from './application/allowance-amendments.js';
 import { Board, MAX_ACTIVE_CLAIMS, type Operator } from './application/board.js';
 import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
@@ -119,7 +120,9 @@ export function yardRuntime(env: Env) {
       siteLog: new SiteLog(logs, board, scanner),
       // T-0189: allowance drafts through Stood's signed API.
       ...(previews ? { previews } : {}),
-      ...(stood && payee ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) } } : {}),
+      ...(stood && payee
+        ? { mandates: { createDraft: (input, key) => stood.createDraft(input, key) }, amendments: stood }
+        : {}),
       // T-0189: submitted work goes to Stood, whose own runner runs the buyer's frozen tests on the exact commit.
       ...(stood ? { packages: new StoodPackageGateway(stood) } : {}),
     },
@@ -181,13 +184,15 @@ export function yardRuntime(env: Env) {
     drafts = config.board?.mandates;
   const submissions = packages ? new SubmissionBridge(board, packages) : null;
   const mandates = drafts ? new MandateBridge(board, drafts) : null;
-  if (submissions || mandates)
+  const amendments = config.board?.amendments ? new AllowanceAmendments(board, config.board.amendments) : null;
+  if (submissions || mandates || amendments)
     schedule.push({
       code: 'RECOVERY_FAILED',
       everyMs: 60_000,
       task: async () => {
         const s = submissions ? await submissions.recover(Date.now()) : [];
         const m = mandates ? await mandates.recover() : [];
+        const a = amendments ? await amendments.recover() : [];
         const count = (rows: readonly { status: string }[], status: string) =>
           rows.filter((r) => r.status === status).length;
         const counts = {
@@ -195,6 +200,8 @@ export function yardRuntime(env: Env) {
           submissionsWaiting: count(s, 'WAIT'),
           mandatesDelivered: count(m, 'DELIVERED'),
           mandatesWaiting: count(m, 'WAIT'),
+          amendmentsSigned: count(a, 'SIGNED'),
+          amendmentsWaiting: a.length - count(a, 'SIGNED'),
         };
         if (Object.values(counts).some((n) => n > 0))
           process.stdout.write(`${JSON.stringify({ code: 'RECOVERY', ...counts })}\n`);

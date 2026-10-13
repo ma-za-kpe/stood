@@ -5,6 +5,7 @@ import type { BlueprintInput, FreezeProof } from '@stood/yard-domain';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
+import { AllowanceAmendments, type AmendmentGateway } from '../application/allowance-amendments.js';
 import {
   type Board,
   type HoldProof,
@@ -58,6 +59,7 @@ export type BoardConfig = Readonly<{
   intakePlanner?: Pick<IntakePlanner, 'create'>;
   secrets?: SecretVault;
   mandates?: DraftGateway;
+  amendments?: AmendmentGateway;
   // T-0196: buyer-requested previews of a submitted milestone (Render, test keys only, expiring).
   previews?: Pick<Previews, 'deploy'>;
   nudges?: NudgeConfig;
@@ -428,6 +430,34 @@ export function boardHttp(app: Hono, config: BoardConfig): void {
       now,
     );
     return c.json({ ...result, status: 'DRAFT', simulated: true });
+  });
+  app.post('/yard/v1/blueprints/:id/amendments', async (c) => {
+    if (!config.amendments) throw new YardError('CONFLICT');
+    const { key, version, actor } = command(c);
+    const input = body(c, ['changes']);
+    return c.json(
+      await new AllowanceAmendments(config.board, config.amendments).propose(
+        c.req.param('id'),
+        actor,
+        version,
+        key,
+        input.changes as never,
+      ),
+    );
+  });
+  app.post('/yard/v1/blueprints/:id/amendments/:amendment/renew', async (c) => {
+    const { key, version, actor } = command(c);
+    body(c, []);
+    if (!config.amendments) throw new YardError('CONFLICT');
+    return c.json(
+      await new AllowanceAmendments(config.board, config.amendments).renew(
+        c.req.param('id'),
+        actor,
+        version,
+        key,
+        c.req.param('amendment'),
+      ),
+    );
   });
   app.post('/yard/v1/blueprints/:id/handover', async (c) => {
     const { key, version, actor, now } = command(c),

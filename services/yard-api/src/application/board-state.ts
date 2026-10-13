@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Blueprint, type BlueprintInput, costDisclosure, type FreezeProof, WorkOrder } from '@stood/yard-domain';
 import { YardError, type YardEvent, type YardEvents, type YardSnapshot } from '../ports/events.js';
+import type { AmendmentIntent } from './board-amendment-types.js';
+import type { MandateRequest } from './mandate-request.js';
+
+export type { MandateRequest } from './mandate-request.js';
 export type Operator = Readonly<{ id: string; root: string; kind: 'BUYER' | 'BUILDER' }>;
 export type SettlementProof = Readonly<{
   eventId: string;
@@ -84,25 +88,6 @@ export type Order = {
   // owner refunds it in PayPal and records the refund's reference.
   refund?: { status: 'DUE' | 'REFUNDED'; at: number; reference?: string };
 };
-export type MandateRequest = Readonly<{
-  payee_ref: string;
-  cap: Readonly<{ minor: number; currency: string }>;
-  milestones: readonly Readonly<{
-    name: string;
-    amount: Readonly<{ minor: number; currency: string }>;
-    profile: string;
-    params: Readonly<{
-      repository: string;
-      baseCommit: string;
-      testBundleHash: string;
-      manifestHash: string;
-      testIds: readonly string[];
-      tests?: readonly Readonly<{ id: string; path: string }>[];
-    }>;
-  }>[];
-  window_days: number;
-  max_resubmits: number;
-}>;
 export type MandateIntent = Readonly<{
   key: string;
   request: MandateRequest;
@@ -113,6 +98,7 @@ export type MandateIntent = Readonly<{
   // ADR-0027: what the buyer authorizes per milestone, the builder's price plus Yard's fee on top. Absent on mandates
   // made before the fee existed (no fee).
   lines?: readonly MandateLine[];
+  termsVersion?: number;
 }>;
 // ADR-0027: a builder's payout, one PayPal Payouts batch per attempt. RESERVED is written before PayPal is called (the
 // batch id is also PayPal-Request-Id and sender_batch_id, so a resend after a lost answer cannot pay twice); SENT once
@@ -178,6 +164,7 @@ export type Data = {
   handover?: Handover;
   mandate?: MandateIntent & { amendmentRequired?: string[] };
   changes?: ChangeOrder[];
+  amendments?: AmendmentIntent[];
   previews?: { wo: string; serviceId: string; url: string; expiresAt: number }[];
   // Fifth audit (2026-10-11): a preview deploy reserved before Render is called, so a crash leaves a trace to repair.
   previewIntents?: { wo: string; deployId: string; name: string; at: number }[];
@@ -200,6 +187,13 @@ export function terms(d: Data, milestoneId: string) {
       for (const c of order.changes)
         if (c.milestoneId === milestoneId)
           effective = { ...effective, name: c.name, budgetMinor: c.budgetMinor, deadline: c.deadline };
+  for (const amendment of d.amendments ?? [])
+    if (amendment.status === 'SIGNED')
+      for (const change of amendment.changes)
+        if (change.milestoneId === milestoneId) {
+          const { milestoneId: _id, ...evidence } = change;
+          effective = { ...effective, ...evidence };
+        }
   return effective;
 }
 export const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
