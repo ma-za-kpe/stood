@@ -1,0 +1,33 @@
+{
+  "qualifiedAt": "2026-10-13T07:35:56.479Z",
+  "environment": "paypal-sandbox",
+  "projectId": "yard-live-2026-10-12T22-47-51-323Z",
+  "workOrder": "final",
+  "yardLedger": {
+    "state": "PAID_OUT",
+    "capturedMinor": 105,
+    "builderMinor": 100,
+    "feeMinor": 5,
+    "currency": "USD",
+    "payoutAttempts": 1,
+    "payoutReference": "3GT56995F8662550T"
+  },
+  "independentPayPalRead": {
+    "payoutBatchId": "4DN4LP8Y26T5C",
+    "batchStatus": "SUCCESS",
+    "senderBatchId": "yard-99b6908e8efb97bb6669969bcf70463068e1181f",
+    "payoutItemId": "AAMZTMADN2E4G",
+    "transactionStatus": "SUCCESS",
+    "amount": {
+      "currency": "USD",
+      "value": "1.00"
+    },
+    "itemCount": 1,
+    "recipientMatchesConfiguredPersonalAccount": true
+  },
+  "limits": [
+    "Sandbox only; no real money",
+    "One payout item; independent PayPal GET matched the configured personal sandbox account",
+    "Yard capture and builder payout are distinct operations and both are recorded"
+  ]
+}
