@@ -46,7 +46,7 @@
 | Hosted Yard app | <https://stood-yard-api.onrender.com/app/> | Owner-issued access code; Board, events, site log and private intake |
 | Stood API contract (OpenAPI 3.1) | <https://stood-api.onrender.com/v1/openapi.json> | Served by `stood-api` from API 1.4.1; the same file is [`openapi/stood.json`](openapi/stood.json) |
 | Stood API reference (APIMatic portal) | <https://ma-za-kpe.github.io/stood/api/> | Generated from the same contract by APIMatic on every merge to `main`; HTTP and TypeScript examples, a signing guide, no Try It (requests need your secret) |
-| Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake is connected; the Foreman and Yard payments remain off until their adapters are connected |
+| Hosted Yard API | <https://stood-yard-api.onrender.com/health> | Yard's Board, events and site log on Render (Starter). Private intake, Foreman and the Stood payment connection are live; `/health` reports configured capabilities |
 | Source code | <https://github.com/ma-za-kpe/stood> | MIT |
 | Releases | <https://github.com/ma-za-kpe/stood/releases> | |
 | Current work | [#75 UX and app coverage](https://github.com/ma-za-kpe/stood/issues/75) · [#76 hosted Foreman and Yard adapters](https://github.com/ma-za-kpe/stood/issues/76) · [#51 submission](https://github.com/ma-za-kpe/stood/issues/51) | Hosted sign-in and import are deployed; C2 stays open for the UX/98% app audit, with [#99](https://github.com/ma-za-kpe/stood/issues/99) tracking import sanitization |
@@ -55,6 +55,7 @@
 | Yard GitHub App | <https://github.com/apps/yard-builder> | Installed only on [`yard-sandbox`](https://github.com/ma-za-kpe/yard-sandbox) ([setup](docs/SETUP.md#7-yard-github-app)) |
 | Yard test repository | <https://github.com/ma-za-kpe/yard-sandbox> | Throwaway: where Yard's `wo/*` branches and pull requests appear in demos |
 | Guide for PayPal developers | [Authorize, capture and void on the PayPal sandbox, step by step](docs/guides/paypal-sandbox-authorize-capture-void.md) | Written from our own setup, with every error we hit |
+| Guide for Render developers | [Deploy Stood and Yard, step by step](docs/guides/render-stood-yard-deployment.md) | Three services, migration order, readiness limits, release checks and rollback |
 | Guide for Kernel developers | [Approve PayPal sandbox payments unattended with a Kernel cloud browser, step by step](docs/guides/kernel-paypal-sandbox-approval.md) | Written from our own runs: CAPTURED, VOIDED and VAULTED with nobody at the keyboard, and every selector mistake we fixed |
 | Guide for APIMatic developers | [A typed SDK from your OpenAPI contract, including per-request HMAC signing, step by step](docs/guides/apimatic-sdk-from-openapi.md) | Written from our own runs: the SDK calls the real router in CI, and every generation mistake we fixed |
 | Guide for Vercel Sandbox developers | [Judge untrusted code with tests it cannot touch, step by step](docs/guides/vercel-sandbox-untrusted-code-judge.md) | Written from our own runs: the builder's early exit and forged report fail, its tampering is refused, and every isolation mistake we fixed |

@@ -45,3 +45,11 @@ it('requires the exact real Stood capture and accepted hosted usage to qualify a
   ])
     expect(qualifiedYardPayment(expected, stood, changed)).toBe(false);
 });
+
+it('starts a new mandate for an empty project and only reuses a complete created mandate', async () => {
+  const { existingYardMandate } = await import('./yard-qualification.js');
+  for (const value of [null, undefined, {}, { status: 'RESERVED' }]) expect(existingYardMandate(value)).toBeNull();
+  expect(() => existingYardMandate({ status: 'CREATED' })).toThrow('Yard mandate recording is incomplete');
+  const mandate = { status: 'CREATED', allowanceId: 'alw_existing', tranches: { final: 'trn_existing' } };
+  expect(existingYardMandate(mandate)).toEqual(mandate);
+});

@@ -1,0 +1,50 @@
+{
+  "qualifiedAt": "2026-10-13T04:05:18.490Z",
+  "deploymentCodeCommit": "fdfa92abf9b87dcb8a31047fba4387cf81915592",
+  "releaseCommit": "f11629798d7c832c7f69da32ffd3cf1a14a22c33",
+  "transport": "hosted-app-session-api",
+  "projectId": "yard-live-2026-10-12T22-47-51-323Z",
+  "allowanceId": "alw_b2d207d9-d49a-4f75-b815-dafdc793bd18",
+  "trancheId": "trn_98785976-7730-454b-9964-3594770015b6",
+  "packageId": "pkg_accf9ff0-d4da-4c98-979a-e22c098b46b3",
+  "commit": "5ba5a5a4f65a929f6cac039c379fc48d9bb736ee",
+  "yardState": "PAID",
+  "settlement": {
+    "effect": "CAPTURE",
+    "reference": "43103345WB005593M",
+    "attempt": 1
+  },
+  "amount": {
+    "minor": 105,
+    "currency": "USD"
+  },
+  "usage": "ACCEPTED",
+  "independentPayPalRead": {
+    "capture": {
+      "id": "43103345WB005593M",
+      "status": "COMPLETED",
+      "amount": {
+        "currency_code": "USD",
+        "value": "1.05"
+      }
+    },
+    "order": {
+      "id": "814833703A5715714",
+      "status": "COMPLETED",
+      "captureCount": 1,
+      "captureIds": ["43103345WB005593M"]
+    }
+  },
+  "limits": [
+    "Sandbox only; no real money",
+    "Session HTTP API, not UI clicks",
+    "Builder payout completion is not established",
+    "429/529 paths are deterministic tests, not forced live quota errors"
+  ],
+  "recovery": [
+    "Null mandate on new project fixed in qualification harness",
+    "Buyer reads work order before builder claim",
+    "Same signing reservation replayed on resume",
+    "Session re-authentication after Render redeploy; same project/hold/package retained"
+  ]
+}
