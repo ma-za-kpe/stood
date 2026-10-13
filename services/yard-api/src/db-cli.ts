@@ -6,6 +6,7 @@ import { migrateYard, setupYardRoles } from './adapters/db-postgres/setup.js';
 //   db-cli.js migrate   every release (Render pre-deploy): apply Yard's schema
 const roles = { owner: 'yard_owner', runtime: 'yard_runtime' };
 const url = process.env.YARD_MIGRATION_DATABASE_URL?.trim() ?? '';
+const runtimeUrl = process.env.YARD_DATABASE_URL?.trim() ?? '';
 const command = process.argv[2];
 if (!url || (command !== 'roles' && command !== 'migrate')) {
   process.stderr.write('Usage: db-cli.js roles|migrate, with YARD_MIGRATION_DATABASE_URL set.\n');
@@ -18,7 +19,12 @@ if ((process.env.YARD_ENV ?? 'local') === 'demo' && new URL(url).searchParams.ge
 const pool = new pg.Pool({ connectionString: url, max: 1 });
 try {
   if (command === 'roles') await setupYardRoles(pool, { ...roles, password: process.env.YARD_RUNTIME_PASSWORD ?? '' });
-  else await migrateYard(pool, roles);
+  else {
+    if (!URL.canParse(runtimeUrl)) throw new Error('YARD_DATABASE_URL is required to verify the active runtime role.');
+    const runtimeLogin = decodeURIComponent(new URL(runtimeUrl).username);
+    if (!runtimeLogin) throw new Error('YARD_DATABASE_URL must name the active runtime role.');
+    await migrateYard(pool, roles, runtimeLogin);
+  }
   process.stdout.write(command === 'roles' ? 'Yard roles ready.\n' : 'Yard schema up to date.\n');
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : 'Yard database setup failed'}\n`);

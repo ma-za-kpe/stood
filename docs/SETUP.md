@@ -17,7 +17,7 @@ This is the record of the hosted sandbox setup done on 7–8 October 2026: every
 
 ### Yard on Render (T-0214, T-0220)
 
-Yard shares Stood's Neon database through **its own roles**: `yard_owner` (no login; owns the `yard` schema) and `yard_runtime` (login; can read and write only Yard's tables, never Stood's). Run once:
+Yard shares Stood's Neon database through **its own roles**: `yard_owner` (no login; owns the `yard` schema) and `yard_runtime` (the restricted Yard privilege role). The login in `YARD_DATABASE_URL` can be the role itself or a rotated login that is a member of `yard_runtime`; it can read and write Yard's tables, never Stood's. The pre-deploy migration verifies that the active login is non-privileged, has the expected Yard role, and cannot assume `yard_owner`:
 
 ```bash
 scripts/dev yard-setup   # creates both roles, applies Yard's schema, writes the Yard settings into .env (never printed)
