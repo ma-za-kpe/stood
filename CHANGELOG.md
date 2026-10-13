@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.1](https://github.com/ma-za-kpe/stood/compare/v0.12.0...v0.12.1) (2026-10-12)
+
+
+### Fixes
+
+* **kernel:** retry browser creation and clean up owned sessions ([#156](https://github.com/ma-za-kpe/stood/issues/156)) ([d82c80b](https://github.com/ma-za-kpe/stood/commit/d82c80b5ada56b3d9e5253cb6778b0e5cb66e30e))
+* repair mandate retries and signing queue; style creator footer ([#155](https://github.com/ma-za-kpe/stood/issues/155)) ([8f6a520](https://github.com/ma-za-kpe/stood/commit/8f6a5206cad18f5b81bf420e685fc5c28432ae3f))
+
 ## [0.12.0](https://github.com/ma-za-kpe/stood/compare/v0.11.0...v0.12.0) (2026-10-12)
 
 
