@@ -34,6 +34,8 @@ Stood decides whether someone's money moves. A false "done", a silent hold, a le
 
 If code and docs disagree, **stop and reconcile**. Update the doc in the same PR as the behaviour change, or open a task for it.
 
+**Issue status:** issue type (`bug`, `enhancement`) and workflow status are separate labels. New issues enter `status: needs-triage`; maintainers move accepted work to `status: accepted`, active work to `status: in-progress`, or blocked work to `status: blocked`.
+
 **Docs stay current in the same PR.** Any change to hosting, keys, accounts, environment variables or setup steps updates [`README.md`](../README.md) (public links and installation guide), [`docs/SETUP.md`](SETUP.md) (what runs where; secrets by **name** only), [`docs/HANDOFF.md`](HANDOFF.md), [`.env.example`](../.env.example) and `TASKS.md` in the same pull request. This repository is built in public: a stale doc is a defect.
 
 ---

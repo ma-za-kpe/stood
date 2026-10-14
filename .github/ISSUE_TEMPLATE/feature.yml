@@ -1,6 +1,6 @@
 name: Feature or use case
 description: Propose a capability or a new evidence profile
-labels: [enhancement]
+labels: [enhancement, 'status: needs-triage']
 body:
   - type: checkboxes
     id: duplicates
