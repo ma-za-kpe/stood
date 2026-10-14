@@ -30,7 +30,7 @@ Status: hosted sandbox pilot. Owner-issued browser sessions protect buyer-owned 
 | Build log text | 90 days, then folded into counts by kind |
 | Stored keys | Deleted 7 days after handover, or on revoke |
 | Previews | At most 30 days, and removed when the project closes |
-| Intake drafts | Until the buyer deletes them, or 90 days after the last change (T-0217). Erasure removes the draft, its history, its save receipts and the Foreman's plan checkpoints, and keeps only the intake id, the reason and the time |
+| Intake drafts | Until the buyer deletes them, or 90 days after the last change (T-0217). A per-intake lock fences saves and planning; a durable cleanup manifest records each Foreman plan target before deletion and tracks completed cleanup. Erasure removes the draft, its history, its save receipts and the Foreman's plan checkpoints, and keeps only the intake id, the reason and the time |
 
 ## Consent copy
 

@@ -78,11 +78,8 @@ export async function migrateYardIntakeErasure(pool: pg.Pool, owner: string): Pr
     await c.query('BEGIN');
     await c.query(`SET LOCAL ROLE ${owner}`);
     await c.query("SELECT pg_advisory_xact_lock(hashtextextended('yard-intake-erasure-migration',0))");
-    if ((await c.query('SELECT 1 FROM yard.schema_migrations WHERE version=9')).rowCount) {
-      await c.query('COMMIT');
-      return;
-    }
-    await c.query(`CREATE FUNCTION yard.intake_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
+    if (!(await c.query('SELECT 1 FROM yard.schema_migrations WHERE version=9')).rowCount)
+      await c.query(`CREATE FUNCTION yard.intake_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN
         IF TG_OP='DELETE' AND current_setting('yard.erase_intake', true) = OLD.intake_id THEN RETURN OLD; END IF;
         RAISE EXCEPTION 'Intake history is append-only';
@@ -100,6 +97,17 @@ export async function migrateYardIntakeErasure(pool: pg.Pool, owner: string): Pr
       CREATE TRIGGER intake_erasure_immutable BEFORE UPDATE OR DELETE ON yard.intake_erasures
         FOR EACH ROW EXECUTE FUNCTION yard.immutable_event();
       INSERT INTO yard.schema_migrations(version) VALUES(9);`);
+    if (!(await c.query('SELECT 1 FROM yard.schema_migrations WHERE version=12')).rowCount)
+      await c.query(`CREATE TABLE yard.intake_erasure_jobs (
+        intake_id text PRIMARY KEY CHECK(intake_id ~ '^[A-Za-z0-9_-]{1,100}$'),
+        reason text NOT NULL CHECK(reason IN ('BUYER_REQUEST','EXPIRED')),
+        started_at timestamptz NOT NULL CHECK(isfinite(started_at)));
+      CREATE TABLE yard.intake_erasure_targets (
+        intake_id text NOT NULL REFERENCES yard.intake_erasure_jobs(intake_id),
+        plan_id text NOT NULL CHECK(length(plan_id) BETWEEN 1 AND 200),
+        forgotten boolean NOT NULL DEFAULT false,
+        PRIMARY KEY(intake_id,plan_id));
+      INSERT INTO yard.schema_migrations(version) VALUES(12);`);
     await c.query('COMMIT');
   } catch (error) {
     await c.query('ROLLBACK');
@@ -135,11 +143,88 @@ export class PostgresIntakes implements IntakeStore {
   constructor(
     private readonly pool: pg.Pool,
     wake?: PostgresYardEvents,
+    private readonly lockPool: pg.Pool = pool,
   ) {
     this.wake = wake ?? new PostgresYardEvents(pool);
   }
   subscribe(id: string, wake: () => void) {
     return this.wake.subscribe(`intake:${id}`, wake);
+  }
+  async withLock<T>(id: string, run: () => Promise<T>): Promise<T> {
+    const c = await this.lockPool.connect();
+    const lock = `yard-intake:${id}`;
+    let acquired = false;
+    try {
+      await c.query('SELECT pg_advisory_lock(hashtextextended($1,0))', [lock]);
+      acquired = true;
+      return await run();
+    } finally {
+      try {
+        if (acquired) await c.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [lock]);
+      } finally {
+        c.release();
+      }
+    }
+  }
+  async assertNotErasing(id: string): Promise<void> {
+    const result = await this.pool.query('SELECT 1 FROM yard.intake_erasure_jobs WHERE intake_id=$1', [id]);
+    if (result.rowCount) throw new YardError('CONFLICT');
+  }
+  async prepareErasure(
+    id: string,
+    owner: string,
+    reason: 'BUYER_REQUEST' | 'EXPIRED',
+    now: number,
+    planIds: readonly string[],
+    eligibleBefore?: number,
+  ): Promise<boolean> {
+    const c = await this.pool.connect();
+    try {
+      await c.query('BEGIN');
+      const current = await c.query('SELECT owner,updated_at FROM yard.intakes WHERE id=$1 FOR UPDATE', [id]);
+      if (!current.rowCount) {
+        const erased = await c.query('SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1', [id]);
+        if (erased.rowCount) {
+          await c.query('COMMIT');
+          return true;
+        }
+        throw new YardError('NOT_FOUND');
+      }
+      if (current.rows[0].owner !== owner) throw new YardError('FORBIDDEN');
+      if (eligibleBefore !== undefined && new Date(current.rows[0].updated_at).getTime() >= eligibleBefore) {
+        await c.query('COMMIT');
+        return false;
+      }
+      await c.query(
+        'INSERT INTO yard.intake_erasure_jobs(intake_id,reason,started_at) VALUES($1,$2,$3) ON CONFLICT(intake_id) DO NOTHING',
+        [id, reason, new Date(now)],
+      );
+      for (const planId of planIds)
+        await c.query(
+          'INSERT INTO yard.intake_erasure_targets(intake_id,plan_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
+          [id, planId],
+        );
+      await c.query('COMMIT');
+      return true;
+    } catch (error) {
+      await c.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      c.release();
+    }
+  }
+  async pendingErasureTargets(id: string): Promise<readonly string[]> {
+    const result = await this.pool.query(
+      'SELECT plan_id FROM yard.intake_erasure_targets WHERE intake_id=$1 AND NOT forgotten ORDER BY plan_id',
+      [id],
+    );
+    return result.rows.map((row) => String(row.plan_id));
+  }
+  async completeErasureTarget(id: string, planId: string): Promise<void> {
+    await this.pool.query('UPDATE yard.intake_erasure_targets SET forgotten=true WHERE intake_id=$1 AND plan_id=$2', [
+      id,
+      planId,
+    ]);
   }
   async load(id: string): Promise<IntakeRecord> {
     const result = await this.pool.query('SELECT * FROM yard.intakes WHERE id=$1', [id]);
@@ -185,6 +270,9 @@ export class PostgresIntakes implements IntakeStore {
     try {
       await c.query('BEGIN');
       await c.query("SELECT pg_advisory_xact_lock(hashtextextended('yard-intake:' || $1,0))", [id]);
+      const erasing = await c.query('SELECT 1 FROM yard.intake_erasure_jobs WHERE intake_id=$1', [id]);
+      const erased = await c.query('SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1', [id]);
+      if (erasing.rowCount || erased.rowCount) throw new YardError('CONFLICT');
       const current = await c.query('SELECT * FROM yard.intakes WHERE id=$1 FOR UPDATE', [id]);
       const before = current.rowCount ? record(current.rows[0]) : null;
       if (before && before.owner !== owner) throw new YardError('FORBIDDEN');
@@ -255,11 +343,12 @@ export class PostgresIntakes implements IntakeStore {
     owner: string,
     reason: 'BUYER_REQUEST' | 'EXPIRED',
     now: number,
-  ): Promise<'ERASED' | 'ALREADY'> {
+    eligibleBefore?: number,
+  ): Promise<'ERASED' | 'ALREADY' | 'FRESH'> {
     const c = await this.pool.connect();
     try {
       await c.query('BEGIN');
-      const current = await c.query('SELECT owner FROM yard.intakes WHERE id=$1 FOR UPDATE', [id]);
+      const current = await c.query('SELECT owner,updated_at FROM yard.intakes WHERE id=$1 FOR UPDATE', [id]);
       if (!current.rowCount) {
         const done = await c.query('SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1', [id]);
         await c.query('COMMIT');
@@ -267,10 +356,21 @@ export class PostgresIntakes implements IntakeStore {
         throw new YardError('NOT_FOUND');
       }
       if (current.rows[0].owner !== owner) throw new YardError('FORBIDDEN');
+      if (eligibleBefore !== undefined && new Date(current.rows[0].updated_at).getTime() >= eligibleBefore) {
+        await c.query('COMMIT');
+        return 'FRESH';
+      }
+      const pending = await c.query(
+        'SELECT 1 FROM yard.intake_erasure_targets WHERE intake_id=$1 AND NOT forgotten LIMIT 1',
+        [id],
+      );
+      if (pending.rowCount) throw new Error('Intake cleanup is incomplete');
       await c.query("SELECT set_config('yard.erase_intake', $1, true)", [id]);
       await c.query('DELETE FROM yard.intake_commands WHERE intake_id=$1', [id]);
       await c.query('DELETE FROM yard.intake_events WHERE intake_id=$1', [id]);
       await c.query('DELETE FROM yard.intakes WHERE id=$1', [id]);
+      await c.query('DELETE FROM yard.intake_erasure_targets WHERE intake_id=$1', [id]);
+      await c.query('DELETE FROM yard.intake_erasure_jobs WHERE intake_id=$1', [id]);
       await c.query('INSERT INTO yard.intake_erasures(intake_id,reason,erased_at) VALUES($1,$2,$3)', [
         id,
         reason,
@@ -286,11 +386,26 @@ export class PostgresIntakes implements IntakeStore {
     }
   }
   // T-0217: drafts nobody has touched since `before`, with their owners, oldest first.
-  async idle(before: number, limit = 100): Promise<readonly Readonly<{ id: string; owner: string }>[]> {
+  async idle(
+    before: number,
+    limit = 100,
+    after?: Readonly<{ updatedAt: number; id: string }>,
+  ): Promise<readonly Readonly<{ id: string; owner: string; updatedAt: number }>[]> {
     const result = await this.pool.query(
-      'SELECT id,owner FROM yard.intakes WHERE updated_at < $1 ORDER BY updated_at, id LIMIT $2',
-      [new Date(before).toISOString(), Math.max(1, Math.min(limit, 500))],
+      `SELECT id,owner,updated_at FROM yard.intakes
+       WHERE updated_at < $1 AND ($3::timestamptz IS NULL OR (updated_at,id) > ($3,$4))
+       ORDER BY updated_at, id LIMIT $2`,
+      [
+        new Date(before).toISOString(),
+        Math.max(1, Math.min(limit, 500)),
+        after ? new Date(after.updatedAt) : null,
+        after?.id ?? null,
+      ],
     );
-    return result.rows.map((r) => ({ id: String(r.id), owner: String(r.owner) }));
+    return result.rows.map((r) => ({
+      id: String(r.id),
+      owner: String(r.owner),
+      updatedAt: new Date(r.updated_at).getTime(),
+    }));
   }
 }

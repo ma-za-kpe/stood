@@ -62,6 +62,9 @@ export function yardRuntime(env: Env) {
     return { config: { environment } as Config, notes, jobs: [], start: async () => {}, stop: async () => {} };
 
   const pool = new pg.Pool({ connectionString: url, max: 5 });
+  // Long planning calls hold an intake advisory lock while Foreman uses the main pool. Keep lock sessions isolated
+  // so a full set of planners cannot consume every connection they need to finish their own checkpoints.
+  const intakeLockPool = new pg.Pool({ connectionString: url, max: 1 });
   const clock = async () => Date.now();
   const events = new PostgresYardEvents(pool, clock);
   // ADR-0027: with the real Stood, Yard's PayPal merchant id is the payee of every allowance.
@@ -81,7 +84,7 @@ export function yardRuntime(env: Env) {
   let retention: ReturnType<typeof startLogRetention> | null = null;
   // T-0266/T-0267: hosted sign-in when the owner issued access codes, and the page when it is built into the image.
   const signIn = operators.some((o) => o.accessCode);
-  const intakes = new PostgresIntakes(pool, events);
+  const intakes = new PostgresIntakes(pool, events, intakeLockPool);
   const foreman = planner
     ? new Foreman(
         new GrokPlannerModel({
@@ -259,7 +262,7 @@ export function yardRuntime(env: Env) {
     // Waits for every running pass to finish before the pool closes.
     async stop() {
       await Promise.all([retention?.stop(), ...running.map((job) => job.stop())]);
-      await pool.end();
+      await Promise.all([pool.end(), intakeLockPool.end()]);
     },
   };
 }

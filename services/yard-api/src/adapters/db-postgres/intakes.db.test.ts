@@ -183,3 +183,64 @@ it('erases an intake, its history and receipts for its owner only, once, and lis
   await expect(store.erase('never-existed', 'buyer', 'EXPIRED', input.now)).rejects.toThrow('NOT_FOUND');
   await expect(f.limited.query("DELETE FROM yard.intake_erasures WHERE intake_id='erase-me'")).rejects.toThrow();
 });
+
+it('persists cleanup targets before deletion, resumes after interruption, and fences saves until cleanup completes', async () => {
+  const input = command('resume-erasure');
+  await store.save(input);
+  const targets = ['plan-one', 'plan-two'];
+  await store.withLock(input.id, async () => {
+    const lock = await f.limited.query(
+      "SELECT pg_try_advisory_xact_lock(hashtextextended('yard-intake:' || $1,0)) AS acquired",
+      [input.id],
+    );
+    expect(lock.rows[0].acquired).toBe(false);
+    expect(await store.prepareErasure(input.id, input.owner, 'BUYER_REQUEST', input.now + 1, targets)).toBe(true);
+  });
+
+  await expect(store.save({ ...input, key: 'after-delete-start', now: input.now + 2 })).rejects.toThrow('CONFLICT');
+  expect(await store.pendingErasureTargets(input.id)).toEqual(targets);
+  await expect(store.erase(input.id, input.owner, 'BUYER_REQUEST', input.now + 3)).rejects.toThrow(
+    'Intake cleanup is incomplete',
+  );
+
+  const [firstTarget, secondTarget] = targets;
+  if (!firstTarget || !secondTarget) throw new Error('Test targets are missing');
+  await store.completeErasureTarget(input.id, firstTarget);
+  expect(await store.pendingErasureTargets(input.id)).toEqual([secondTarget]);
+  await store.completeErasureTarget(input.id, secondTarget);
+  expect(await store.erase(input.id, input.owner, 'BUYER_REQUEST', input.now + 4)).toBe('ERASED');
+  expect(await store.pendingErasureTargets(input.id)).toEqual([]);
+  await expect(store.save({ ...input, key: 'resurrect', now: input.now + 5 })).rejects.toThrow('CONFLICT');
+});
+
+it('rechecks the expiry cutoff while holding the row lock so a fresh save survives', async () => {
+  const input = command('fresh-expiry');
+  await store.save(input);
+  const cutoff = input.now + 1000;
+  const updated = await store.save({ ...input, key: 'fresh-save', expectedVersion: 1, now: cutoff + 1 });
+  expect(await store.erase(input.id, input.owner, 'EXPIRED', cutoff + 2, cutoff)).toBe('FRESH');
+  expect(await store.load(input.id)).toEqual(updated);
+});
+
+it('paginates expired drafts with a stable keyset cursor beyond the first hundred', async () => {
+  const base = { ...command('expiry-page'), now: command('expiry-page').now + 86_400_000 };
+  for (let index = 0; index < 101; index++)
+    await store.save({
+      ...base,
+      id: `expiry-page-${String(index).padStart(3, '0')}`,
+      key: `save-${index}`,
+      now: base.now + index,
+    });
+  const seen = new Set<string>();
+  let after: { updatedAt: number; id: string } | undefined;
+  while (true) {
+    const page = await store.idle(base.now + 1000, 100, after);
+    if (!page.length) break;
+    for (const draft of page) seen.add(draft.id);
+    const last = page.at(-1);
+    if (!last) break;
+    after = { updatedAt: last.updatedAt, id: last.id };
+  }
+  for (let index = 0; index < 101; index++)
+    expect(seen.has(`expiry-page-${String(index).padStart(3, '0')}`)).toBe(true);
+});

@@ -30,11 +30,12 @@ function deps(projects: string[] = []) {
           erased.push([id, owner, reason]);
           return id === 'again' || id === 'gone' ? ('ALREADY' as const) : ('ERASED' as const);
         }),
-        idle: vi.fn(async (before: number) => {
+        idle: vi.fn(async (before: number, _limit?: number, after?: { updatedAt: number; id: string }) => {
           expect(before).toBe(now - INTAKE_IDLE_MS);
+          if (after) return [];
           return [
-            { id: 'old', owner: 'buyer' },
-            { id: 'project', owner: 'buyer' },
+            { id: 'old', owner: 'buyer', updatedAt: before - 1 },
+            { id: 'project', owner: 'buyer', updatedAt: before - 1 },
           ];
         }),
       },
@@ -99,5 +100,58 @@ describe('intake erasure', () => {
     expect(d.erased).toEqual([['old', 'buyer', 'EXPIRED']]);
     const ids = [1, 2].map((v) => intakePlanId('buyer', 'old', v));
     expect(d.forgotten).toEqual([...ids, ...ids]);
+  });
+
+  it('rechecks the cutoff before touching plans when a selected draft was edited meanwhile', async () => {
+    const updatedAt = now - INTAKE_IDLE_MS + 1;
+    const intakes = {
+      load: vi.fn(async (id: string) => ({ id, owner: 'buyer', version: 1, updatedAt }) as never),
+      erase: vi.fn(async () => 'ERASED' as const),
+      idle: vi.fn(async (_before: number, _limit?: number, after?: { updatedAt: number; id: string }) =>
+        after ? [] : [{ id: 'edited', owner: 'buyer', updatedAt: updatedAt - 1 }],
+      ),
+    };
+    const projects = {
+      load: vi.fn(async (): Promise<never> => {
+        throw new YardError('NOT_FOUND');
+      }),
+    };
+    const foreman = { forget: vi.fn(async () => {}) };
+    expect(await expireIntakes(now, { intakes, projects, foreman })).toBe(0);
+    expect(projects.load).not.toHaveBeenCalled();
+    expect(foreman.forget).not.toHaveBeenCalled();
+    expect(intakes.erase).not.toHaveBeenCalled();
+  });
+
+  it('continues through the expiry page after an individual cleanup failure', async () => {
+    const before = now - INTAKE_IDLE_MS;
+    const failedPlan = intakePlanId('buyer', 'bad', 1);
+    const intakes = {
+      load: vi.fn(async (id: string) => ({ id, owner: 'buyer', version: 1, updatedAt: before - 1 }) as never),
+      erase: vi.fn(async () => 'ERASED' as const),
+      idle: vi.fn(async (_cutoff: number, _limit?: number, after?: { updatedAt: number; id: string }) =>
+        after
+          ? []
+          : [
+              { id: 'bad', owner: 'buyer', updatedAt: before - 2 },
+              { id: 'good', owner: 'buyer', updatedAt: before - 1 },
+            ],
+      ),
+    };
+    const projects = {
+      load: vi.fn(async (): Promise<never> => {
+        throw new YardError('NOT_FOUND');
+      }),
+    };
+    const foreman = {
+      forget: vi.fn(async (id: string) => {
+        if (id === failedPlan) throw new Error('temporary');
+      }),
+    };
+    await expect(expireIntakes(now, { intakes, projects, foreman })).rejects.toThrow(
+      'Failed to erase 1 expired intake',
+    );
+    expect(intakes.erase).toHaveBeenCalledTimes(1);
+    expect(intakes.erase).toHaveBeenCalledWith('good', 'buyer', 'EXPIRED', now, before);
   });
 });
