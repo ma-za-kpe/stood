@@ -223,7 +223,7 @@ describe('IntakePanel (T-0275)', () => {
     expect(screen.getByText(/Planning is coming next; nothing is signed or funded/)).toBeTruthy();
     expect(screen.getAllByText('Not chosen yet').length).toBeGreaterThan(5);
     act(() => all.at(-1)?.open());
-    expect(screen.getByText(/Intake updates: connected/)).toBeTruthy();
+    expect(await screen.findByText(/Intake updates: connected/)).toBeTruthy();
     await click('Edit choices');
     expect(screen.getByText('1. The idea')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('What are we building?'), { target: { value: 'Partial idea only' } });
