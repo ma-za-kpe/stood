@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.15.0](https://github.com/ma-za-kpe/stood/compare/v0.14.2...v0.15.0) (2026-10-14)
+
+
+### Features
+
+* **c5:** improve issue intake and add Render deploy button ([aa4bd11](https://github.com/ma-za-kpe/stood/commit/aa4bd1140ded7fe5e13789d278ce9b844fb15749))
+* **issues:** add triage status labels ([476d4c2](https://github.com/ma-za-kpe/stood/commit/476d4c258852c9a940fec8060e68718d7e14e631))
+* **issues:** require duplicate checks ([bf92656](https://github.com/ma-za-kpe/stood/commit/bf92656c354df4c1c1000f38f6ea47e07c938094))
+* **issues:** require proposed feature behavior ([0763cf2](https://github.com/ma-za-kpe/stood/commit/0763cf2bb51f5e38a9a4dad75e05962adbbd9a09))
+* **render:** add safe community deploy button ([5644857](https://github.com/ma-za-kpe/stood/commit/564485736e6e7921d243763999240442c2a5c254))
+
+
+### Fixes
+
+* **yard:** recover hosted planning attempts ([#194](https://github.com/ma-za-kpe/stood/issues/194)) ([d8ca358](https://github.com/ma-za-kpe/stood/commit/d8ca3580da3a18c996e99b92acee92d5e9484be1))
+
+
+### Documentation
+
+* **contributing:** cite external product claims ([da4c957](https://github.com/ma-za-kpe/stood/commit/da4c9577fa11343be1635ceecd3048bc6378d39a))
+* **contributing:** require sandbox guide checks ([d1b41c3](https://github.com/ma-za-kpe/stood/commit/d1b41c3c8ca1b1169066c5f7182771cc3b5d94a9))
+* **tasks:** record Foreman pool fix promotion ([#187](https://github.com/ma-za-kpe/stood/issues/187)) ([ce27545](https://github.com/ma-za-kpe/stood/commit/ce27545b2f4d1d89a1a8fbf09e25ffbdf913b837))
+
 ## [0.14.2](https://github.com/ma-za-kpe/stood/compare/v0.14.1...v0.14.2) (2026-10-14)
 
 
