@@ -59,6 +59,16 @@ In this codebase, `PROVIDER_PAYPAL=live` selects the real provider adapter, whil
 
 All three services specify `autoDeployTrigger: checksPass`: a main commit's CI checks must complete successfully before automatic deployment. Blueprint synchronization and service auto-deployment are separate controls; inspect both when investigating an unexpected deploy. See [Render deployment behavior](https://render.com/docs/deploys) and [Blueprint synchronization](https://render.com/docs/infrastructure-as-code).
 
+### Community Deploy to Render button
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fma-za-kpe%2Fstood%2Ftree%2Fdocs%2Frender-button-blueprint)
+
+The button loads a separate root Blueprint from the [`docs/render-button-blueprint` branch](https://github.com/ma-za-kpe/stood/tree/docs/render-button-blueprint). Its three services explicitly build Stood source from `main`, use distinct `stood-demo-*` names, and set `autoDeployTrigger: 'off'`; creating this copy cannot change the hosted demo's root Blueprint or make later upstream pushes deploy into a user's workspace. Owners trigger each update manually from Render. See [Render's button guidance](https://render.com/docs/deploy-to-render) and [Blueprint auto-deploy setting](https://render.com/docs/blueprint-spec#autodeploytrigger).
+
+Review the cost before continuing. The Blueprint creates three paid `starter` services (the supported legacy name for Render's `0.5c-512mb` plan); current compute prices are listed on [Render pricing](https://render.com/pricing) and [compute plans](https://render.com/docs/compute-plans). It does not create a database or external provider accounts. You need a billed Render workspace, Neon Postgres with Stood and Yard database roles, separate Stood and Yard PayPal sandbox apps, a private Cloudflare R2 bucket, Vercel Sandbox project and token, a GitHub App or read token, Grok planner access, and the Yard operator and signing keys. Preview deployments also require a separate Render workspace key and owner ID. Render prompts for every Blueprint value marked `sync: false`; the complete variable-to-service map is in [SETUP](../SETUP.md#variables-on-each-render-service). Sandbox credentials only. Credits may offset usage, but the deployment is not free.
+
+Qualification before publishing the button: `render blueprints validate` accepted this three-service Blueprint. A GET of the published button target returned HTTP 200 and Render redirected it to its Blueprint creation page. No paid services were provisioned for this check. The current hosted-demo Blueprint remains the separate root `render.yaml` and retains its checks-pass deployment behavior.
+
 The root build context is intentional: both Dockerfiles build a workspace with shared packages. Do not change it to an individual service directory without adjusting the workspace build.
 
 ## 4. Migrate before serving new code
