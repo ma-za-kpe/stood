@@ -38,10 +38,10 @@ export async function setupYardRoles(pool: pg.Pool, roles: Roles & Readonly<{ pa
 }
 
 // T-0214, every release: Yard's schema, idempotently, as the owner role.
-export async function migrateYard(pool: pg.Pool, roles: Roles): Promise<void> {
+export async function migrateYard(pool: pg.Pool, roles: Roles, runtimeLogin = roles.runtime): Promise<void> {
   const client = await pool.connect();
   try {
-    await provisionYard(client, roles.owner, roles.runtime);
+    await provisionYard(client, roles.owner, roles.runtime, runtimeLogin);
   } finally {
     client.release();
   }

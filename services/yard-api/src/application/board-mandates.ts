@@ -13,6 +13,7 @@ import {
   terms,
   yardFee,
 } from './board-state.js';
+import { canonicalMandateRequest } from './mandate-request.js';
 
 export class BoardMandates {
   constructor(private readonly context: BoardContext) {}
@@ -47,7 +48,7 @@ export class BoardMandates {
         }));
         const hold = (i: number) => (lines[i] as MandateLine).builderMinor + (lines[i] as MandateLine).feeMinor;
         const days = Math.min(28, Math.max(1, Math.ceil((latest - now) / 86400000)));
-        const request: MandateRequest = {
+        const request: MandateRequest = canonicalMandateRequest({
           // ADR-0027: Yard's PayPal merchant receives the capture; builders are paid out after release. Without a
           // configured merchant (local simulations) the payee is a project reference only a simulator accepts.
           payee_ref: this.context.limits.payee ?? `yard:${id}`,
@@ -72,7 +73,7 @@ export class BoardMandates {
           })),
           window_days: days,
           max_resubmits: 1,
-        };
+        });
         d.mandate = {
           key: `yard-mandate:${fingerprint({ id, actor, key })}`,
           request,

@@ -30,6 +30,22 @@ export class KernelBrowserError extends Error {
     super(`${code}${status === undefined ? '' : ` ${status}`}`);
   }
 }
+export class KernelApprovalBrowserError extends Error {
+  readonly code: 'KERNEL_APPROVAL_BROWSER_FAILED' = 'KERNEL_APPROVAL_BROWSER_FAILED';
+  constructor(
+    readonly stage:
+      | 'SESSION_RESPONSE'
+      | 'BROWSER_CONNECT'
+      | 'PAYPAL_NAVIGATION'
+      | 'PAYPAL_INITIAL_PAGE'
+      | 'PAYPAL_LOGIN'
+      | 'PAYPAL_APPROVAL_PAGE'
+      | 'PAYPAL_APPROVE'
+      | 'BROWSER_CLOSE',
+  ) {
+    super(`KERNEL_APPROVAL_BROWSER_FAILED ${stage}`);
+  }
+}
 type Config = Readonly<{
   apiKey: string;
   buyerEmail: string;
@@ -122,32 +138,50 @@ export class KernelSandboxApprover {
     const target = URL.canParse(link) ? new URL(link) : null;
     if (target?.protocol !== 'https:' || target.hostname !== 'www.sandbox.paypal.com') throw new Error('NOT_SANDBOX');
     const created = await this.createBrowser();
-    const session = (await created.json()) as { session_id?: string; cdp_ws_url?: string };
-    if (typeof session.session_id !== 'string' || !session.session_id.trim()) throw new Error('KERNEL_UNEXPECTED');
+    let session: { session_id?: string; cdp_ws_url?: string };
+    try {
+      session = (await created.json()) as { session_id?: string; cdp_ws_url?: string };
+    } catch {
+      throw new KernelApprovalBrowserError('SESSION_RESPONSE');
+    }
+    if (typeof session.session_id !== 'string' || !session.session_id.trim())
+      throw new KernelApprovalBrowserError('SESSION_RESPONSE');
     try {
       if (typeof session.cdp_ws_url !== 'string' || !session.cdp_ws_url.startsWith('wss://'))
-        throw new Error('KERNEL_UNEXPECTED');
-      if (!this.config.connect) throw new Error('KERNEL_NO_BROWSER');
-      const browser = await this.config.connect(session.cdp_ws_url);
+        throw new KernelApprovalBrowserError('SESSION_RESPONSE');
+      if (!this.config.connect) throw new KernelApprovalBrowserError('BROWSER_CONNECT');
+      let stage: KernelApprovalBrowserError['stage'] = 'BROWSER_CONNECT';
+      let browser: Awaited<ReturnType<NonNullable<Config['connect']>>>;
+      try {
+        browser = await this.config.connect(session.cdp_ws_url);
+      } catch {
+        throw new KernelApprovalBrowserError(stage);
+      }
+      let closeFailed = false;
       try {
         const page = browser.page;
         const english = new URL(target.href);
         english.searchParams.set('locale.x', 'en_US');
+        stage = 'PAYPAL_NAVIGATION';
         await page.goto(english.href);
+        stage = 'PAYPAL_INITIAL_PAGE';
         await page.waitForSelector(`${EMAIL}, ${APPROVE}`, { timeout: 60_000 });
         // Screenshots are evidence only: a failed capture never stops an approval.
         const capture = (step: string) => page.capture?.(step).catch(() => undefined);
         if (await page.isVisible(EMAIL)) {
           await capture('1-sign-in');
+          stage = 'PAYPAL_LOGIN';
           await page.fill(EMAIL, this.config.buyerEmail);
           await page.click(NEXT);
           await page.waitForSelector(PASSWORD, { timeout: 30_000 });
           await capture('2-password');
           await page.fill(PASSWORD, this.config.buyerPassword);
           await page.click(LOGIN);
+          stage = 'PAYPAL_APPROVAL_PAGE';
           await page.waitForSelector(APPROVE, { timeout: 60_000 });
         }
         await capture('3-approve');
+        stage = 'PAYPAL_APPROVE';
         await page.click(APPROVE);
         // With a return URL PayPal hands the buyer back; without one (plain funding orders) it stays put. Either way
         // the caller confirms approval from PayPal's API (the sandbox run polls for APPROVED), never from the page.
@@ -155,9 +189,15 @@ export class KernelSandboxApprover {
           .waitForURL((u) => u.hostname !== 'paypal.com' && !u.hostname.endsWith('.paypal.com'), { timeout: 15_000 })
           .catch(() => undefined);
         await capture('4-approved');
+      } catch (error) {
+        if (error instanceof KernelApprovalBrowserError) throw error;
+        throw new KernelApprovalBrowserError(stage);
       } finally {
-        await browser.close();
+        await browser.close().catch(() => {
+          closeFailed = true;
+        });
       }
+      if (closeFailed) throw new KernelApprovalBrowserError('BROWSER_CLOSE');
     } finally {
       await this.http(`${this.base}/browsers/${encodeURIComponent(session.session_id)}`, {
         method: 'DELETE',

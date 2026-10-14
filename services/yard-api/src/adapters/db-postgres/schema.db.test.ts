@@ -17,10 +17,10 @@ const connection = new URL(`postgres://db:5432/${name}`);
 connection.username = runtime;
 connection.password = password;
 const limited = new pg.Pool({ connectionString: connection.toString() });
-async function provision(o = owner, r = runtime) {
+async function provision(o = owner, r = runtime, login = r) {
   const client = await pool.connect();
   try {
-    await provisionYard(client, o, r);
+    await provisionYard(client, o, r, login);
   } finally {
     client.release();
   }
@@ -80,6 +80,50 @@ describe('Yard schema and runtime permissions against real Stood migrations (T-0
     await expect(limited.query('TRUNCATE yard.work_orders_probe')).rejects.toThrow();
     await limited.query('DELETE FROM yard.work_orders_probe');
   });
+  it('keeps rotating login identities inside a no-login Yard role group', async () => {
+    const group = `${runtime}_group`;
+    const login = `${runtime}_rotated`;
+    const rotatedUrl = new URL(`postgres://db:5432/${name}`);
+    rotatedUrl.username = login;
+    rotatedUrl.password = password;
+    const rotated = new pg.Pool({ connectionString: rotatedUrl.toString() });
+    const validate = async () => {
+      const client = await pool.connect();
+      try {
+        await provisionYard(client, owner, group, login);
+      } finally {
+        client.release();
+      }
+    };
+    await admin.query(`CREATE ROLE ${group} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
+    await admin.query(
+      `CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`,
+    );
+    try {
+      await expect(validate()).rejects.toThrow('not a member');
+      await admin.query(`GRANT ${group} TO ${login}`);
+      await admin.query(`GRANT ${owner} TO ${group}`);
+      await expect(validate()).rejects.toThrow('migration-owner membership');
+      await admin.query(`REVOKE ${owner} FROM ${group}`);
+      await validate();
+      const ownerClient = await pool.connect();
+      try {
+        await ownerClient.query(`SET ROLE ${owner}`);
+        await ownerClient.query('CREATE TABLE yard.rotation_probe (id text PRIMARY KEY)');
+      } finally {
+        await ownerClient.query('RESET ROLE');
+        ownerClient.release();
+      }
+      await rotated.query("INSERT INTO yard.rotation_probe VALUES('ok')");
+      await expect(rotated.query('SELECT * FROM public.payment_streams')).rejects.toThrow(/permission denied/);
+      await expect(rotated.query('CREATE TABLE yard.rotation_probe_ddl (id int)')).rejects.toThrow(/permission denied/);
+    } finally {
+      await rotated.end();
+      await admin.query(`DROP ROLE ${login}`);
+      await pool.query(`DROP OWNED BY ${group}`);
+      await admin.query(`DROP ROLE ${group}`);
+    }
+  });
   it('rejects broad grants or membership before changing permissions', async () => {
     await pool.query(`GRANT SELECT ON public.payment_streams TO ${runtime}`);
     await expect(provision()).rejects.toThrow('Stood');
@@ -100,6 +144,7 @@ describe('Yard schema and runtime permissions against real Stood migrations (T-0
     await expect(provision('missing_role')).rejects.toThrow();
     await expect(provision(owner, 'bad; DROP DATABASE stood')).rejects.toThrow();
     await expect(provision(owner, owner)).rejects.toThrow();
+    await expect(provision(owner, runtime, owner)).rejects.toThrow();
     await pool.query('ALTER SCHEMA yard OWNER TO stood');
     await expect(provision()).rejects.toThrow('owner');
     await pool.query(`ALTER SCHEMA yard OWNER TO ${owner}`);

@@ -1,0 +1,57 @@
+{
+  "run": "2026-10-13T14-35-45-231Z",
+  "base": "https://stood-api.onrender.com",
+  "repository": "ma-za-kpe/yard-sandbox",
+  "allowance": "alw_c9b00938-1d9c-41b8-9b1f-ebfeea763a0d",
+  "tranche": "trn_50209341-91fa-45a7-8388-3476e6f09ea0",
+  "version": 2,
+  "termsHash": "1f63f980541326ace1f0d697f9868c0f3862909dc1f6e897667c5224339162fd",
+  "package": "pkg_f01b2ddb-31fc-4df6-ad7e-a62c5f72f188",
+  "events": [
+    { "at": "2026-10-13T14:35:46.245Z", "step": "preflight", "apiVersion": "1.5.0", "sandboxPaymentsReady": true },
+    {
+      "at": "2026-10-13T14:36:19.181Z",
+      "step": "baseline",
+      "id": "bl_6c982b89-6040-4445-a502-abcc7e11f582",
+      "status": "DONE",
+      "tests": [{ "id": "booking-v1", "status": "FAIL" }]
+    },
+    {
+      "at": "2026-10-13T14:36:19.476Z",
+      "step": "allowance",
+      "id": "alw_c9b00938-1d9c-41b8-9b1f-ebfeea763a0d",
+      "trancheId": "trn_50209341-91fa-45a7-8388-3476e6f09ea0"
+    },
+    { "at": "2026-10-13T14:36:35.875Z", "step": "kernel", "approving": "www.sandbox.paypal.com" },
+    { "at": "2026-10-13T14:37:19.372Z", "step": "mandate", "version": 1, "status": "SIGNED" },
+    {
+      "at": "2026-10-13T14:37:19.892Z",
+      "step": "amendment",
+      "version": 2,
+      "termsHash": "1f63f980541326ace1f0d697f9868c0f3862909dc1f6e897667c5224339162fd"
+    },
+    { "at": "2026-10-13T14:37:35.896Z", "step": "kernel", "approving": "www.sandbox.paypal.com" },
+    { "at": "2026-10-13T14:38:21.116Z", "step": "mandate", "version": 2, "status": "SIGNED" },
+    {
+      "at": "2026-10-13T14:38:39.859Z",
+      "step": "funding",
+      "termsVersion": 2,
+      "status": "HELD",
+      "amountMinor": 100,
+      "currency": "USD"
+    },
+    {
+      "at": "2026-10-13T14:38:40.269Z",
+      "step": "package",
+      "id": "pkg_f01b2ddb-31fc-4df6-ad7e-a62c5f72f188",
+      "commit": "5ba5a5a4f65a929f6cac039c379fc48d9bb736ee"
+    },
+    {
+      "at": "2026-10-13T14:39:43.928Z",
+      "step": "decision",
+      "state": "RELEASED",
+      "settlement": "CAPTURE",
+      "captureReference": "7DK490483J3777634"
+    }
+  ]
+}

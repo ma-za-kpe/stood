@@ -89,6 +89,7 @@ it('reserves the exact frozen terms before calling Stood and maps each tranche t
               testBundleHash: '0'.repeat(64),
               manifestHash: 'c'.repeat(64),
               testIds: ['works'],
+              minMutation: 0,
             },
           },
           {
@@ -101,6 +102,7 @@ it('reserves the exact frozen terms before calling Stood and maps each tranche t
               testBundleHash: '1'.repeat(64),
               manifestHash: 'c'.repeat(64),
               testIds: ['works'],
+              minMutation: 0,
             },
           },
         ],
