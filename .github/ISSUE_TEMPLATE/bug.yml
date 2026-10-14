@@ -2,6 +2,14 @@ name: Bug report
 description: Something behaves differently from the docs or specs
 labels: [bug]
 body:
+  - type: checkboxes
+    id: duplicates
+    attributes:
+      label: Duplicate check
+      description: Search both open and closed issues before filing.
+      options:
+        - label: I checked open and closed issues and this is not a duplicate.
+          required: true
   - type: textarea
     id: what
     attributes:

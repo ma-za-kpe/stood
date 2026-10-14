@@ -2,6 +2,14 @@ name: Feature or use case
 description: Propose a capability or a new evidence profile
 labels: [enhancement]
 body:
+  - type: checkboxes
+    id: duplicates
+    attributes:
+      label: Duplicate check
+      description: Search both open and closed issues before filing.
+      options:
+        - label: I checked open and closed issues and this is not a duplicate.
+          required: true
   - type: textarea
     id: problem
     attributes:
