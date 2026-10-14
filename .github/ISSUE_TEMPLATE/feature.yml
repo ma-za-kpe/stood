@@ -17,6 +17,13 @@ body:
     validations:
       required: true
   - type: textarea
+    id: proposed-solution
+    attributes:
+      label: What behavior or solution do you propose?
+      description: Describe the outcome or approach. It is fine to leave implementation details open.
+    validations:
+      required: true
+  - type: textarea
     id: evidence
     attributes:
       label: What evidence proves it? Which generic checks (S16) would it use?
