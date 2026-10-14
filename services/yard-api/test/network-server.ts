@@ -23,6 +23,10 @@ import { browserSession } from './fakes/browser-session.js';
 
 if (process.env.NETWORK_MOCK !== 'true' || process.env.APP_ENV !== 'ci') throw new Error('Mock Yard refused');
 const pool = new pg.Pool({ connectionString: 'postgres://yard_runtime:sim-yard-database-only@db:5432/stood_mock' });
+const foremanCoordinatorPool = new pg.Pool({
+  connectionString: 'postgres://yard_runtime:sim-yard-database-only@db:5432/stood_mock',
+  max: 5,
+});
 const intakeLockPool = new pg.Pool({
   connectionString: 'postgres://yard_runtime:sim-yard-database-only@db:5432/stood_mock',
   max: 5,
@@ -45,7 +49,7 @@ const foreman = new Foreman(
   new ScriptedPlannerModel('ci'),
   new PostgresSaver(pool, undefined, { schema: 'yard' }),
   true,
-  new PostgresForemanCoordinator(pool),
+  new PostgresForemanCoordinator(foremanCoordinatorPool),
 );
 const board = new Board(events);
 const logs = new PostgresSiteLogs(pool, events);
@@ -161,6 +165,6 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () => {
     retention.stop();
     server.close(() => {
-      void Promise.all([pool.end(), intakeLockPool.end()]);
+      void Promise.all([pool.end(), intakeLockPool.end(), foremanCoordinatorPool.end()]);
     });
   });
