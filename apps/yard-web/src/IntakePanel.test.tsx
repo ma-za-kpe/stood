@@ -2,7 +2,8 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, render, streams } from '../test/harness.js';
-import { completeDraft, intakeServer, plan, progress } from '../test/intake-server.js';
+import { completeDraft, intakeServer, plan, progress, T } from '../test/intake-server.js';
+import { PLANNER_TIMEOUT_MS } from './http.js';
 import { IntakePanel } from './IntakePanel.js';
 
 afterEach(() => {
@@ -10,6 +11,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const click = async (name: string | RegExp) => {
+  const button = screen.getByRole('button', { name });
+  if (name === 'Start a private intake')
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
   await act(async () => fireEvent.click(screen.getByRole('button', { name })));
 };
 const saved = () =>
@@ -298,6 +302,28 @@ describe('IntakePanel (T-0275)', () => {
     expect(calls.some((call) => call.path.endsWith('/plan') && call.body === '{}')).toBe(true);
   });
 
+  it('waits for hosted planner capabilities before creating repository defaults', async () => {
+    streams();
+    const server = intakeServer();
+    let resolveCapabilities: (() => void) | undefined;
+    const capabilities = new Promise<{ body: { foreman: true; repository: string } }>((resolve) => {
+      resolveCapabilities = () => resolve({ body: { foreman: true, repository: 'owner/sandbox' } });
+    });
+    const calls = api((call) => (call.path === '/capabilities' ? capabilities : server.reply(call)));
+    render(<IntakePanel enabled hosted />);
+
+    const start = screen.getByRole('button', { name: 'Start a private intake' }) as HTMLButtonElement;
+    expect(start.disabled).toBe(true);
+    await waitFor(() => expect(resolveCapabilities).toBeTypeOf('function'));
+    expect(calls.some((call) => call.method === 'POST' && call.path === '/intakes')).toBe(false);
+
+    await act(async () => resolveCapabilities?.());
+    await waitFor(() => expect(start.disabled).toBe(false));
+    await click('Start a private intake');
+    await saved();
+    expect(server.state.record?.draft).toMatchObject({ handover: { repository: 'owner/sandbox' } });
+  });
+
   it('adds defaults to a saved incomplete brief without replacing its existing answers', async () => {
     streams();
     const server = intakeServer();
@@ -326,6 +352,11 @@ describe('IntakePanel (T-0275)', () => {
   });
 
   it('lets an eligible hosted buyer request a draft blueprint when Foreman is available', async () => {
+    const timeouts: number[] = [];
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
+      timeouts.push(milliseconds);
+      return new AbortController().signal;
+    });
     streams();
     const server = intakeServer({ draft: completeDraft(), step: 7 });
     const calls = api(server.reply);
@@ -338,6 +369,7 @@ describe('IntakePanel (T-0275)', () => {
     expect(await screen.findByText('Blueprint’s ready. Read the tests.')).toBeTruthy();
     expect(calls.some((call) => call.path.endsWith('/plan') && call.method === 'POST')).toBe(true);
     expect(calls.some((call) => call.path === '/capabilities')).toBe(true);
+    expect(timeouts.at(-1)).toBe(PLANNER_TIMEOUT_MS);
   });
 
   it('rechecks completeness at click time if the saved deadline expires after rendering', async () => {
@@ -409,6 +441,16 @@ describe('IntakePanel (T-0275)', () => {
   it('shows the capability check while pending and ignores its reply after unmount', async () => {
     streams();
     const server = intakeServer({ draft: completeDraft(), step: 7 });
+    server.state.record = {
+      id: 'saved-pending-capability',
+      owner: 'buyer',
+      version: 1,
+      step: 7,
+      draft: completeDraft(),
+      createdAt: T,
+      updatedAt: T,
+    };
+    window.history.replaceState(null, '', '?intake=saved-pending-capability');
     let finish: (() => void) | undefined;
     api((call) =>
       call.path === '/capabilities'
@@ -418,9 +460,7 @@ describe('IntakePanel (T-0275)', () => {
         : server.reply(call),
     );
     const view = render(<IntakePanel enabled hosted />);
-    await click('Start a private intake');
-    await saved();
-    await click('Review my choices');
+    await screen.findByRole('heading', { name: 'Review your project brief.' });
     expect(screen.getByText(/Checking whether Foreman planning is available/)).toBeTruthy();
     view.unmount();
     finish?.();

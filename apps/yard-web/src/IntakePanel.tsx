@@ -8,7 +8,7 @@ import { BlueprintEditor } from './BlueprintEditor.js';
 import type { AcceptanceCase, EditableDraft } from './blueprint-edit.js';
 import { CostBreakdown } from './CostBreakdown.js';
 import { browserRequestKey } from './claim-keys.js';
-import { ApiError, api } from './http.js';
+import { ApiError, api, PLANNER_TIMEOUT_MS } from './http.js';
 import {
   foremanChoices,
   formDraft,
@@ -206,7 +206,8 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     return () => source.close();
   }, [enabled, record]);
   const request = useCallback(
-    (path: string, options?: RequestInit) => api(path, { ...options, signal: controller.current?.signal ?? null }),
+    (path: string, options?: RequestInit, timeoutMs?: number) =>
+      api(path, { ...options, signal: controller.current?.signal ?? null }, timeoutMs),
     [],
   );
   const install = (value: unknown) => {
@@ -384,11 +385,15 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     actorRef.current?.send({ type: 'PLAN' });
     try {
       const next = planSchema.parse(
-        await request(`/intakes/${current.id}/plan`, {
-          method: 'POST',
-          headers: { 'If-Match': String(current.version), 'Idempotency-Key': `plan-${current.version}` },
-          body: '{}',
-        }),
+        await request(
+          `/intakes/${current.id}/plan`,
+          {
+            method: 'POST',
+            headers: { 'If-Match': String(current.version), 'Idempotency-Key': `plan-${current.version}` },
+            body: '{}',
+          },
+          PLANNER_TIMEOUT_MS,
+        ),
       );
       if (live.current) {
         setPlan(next);
@@ -414,11 +419,15 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     actorRef.current?.send({ type: 'PLAN' });
     try {
       const next = planSchema.parse(
-        await request(`/intakes/${current.id}/plan/recover`, {
-          method: 'POST',
-          headers: { 'If-Match': String(current.version) },
-          body: '{}',
-        }),
+        await request(
+          `/intakes/${current.id}/plan/recover`,
+          {
+            method: 'POST',
+            headers: { 'If-Match': String(current.version) },
+            body: '{}',
+          },
+          PLANNER_TIMEOUT_MS,
+        ),
       );
       if (live.current) {
         setPlan(next);
@@ -579,7 +588,11 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
               Describe what you want to build. This hosted sandbox starts with editable recommendations, including a
               $100 USD budget, a 21-day target and its configured repository. Review them before planning.
             </p>
-            <button type="button" disabled={busy} onClick={() => void open(true)}>
+            <button
+              type="button"
+              disabled={busy || (hosted && foremanCapability === 'checking')}
+              onClick={() => void open(true)}
+            >
               Start a private intake
             </button>
             <details open={!!resumeId} className="resume-project">
