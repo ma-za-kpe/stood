@@ -10,6 +10,8 @@ import { PostgresRunClaims } from './adapters/db-postgres/run-claims.js';
 import { PostgresRunnerJobs } from './adapters/db-postgres/runner-jobs.js';
 import * as schema from './adapters/db-postgres/schema.js';
 import { PostgresTranches } from './adapters/db-postgres/tranches.js';
+import { PostgresUploads } from './adapters/db-postgres/uploads.js';
+import { S3EvidenceStore } from './adapters/evidence/s3-evidence-store.js';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
 import { PayPalAdapter } from './adapters/payments-paypal/adapter.js';
 import { reportSigner } from './adapters/runner/report-signer.js';
@@ -20,6 +22,7 @@ import { runClaimed } from './application/claimed-queue.js';
 import { runCodeJob } from './application/code-run.js';
 import { runReconciliationAudit } from './application/reconciliation-audit-run.js';
 import { reconciliationTick } from './application/reconciliation-worker.js';
+import { cleanupExpiredUploads } from './application/upload-cleanup.js';
 import type { ProviderTransactions } from './ports/provider-transactions.js';
 import { reconciliationRuntime } from './reconciliation-runtime.js';
 import { githubReadAccess, RUNNER_ID, RUNNER_LABEL_HASH, runnerSettings } from './runner-runtime.js';
@@ -45,6 +48,34 @@ if (!missing.length && problem) {
     const queue = new PostgresReconciliationQueue(pool);
     const db = drizzle(pool, { schema });
     const findings = new PostgresReconciliationFindings(db);
+    const uploadCleanupEnabled = process.env.INCOMPLETE_UPLOAD_CLEANUP === 'on';
+    const uploadCleanupConfigured = [
+      process.env.STOOD_EVIDENCE_S3_ENDPOINT,
+      process.env.STOOD_EVIDENCE_S3_BUCKET,
+      process.env.STOOD_EVIDENCE_S3_ACCESS_KEY_ID,
+      process.env.STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY,
+    ].every((value) => !!value?.trim());
+    let uploadCleaner: { store: PostgresUploads; objects: S3EvidenceStore } | null = null;
+    if (uploadCleanupEnabled && uploadCleanupConfigured) {
+      try {
+        uploadCleaner = {
+          store: new PostgresUploads(db),
+          objects: new S3EvidenceStore({
+            endpoint: process.env.STOOD_EVIDENCE_S3_ENDPOINT ?? '',
+            bucket: process.env.STOOD_EVIDENCE_S3_BUCKET ?? '',
+            accessKeyId: process.env.STOOD_EVIDENCE_S3_ACCESS_KEY_ID ?? '',
+            secretAccessKey: process.env.STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY ?? '',
+          }),
+        };
+      } catch {
+        // A bad optional cleanup configuration must not stop reconciliation or settlement.
+      }
+    }
+    process.stdout.write(
+      uploadCleaner
+        ? 'Abandoned upload cleanup on; completed uploads are excluded.\n'
+        : `Abandoned upload cleanup off${uploadCleanupEnabled ? ': bucket config missing' : ''}.\n`,
+    );
     // T-0155: hourly ledger-versus-PayPal audit. Isolated: an audit failure never stops reconciliation.
     const search = providers.transport as Partial<ProviderTransactions>;
     // T-0260: saved-PayPal mandates and tranche funding, advanced by their own use cases each tick.
@@ -112,6 +143,22 @@ if (!missing.length && problem) {
             for (const r of ran) process.stdout.write(`Code runner: baseline ${r.id} ${r.outcome}.\n`);
           } catch {
             process.stdout.write('Code runner: baseline queue unavailable.\n');
+          }
+          await setTimeout(60_000, undefined, { signal: abort.signal }).catch(() => undefined);
+        }
+      })();
+    }
+    if (uploadCleaner) {
+      void (async () => {
+        while (!abort.signal.aborted) {
+          try {
+            const cleaned = await cleanupExpiredUploads(uploadCleaner.store, uploadCleaner.objects, Date.now());
+            if (cleaned.deleted || cleaned.absent || cleaned.failed)
+              process.stdout.write(
+                `Abandoned uploads: ${cleaned.deleted} objects removed, ${cleaned.absent} already absent, ${cleaned.failed} deferred.\n`,
+              );
+          } catch {
+            process.stderr.write('Abandoned upload cleanup unavailable; it will retry.\n');
           }
           await setTimeout(60_000, undefined, { signal: abort.signal }).catch(() => undefined);
         }

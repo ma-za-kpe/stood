@@ -111,6 +111,9 @@ services:
         sync: false
       - key: STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY
         sync: false
+      # T-0359: only expired OPEN sessions; deliberately off until the owner authorizes incomplete-object cleanup.
+      - key: INCOMPLETE_UPLOAD_CLEANUP
+        value: "off"
       # GitHub reads (#77): the Yard GitHub App's short-lived, read-only installation tokens. The App's private key is
       # prompted (the same one stood-yard-api uses). GITHUB_READ_TOKEN is the fallback while the key is not set.
       - key: GITHUB_APP_ID

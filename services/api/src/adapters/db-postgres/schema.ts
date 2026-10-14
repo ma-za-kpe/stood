@@ -569,6 +569,7 @@ export const uploadSessions = pgTable(
     completedAt: bigint('completed_at', { mode: 'number' }),
   },
   (t) => [
+    index('upload_sessions_cleanup_due').on(t.expiresAt, t.id).where(sql`${t.status} = 'OPEN'`),
     unique('upload_request_identity').on(t.platformId, t.trancheId, t.key),
     foreignKey({
       columns: [t.trancheId, t.platformId],
@@ -587,5 +588,24 @@ export const uploadSessions = pgTable(
       'upload_status_valid',
       sql`(${t.status} = 'OPEN' AND ${t.completedAt} IS NULL) OR (${t.status} = 'COMPLETE' AND ${t.completedAt} >= ${t.createdAt} AND ${t.completedAt} < ${t.expiresAt})`,
     ),
+  ],
+);
+
+// T-0359: object-level receipts make deletion of abandoned OPEN uploads resumable. Completed sessions are never
+// selected by the janitor, and this append-only table records only exact session-owned object keys.
+export const uploadCleanupReceipts = pgTable(
+  'upload_cleanup_receipts',
+  {
+    sessionId: text('session_id').notNull(),
+    objectKey: text('object_key').notNull(),
+    outcome: text().$type<'DELETED' | 'ABSENT'>().notNull(),
+    recordedAt: bigint('recorded_at', { mode: 'number' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.objectKey] }),
+    foreignKey({ columns: [t.sessionId], foreignColumns: [uploadSessions.id] }),
+    check('upload_cleanup_key_valid', sql`${t.objectKey} ~ ('^uploads/' || ${t.sessionId} || '/[0-9]+-[a-f0-9]{64}$')`),
+    check('upload_cleanup_outcome_valid', sql`${t.outcome} IN ('DELETED', 'ABSENT')`),
+    check('upload_cleanup_time_valid', sql`${t.recordedAt} >= 0`),
   ],
 );

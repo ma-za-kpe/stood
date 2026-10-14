@@ -85,3 +85,36 @@ it('protects object identities and completed receipts against direct database re
   ).rejects.toThrow('immutable');
   await expect(pool.query('DELETE FROM upload_sessions WHERE id = $1', [open.id])).rejects.toThrow('immutable');
 });
+
+it('cleans only expired OPEN upload objects, resumes per-object receipts, and excludes completed photos', async () => {
+  const id = await tranche();
+  const base = Date.now() - 2 * 24 * 60 * 60_000;
+  const completeOpen = await store.reserve('platform', id, 'complete-first', 'c'.repeat(64), photos, base);
+  const completePhoto = completeOpen.photos[0];
+  if (!completePhoto) throw new Error('Expected a declared photo');
+  await store.complete('platform', id, completeOpen.id, base + 1);
+  const firstPhoto = photos[0];
+  if (!firstPhoto) throw new Error('Expected a declared photo');
+  const abandoned = await store.reserve(
+    'platform',
+    id,
+    'abandoned',
+    'd'.repeat(64),
+    [firstPhoto, { sha256: 'e'.repeat(64), bytes: 5, contentType: 'image/jpeg' as const }],
+    base + 2,
+  );
+  const [abandonedFirst, abandonedSecond] = abandoned.photos;
+  if (!abandonedFirst || !abandonedSecond) throw new Error('Expected two declared photos');
+  const now = abandoned.expiresAt + 60 * 60_000;
+  expect(await store.expiredOpen(now, 60 * 60_000, 25)).toEqual([{ id: abandoned.id, photos: abandoned.photos }]);
+  expect(await store.recordCleanup(abandoned.id, abandonedFirst.key, 'DELETED', now, 60 * 60_000)).toBe(true);
+  expect(await store.recordCleanup(abandoned.id, abandonedFirst.key, 'DELETED', now, 60 * 60_000)).toBe(false);
+  expect(await store.expiredOpen(now, 60 * 60_000, 25)).toEqual([{ id: abandoned.id, photos: [abandonedSecond] }]);
+  expect(await store.recordCleanup(completeOpen.id, completePhoto.key, 'DELETED', now, 60 * 60_000)).toBe(false);
+  await expect(
+    pool.query('UPDATE upload_cleanup_receipts SET outcome = $1 WHERE session_id = $2', ['ABSENT', abandoned.id]),
+  ).rejects.toThrow('immutable');
+  await expect(pool.query('DELETE FROM upload_cleanup_receipts WHERE session_id = $1', [abandoned.id])).rejects.toThrow(
+    'immutable',
+  );
+});
