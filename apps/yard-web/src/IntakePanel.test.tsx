@@ -288,16 +288,23 @@ describe('IntakePanel (T-0275)', () => {
     expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
   });
 
-  it('shows an unknown capability state when the status check cannot be reached', async () => {
+  it('lets a buyer recheck capability after the status request fails', async () => {
     streams();
     const server = intakeServer({ draft: completeDraft(), step: 7, capabilitiesStatus: 503 });
-    api(server.reply);
+    const calls = api(server.reply);
     render(<IntakePanel enabled hosted />);
     await click('Start a private intake');
     await saved();
     await click('Review my choices');
     expect(await screen.findByText(/Planning availability could not be checked/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
+    await click('Check planning availability again');
+    expect(await screen.findByText(/Planning availability could not be checked/)).toBeTruthy();
+    expect(calls.filter((call) => call.path === '/capabilities')).toHaveLength(2);
+    server.state.capabilitiesStatus = undefined;
+    await click('Check planning availability again');
+    expect(await screen.findByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeTruthy();
+    expect(calls.filter((call) => call.path === '/capabilities')).toHaveLength(3);
   });
 
   it('shows the capability check while pending and ignores its reply after unmount', async () => {
@@ -320,7 +327,7 @@ describe('IntakePanel (T-0275)', () => {
     finish?.();
   });
 
-  it('reports planning becoming unavailable after the capability check', async () => {
+  it('keeps transient planning failures retryable and exposes saved-attempt recovery', async () => {
     streams();
     const server = intakeServer({ draft: completeDraft(), step: 7 });
     server.state.failPlan = true;
@@ -330,9 +337,83 @@ describe('IntakePanel (T-0275)', () => {
     await saved();
     await click('Review my choices');
     await click('Ask the Foreman for a blueprint');
-    expect(await screen.findByText(/Foreman planning is currently unavailable/)).toBeTruthy();
-    expect(screen.getByText(/Your brief is saved; try again later/)).toBeTruthy();
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Recover saved planning attempt' })).toBeTruthy();
     expect(calls.filter((call) => call.path.endsWith('/plan'))).toHaveLength(1);
+    expect(calls.filter((call) => call.path === '/capabilities')).toHaveLength(1);
+    server.state.failRecover = true;
+    await click('Recover saved planning attempt');
+    expect((await screen.findByRole('alert')).textContent).toMatch(/saved planning attempt could not be recovered/);
+    expect(screen.getByRole('button', { name: 'Recover saved planning attempt' })).toBeTruthy();
+    server.state.failRecover = false;
+    await click('Recover saved planning attempt');
+    expect(await screen.findByText('Blueprint’s ready. Read the tests.')).toBeTruthy();
+    expect(calls.filter((call) => /\/intakes\/[^/]+\/plan\/recover$/.test(call.path))).toHaveLength(2);
+  });
+
+  it('does not update React state when a recovery request finishes after unmount', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    server.state.failPlan = true;
+    let finishRecovery: ((response: { status?: number; body?: unknown }) => void) | undefined;
+    api((call) =>
+      call.path.endsWith('/plan/recover')
+        ? new Promise((resolve) => {
+            finishRecovery = resolve;
+          })
+        : server.reply(call),
+    );
+    const view = render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    await click('Ask the Foreman for a blueprint');
+    await click('Recover saved planning attempt');
+    await waitFor(() => expect(finishRecovery).toBeDefined());
+    view.unmount();
+    finishRecovery?.({ status: 503 });
+    await act(async () => Promise.resolve());
+  });
+
+  it('ignores a successful recovery reply after the buyer leaves the page', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    server.state.failPlan = true;
+    let finishRecovery: ((response: { status?: number; body?: unknown }) => void) | undefined;
+    api((call) =>
+      call.path.endsWith('/plan/recover')
+        ? new Promise((resolve) => {
+            finishRecovery = resolve;
+          })
+        : server.reply(call),
+    );
+    const view = render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    await click('Ask the Foreman for a blueprint');
+    await click('Recover saved planning attempt');
+    await waitFor(() => expect(finishRecovery).toBeDefined());
+    view.unmount();
+    finishRecovery?.({ body: plan() });
+    await act(async () => Promise.resolve());
+  });
+
+  it('honors a successful capability recheck that confirms Foreman is not configured', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7, capabilitiesStatus: 503 });
+    api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    expect(await screen.findByText(/Planning availability could not be checked/)).toBeTruthy();
+    server.state.capabilitiesStatus = undefined;
+    server.state.foreman = false;
+    await click('Check planning availability again');
+    expect(await screen.findByText(/Foreman planning is unavailable in this Yard deployment/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
   });
 
   it('stops saving when another tab changed the answers, until the saved version is reloaded', async () => {

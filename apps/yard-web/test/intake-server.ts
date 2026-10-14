@@ -57,6 +57,9 @@ export function intakeServer(
     plan: plan(),
     failPut: 0 as number,
     failPlan: false,
+    failRecover: false,
+    capabilitiesStatus: initial.capabilitiesStatus,
+    foreman: initial.foreman ?? true,
     // C4 (#77): what successive blueprint calls return; empty means the service is unavailable.
     baselines: [] as unknown[],
     eraseStatus: 0 as number,
@@ -64,8 +67,8 @@ export function intakeServer(
   const reply = (call: Call) => {
     if (call.path === '/capabilities')
       return {
-        ...(initial.capabilitiesStatus === undefined ? {} : { status: initial.capabilitiesStatus }),
-        body: { foreman: initial.foreman ?? true },
+        ...(state.capabilitiesStatus === undefined ? {} : { status: state.capabilitiesStatus }),
+        body: { foreman: state.foreman },
       };
     if (call.path === '/research/ideas')
       return {
@@ -91,6 +94,8 @@ export function intakeServer(
       };
       return { body: state.record };
     }
+    const recovery = /^\/intakes\/([^/]+)\/plan\/recover$/.exec(call.path);
+    if (recovery && call.method === 'POST') return state.failRecover ? { status: 503 } : { body: state.plan };
     const intake = /^\/intakes\/([^/]+)(\/plan)?$/.exec(call.path);
     if (intake && call.method === 'GET')
       return state.record && state.record.id === intake[1] ? { body: state.record } : { status: 404 };

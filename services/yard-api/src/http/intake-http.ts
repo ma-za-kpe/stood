@@ -11,7 +11,7 @@ export function intakeHttp(
   app: Hono,
   config: Readonly<{
     store: IntakeStore;
-    planner?: Pick<IntakePlanner, 'create'>;
+    planner?: Pick<IntakePlanner, 'create' | 'recover'>;
     request(c: Context): Readonly<{ actor: Operator; body: string; now: number }>;
     authorize(headers: Headers, id: string, target: string): Promise<boolean>;
     // T-0217: what erasing an intake must also check and clean up.
@@ -56,7 +56,8 @@ export function intakeHttp(
       initial ? 201 : 200,
     );
   };
-  if (config.planner)
+  const planner = config.planner;
+  if (planner)
     app.post('/yard/v1/intakes/:id/plan', async (c) => {
       const owner = buyer(c),
         rawVersion = c.req.header('If-Match') ?? '',
@@ -72,9 +73,36 @@ export function intakeHttp(
       )
         throw new YardError('INVALID');
       try {
-        const plan = await config.planner!.create(c.req.param('id'), owner, Number(rawVersion), config.request(c).now);
+        const plan = await planner.create(c.req.param('id'), owner, Number(rawVersion), config.request(c).now);
         c.header('Cache-Control', 'private, no-store');
         return c.json(plan, 201);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          'code' in error &&
+          ['INVALID', 'FORBIDDEN', 'CONFLICT', 'NOT_FOUND'].includes(String(error.code))
+        )
+          throw new YardError(error.code as 'INVALID' | 'FORBIDDEN' | 'CONFLICT' | 'NOT_FOUND');
+        throw error;
+      }
+    });
+  if (planner)
+    app.post('/yard/v1/intakes/:id/plan/recover', async (c) => {
+      const owner = buyer(c),
+        rawVersion = c.req.header('If-Match') ?? '';
+      const value: unknown = JSON.parse(config.request(c).body);
+      if (
+        !/^[1-9]\d{0,9}$/.test(rawVersion) ||
+        !value ||
+        typeof value !== 'object' ||
+        Array.isArray(value) ||
+        Object.keys(value).length
+      )
+        throw new YardError('INVALID');
+      try {
+        const plan = await planner.recover(c.req.param('id'), owner, Number(rawVersion));
+        c.header('Cache-Control', 'private, no-store');
+        return c.json(plan);
       } catch (error) {
         if (
           error instanceof Error &&

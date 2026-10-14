@@ -90,6 +90,26 @@ it('keeps a repository outage explicit and does not create a planning checkpoint
   expect(draft).not.toHaveBeenCalled();
 });
 
+it('recovers a failed model attempt for the owning buyer and exact saved version', async () => {
+  const { store, repositories, record } = setup();
+  const model = new ScriptedPlannerModel('ci');
+  const draft = vi.spyOn(model, 'draft').mockRejectedValueOnce(new Error('Model unavailable'));
+  const foreman = new Foreman(model, new MemorySaver());
+  const planner = new IntakePlanner(store, foreman, repositories);
+
+  await expect(planner.create('idea', 'buyer', 2, now)).rejects.toThrow('Model unavailable');
+  await expect(planner.create('idea', 'buyer', 2, now + 1000)).rejects.toThrow('NOT_FOUND');
+  expect(draft).toHaveBeenCalledTimes(1);
+  await expect(planner.recover('idea', 'foreign', 2)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  await expect(planner.recover('idea', 'buyer', 1)).rejects.toMatchObject({ code: 'CONFLICT' });
+
+  const recovered = await planner.recover('idea', 'buyer', 2);
+  expect(recovered.status).toBe('BUYER_REVIEW');
+  expect(draft).toHaveBeenCalledTimes(2);
+  expect(store.registerPlan).toHaveBeenCalledWith('idea', 'buyer', 2, intakePlanId('buyer', 'idea', 2));
+  expect(record.owner).toBe('buyer');
+});
+
 // Fifth audit (2026-10-11): erasing an intake must remove what the real planner stored for every version.
 it("erasing the intake removes the real planner's plans for every version", async () => {
   const { store, repositories, record } = setup();

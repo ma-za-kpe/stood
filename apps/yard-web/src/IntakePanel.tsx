@@ -127,6 +127,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     createId = useRef<string | null>(null);
   const [feedback, setFeedback] = useState('');
   const [foremanCapability, setForemanCapability] = useState<ForemanCapability>(hosted ? 'checking' : 'available');
+  const [planningRecoveryAvailable, setPlanningRecoveryAvailable] = useState(false);
   const [externalStale, setExternalStale] = useState(false),
     [feed, setFeed] = useState('disconnected');
   const live = useRef(true),
@@ -289,6 +290,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       if (!live.current) return false;
       recordRef.current = next;
       setRecord(next);
+      setPlanningRecoveryAvailable(false);
       saved.current = JSON.stringify(command.values);
       retryWrite.current = null;
       failedRevision.current = -1;
@@ -366,10 +368,38 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       }
     } catch (e) {
       if (live.current) {
-        if (hosted && e instanceof ApiError && [404, 503].includes(e.status)) {
-          setForemanCapability('unavailable');
-          setError('Foreman planning is currently unavailable. Your saved brief is safe; try again later.');
-        } else setError((e as Error).message);
+        if (hosted) setPlanningRecoveryAvailable(true);
+        setError((e as Error).message);
+        actorRef.current?.send({ type: 'ERROR' });
+      }
+    } finally {
+      pending.current = false;
+      if (live.current) setBusy(false);
+    }
+  };
+  const recoverPlanning = async () => {
+    const current = recordRef.current;
+    if (!current || pending.current || externalStale || (hosted && foremanCapability !== 'available')) return;
+    pending.current = true;
+    setBusy(true);
+    setError('');
+    actorRef.current?.send({ type: 'PLAN' });
+    try {
+      const next = planSchema.parse(
+        await request(`/intakes/${current.id}/plan/recover`, {
+          method: 'POST',
+          headers: { 'If-Match': String(current.version) },
+          body: '{}',
+        }),
+      );
+      if (live.current) {
+        setPlan(next);
+        setPlanningRecoveryAvailable(false);
+        actorRef.current?.send({ type: 'DONE' });
+      }
+    } catch (e) {
+      if (live.current) {
+        setError(`The saved planning attempt could not be recovered: ${(e as Error).message} You can retry planning.`);
         actorRef.current?.send({ type: 'ERROR' });
       }
     } finally {
@@ -729,9 +759,24 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                     Foreman planning is unavailable in this Yard deployment. Your brief is saved; try again later.
                   </p>
                 ) : foremanCapability === 'unknown' ? (
-                  <p role="note">
-                    Planning availability could not be checked. Your brief is saved; reload or try again later.
-                  </p>
+                  <>
+                    <p role="note">
+                      Planning availability could not be checked. Your brief is saved; recheck availability to continue.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setForemanCapability('checking');
+                        void api('/capabilities')
+                          .then((value) => capabilitiesSchema.parse(value))
+                          .then(({ foreman }) => setForemanCapability(foreman ? 'available' : 'unavailable'))
+                          .catch(() => setForemanCapability('unknown'));
+                      }}
+                    >
+                      Check planning availability again
+                    </button>
+                  </>
                 ) : (
                   (() => {
                     const missing = incompletePlanningChoices(record.draft, Date.now());
@@ -750,6 +795,11 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
               ) : (
                 <button type="button" disabled={busy} onClick={() => void planWork()}>
                   Ask the Foreman for a blueprint
+                </button>
+              )}
+              {hosted && planningRecoveryAvailable && foremanCapability === 'available' && (
+                <button type="button" disabled={busy || externalStale} onClick={() => void recoverPlanning()}>
+                  Recover saved planning attempt
                 </button>
               )}
             </>

@@ -42,13 +42,14 @@ function fixture() {
       risks: ['Synthetic HTTP port response'],
     }),
   );
+  const recoverPlan = vi.fn(async () => createPlan());
   const app = createYardApp({
     environment: 'ci',
     board: {
       board: new Board(new MemoryEvents()),
       clock: async () => now,
       intakes: store,
-      intakePlanner: { create: createPlan },
+      intakePlanner: { create: createPlan, recover: recoverPlan },
       operators: ['buyer', 'foreign', 'builder'].map((id) => ({
         key: `${id}-key`,
         secret: `${id}-secret`,
@@ -84,7 +85,7 @@ function fixture() {
     };
     return app.request(path, { method, headers, ...(body ? { body } : {}) });
   };
-  return { store, app, request, saved, createPlan };
+  return { store, app, request, saved, createPlan, recoverPlan };
 }
 it('owns autosave identity and clock on the server and returns a resumable private record', async () => {
   const { request, store, saved } = fixture();
@@ -131,8 +132,8 @@ it('rejects a missing version instead of confusing it with a new draft', async (
   expect(store.save).not.toHaveBeenCalled();
 });
 
-it('plans only a buyer-owned saved version using a signed empty command', async () => {
-  const { request, createPlan } = fixture();
+it('plans and recovers only a buyer-owned saved version using signed empty commands', async () => {
+  const { request, createPlan, recoverPlan } = fixture();
   expect((await request('/yard/v1/intakes/idea/plan', 'POST', {}, '1')).status).toBe(201);
   expect(createPlan).toHaveBeenCalledWith('idea', 'buyer', 1, now);
   createPlan.mockClear();
@@ -146,4 +147,15 @@ it('plans only a buyer-owned saved version using a signed empty command', async 
       actor === 'builder' ? 403 : 422,
     );
   expect(createPlan).not.toHaveBeenCalled();
+  expect((await request('/yard/v1/intakes/idea/plan/recover', 'POST', {}, '1')).status).toBe(200);
+  expect(recoverPlan).toHaveBeenCalledWith('idea', 'buyer', 1);
+  for (const [body, version, actor] of [
+    [{}, '0', 'buyer'],
+    [{}, '1', 'builder'],
+    [{ reason: 'x' }, '1', 'buyer'],
+  ] as const)
+    expect((await request('/yard/v1/intakes/idea/plan/recover', 'POST', body, version, actor)).status).toBe(
+      actor === 'builder' ? 403 : 422,
+    );
+  expect(recoverPlan).toHaveBeenCalledTimes(1);
 });
