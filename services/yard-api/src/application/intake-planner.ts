@@ -27,6 +27,19 @@ export class IntakePlanner {
     const run = () => this.createLocked(id, buyer, version, now);
     return this.store.withLock ? this.store.withLock(id, run) : run();
   }
+  async recover(id: string, buyer: string, version: number): Promise<Plan> {
+    const run = async () => {
+      if (!Number.isSafeInteger(version) || version < 1) throw new YardError('INVALID');
+      await this.store.assertNotErasing?.(id);
+      const record = await this.store.load(id);
+      if (record.owner !== buyer) throw new YardError('FORBIDDEN');
+      if (record.version !== version) throw new YardError('CONFLICT');
+      const planId = intakePlanId(buyer, id, version);
+      await this.store.registerPlan?.(id, buyer, version, planId);
+      return this.foreman.recover(planId, buyer);
+    };
+    return this.store.withLock ? this.store.withLock(id, run) : run();
+  }
   private async createLocked(id: string, buyer: string, version: number, now: number): Promise<Plan> {
     if (!Number.isSafeInteger(version) || version < 1 || !Number.isSafeInteger(now) || now < 0)
       throw new YardError('INVALID');

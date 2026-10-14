@@ -1,4 +1,10 @@
-import { assertPublicInput, type IntakeDraft, intakeChecked, intakeSteps } from '@stood/yard-contracts';
+import {
+  assertPublicInput,
+  completeIntakeSchema,
+  type IntakeDraft,
+  intakeChecked,
+  intakeSteps,
+} from '@stood/yard-contracts';
 export type IntakeValues = Record<string, string>;
 export type IntakeField = Readonly<{
   path: string;
@@ -155,6 +161,26 @@ export const stepNames = [
   'Budget and timing',
   'Ownership and handover',
 ];
+export function incompletePlanningChoices(draft: IntakeDraft, now: number): string[] {
+  const candidate = {
+    ...draft,
+    handover: { ...draft.handover, baseCommit: '0'.repeat(40) },
+  };
+  const parsed = completeIntakeSchema.safeParse(candidate);
+  const missing = new Set<string>();
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.join('.');
+      const fields = formFields.flat().filter((item) => item.path === path || item.path.startsWith(`${path}.`));
+      for (const field of fields) missing.add(field.label);
+    }
+  }
+  if (!draft.idea?.users?.length) missing.add('Who uses it?');
+  if (draft.handover?.consent !== true) missing.add('Allow assigned agents or human builders to build this');
+  const deadline = draft.timing?.deadline;
+  if (!Number.isSafeInteger(now) || typeof deadline !== 'number' || deadline <= now) missing.add('Deadline');
+  return [...missing];
+}
 export function majorToMinor(value: string): number {
   if (!/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter an amount with no more than two decimal places.');
   const [whole = '', fraction = ''] = value.split('.');

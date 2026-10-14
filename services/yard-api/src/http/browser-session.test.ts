@@ -5,13 +5,14 @@ import { createYardApp } from './app.js';
 
 const code = 'buyer-access-code-xxxxxxxxxxxxxxxx';
 const secret = 's'.repeat(40);
-function hosted() {
+function hosted(foreman = false) {
   let now = 1791158400000;
   const app = createYardApp({
     environment: 'demo',
     board: {
       board: new Board(new MemoryEvents()),
       clock: async () => now,
+      ...(foreman ? { foreman: {} as never } : {}),
       operators: [
         { key: 'buyer-key', secret, accessCode: code, actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' } },
       ],
@@ -27,6 +28,16 @@ const signIn = (app: ReturnType<typeof hosted>['app'], accessCode: string, ip = 
     headers: { ...origin, 'X-Forwarded-For': ip },
     body: JSON.stringify({ access_code: accessCode }),
   });
+
+it('reports only the configured Foreman capability to the hosted page', async () => {
+  const off = await hosted().app.request('/app/api/capabilities');
+  expect(off.status).toBe(200);
+  expect(off.headers.get('Cache-Control')).toBe('no-store');
+  expect(await off.json()).toEqual({ foreman: false });
+
+  const on = await hosted(true).app.request('/app/api/capabilities');
+  expect(await on.json()).toEqual({ foreman: true });
+});
 
 // T-0266: the hosted Yard page signs people in with an access code the owner issues. The cookie is an opaque,
 // expiring session id; the operator's signing secret never reaches the browser.
