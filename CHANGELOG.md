@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/ma-za-kpe/stood/compare/v0.14.1...v0.14.2) (2026-10-14)
+
+
+### Fixes
+
+* **yard:** isolate Foreman coordinator pool ([#183](https://github.com/ma-za-kpe/stood/issues/183)) ([b7cf8ac](https://github.com/ma-za-kpe/stood/commit/b7cf8ac0f2a77c6a4a247ee6a09fdadf2f298dd6))
+
 ## [0.14.1](https://github.com/ma-za-kpe/stood/compare/v0.14.0...v0.14.1) (2026-10-14)
 
 
