@@ -99,6 +99,10 @@ try {
         },
       }),
     );
+    // Exercise the configured-repository default in the same browser flow as hosted intake creation.
+    await page.route('**/app/api/capabilities', (route) =>
+      route.fulfill({ json: { foreman: true, repository: 'ma-za-kpe/yard-sandbox' } }),
+    );
     await page.goto('http://localhost:3001/app');
     assert.equal(new URL(page.url()).pathname, '/app/');
     await page.getByLabel('Access code').waitFor();
@@ -141,6 +145,18 @@ try {
     await page.getByRole('heading', { name: 'Review your project brief.', exact: true }).waitFor();
     await navigate('http://localhost:3001/app/');
     await page.getByRole('button', { name: 'Start a private intake', exact: true }).click();
+    await page.getByLabel('What are we building?').waitFor();
+    await page.locator('details.brief-sections > summary').click();
+    await page.getByRole('button', { name: /7 Budget and timing/ }).click();
+    assert.equal(await page.getByLabel('Total builder budget').inputValue(), '100.00');
+    assert.equal(await page.getByLabel('Budget currency').inputValue(), 'USD');
+    assert.notEqual(await page.getByLabel('Target deadline (UTC)').inputValue(), '');
+    assert.equal(await page.getByLabel('Sign-off email').inputValue(), 'makpalyy@gmail.com');
+    await page.getByRole('button', { name: /8 Ownership and handover/ }).click();
+    assert.equal(await page.getByLabel('Your GitHub repository').inputValue(), 'ma-za-kpe/yard-sandbox');
+    assert.equal(await page.getByLabel('Your production host').inputValue(), 'RENDER');
+    assert.equal(await page.getByLabel('Allow assigned agents or human builders to build this').inputValue(), 'true');
+    await page.getByRole('button', { name: /1 The idea/ }).click();
     await page.getByLabel('What are we building?').fill('A booking tool for my customers');
     await page.getByRole('button', { name: 'Review my brief', exact: true }).click();
     await page.getByRole('heading', { name: 'Review your project brief.', exact: true }).waitFor();
