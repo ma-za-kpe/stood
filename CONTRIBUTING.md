@@ -14,4 +14,6 @@ By contributing you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security
 
 When documenting a vendor or external service, link its primary documentation for behavior, configuration, compatibility, limits, and pricing. Separate those documented facts from observations made in our own sandbox runs.
 
+For changes to commands, integrations, or setup guides, manually follow the documented path in a sandbox. Include the exact command and observed result in the pull request; do not present a simulated result as a live qualification.
+
 Design-phase contributions (docs, research, field knowledge from Ghana, Nigeria, Kenya or Uganda) are very welcome. Open an issue.

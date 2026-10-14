@@ -26,4 +26,6 @@ What changed and why. Link the task: `TASKS.md#T-XXXX` and the spec doc(s).
 ## Docs and voice
 
 - [ ] Spec docs / ADRs / `TASKS.md` updated.
+- [ ] External behavior, configuration, limits and pricing claims link to primary sources; sandbox observations are identified as observations.
+- [ ] Changed commands, integrations or setup guides were manually followed in a sandbox; exact commands and outcomes are included above.
 - [ ] User-facing copy matches `docs/stood/S06-voice-and-states.md` (no "escrow", "verified", "fraud", "Something went wrong").
