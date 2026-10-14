@@ -18,10 +18,14 @@ export type IntakeWrite = Readonly<{
   draft: unknown;
   now: number;
 }>;
+export type IntakePlanLock<T> = Readonly<{ linked: false } | { linked: true; value: T }>;
 export interface IntakeStore {
   load(id: string): Promise<IntakeRecord>;
   // Holds the same per-intake advisory lock used by save for the full async operation.
   withLock?<T>(id: string, run: () => Promise<T>): Promise<T>;
+  // Resolves the plan's source intake, then holds its deletion fence while the project is created.
+  withPlanLock?<T>(planId: string, run: () => Promise<T>): Promise<IntakePlanLock<T>>;
+  registerPlan?(id: string, owner: string, version: number, planId: string): Promise<void>;
   assertNotErasing?(id: string): Promise<void>;
   prepareErasure?(
     id: string,

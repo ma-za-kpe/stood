@@ -62,9 +62,12 @@ export function yardRuntime(env: Env) {
     return { config: { environment } as Config, notes, jobs: [], start: async () => {}, stop: async () => {} };
 
   const pool = new pg.Pool({ connectionString: url, max: 5 });
-  // Long planning calls hold an intake advisory lock while Foreman uses the main pool. Keep lock sessions isolated
-  // so a full set of planners cannot consume every connection they need to finish their own checkpoints.
-  const intakeLockPool = new pg.Pool({ connectionString: url, max: 1 });
+  // Foreman holds coordinator connections while LangGraph reads/writes checkpoints on `pool`.
+  // Keep the pools separate so five concurrent plans cannot exhaust checkpoint capacity.
+  const foremanCoordinatorPool = new pg.Pool({ connectionString: url, max: 5 });
+  // Acquire intake locks before main-pool work; saves waiting on another operation stay out of the five connections
+  // that the lock holder needs for reads, checkpoints and cleanup. The dedicated pool supports five lock holders.
+  const intakeLockPool = new pg.Pool({ connectionString: url, max: 5 });
   const clock = async () => Date.now();
   const events = new PostgresYardEvents(pool, clock);
   // ADR-0027: with the real Stood, Yard's PayPal merchant id is the payee of every allowance.
@@ -96,7 +99,7 @@ export function yardRuntime(env: Env) {
         }),
         new PostgresSaver(pool, undefined, { schema: 'yard' }),
         false,
-        new PostgresForemanCoordinator(pool),
+        new PostgresForemanCoordinator(foremanCoordinatorPool),
       )
     : null;
   const vault = new SecretVault(new PostgresSecretRows(pool), new LocalKeyWrapper(keys.keys, keys.current));
@@ -116,7 +119,7 @@ export function yardRuntime(env: Env) {
         ? { foreman, intakePlanner: new IntakePlanner(intakes, foreman, planner.repositories) }
         : {}),
       // C4 (#77): accepted plans become frozen blueprints once Stood's runner shows every frozen test red.
-      ...(foreman && planner && stood ? { planBlueprints: { ...planner.seed, stood } } : {}),
+      ...(foreman && planner && stood ? { planBlueprints: { ...planner.seed, stood, intakes } } : {}),
       clock,
       operators,
       secrets: vault,
@@ -262,7 +265,7 @@ export function yardRuntime(env: Env) {
     // Waits for every running pass to finish before the pool closes.
     async stop() {
       await Promise.all([retention?.stop(), ...running.map((job) => job.stop())]);
-      await Promise.all([pool.end(), intakeLockPool.end()]);
+      await Promise.all([pool.end(), intakeLockPool.end(), foremanCoordinatorPool.end()]);
     },
   };
 }

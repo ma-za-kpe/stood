@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import pg from 'pg';
 import { expect, it, vi } from 'vitest';
 import { yardDatabase } from '../../yard-api/test/database.js';
 import { PostgresForemanCoordinator } from '../src/adapters/db-postgres/coordinator.js';
@@ -166,6 +167,82 @@ it('releases the Postgres thread lock when model work fails and requires pool ca
     f.limited.options.max = previous;
   } finally {
     await recovered.end();
+    await f.close();
+  }
+});
+
+it('lets five concurrent Foreman drafts persist checkpoints through a dedicated coordinator pool', async () => {
+  const f = await yardDatabase();
+  const checkpointPool = f.connectRuntime();
+  checkpointPool.options.max = 5;
+  const coordinatorPool = new pg.Pool({ connectionString: checkpointPool.options.connectionString, max: 5 });
+  try {
+    await new PostgresSaver(f.migration, undefined, { schema: 'yard' }).setup();
+    const saver = new PostgresSaver(checkpointPool, undefined, { schema: 'yard' });
+    const coordinator = new PostgresForemanCoordinator(coordinatorPool);
+    let modelCalls = 0;
+    let openBarrier!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      openBarrier = resolve;
+    });
+    const output = {
+      summary: 'A booking app',
+      risks: [],
+      requirements: [{ id: 'booking', text: 'Can book', testIds: ['works'] }],
+      milestones: ['Build', 'Preview', 'Handover'].map((name, index) => ({
+        id: `m${index}`,
+        name,
+        budgetMinor: 1000,
+        deadline: 1791244800000,
+        tests: [
+          {
+            id: 'works',
+            path: 'tests/booking.test.js',
+            cases: [{ name: 'books a slot', args: ['book'], input: '', status: 0, output: 'booked\n', match: 'exact' }],
+          },
+        ],
+      })),
+    };
+    const foreman = new Foreman(
+      {
+        draft: async () => {
+          modelCalls++;
+          if (modelCalls === 5) openBarrier();
+          await barrier;
+          return output;
+        },
+      },
+      saver,
+      true,
+      coordinator,
+    );
+    const intakes = Array.from({ length: 5 }, (_, index) => ({
+      id: `pool-capacity-${index}`,
+      buyerOperatorId: 'buyer',
+      repository: 'buyer/project',
+      baseCommit: 'a'.repeat(40),
+      description: 'A booking app',
+      capMinor: 3000,
+      currency: 'USD' as const,
+      createdAt: 1791158400000,
+    }));
+    const work = intakes.map((intake) => foreman.draft(intake));
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        Promise.all(work),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('FOREMAN_CHECKPOINT_POOL_STARVED')), 5000);
+        }),
+      ]);
+      expect(result).toHaveLength(5);
+      expect(modelCalls).toBe(5);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  } finally {
+    await coordinatorPool.end();
+    await checkpointPool.end();
     await f.close();
   }
 });

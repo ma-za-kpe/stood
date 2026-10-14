@@ -14,6 +14,9 @@ export function intakePlanId(buyer: string, id: string, version: number): string
     .update(JSON.stringify([buyer, id, version]))
     .digest('hex')}`;
 }
+export function isIntakePlanId(id: string): boolean {
+  return /^intake-[a-f0-9]{64}$/.test(id);
+}
 export class IntakePlanner {
   constructor(
     private readonly store: IntakeStore,
@@ -32,6 +35,9 @@ export class IntakePlanner {
     if (record.owner !== buyer) throw new YardError('FORBIDDEN');
     if (record.version !== version) throw new YardError('CONFLICT');
     const planId = intakePlanId(buyer, id, version);
+    // Persist the reverse link before the external write so project conversion and erasure share one fence. If
+    // drafting is interrupted, erasure can still safely forget this exact prospective thread.
+    await this.store.registerPlan?.(id, buyer, version, planId);
     let existing: Plan | undefined;
     try {
       existing = await this.foreman.read(planId);

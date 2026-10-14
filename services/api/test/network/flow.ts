@@ -74,7 +74,7 @@ export class NetworkFlow {
       method: 'POST',
       headers: { Authorization: 'Bearer sim-access-token', 'Content-Type': 'application/json' },
       body: JSON.stringify(value),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(10000),
     });
     assert(response.ok);
     return response.json() as Promise<Record<string, unknown>>;

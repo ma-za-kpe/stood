@@ -1,8 +1,8 @@
 import type pg from 'pg';
 import type { ForemanCoordinator } from '../../coordinator.js';
 
-// A separate pool connection holds the thread lock while LangGraph persists
-// checkpoints. The runtime pool must have capacity for both connections.
+// A coordinator connection stays checked out while LangGraph persists checkpoints.
+// Supply a dedicated pool so coordinator concurrency cannot consume checkpoint capacity.
 export class PostgresForemanCoordinator implements ForemanCoordinator {
   constructor(private readonly pool: pg.Pool) {
     if ((pool.options.max ?? 10) < 2) throw new Error('COORDINATOR_CAPACITY');

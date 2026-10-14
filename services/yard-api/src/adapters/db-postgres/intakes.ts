@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { intakeChecked } from '@stood/yard-contracts';
 import type pg from 'pg';
 import { YardError, type YardEvent } from '../../ports/events.js';
-import type { IntakeRecord, IntakeStore, IntakeWrite } from '../../ports/intakes.js';
+import type { IntakePlanLock, IntakeRecord, IntakeStore, IntakeWrite } from '../../ports/intakes.js';
 import { PostgresYardEvents } from './events.js';
 
 export async function migrateYardIntakes(pool: pg.Pool, owner: string): Promise<void> {
@@ -116,6 +116,62 @@ export async function migrateYardIntakeErasure(pool: pg.Pool, owner: string): Pr
     c.release();
   }
 }
+
+// Associates deterministic Foreman thread IDs with their source intake so blueprint conversion can share the
+// intake's deletion lock. Backfill every saved version so plans created before this migration remain fenced.
+export async function migrateYardIntakePlanLinks(pool: pg.Pool, owner: string): Promise<void> {
+  if (!/^[a-z][a-z0-9_]{0,62}$/.test(owner)) throw new RangeError('Invalid Yard owner');
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(`SET LOCAL ROLE ${owner}`);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended('yard-intake-plan-links-migration',0))");
+    if ((await c.query('SELECT 1 FROM yard.schema_migrations WHERE version=13')).rowCount) {
+      await c.query('COMMIT');
+      return;
+    }
+    await c.query(`CREATE TABLE yard.intake_plan_links (
+      plan_id text PRIMARY KEY CHECK(plan_id ~ '^intake-[a-f0-9]{64}$'),
+      intake_id text NOT NULL REFERENCES yard.intakes(id) ON DELETE CASCADE,
+      version integer NOT NULL CHECK(version>0),
+      UNIQUE(intake_id,version));
+      INSERT INTO yard.schema_migrations(version) VALUES(13);`);
+    const { rows } = await c.query<{ id: string; owner: string; version: number }>(
+      'SELECT id,owner,version FROM yard.intakes ORDER BY id',
+    );
+    const batch: { planId: string; intakeId: string; version: number }[] = [];
+    const flush = async () => {
+      if (!batch.length) return;
+      await c.query(
+        `INSERT INTO yard.intake_plan_links(plan_id,intake_id,version)
+         SELECT plan_id,intake_id,version FROM jsonb_to_recordset($1::jsonb)
+           AS links(plan_id text,intake_id text,version integer) ON CONFLICT DO NOTHING`,
+        [
+          JSON.stringify(
+            batch.map(({ planId, intakeId, version }) => ({ plan_id: planId, intake_id: intakeId, version })),
+          ),
+        ],
+      );
+      batch.length = 0;
+    };
+    for (const intake of rows) {
+      for (let version = 1; version <= Number(intake.version); version++) {
+        const hash = createHash('sha256')
+          .update(JSON.stringify([intake.owner, intake.id, version]))
+          .digest('hex');
+        batch.push({ planId: `intake-${hash}`, intakeId: intake.id, version });
+        if (batch.length >= 500) await flush();
+      }
+    }
+    await flush();
+    await c.query('COMMIT');
+  } catch (error) {
+    await c.query('ROLLBACK');
+    throw error;
+  } finally {
+    c.release();
+  }
+}
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object')
@@ -166,8 +222,68 @@ export class PostgresIntakes implements IntakeStore {
       }
     }
   }
+  async withPlanLock<T>(planId: string, run: () => Promise<T>): Promise<IntakePlanLock<T>> {
+    const link = await this.pool.query<{ intake_id: string }>(
+      'SELECT intake_id FROM yard.intake_plan_links WHERE plan_id=$1',
+      [planId],
+    );
+    const linked = link.rows[0];
+    if (!linked) return { linked: false };
+    const intakeId = String(linked.intake_id);
+    const value = await this.withLock(intakeId, async () => {
+      const active = await this.pool.query(
+        `SELECT 1 FROM yard.intakes i
+         WHERE i.id=$1
+           AND NOT EXISTS (SELECT 1 FROM yard.intake_erasure_jobs j WHERE j.intake_id=i.id)
+           AND NOT EXISTS (SELECT 1 FROM yard.intake_erasures e WHERE e.intake_id=i.id)`,
+        [intakeId],
+      );
+      if (!active.rowCount) throw new YardError('CONFLICT');
+      return run();
+    });
+    return { linked: true, value };
+  }
+  async registerPlan(id: string, owner: string, version: number, planId: string): Promise<void> {
+    const c = await this.pool.connect();
+    try {
+      await c.query('BEGIN');
+      const current = await c.query<{ owner: string; version: number }>(
+        'SELECT owner,version FROM yard.intakes WHERE id=$1 FOR KEY SHARE',
+        [id],
+      );
+      const intake = current.rows[0];
+      if (!intake) throw new YardError('NOT_FOUND');
+      if (intake.owner !== owner) throw new YardError('FORBIDDEN');
+      if (Number(intake.version) < version) throw new YardError('CONFLICT');
+      const erasing = await c.query(
+        'SELECT 1 FROM yard.intake_erasure_jobs WHERE intake_id=$1 UNION ALL SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1',
+        [id],
+      );
+      if (erasing.rowCount) throw new YardError('CONFLICT');
+      await c.query(
+        'INSERT INTO yard.intake_plan_links(plan_id,intake_id,version) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+        [planId, id, version],
+      );
+      const saved = await c.query<{ intake_id: string; version: number }>(
+        'SELECT intake_id,version FROM yard.intake_plan_links WHERE plan_id=$1',
+        [planId],
+      );
+      const savedLink = saved.rows[0];
+      if (!savedLink || savedLink.intake_id !== id || Number(savedLink.version) !== version)
+        throw new YardError('CONFLICT');
+      await c.query('COMMIT');
+    } catch (error) {
+      await c.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      c.release();
+    }
+  }
   async assertNotErasing(id: string): Promise<void> {
-    const result = await this.pool.query('SELECT 1 FROM yard.intake_erasure_jobs WHERE intake_id=$1', [id]);
+    const result = await this.pool.query(
+      'SELECT 1 FROM yard.intake_erasure_jobs WHERE intake_id=$1 UNION ALL SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1',
+      [id],
+    );
     if (result.rowCount) throw new YardError('CONFLICT');
   }
   async prepareErasure(
@@ -266,76 +382,77 @@ export class PostgresIntakes implements IntakeStore {
     const fingerprint = createHash('sha256')
       .update(JSON.stringify(canonical({ id, owner, expectedVersion, step, draft })))
       .digest('hex');
-    const c = await this.pool.connect();
-    try {
-      await c.query('BEGIN');
-      await c.query("SELECT pg_advisory_xact_lock(hashtextextended('yard-intake:' || $1,0))", [id]);
-      const erasing = await c.query('SELECT 1 FROM yard.intake_erasure_jobs WHERE intake_id=$1', [id]);
-      const erased = await c.query('SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1', [id]);
-      if (erasing.rowCount || erased.rowCount) throw new YardError('CONFLICT');
-      const current = await c.query('SELECT * FROM yard.intakes WHERE id=$1 FOR UPDATE', [id]);
-      const before = current.rowCount ? record(current.rows[0]) : null;
-      if (before && before.owner !== owner) throw new YardError('FORBIDDEN');
-      const receipt = await c.query(
-        'SELECT fingerprint,result FROM yard.intake_commands WHERE intake_id=$1 AND key=$2',
-        [id, key],
-      );
-      if (receipt.rowCount) {
-        if (receipt.rows[0].fingerprint !== fingerprint) throw new YardError('CONFLICT');
-        await c.query('COMMIT');
-        return structuredClone(receipt.rows[0].result as IntakeRecord);
-      }
-      if (expectedVersion !== (before?.version ?? 0)) throw new YardError('STALE_VERSION');
-      if (before && now < before.updatedAt) throw new YardError('INVALID');
-      const result: IntakeRecord = {
-        id,
-        owner,
-        step,
-        draft,
-        version: expectedVersion + 1,
-        createdAt: before?.createdAt ?? now,
-        updatedAt: now,
-      };
-      const at = new Date(now);
-      if (!before)
-        await c.query('INSERT INTO yard.intakes VALUES($1,$2,$3,$4,$5,$6,$6)', [
+    return this.withLock(id, async () => {
+      const c = await this.pool.connect();
+      try {
+        await c.query('BEGIN');
+        const erasing = await c.query('SELECT 1 FROM yard.intake_erasure_jobs WHERE intake_id=$1', [id]);
+        const erased = await c.query('SELECT 1 FROM yard.intake_erasures WHERE intake_id=$1', [id]);
+        if (erasing.rowCount || erased.rowCount) throw new YardError('CONFLICT');
+        const current = await c.query('SELECT * FROM yard.intakes WHERE id=$1 FOR UPDATE', [id]);
+        const before = current.rowCount ? record(current.rows[0]) : null;
+        if (before && before.owner !== owner) throw new YardError('FORBIDDEN');
+        const receipt = await c.query(
+          'SELECT fingerprint,result FROM yard.intake_commands WHERE intake_id=$1 AND key=$2',
+          [id, key],
+        );
+        if (receipt.rowCount) {
+          if (receipt.rows[0].fingerprint !== fingerprint) throw new YardError('CONFLICT');
+          await c.query('COMMIT');
+          return structuredClone(receipt.rows[0].result as IntakeRecord);
+        }
+        if (expectedVersion !== (before?.version ?? 0)) throw new YardError('STALE_VERSION');
+        if (before && now < before.updatedAt) throw new YardError('INVALID');
+        const result: IntakeRecord = {
           id,
           owner,
-          result.version,
           step,
-          JSON.stringify(draft),
-          at,
-        ]);
-      else
-        await c.query('UPDATE yard.intakes SET version=$2,step=$3,data=$4,updated_at=$5 WHERE id=$1', [
+          draft,
+          version: expectedVersion + 1,
+          createdAt: before?.createdAt ?? now,
+          updatedAt: now,
+        };
+        const at = new Date(now);
+        if (!before)
+          await c.query('INSERT INTO yard.intakes VALUES($1,$2,$3,$4,$5,$6,$6)', [
+            id,
+            owner,
+            result.version,
+            step,
+            JSON.stringify(draft),
+            at,
+          ]);
+        else
+          await c.query('UPDATE yard.intakes SET version=$2,step=$3,data=$4,updated_at=$5 WHERE id=$1', [
+            id,
+            result.version,
+            step,
+            JSON.stringify(draft),
+            at,
+          ]);
+        await c.query("INSERT INTO yard.intake_events VALUES($1,$2,'intake.saved',$3,$4,$5)", [
           id,
           result.version,
-          step,
-          JSON.stringify(draft),
+          owner,
+          JSON.stringify({ step, version: result.version }),
           at,
         ]);
-      await c.query("INSERT INTO yard.intake_events VALUES($1,$2,'intake.saved',$3,$4,$5)", [
-        id,
-        result.version,
-        owner,
-        JSON.stringify({ step, version: result.version }),
-        at,
-      ]);
-      await c.query('INSERT INTO yard.intake_commands VALUES($1,$2,$3,$4)', [
-        id,
-        key,
-        fingerprint,
-        JSON.stringify(result),
-      ]);
-      await c.query("SELECT pg_notify('yard_events', $1)", [`intake:${id}`]);
-      await c.query('COMMIT');
-      return structuredClone(result);
-    } catch (error) {
-      await c.query('ROLLBACK');
-      throw error;
-    } finally {
-      c.release();
-    }
+        await c.query('INSERT INTO yard.intake_commands VALUES($1,$2,$3,$4)', [
+          id,
+          key,
+          fingerprint,
+          JSON.stringify(result),
+        ]);
+        await c.query("SELECT pg_notify('yard_events', $1)", [`intake:${id}`]);
+        await c.query('COMMIT');
+        return structuredClone(result);
+      } catch (error) {
+        await c.query('ROLLBACK');
+        throw error;
+      } finally {
+        c.release();
+      }
+    });
   }
   // T-0217: erases the intake, its history and its idempotency receipts in one transaction; a repeat is a no-op.
   async erase(

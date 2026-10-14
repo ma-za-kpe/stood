@@ -1,10 +1,20 @@
+import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { yardDatabase } from '../../../test/database.js';
+import { eraseIntake } from '../../application/intake-erasure.js';
+import { intakePlanId } from '../../application/intake-planner.js';
+import { YardError } from '../../ports/events.js';
 import { migrateYardEvents } from './events.js';
-import { migrateYardIntakeErasure, migrateYardIntakes, PostgresIntakes } from './intakes.js';
+import {
+  migrateYardIntakeErasure,
+  migrateYardIntakePlanLinks,
+  migrateYardIntakes,
+  PostgresIntakes,
+} from './intakes.js';
 
 let f: Awaited<ReturnType<typeof yardDatabase>>;
 let store: PostgresIntakes;
+let intakeLockPool: pg.Pool;
 const command = (id: string) => ({
   id,
   owner: 'buyer',
@@ -20,10 +30,27 @@ beforeAll(async () => {
   await migrateYardIntakes(f.pool, f.owner);
   await migrateYardIntakeErasure(f.pool, f.owner);
   await migrateYardIntakeErasure(f.pool, f.owner);
-  store = new PostgresIntakes(f.limited);
+  intakeLockPool = new pg.Pool({ connectionString: f.limited.options.connectionString, max: 5 });
+  store = new PostgresIntakes(f.limited, undefined, intakeLockPool);
+  const legacy = command('legacy-plan-links');
+  await store.save(legacy);
+  await store.save({ ...legacy, key: 'second', expectedVersion: 1, now: legacy.now + 1 });
+  await store.save({ ...legacy, key: 'third', expectedVersion: 2, now: legacy.now + 2 });
+  await migrateYardIntakePlanLinks(f.pool, f.owner);
+  await migrateYardIntakePlanLinks(f.pool, f.owner);
 });
 afterAll(async () => {
+  if (intakeLockPool) await intakeLockPool.end();
   if (f) await f.close();
+});
+it('backfills a fence for every pre-migration intake plan version', async () => {
+  const links = await f.limited.query(
+    'SELECT version FROM yard.intake_plan_links WHERE intake_id=$1 ORDER BY version',
+    ['legacy-plan-links'],
+  );
+  expect(links.rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+  const result = await store.withPlanLock(intakePlanId('buyer', 'legacy-plan-links', 1), async () => 'locked');
+  expect(result).toEqual({ linked: true, value: 'locked' });
 });
 it('restores a private draft and exact save receipt through a new connection', async () => {
   const input = command('resume');
@@ -72,6 +99,47 @@ it('serialises competing autosaves and keeps one consecutive audit event per ver
   });
   expect((await store.read(input.id, 0)).map((e) => e.seq)).toEqual([1, 2]);
   expect((await store.read(input.id, 1)).map((e) => e.seq)).toEqual([2]);
+});
+it('keeps saves waiting on the intake fence out of the main database pool', async () => {
+  const connectionString = f.limited.options.connectionString;
+  if (!connectionString) throw new Error('Test database URL is missing');
+  const mainPool = new pg.Pool({ connectionString, max: 5, connectionTimeoutMillis: 2000 });
+  const lockPool = new pg.Pool({ connectionString, max: 5 });
+  const isolated = new PostgresIntakes(mainPool, undefined, lockPool);
+  const input = command('pool-fence');
+  await isolated.save(input);
+  let entered!: () => void;
+  let queued!: () => void;
+  const enteredLock = new Promise<void>((resolve) => (entered = resolve));
+  const savesStarted = new Promise<void>((resolve) => (queued = resolve));
+  const holder = isolated.withLock(input.id, async () => {
+    entered();
+    await savesStarted;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return isolated.load(input.id);
+  });
+  await enteredLock;
+  const saves = Array.from({ length: 5 }, (_, i) =>
+    isolated.save({ ...input, key: `waiting-${i}`, expectedVersion: 1, step: 1, now: input.now + 1 }),
+  );
+  queued();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const loaded = await Promise.race([
+      holder,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('lock holder was starved by waiting saves')), 3000);
+      }),
+    ]);
+    expect(loaded).toMatchObject({ id: input.id, version: 1 });
+    expect(mainPool.waitingCount).toBe(0);
+    expect((await Promise.allSettled(saves)).filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    await Promise.allSettled([holder, ...saves]);
+    await lockPool.end();
+    await mainPool.end();
+  }
 });
 it('rejects recognised secrets and credential fields before any database write', async () => {
   const input = command('secret');
@@ -211,6 +279,40 @@ it('persists cleanup targets before deletion, resumes after interruption, and fe
   expect(await store.erase(input.id, input.owner, 'BUYER_REQUEST', input.now + 4)).toBe('ERASED');
   expect(await store.pendingErasureTargets(input.id)).toEqual([]);
   await expect(store.save({ ...input, key: 'resurrect', now: input.now + 5 })).rejects.toThrow('CONFLICT');
+});
+
+it('fences project conversion against intake erasure from before creation through the final write', async () => {
+  const input = command('conversion-fence');
+  await store.save(input);
+  const planId = intakePlanId(input.owner, input.id, 1);
+  await store.registerPlan(input.id, input.owner, 1, planId);
+  let started!: () => void;
+  let release!: () => void;
+  const conversionStarted = new Promise<void>((resolve) => (started = resolve));
+  const waitForRelease = new Promise<void>((resolve) => (release = resolve));
+  let projectCreated = false;
+  const conversion = store.withPlanLock(planId, async () => {
+    started();
+    await waitForRelease;
+    projectCreated = true;
+  });
+  await conversionStarted;
+  const erasure = eraseIntake(input.id, input.owner, input.now + 1, {
+    intakes: store,
+    projects: {
+      load: async (id: string) => {
+        if (id === planId && projectCreated) return { id, owner: input.owner, version: 1, data: {} };
+        throw new YardError('NOT_FOUND');
+      },
+    },
+    foreman: { forget: async () => {} },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(projectCreated).toBe(false);
+  release();
+  await conversion;
+  await expect(erasure).rejects.toMatchObject({ code: 'CONFLICT' });
+  expect(await store.load(input.id)).toMatchObject({ id: input.id, version: 1 });
 });
 
 it('rechecks the expiry cutoff while holding the row lock so a fresh save survives', async () => {
