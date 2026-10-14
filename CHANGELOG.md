@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.14.0](https://github.com/ma-za-kpe/stood/compare/v0.13.0...v0.14.0) (2026-10-14)
+
+
+### Features
+
+* **c4:** qualify hosted allowance amendments ([#169](https://github.com/ma-za-kpe/stood/issues/169)) ([4d71d0f](https://github.com/ma-za-kpe/stood/commit/4d71d0ff3d95ee312050e6b23a9a8694271793dd))
+
+
+### Fixes
+
+* **yard:** accept canonical allowance amendment receipts ([#170](https://github.com/ma-za-kpe/stood/issues/170)) ([fb1d71f](https://github.com/ma-za-kpe/stood/commit/fb1d71f6f8d3aec515d6cf727189461b190b5963))
+* **yard:** accept rotated runtime login ([3810fb2](https://github.com/ma-za-kpe/stood/commit/3810fb21a5c7a43ba080306a1e4964871426db42))
+* **yard:** canonicalize amendment receipts ([fb1d71f](https://github.com/ma-za-kpe/stood/commit/fb1d71f6f8d3aec515d6cf727189461b190b5963))
+* **yard:** validate rotated runtime role ([740b4d1](https://github.com/ma-za-kpe/stood/commit/740b4d17786c04f679c9c949b29b937b27cf61a1))
+
+
+### Documentation
+
+* record C4 live blockers ([b2265e4](https://github.com/ma-za-kpe/stood/commit/b2265e44f68d1cc2596aeb488ce0e18b818bde56))
+
 ## [0.13.0](https://github.com/ma-za-kpe/stood/compare/v0.12.2...v0.13.0) (2026-10-13)
 
 
