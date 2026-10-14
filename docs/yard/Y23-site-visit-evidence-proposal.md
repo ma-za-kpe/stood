@@ -6,7 +6,7 @@ Status: design for implementation and owner/counsel review, 2026-10-13. This pro
 
 Stood upload sessions accept 1–10 declared JPEG, HEIC or WebP objects, each no larger than 8 MiB, with a 15-minute upload window. Completion currently checks size, SHA-256 and a short format header, then records `COMPLETE`. It does not fully decode the image, extract trusted metadata, assess site-visit signals, create an attestation, or feed the payment decision. This byte-integrity receipt must remain intake-only.
 
-The EyeOnSite `main` source reviewed at commit [`af103a4`](https://github.com/ma-za-kpe/eyeonsite/commit/af103a4) is not currently a trusted attestation producer for Stood. Its Android `AppCheckAttestationService` returns `PASSED` locally; the Firestore evidence create rule requires identity/task/photos fields but does not whitelist server-computed assessment fields; and `onEvidenceSubmitted` trusts the stored `attestationVerdict` and returns early when a numeric `qualityScore` is already present. Stood must refuse to infer trust from these client-writable values. EyeOnSite needs a server-authenticated assessment receipt before it can feed this integration.
+The EyeOnSite trust flaw from [`af103a4`](https://github.com/ma-za-kpe/eyeonsite/commit/af103a4) was fixed on current `main` at [`d9900c1`](https://github.com/ma-za-kpe/eyeonsite/commit/d9900c1): Android now reports `UNKNOWN` until server attestation is configured, Firestore client writes are restricted to intake fields, and `onEvidenceSubmitted` ignores client assessment fields and no longer skips processing when `qualityScore` is present. That closes the client-writable assessment bypass. It still does not produce a signed per-evidence receipt that Stood can verify, and Stood must continue treating the EyeOnSite assessment as untrusted until a cross-service receipt is designed and qualified.
 
 ## Proposed evidence flow
 
@@ -18,7 +18,7 @@ The EyeOnSite `main` source reviewed at commit [`af103a4`](https://github.com/ma
 
 ## Safe cleanup and retention fence
 
-Uncompleted `OPEN` sessions are not payment evidence. A cleanup worker may delete only their exact `uploads/<session-id>/...` objects after the session expiry plus a short operational grace period, recording one idempotent cleanup receipt per object. It must isolate failures, treat confirmed 404 as removed, and never enumerate or delete a broad bucket prefix. A completed session is excluded from this janitor.
+Uncompleted `OPEN` sessions are not payment evidence. Stood now has an opt-in cleanup worker that targets only their exact `uploads/<session-id>/...` objects one hour after session expiry. It records one append-only receipt per object, resumes at the first object without a receipt, bounds concurrent deletes, and isolates failures. It never enumerates or deletes a broad bucket prefix. The `INCOMPLETE_UPLOAD_CLEANUP` switch defaults to `off`; no production cleanup has been enabled or run. Completed sessions are excluded from the query and the object adapter refuses every non-upload key.
 
 Deletion or expiry of completed photos stays disabled pending owner/counsel review. The approved policy must specify the purpose and retention duration for raw images, derived hashes, location/EXIF, EyeOnSite receipts, model findings, dispute copies, backups and exports, and define which fields remain in the financial audit. A 90-day upload expiry or a bucket-wide lifecycle rule is not acceptable evidence retention policy.
 

@@ -21,6 +21,10 @@ function bucket(over: { down?: boolean; status?: number } = {}) {
       objects.set(url.pathname, Buffer.from(init.body as Uint8Array));
       return new Response('', { status: 200 });
     }
+    if (init?.method === 'DELETE') {
+      const found = objects.delete(url.pathname);
+      return new Response(found ? null : '', { status: found ? 204 : 404 });
+    }
     const found = objects.get(url.pathname);
     return found ? new Response(new Uint8Array(found)) : new Response('', { status: 404 });
   };
@@ -79,6 +83,20 @@ describe('S3EvidenceStore', () => {
     expect(await s.put('runs/p/t/k', Buffer.from('same'), 'application/json')).toEqual(first);
     b.objects.set(`/stood-evidence/${first.key}`, Buffer.from('tampered'));
     await expect(s.put('runs/p/t/k', Buffer.from('same'), 'application/json')).rejects.toThrow('EVIDENCE_CONFLICT');
+  });
+
+  it('deletes only exact incomplete-upload object keys and treats missing bytes as already removed', async () => {
+    const b = bucket();
+    const s = store(b);
+    const key = `uploads/upl_12345678-1234-1234-1234-123456789abc/0-${'a'.repeat(64)}`;
+    b.objects.set(`/stood-evidence/${key}`, Buffer.from('photo'));
+    expect(await s.deleteUpload(key)).toBe('DELETED');
+    expect(await s.deleteUpload(key)).toBe('ABSENT');
+    await expect(s.deleteUpload(`runs/p/t/${'a'.repeat(64)}`)).rejects.toThrow('EVIDENCE_INVALID_KEY');
+    await expect(
+      s.deleteUpload(`uploads/upl_12345678-1234-1234-1234-123456789abc/../${'a'.repeat(64)}`),
+    ).rejects.toThrow('EVIDENCE_INVALID_KEY');
+    expect(b.calls.map((call) => call.method)).toEqual(['DELETE', 'DELETE']);
   });
 
   it('is unavailable when the bucket refuses or cannot be reached, and rejects unsafe keys before any call', async () => {

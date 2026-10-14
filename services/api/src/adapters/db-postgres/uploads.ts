@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { UPLOAD_TTL_MS, uploadPhotos } from '../../application/upload-session.js';
 import { restoreTrancheRecord } from '../../domain/tranche-record.js';
 import { UploadError, type UploadPhoto, type UploadSession, type UploadStore } from '../../ports/upload-store.js';
 import * as schema from './schema.js';
 
-const { uploadSessions: sessions, apiTrancheOwners: owners, paymentStreams: streams } = schema;
+const {
+  uploadSessions: sessions,
+  uploadCleanupReceipts: cleanupReceipts,
+  apiTrancheOwners: owners,
+  paymentStreams: streams,
+} = schema;
 type Database = NodePgDatabase<typeof schema>;
 const view = (row: typeof sessions.$inferSelect): UploadSession =>
   structuredClone({
@@ -124,6 +129,87 @@ export class PostgresUploads implements UploadStore {
         .returning();
       if (!done) throw new Error('Upload completion failed');
       return view(done);
+    });
+  }
+
+  async expiredOpen(now: number, graceMs: number, limit: number) {
+    time(now);
+    if (
+      !Number.isSafeInteger(graceMs) ||
+      graceMs < 0 ||
+      graceMs > now ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    )
+      throw new UploadError('INVALID');
+    const rows = await this.db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.status, 'OPEN'),
+          lte(sessions.expiresAt, now - graceMs),
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements(${sessions.photos}) AS photo
+            WHERE NOT EXISTS (
+              SELECT 1 FROM upload_cleanup_receipts receipt
+              WHERE receipt.session_id = ${sessions.id} AND receipt.object_key = photo->>'key'
+            )
+          )`,
+        ),
+      )
+      .orderBy(asc(sessions.expiresAt), asc(sessions.id))
+      .limit(limit);
+    if (!rows.length) return [];
+    const receipts = await this.db
+      .select({ sessionId: cleanupReceipts.sessionId, objectKey: cleanupReceipts.objectKey })
+      .from(cleanupReceipts)
+      .where(
+        inArray(
+          cleanupReceipts.sessionId,
+          rows.map((row) => row.id),
+        ),
+      );
+    const done = new Map<string, Set<string>>();
+    for (const receipt of receipts) {
+      const keys = done.get(receipt.sessionId) ?? new Set<string>();
+      keys.add(receipt.objectKey);
+      done.set(receipt.sessionId, keys);
+    }
+    return rows
+      .map((row) => ({
+        id: row.id,
+        photos: row.photos.filter((photo) => !done.get(row.id)?.has(photo.key)),
+      }))
+      .filter((row) => row.photos.length > 0);
+  }
+
+  async recordCleanup(id: string, objectKey: string, outcome: 'DELETED' | 'ABSENT', now: number, graceMs: number) {
+    time(now);
+    if (
+      !/^upl_[a-f0-9-]{36}$/.test(id) ||
+      !Number.isSafeInteger(graceMs) ||
+      graceMs < 0 ||
+      graceMs > now ||
+      !new RegExp(`^uploads/${id}/[0-9]+-[a-f0-9]{64}$`).test(objectKey)
+    )
+      throw new UploadError('INVALID');
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx.select().from(sessions).where(eq(sessions.id, id)).for('update');
+      if (
+        !row ||
+        row.status !== 'OPEN' ||
+        row.expiresAt > now - graceMs ||
+        !row.photos.some((photo) => photo.key === objectKey)
+      )
+        return false;
+      const [receipt] = await tx
+        .insert(cleanupReceipts)
+        .values({ sessionId: id, objectKey, outcome, recordedAt: now })
+        .onConflictDoNothing()
+        .returning({ objectKey: cleanupReceipts.objectKey });
+      return !!receipt;
     });
   }
 }

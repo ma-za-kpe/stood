@@ -105,6 +105,17 @@ export function intakeHttp(
           erase: erase.bind(config.store),
           idle: idle.bind(config.store),
           load: config.store.load.bind(config.store),
+          ...(config.store.withLock ? { withLock: config.store.withLock.bind(config.store) } : {}),
+          ...(config.store.assertNotErasing
+            ? { assertNotErasing: config.store.assertNotErasing.bind(config.store) }
+            : {}),
+          ...(config.store.prepareErasure ? { prepareErasure: config.store.prepareErasure.bind(config.store) } : {}),
+          ...(config.store.pendingErasureTargets
+            ? { pendingErasureTargets: config.store.pendingErasureTargets.bind(config.store) }
+            : {}),
+          ...(config.store.completeErasureTarget
+            ? { completeErasureTarget: config.store.completeErasureTarget.bind(config.store) }
+            : {}),
         },
         ...erasure,
       });

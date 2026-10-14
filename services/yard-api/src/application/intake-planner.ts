@@ -21,8 +21,13 @@ export class IntakePlanner {
     private readonly repositories: IntakeRepositories,
   ) {}
   async create(id: string, buyer: string, version: number, now: number): Promise<Plan> {
+    const run = () => this.createLocked(id, buyer, version, now);
+    return this.store.withLock ? this.store.withLock(id, run) : run();
+  }
+  private async createLocked(id: string, buyer: string, version: number, now: number): Promise<Plan> {
     if (!Number.isSafeInteger(version) || version < 1 || !Number.isSafeInteger(now) || now < 0)
       throw new YardError('INVALID');
+    await this.store.assertNotErasing?.(id);
     const record = await this.store.load(id);
     if (record.owner !== buyer) throw new YardError('FORBIDDEN');
     if (record.version !== version) throw new YardError('CONFLICT');
@@ -67,9 +72,8 @@ export class IntakePlanner {
       context: JSON.stringify(withheldForPlanner(snapshot)),
       createdAt: now,
     });
-    // Sixth audit (2026-10-11): the intake may have been erased while the repository was resolved. Half of a deletion
-    // fence with intake erasure, which forgets every plan again after the draft is gone: re-check the intake after
-    // writing, and forget this plan if it is gone, so no ordering of the two leaves a plan behind.
+    // Keep the post-write check as defense in depth for non-Postgres stores; production also holds the shared intake
+    // lock for the full planning operation, so erasure cannot cross this write.
     try {
       await this.store.load(id);
     } catch (error) {

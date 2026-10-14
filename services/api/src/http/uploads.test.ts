@@ -21,9 +21,12 @@ function fixture() {
     reserve: vi.fn(async () => session),
     get: vi.fn(async () => session),
     complete: vi.fn(async () => ({ ...session, status: 'COMPLETE' as const, completedAt: now })),
+    expiredOpen: vi.fn(async () => []),
+    recordCleanup: vi.fn(async () => false),
   };
   const objects = {
     get: vi.fn(async () => body),
+    deleteUpload: vi.fn(async () => 'DELETED' as const),
     presignPut: vi.fn(() => ({
       url: 'https://bucket.example/uploads/session/photo',
       headers: { 'content-type': 'image/jpeg' },
