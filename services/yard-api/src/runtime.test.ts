@@ -104,7 +104,9 @@ it('turns on the Foreman only when the planner, its budget and the GitHub App ar
       ? Response.json({ token: 'ghs_read', expires_at: new Date(Date.now() + 600_000).toISOString() })
       : Response.json({ object: { sha: 'a'.repeat(40) } });
   });
-  const resolver = plannerConfig(planner, [])?.repositories;
+  const plannerSettings = plannerConfig(planner, []);
+  expect(plannerSettings?.repository).toBe('owner/sandbox');
+  const resolver = plannerSettings?.repositories;
   vi.unstubAllGlobals();
   await expect(resolver?.resolve('buyer', 'owner/other')).rejects.toMatchObject({ code: 'FORBIDDEN' });
   expect(calls).toEqual([]);

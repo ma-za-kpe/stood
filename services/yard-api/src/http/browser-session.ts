@@ -65,6 +65,7 @@ export function hostedSessions(
     clock(): Promise<number>;
     origin: string;
     foremanAvailable?: boolean;
+    plannerRepository?: string;
   }>,
 ): void {
   const sessions = new Map<string, { key: string; expiresAt: number }>();
@@ -94,7 +95,10 @@ export function hostedSessions(
   // This reveals only whether planning is configured in this deployment, as already exposed by /health.
   app.get('/app/api/capabilities', (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ foreman: config.foremanAvailable ?? false });
+    return c.json({
+      foreman: config.foremanAvailable ?? false,
+      ...(config.foremanAvailable && config.plannerRepository ? { repository: config.plannerRepository } : {}),
+    });
   });
   app.get('/app/api/session', async (c) => {
     const o = await current(c);
