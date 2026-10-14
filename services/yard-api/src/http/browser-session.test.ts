@@ -17,7 +17,10 @@ function hosted(foreman = false) {
         { key: 'buyer-key', secret, accessCode: code, actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' } },
       ],
     },
-    browser: { origin: 'https://stood-yard-api.onrender.com' },
+    browser: {
+      origin: 'https://stood-yard-api.onrender.com',
+      ...(foreman ? { plannerRepository: 'owner/sandbox' } : {}),
+    },
   });
   return { app, advance: (ms: number) => (now += ms) };
 }
@@ -36,7 +39,7 @@ it('reports only the configured Foreman capability to the hosted page', async ()
   expect(await off.json()).toEqual({ foreman: false });
 
   const on = await hosted(true).app.request('/app/api/capabilities');
-  expect(await on.json()).toEqual({ foreman: true });
+  expect(await on.json()).toEqual({ foreman: true, repository: 'owner/sandbox' });
 });
 
 // T-0266: the hosted Yard page signs people in with an access code the owner issues. The cookie is an opaque,

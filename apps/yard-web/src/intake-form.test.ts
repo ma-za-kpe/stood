@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { intakeFixture } from '../../../packages/yard-contracts/test/fakes/intake.js';
-import { foremanChoices, formDraft, formValues, majorToMinor } from './intake-form.js';
+import { foremanChoices, formDraft, formValues, majorToMinor, withRecommendedDefaults } from './intake-form.js';
 
 const now = 1791158400000;
 it('converts money exactly and refuses precision loss and malformed values', () => {
@@ -25,6 +25,33 @@ it('preserves an unfinished draft and rejects invalid service rows', () => {
     idea: { description: 'Book appointments' },
   });
   expect(() => formDraft({ 'services.selected': 'DATABASE: Supabase\nnot-a-service' })).toThrow();
+});
+
+it('fills blank intake choices with editable defaults while preserving every existing answer', () => {
+  const defaults = withRecommendedDefaults(
+    {
+      'idea.description': 'Keep my original brief',
+      'timing.capMinor': '125.00',
+      'handover.repository': 'me/app',
+      'idea.references': '',
+    },
+    'owner/sandbox',
+    now,
+  );
+  expect(defaults).toMatchObject({
+    'idea.description': 'Keep my original brief',
+    'timing.capMinor': '125.00',
+    'timing.currency': 'USD',
+    'timing.deadline': new Date(now + 21 * 86400000).toISOString().slice(0, 16),
+    'handover.repository': 'me/app',
+    'handover.production': 'RENDER',
+    'handover.consent': 'true',
+    'data.retention': 'FOREMAN',
+  });
+  const parsed = formDraft(defaults);
+  expect(parsed.timing?.capMinor).toBe(12500);
+  expect(parsed.handover?.consent).toBe(true);
+  expect(parsed.handover?.repository).toBe('me/app');
 });
 
 // T-0275: every step's Foreman choices are explicit and valid; conversions refuse impossible input.
