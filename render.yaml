@@ -1,11 +1,11 @@
-# Render Blueprint for the hosted demo (T-0214). Sandbox only: no live PayPal host, no committed secrets.
-# Every secret is sync: false, so Render asks the owner for it in their own account. Render deploys main
-# automatically once its GitHub checks pass (no Actions minutes); the reconciler's pre-deploy step applies
-# migrations first. Yard runs as one Starter web service (owner's choice, 2026-10-08) with its own restricted
-# database role; its pre-deploy step applies Yard's schema.
+# Render Deploy button Blueprint (T-0387), kept on docs/render-button-blueprint.
+# Community installs build source from main but require manual deploys. Keep this isolated from the hosted-demo
+# root render.yaml, which deploys after CI checks pass. Every secret is sync: false and must be entered by the owner.
+# This provisions three paid services and does not provision Postgres, R2, Vercel, GitHub or PayPal accounts.
 services:
   - type: web
-    name: stood-api
+    name: stood-demo-api
+    repo: https://github.com/ma-za-kpe/stood
     runtime: docker
     region: frankfurt
     # Starter, always on (owner's choice, 2026-10-12): on the free plan it slept when idle and took up to 11 minutes to
@@ -15,8 +15,8 @@ services:
     dockerContext: .
     healthCheckPath: /health
     branch: main
-    # Deploy when a main commit's GitHub checks pass (Render watches GitHub: no Actions minutes).
-    autoDeployTrigger: checksPass
+    # Community button installs link to main but deploy only when the owner asks.
+    autoDeployTrigger: 'off'
     envVars:
       - key: APP_ENV
         value: demo
@@ -60,7 +60,8 @@ services:
       - key: STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY
         sync: false
   - type: worker
-    name: stood-reconciler
+    name: stood-demo-reconciler
+    repo: https://github.com/ma-za-kpe/stood
     runtime: docker
     region: frankfurt
     # Render has no free plan for background workers. Owner chose Starter (2026-10-07).
@@ -71,8 +72,8 @@ services:
     # T-0253: apply migrations before this release goes live (paid instances only); a failure stops the deploy.
     preDeployCommand: /nodejs/bin/node dist/migrate-cli.js
     branch: main
-    # Deploy when a main commit's GitHub checks pass (Render watches GitHub: no Actions minutes).
-    autoDeployTrigger: checksPass
+    # Community button installs link to main but deploy only when the owner asks.
+    autoDeployTrigger: 'off'
     envVars:
       - key: APP_ENV
         value: demo
@@ -128,7 +129,8 @@ services:
       - key: SETTLEMENT_EXECUTOR
         sync: false
   - type: web
-    name: stood-yard-api
+    name: stood-demo-yard-api
+    repo: https://github.com/ma-za-kpe/stood
     runtime: docker
     region: frankfurt
     # Always on for lease expiry and log retention jobs; Starter chosen by the owner (2026-10-08).
@@ -139,7 +141,8 @@ services:
     # T-0214: Yard's schema, as its owner role, before each release goes live.
     preDeployCommand: /nodejs/bin/node dist/db-cli.js migrate
     branch: main
-    autoDeployTrigger: checksPass
+    # Community button installs link to main but deploy only when the owner asks.
+    autoDeployTrigger: 'off'
     envVars:
       - key: YARD_ENV
         value: demo
