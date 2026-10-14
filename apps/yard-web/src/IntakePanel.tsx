@@ -579,7 +579,11 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
               Describe what you want to build. This hosted sandbox starts with editable recommendations, including a
               $100 USD budget, a 21-day target and its configured repository. Review them before planning.
             </p>
-            <button type="button" disabled={busy} onClick={() => void open(true)}>
+            <button
+              type="button"
+              disabled={busy || (hosted && foremanCapability === 'checking')}
+              onClick={() => void open(true)}
+            >
               Start a private intake
             </button>
             <details open={!!resumeId} className="resume-project">
