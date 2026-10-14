@@ -110,7 +110,14 @@ export function yardRuntime(env: Env) {
   const config: Config = {
     environment,
     research: new TribunalCatalog(),
-    ...(signIn ? { browser: { origin: env.YARD_PUBLIC_ORIGIN ?? 'https://stood-yard-api.onrender.com' } } : {}),
+    ...(signIn
+      ? {
+          browser: {
+            origin: env.YARD_PUBLIC_ORIGIN ?? 'https://stood-yard-api.onrender.com',
+            ...(planner ? { plannerRepository: planner.repository } : {}),
+          },
+        }
+      : {}),
     ...(env.YARD_WEB_DIR ? { web: { root: env.YARD_WEB_DIR } } : {}),
     board: {
       board,
@@ -297,6 +304,7 @@ export function plannerConfig(env: Env, notes: string[]) {
   if (!apiKey || !(dollars >= 0.01 && dollars <= 5) || !github) return null;
   const app = github;
   return {
+    repository,
     apiKey,
     model: env.GROK_PLANNER_MODEL?.trim() || undefined,
     dailyMicros: Math.round(dollars * 1_000_000),

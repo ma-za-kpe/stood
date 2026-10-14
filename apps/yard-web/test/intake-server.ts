@@ -42,7 +42,13 @@ export const progress = (status: string, milestones: { baseline: string; passing
 });
 
 export function intakeServer(
-  initial: { draft?: unknown; step?: number; foreman?: boolean; capabilitiesStatus?: number } = {},
+  initial: {
+    draft?: unknown;
+    step?: number;
+    foreman?: boolean;
+    capabilitiesStatus?: number;
+    repository?: string | null;
+  } = {},
 ) {
   const state = {
     record: null as null | {
@@ -60,6 +66,7 @@ export function intakeServer(
     failRecover: false,
     capabilitiesStatus: initial.capabilitiesStatus,
     foreman: initial.foreman ?? true,
+    repository: initial.repository === null ? undefined : (initial.repository ?? 'owner/sandbox'),
     // C4 (#77): what successive blueprint calls return; empty means the service is unavailable.
     baselines: [] as unknown[],
     eraseStatus: 0 as number,
@@ -68,7 +75,7 @@ export function intakeServer(
     if (call.path === '/capabilities')
       return {
         ...(state.capabilitiesStatus === undefined ? {} : { status: state.capabilitiesStatus }),
-        body: { foreman: state.foreman },
+        body: { foreman: state.foreman, ...(state.repository ? { repository: state.repository } : {}) },
       };
     if (call.path === '/research/ideas')
       return {

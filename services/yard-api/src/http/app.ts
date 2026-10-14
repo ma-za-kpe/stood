@@ -13,7 +13,7 @@ export function createYardApp(
     eventFeed?: EventFeed;
     board?: BoardConfig;
     // T-0266: hosted sign-in for the Yard page, served from this origin.
-    browser?: Readonly<{ origin: string }>;
+    browser?: Readonly<{ origin: string; plannerRepository?: string }>;
     // T-0267: the built Yard page, served from this origin.
     web?: Readonly<{ root: string }>;
   }>,
@@ -58,6 +58,9 @@ export function createYardApp(
       clock: config.board.clock,
       origin: config.browser.origin,
       foremanAvailable: !!config.board.foreman,
+      ...(config.board.foreman && config.browser.plannerRepository
+        ? { plannerRepository: config.browser.plannerRepository }
+        : {}),
     });
   if (config.web) {
     app.get('/app', (c) => c.redirect(`/app/${new URL(c.req.url).search}`, 308));

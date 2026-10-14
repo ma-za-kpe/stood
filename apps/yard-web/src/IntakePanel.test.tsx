@@ -229,7 +229,7 @@ describe('IntakePanel (T-0275)', () => {
     expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
     expect(screen.getByText(/Last saved:/)).toBeTruthy();
     expect(screen.getByText(/Planning a draft does not require keys/)).toBeTruthy();
-    expect(screen.getAllByText('Not chosen yet').length).toBeGreaterThan(5);
+    expect(screen.getAllByText('Not chosen yet').length).toBeGreaterThan(0);
     act(() => all.at(-1)?.open());
     expect(await screen.findByText(/Intake updates: connected/)).toBeTruthy();
     await click('Edit choices');
@@ -240,6 +240,89 @@ describe('IntakePanel (T-0275)', () => {
     expect((screen.getByLabelText('Saved what are we building?') as HTMLTextAreaElement).value).toBe(
       'Partial idea only',
     );
+  });
+
+  it('takes a new hosted intake from editable defaults through review and a blueprint request', async () => {
+    streams();
+    const server = intakeServer();
+    const calls = api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await waitFor(() => expect(calls.some((call) => call.path === '/capabilities')).toBe(true));
+    await click('Start a private intake');
+    await saved();
+
+    const created = server.state.record?.draft as {
+      timing: { capMinor: number; currency: string; deadline: number };
+      handover: { repository: string; production: string; consent: boolean };
+      audience: { platforms: string[] };
+    };
+    expect(created.timing).toMatchObject({ capMinor: 10000, currency: 'USD' });
+    expect(created.timing.deadline).toBeGreaterThan(Date.now());
+    expect(created.handover).toMatchObject({ repository: 'owner/sandbox', production: 'RENDER', consent: true });
+    expect(server.state.record?.draft).toMatchObject({
+      timing: { signoffName: 'Maku Mazakpe', signoffEmail: 'makpalyy@gmail.com' },
+    });
+    expect(created.audience.platforms).toEqual(['FOREMAN']);
+
+    fireEvent.change(screen.getByLabelText('What are we building?'), {
+      target: { value: 'A small appointment booking app' },
+    });
+    await click(/7 Budget and timing/);
+    expect((screen.getByLabelText('Total builder budget') as HTMLInputElement).value).toBe('100.00');
+    fireEvent.change(screen.getByLabelText('Total builder budget'), { target: { value: '125.00' } });
+    fireEvent.change(screen.getByLabelText('Who signs off at handover?'), { target: { value: 'Maku Mazakpe' } });
+    fireEvent.change(screen.getByLabelText('Sign-off email'), { target: { value: 'maku@example.test' } });
+    await click(/8 Ownership and handover/);
+    expect((screen.getByLabelText('Your GitHub repository') as HTMLInputElement).value).toBe('owner/sandbox');
+    fireEvent.change(screen.getByLabelText('Allow assigned agents or human builders to build this'), {
+      target: { value: 'true' },
+    });
+    await click('Review my brief');
+    expect(await screen.findByText('Review your project brief.')).toBeTruthy();
+    fireEvent.click(screen.getByText('People and places'));
+    expect(screen.getAllByText('Let the Foreman decide').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('The idea'));
+    expect(screen.getAllByText('None added (optional)').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('Services'));
+    expect(screen.getByText('No additional service selected')).toBeTruthy();
+    await waitFor(() => expect(server.state.record?.version).toBeGreaterThan(1));
+    expect(server.state.record?.draft).toMatchObject({
+      timing: { capMinor: 12500, currency: 'USD' },
+      handover: { repository: 'owner/sandbox', consent: true },
+      idea: { description: 'A small appointment booking app' },
+    });
+    await click('Ask the Foreman for a blueprint');
+    expect(await screen.findByText('Blueprint’s ready. Read the tests.')).toBeTruthy();
+    expect(calls.some((call) => call.path === '/capabilities')).toBe(true);
+    expect(calls.some((call) => call.path.endsWith('/plan') && call.method === 'POST')).toBe(true);
+    expect(calls.some((call) => call.path.endsWith('/plan') && call.body === '{}')).toBe(true);
+  });
+
+  it('adds defaults to a saved incomplete brief without replacing its existing answers', async () => {
+    streams();
+    const server = intakeServer();
+    const calls = api(server.reply);
+    server.state.record = {
+      id: 'saved-incomplete',
+      owner: 'buyer',
+      version: 1,
+      step: 0,
+      draft: { idea: { description: 'Keep this saved description' } },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    window.history.replaceState(null, '', '?intake=saved-incomplete');
+    render(<IntakePanel enabled hosted />);
+    expect(await screen.findByText('Review your project brief.')).toBeTruthy();
+    await click('Fill blank fields with editable defaults');
+    await waitFor(() => expect(server.state.record?.version).toBe(2));
+    expect(server.state.record?.draft).toMatchObject({
+      idea: { description: 'Keep this saved description', proofFlow: 'Let the Foreman propose a proof flow' },
+      timing: { capMinor: 10000, currency: 'USD' },
+      handover: { repository: 'owner/sandbox', production: 'RENDER', consent: true },
+    });
+    expect(calls.some((call) => call.method === 'PUT')).toBe(true);
+    expect(screen.getByText('Fill blank fields with editable defaults')).toBeTruthy();
   });
 
   it('lets an eligible hosted buyer request a draft blueprint when Foreman is available', async () => {
@@ -288,6 +371,21 @@ describe('IntakePanel (T-0275)', () => {
     expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
   });
 
+  it('keeps useful defaults when this deployment has no configured sandbox repository', async () => {
+    streams();
+    const server = intakeServer({ repository: null });
+    api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    expect(server.state.record?.draft).toMatchObject({
+      timing: { capMinor: 10000, currency: 'USD' },
+      handover: { production: 'RENDER', consent: true },
+    });
+    if (!server.state.record) throw new Error('Expected the hosted intake to be saved.');
+    expect((server.state.record.draft as { handover: Record<string, unknown> }).handover.repository).toBeUndefined();
+  });
+
   it('lets a buyer recheck capability after the status request fails', async () => {
     streams();
     const server = intakeServer({ draft: completeDraft(), step: 7, capabilitiesStatus: 503 });
@@ -302,6 +400,7 @@ describe('IntakePanel (T-0275)', () => {
     expect(await screen.findByText(/Planning availability could not be checked/)).toBeTruthy();
     expect(calls.filter((call) => call.path === '/capabilities')).toHaveLength(2);
     server.state.capabilitiesStatus = undefined;
+    server.state.repository = undefined;
     await click('Check planning availability again');
     expect(await screen.findByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeTruthy();
     expect(calls.filter((call) => call.path === '/capabilities')).toHaveLength(3);

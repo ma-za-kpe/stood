@@ -17,6 +17,7 @@ import {
   type IntakeValues,
   incompletePlanningChoices,
   stepNames,
+  withRecommendedDefaults,
 } from './intake-form.js';
 import { TribunalImportPanel } from './TribunalImportPanel.js';
 
@@ -67,7 +68,7 @@ const planSchema = z.object({
   requirements: z.array(z.object({ id: z.string(), text: z.string(), testIds: z.array(z.string()) })),
   risks: z.array(z.string()),
 });
-const capabilitiesSchema = z.object({ foreman: z.boolean() });
+const capabilitiesSchema = z.object({ foreman: z.boolean(), repository: z.string().optional() });
 type Plan = z.infer<typeof planSchema>;
 type ForemanCapability = 'checking' | 'available' | 'unavailable' | 'unknown';
 const wizard = createMachine({
@@ -96,6 +97,19 @@ const encoded = (values: IntakeValues) =>
   Object.fromEntries(Object.entries(values).map(([k, v]) => [k.replace('.', '__'), v]));
 const decoded = (values: IntakeValues) =>
   Object.fromEntries(Object.entries(values).map(([k, v]) => [k.replace('__', '.'), v]));
+const displayIntakeValue = (value: string | undefined, path: string) => {
+  if (value === undefined || value === '') {
+    if (path === 'services.selected') return 'No additional service selected';
+    if (path === 'idea.references' || path === 'idea.assets') return 'None added (optional)';
+    return 'Not chosen yet';
+  }
+  if (value === 'true') return 'Yes';
+  if (value === 'false') return 'No';
+  return value
+    .split('\n')
+    .map((line) => (line === 'FOREMAN' ? 'Let the Foreman decide' : line))
+    .join('\n');
+};
 export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hosted?: boolean }) {
   const actorRef = useRef<ReturnType<typeof createActor<typeof wizard>> | null>(null);
   const [state, setState] = useState({ view: 'editing', step: 0 });
@@ -127,6 +141,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     createId = useRef<string | null>(null);
   const [feedback, setFeedback] = useState('');
   const [foremanCapability, setForemanCapability] = useState<ForemanCapability>(hosted ? 'checking' : 'available');
+  const [plannerRepository, setPlannerRepository] = useState('');
   const [planningRecoveryAvailable, setPlanningRecoveryAvailable] = useState(false);
   const [externalStale, setExternalStale] = useState(false),
     [feed, setFeed] = useState('disconnected');
@@ -155,8 +170,11 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     setForemanCapability('checking');
     void api('/capabilities')
       .then((value) => capabilitiesSchema.parse(value))
-      .then(({ foreman }) => {
-        if (active) setForemanCapability(foreman ? 'available' : 'unavailable');
+      .then(({ foreman, repository }) => {
+        if (active) {
+          setPlannerRepository(repository ?? '');
+          setForemanCapability(foreman ? 'available' : 'unavailable');
+        }
       })
       .catch(() => {
         if (active) setForemanCapability('unknown');
@@ -217,7 +235,10 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     try {
       if (create && !createId.current) {
         createId.current = `idea-${browserRequestKey()}`;
-        createDraft.current = draft;
+        const initial = encoded(formValues(draft));
+        createDraft.current = hosted
+          ? formDraft(decoded(withRecommendedDefaults(initial, plannerRepository, Date.now())))
+          : draft;
       }
       const id = create ? (createId.current ?? '') : resumeId;
       if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new Error('Enter the intake ID from your saved link.');
@@ -309,6 +330,13 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       if (live.current) setBusy(false);
     }
   }, [enabled, externalStale, getValues, request, revision, state.step]);
+  const applyDefaults = async () => {
+    if (!record || pending.current || !enabled || externalStale) return;
+    const seeded = withRecommendedDefaults(decoded(getValues()), plannerRepository, Date.now());
+    for (const [key, value] of Object.entries(seeded)) setValue(key.replace('.', '__'), value, { shouldDirty: true });
+    setStatus('Recommended defaults added to blank fields. Review and edit them before planning.');
+    await save();
+  };
   // One write in flight. A changed answer during a save is picked up on completion;
   // a stale or failed write never marks those newer answers as saved.
   useEffect(() => {
@@ -547,7 +575,10 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
         <div className="project-start">
           <aside className="own-project" aria-labelledby="own-project-title">
             <h3 id="own-project-title">Have your own idea?</h3>
-            <p>Describe what you want to build. Add your scope, budget and requirements one step at a time.</p>
+            <p>
+              Describe what you want to build. This hosted sandbox starts with editable recommendations, including a
+              $100 USD budget, a 21-day target and its configured repository. Review them before planning.
+            </p>
             <button type="button" disabled={busy} onClick={() => void open(true)}>
               Start a private intake
             </button>
@@ -740,7 +771,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                               rows={6}
                             />
                           ) : (
-                            decoded(getValues())[field.path] || 'Not chosen yet'
+                            displayIntakeValue(decoded(getValues())[field.path], field.path)
                           )}
                         </dd>
                       </div>
@@ -751,6 +782,11 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
               <button type="button" disabled={busy} onClick={() => actorRef.current?.send({ type: 'EDIT' })}>
                 Edit choices
               </button>
+              {hosted && (
+                <button type="button" disabled={busy || externalStale} onClick={() => void applyDefaults()}>
+                  Fill blank fields with editable defaults
+                </button>
+              )}
               {hosted ? (
                 foremanCapability === 'checking' ? (
                   <p role="status">Checking whether Foreman planning is available…</p>
@@ -770,7 +806,10 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                         setForemanCapability('checking');
                         void api('/capabilities')
                           .then((value) => capabilitiesSchema.parse(value))
-                          .then(({ foreman }) => setForemanCapability(foreman ? 'available' : 'unavailable'))
+                          .then(({ foreman, repository }) => {
+                            setPlannerRepository(repository ?? '');
+                            setForemanCapability(foreman ? 'available' : 'unavailable');
+                          })
                           .catch(() => setForemanCapability('unknown'));
                       }}
                     >

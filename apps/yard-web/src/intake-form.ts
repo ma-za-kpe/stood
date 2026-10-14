@@ -146,7 +146,7 @@ export const formFields: readonly (readonly IntakeField[])[] = [
     field(
       'handover.consent',
       'Allow assigned agents or human builders to build this',
-      'Your repository is visible only to the assigned builder. This does not authorise a payment.',
+      'Preselected in this hosted sandbox so planning can continue; review or change it. This does not authorise a payment.',
       'boolean',
     ),
   ],
@@ -181,6 +181,59 @@ export function incompletePlanningChoices(draft: IntakeDraft, now: number): stri
   if (!Number.isSafeInteger(now) || typeof deadline !== 'number' || deadline <= now) missing.add('Deadline');
   return [...missing];
 }
+// Defaults are starting points the buyer can edit. Preserve every non-empty answer.
+export function recommendedDefaults(repository: string, now: number): IntakeValues {
+  const deadline = new Date(now + 21 * 86400000).toISOString().slice(0, 16);
+  return {
+    'idea.users': 'FOREMAN',
+    'idea.proofFlow': 'Let the Foreman propose a proof flow',
+    'idea.references': '',
+    'idea.assets': '',
+    'audience.platforms': 'FOREMAN',
+    'audience.countries': 'FOREMAN',
+    'audience.currencies': 'FOREMAN',
+    'audience.languages': 'FOREMAN',
+    'audience.usersMonth1': 'FOREMAN',
+    'audience.usersMonth12': 'FOREMAN',
+    'audience.accessibility': 'WCAG AA',
+    'audience.offline': 'FOREMAN',
+    'features.selected': 'FOREMAN',
+    'features.details': 'Let the Foreman decide',
+    'data.categories': 'FOREMAN',
+    'data.personalData': 'FOREMAN',
+    'data.regimes': 'FOREMAN',
+    'data.residency': 'FOREMAN',
+    'data.importSource': 'FOREMAN',
+    'data.retention': 'FOREMAN',
+    'stack.choice': 'FOREMAN',
+    'stack.language': 'FOREMAN',
+    'stack.framework': 'FOREMAN',
+    'stack.database': 'FOREMAN',
+    'stack.cloud': 'FOREMAN',
+    'services.selected': '',
+    'services.decide': 'true',
+    'timing.capMinor': '100.00',
+    'timing.currency': 'USD',
+    'timing.deadline': deadline,
+    'timing.pace': 'FOREMAN',
+    'timing.signoffName': 'Maku Mazakpe',
+    'timing.signoffEmail': 'makpalyy@gmail.com',
+    'handover.repository': repository,
+    'handover.production': 'RENDER',
+    'handover.domain': 'None',
+    'handover.licence': 'Proprietary',
+    'handover.maintainer': 'Me',
+    'handover.consent': 'true',
+  };
+}
+
+export function withRecommendedDefaults(values: IntakeValues, repository: string, now: number): IntakeValues {
+  const defaults = recommendedDefaults(repository, now);
+  const result = { ...defaults };
+  for (const [path, value] of Object.entries(values)) if (value.trim()) result[path] = value;
+  return result;
+}
+
 export function majorToMinor(value: string): number {
   if (!/^\d+(\.\d{1,2})?$/.test(value)) throw new Error('Enter an amount with no more than two decimal places.');
   const [whole = '', fraction = ''] = value.split('.');
@@ -279,7 +332,14 @@ export function foremanChoices(step: number): IntakeValues {
       'data.importSource': 'FOREMAN',
       'data.retention': 'FOREMAN',
     };
-  if (name === 'stack') return Object.fromEntries((formFields[4] ?? []).map((f) => [f.path, 'FOREMAN']));
+  if (name === 'stack')
+    return {
+      'stack.choice': 'FOREMAN',
+      'stack.language': 'FOREMAN',
+      'stack.framework': 'FOREMAN',
+      'stack.database': 'FOREMAN',
+      'stack.cloud': 'FOREMAN',
+    };
   if (name === 'services') return { 'services.selected': '', 'services.decide': 'true' };
   if (name === 'timing') return { 'timing.pace': 'FOREMAN' };
   return {
