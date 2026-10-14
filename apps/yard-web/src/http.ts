@@ -7,12 +7,15 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
-export async function api(path: string, options?: RequestInit) {
+export const API_TIMEOUT_MS = 20_000;
+export const PLANNER_TIMEOUT_MS = 180_000;
+
+export async function api(path: string, options?: RequestInit, timeoutMs = API_TIMEOUT_MS) {
   const response = await fetch(`/app/api${path}`, {
     ...options,
     signal: options?.signal
-      ? AbortSignal.any([options.signal, AbortSignal.timeout(20_000)])
-      : AbortSignal.timeout(20_000),
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs),
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
