@@ -1,11 +1,26 @@
 name: Feature or use case
 description: Propose a capability or a new evidence profile
-labels: [enhancement]
+labels: [enhancement, 'status: needs-triage']
 body:
+  - type: checkboxes
+    id: duplicates
+    attributes:
+      label: Duplicate check
+      description: Search both open and closed issues before filing.
+      options:
+        - label: I checked open and closed issues and this is not a duplicate.
+          required: true
   - type: textarea
     id: problem
     attributes:
       label: Who is the payer, who is the payee, and what does "done" mean?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: What behavior or solution do you propose?
+      description: Describe the outcome or approach. It is fine to leave implementation details open.
     validations:
       required: true
   - type: textarea
