@@ -19,7 +19,12 @@ function setup() {
     createdAt: now,
     updatedAt: now,
   };
-  const store = { load: vi.fn(async () => record), save: vi.fn(), read: vi.fn(async () => []) };
+  const store = {
+    load: vi.fn(async () => record),
+    save: vi.fn(),
+    read: vi.fn(async () => []),
+    registerPlan: vi.fn(async () => {}),
+  };
   const draft = vi.fn(async (input: unknown) => input);
   const read = vi.fn(async (): Promise<never> => {
     throw new YardError('NOT_FOUND');
@@ -29,8 +34,9 @@ function setup() {
   return { record, store, draft, read, repositories, planner: new IntakePlanner(store, foreman, repositories) };
 }
 it('plans an owned saved version with a server-resolved repository and every intake choice', async () => {
-  const { planner, draft, repositories, record } = setup();
+  const { planner, draft, repositories, record, store } = setup();
   await planner.create('idea', 'buyer', 2, now);
+  expect(store.registerPlan).toHaveBeenCalledWith('idea', 'buyer', 2, intakePlanId('buyer', 'idea', 2));
   const input = draft.mock.calls[0]?.[0] as {
     id: string;
     context: string;

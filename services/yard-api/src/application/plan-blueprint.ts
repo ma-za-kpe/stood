@@ -2,11 +2,14 @@ import type { BaselineInput, BaselineView } from '@stood/stood-sdk';
 import type { Blueprint, BlueprintInput, FreezeProof, Plan } from '@stood/yard-domain';
 import { YardError, type YardSnapshot } from '../ports/events.js';
 import type { ForemanPlans } from '../ports/foreman.js';
+import type { IntakeStore } from '../ports/intakes.js';
 import type { Repositories } from '../ports/repositories.js';
 import type { Operator } from './board.js';
+import { isIntakePlanId } from './intake-planner.js';
 
 type Deps = Readonly<{
   plans: Pick<ForemanPlans, 'read'>;
+  intakes?: Pick<IntakeStore, 'withPlanLock'>;
   repositories: Pick<Repositories, 'issue' | 'seedTests'>;
   // The Yard GitHub App installation that holds the buyer's repository.
   installation: string;
@@ -38,7 +41,7 @@ const blueprintOf = (snapshot: YardSnapshot) => (snapshot.data as { blueprint: B
 // 2. The Board blueprint is created from the plan at that commit, with each milestone's test manifest.
 // 3. Stood runs each milestone's tests on the base commit in its isolated runner (a baseline).
 // 4. Only when every frozen test failed there is the blueprint frozen, with Stood's evidence as the proof.
-export async function planBlueprint(planId: string, actor: Operator, deps: Deps): Promise<PlanBlueprint> {
+async function createBlueprint(planId: string, actor: Operator, deps: Deps): Promise<PlanBlueprint> {
   let plan: Plan;
   try {
     plan = await deps.plans.read(planId);
@@ -121,4 +124,15 @@ export async function planBlueprint(planId: string, actor: Operator, deps: Deps)
     `yard-freeze:${draft.id}`,
   );
   return result('FROZEN');
+}
+
+export async function planBlueprint(planId: string, actor: Operator, deps: Deps): Promise<PlanBlueprint> {
+  if (deps.intakes?.withPlanLock) {
+    const locked = await deps.intakes.withPlanLock(planId, () => createBlueprint(planId, actor, deps));
+    if (locked.linked) return locked.value;
+    // A deterministic intake plan without a durable link is a legacy or orphaned record. Fail closed: it must not
+    // be allowed to create a project after its source intake was erased.
+    if (isIntakePlanId(planId)) throw new YardError('CONFLICT');
+  }
+  return createBlueprint(planId, actor, deps);
 }
