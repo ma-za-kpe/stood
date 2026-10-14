@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, render, streams } from '../test/harness.js';
 import { completeDraft, intakeServer, plan, progress, T } from '../test/intake-server.js';
+import { PLANNER_TIMEOUT_MS } from './http.js';
 import { IntakePanel } from './IntakePanel.js';
 
 afterEach(() => {
@@ -351,6 +352,11 @@ describe('IntakePanel (T-0275)', () => {
   });
 
   it('lets an eligible hosted buyer request a draft blueprint when Foreman is available', async () => {
+    const timeouts: number[] = [];
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
+      timeouts.push(milliseconds);
+      return new AbortController().signal;
+    });
     streams();
     const server = intakeServer({ draft: completeDraft(), step: 7 });
     const calls = api(server.reply);
@@ -363,6 +369,7 @@ describe('IntakePanel (T-0275)', () => {
     expect(await screen.findByText('Blueprint’s ready. Read the tests.')).toBeTruthy();
     expect(calls.some((call) => call.path.endsWith('/plan') && call.method === 'POST')).toBe(true);
     expect(calls.some((call) => call.path === '/capabilities')).toBe(true);
+    expect(timeouts.at(-1)).toBe(PLANNER_TIMEOUT_MS);
   });
 
   it('rechecks completeness at click time if the saved deadline expires after rendering', async () => {
