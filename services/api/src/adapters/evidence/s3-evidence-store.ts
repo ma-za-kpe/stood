@@ -68,7 +68,7 @@ export class S3EvidenceStore implements EvidenceStore {
     this.http = config.fetch ?? fetch;
     this.clock = config.clock ?? Date.now;
   }
-  private async send(method: 'GET' | 'PUT', key: string, body?: Buffer, extra: Record<string, string> = {}) {
+  private async send(method: 'GET' | 'PUT' | 'DELETE', key: string, body?: Buffer, extra: Record<string, string> = {}) {
     const url = new URL(`/${this.config.bucket}/${key}`, this.base);
     const payloadHash = sha256(body ?? '');
     const amzDate = new Date(this.clock()).toISOString().replace(/[-:]|\.\d{3}/g, '');
@@ -197,5 +197,14 @@ export class S3EvidenceStore implements EvidenceStore {
     } finally {
       reader.releaseLock();
     }
+  }
+
+  async deleteUpload(key: string): Promise<'DELETED' | 'ABSENT'> {
+    // Do not expose general evidence deletion: only the exact immutable upload-session key shape is eligible.
+    if (!/^uploads\/upl_[a-f0-9-]{36}\/[0-9]+-[a-f0-9]{64}$/.test(key)) throw new EvidenceStoreError('INVALID_KEY');
+    const response = await this.send('DELETE', key);
+    if (response.status === 404) return 'ABSENT';
+    if (!response.ok) throw new EvidenceStoreError('UNAVAILABLE');
+    return 'DELETED';
   }
 }
