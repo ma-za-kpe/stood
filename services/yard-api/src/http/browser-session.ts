@@ -60,7 +60,12 @@ const digest = (s: string) => createHash('sha256').update(s).digest();
 // session id (in memory: one instance; a restart signs everyone out). Changes must come from the page's own origin.
 export function hostedSessions(
   app: Hono,
-  config: Readonly<{ operators: readonly Operator[]; clock(): Promise<number>; origin: string }>,
+  config: Readonly<{
+    operators: readonly Operator[];
+    clock(): Promise<number>;
+    origin: string;
+    foremanAvailable?: boolean;
+  }>,
 ): void {
   const sessions = new Map<string, { key: string; expiresAt: number }>();
   const failures = new Map<string, { count: number; since: number }>();
@@ -85,6 +90,11 @@ export function hostedSessions(
     if (!['GET', 'HEAD'].includes(c.req.method) && c.req.header('Origin') !== config.origin)
       return c.json({ code: 'forbidden' }, 403);
     await next();
+  });
+  // This reveals only whether planning is configured in this deployment, as already exposed by /health.
+  app.get('/app/api/capabilities', (c) => {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ foreman: config.foremanAvailable ?? false });
   });
   app.get('/app/api/session', async (c) => {
     const o = await current(c);

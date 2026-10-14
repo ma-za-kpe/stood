@@ -41,7 +41,9 @@ export const progress = (status: string, milestones: { baseline: string; passing
   milestones: milestones.map((m, i) => ({ id: `m${i + 1}`, passing: [], ...m })),
 });
 
-export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
+export function intakeServer(
+  initial: { draft?: unknown; step?: number; foreman?: boolean; capabilitiesStatus?: number } = {},
+) {
   const state = {
     record: null as null | {
       id: string;
@@ -55,11 +57,19 @@ export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
     plan: plan(),
     failPut: 0 as number,
     failPlan: false,
+    failRecover: false,
+    capabilitiesStatus: initial.capabilitiesStatus,
+    foreman: initial.foreman ?? true,
     // C4 (#77): what successive blueprint calls return; empty means the service is unavailable.
     baselines: [] as unknown[],
     eraseStatus: 0 as number,
   };
   const reply = (call: Call) => {
+    if (call.path === '/capabilities')
+      return {
+        ...(state.capabilitiesStatus === undefined ? {} : { status: state.capabilitiesStatus }),
+        body: { foreman: state.foreman },
+      };
     if (call.path === '/research/ideas')
       return {
         body: {
@@ -84,6 +94,8 @@ export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
       };
       return { body: state.record };
     }
+    const recovery = /^\/intakes\/([^/]+)\/plan\/recover$/.exec(call.path);
+    if (recovery && call.method === 'POST') return state.failRecover ? { status: 503 } : { body: state.plan };
     const intake = /^\/intakes\/([^/]+)(\/plan)?$/.exec(call.path);
     if (intake && call.method === 'GET')
       return state.record && state.record.id === intake[1] ? { body: state.record } : { status: 404 };

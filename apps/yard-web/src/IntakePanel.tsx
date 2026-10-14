@@ -9,7 +9,15 @@ import type { AcceptanceCase, EditableDraft } from './blueprint-edit.js';
 import { CostBreakdown } from './CostBreakdown.js';
 import { browserRequestKey } from './claim-keys.js';
 import { ApiError, api } from './http.js';
-import { foremanChoices, formDraft, formFields, formValues, type IntakeValues, stepNames } from './intake-form.js';
+import {
+  foremanChoices,
+  formDraft,
+  formFields,
+  formValues,
+  type IntakeValues,
+  incompletePlanningChoices,
+  stepNames,
+} from './intake-form.js';
 import { TribunalImportPanel } from './TribunalImportPanel.js';
 
 const recordSchema = z.object({
@@ -59,7 +67,9 @@ const planSchema = z.object({
   requirements: z.array(z.object({ id: z.string(), text: z.string(), testIds: z.array(z.string()) })),
   risks: z.array(z.string()),
 });
+const capabilitiesSchema = z.object({ foreman: z.boolean() });
 type Plan = z.infer<typeof planSchema>;
+type ForemanCapability = 'checking' | 'available' | 'unavailable' | 'unknown';
 const wizard = createMachine({
   context: { step: 0 },
   initial: 'editing',
@@ -116,6 +126,8 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     ),
     createId = useRef<string | null>(null);
   const [feedback, setFeedback] = useState('');
+  const [foremanCapability, setForemanCapability] = useState<ForemanCapability>(hosted ? 'checking' : 'available');
+  const [planningRecoveryAvailable, setPlanningRecoveryAvailable] = useState(false);
   const [externalStale, setExternalStale] = useState(false),
     [feed, setFeed] = useState('disconnected');
   const live = useRef(true),
@@ -137,6 +149,22 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     const subscription = watch(() => setRevision((v) => v + 1));
     return () => subscription.unsubscribe();
   }, [watch]);
+  useEffect(() => {
+    if (!hosted || !enabled) return;
+    let active = true;
+    setForemanCapability('checking');
+    void api('/capabilities')
+      .then((value) => capabilitiesSchema.parse(value))
+      .then(({ foreman }) => {
+        if (active) setForemanCapability(foreman ? 'available' : 'unavailable');
+      })
+      .catch(() => {
+        if (active) setForemanCapability('unknown');
+      });
+    return () => {
+      active = false;
+    };
+  }, [enabled, hosted]);
   useEffect(() => {
     if (!enabled || !record) return;
     const source = new EventSource(`/app/api/intakes/${encodeURIComponent(record.id)}/events?since=${record.version}`);
@@ -262,6 +290,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       if (!live.current) return false;
       recordRef.current = next;
       setRecord(next);
+      setPlanningRecoveryAvailable(false);
       saved.current = JSON.stringify(command.values);
       retryWrite.current = null;
       failedRevision.current = -1;
@@ -313,7 +342,14 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
   };
   const planWork = async () => {
     const current = recordRef.current;
-    if (!current || pending.current || externalStale || hosted) return;
+    if (!current || pending.current || externalStale || (hosted && foremanCapability !== 'available')) return;
+    if (hosted) {
+      const missing = incompletePlanningChoices(current.draft, Date.now());
+      if (missing.length) {
+        setError(`Complete or correct these choices before planning: ${missing.join(', ')}.`);
+        return;
+      }
+    }
     pending.current = true;
     setBusy(true);
     setError('');
@@ -332,7 +368,38 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       }
     } catch (e) {
       if (live.current) {
+        if (hosted) setPlanningRecoveryAvailable(true);
         setError((e as Error).message);
+        actorRef.current?.send({ type: 'ERROR' });
+      }
+    } finally {
+      pending.current = false;
+      if (live.current) setBusy(false);
+    }
+  };
+  const recoverPlanning = async () => {
+    const current = recordRef.current;
+    if (!current || pending.current || externalStale || (hosted && foremanCapability !== 'available')) return;
+    pending.current = true;
+    setBusy(true);
+    setError('');
+    actorRef.current?.send({ type: 'PLAN' });
+    try {
+      const next = planSchema.parse(
+        await request(`/intakes/${current.id}/plan/recover`, {
+          method: 'POST',
+          headers: { 'If-Match': String(current.version) },
+          body: '{}',
+        }),
+      );
+      if (live.current) {
+        setPlan(next);
+        setPlanningRecoveryAvailable(false);
+        actorRef.current?.send({ type: 'DONE' });
+      }
+    } catch (e) {
+      if (live.current) {
+        setError(`The saved planning attempt could not be recovered: ${(e as Error).message} You can retry planning.`);
         actorRef.current?.send({ type: 'ERROR' });
       }
     } finally {
@@ -474,9 +541,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
             : error}
         </p>
       )}
-      {hosted && record && (
-        <p className="fine">Saved privately. Planning is coming next; nothing is signed or funded.</p>
-      )}
+      {hosted && record && <p className="fine">Saved privately. Nothing is signed or funded.</p>}
       <p role="status">{busy ? 'Working…' : status}</p>
       {!record ? (
         <div className="project-start">
@@ -687,12 +752,54 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
                 Edit choices
               </button>
               {hosted ? (
-                <p role="note">
-                  Planning is the next connection. Your saved brief is ready to continue when it is available.
-                </p>
+                foremanCapability === 'checking' ? (
+                  <p role="status">Checking whether Foreman planning is available…</p>
+                ) : foremanCapability === 'unavailable' ? (
+                  <p role="note">
+                    Foreman planning is unavailable in this Yard deployment. Your brief is saved; try again later.
+                  </p>
+                ) : foremanCapability === 'unknown' ? (
+                  <>
+                    <p role="note">
+                      Planning availability could not be checked. Your brief is saved; recheck availability to continue.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setForemanCapability('checking');
+                        void api('/capabilities')
+                          .then((value) => capabilitiesSchema.parse(value))
+                          .then(({ foreman }) => setForemanCapability(foreman ? 'available' : 'unavailable'))
+                          .catch(() => setForemanCapability('unknown'));
+                      }}
+                    >
+                      Check planning availability again
+                    </button>
+                  </>
+                ) : (
+                  (() => {
+                    const missing = incompletePlanningChoices(record.draft, Date.now());
+                    return missing.length ? (
+                      <p role="note">
+                        Complete or correct these choices before requesting a blueprint: {missing.join(', ')}. Choose
+                        Edit choices to update them.
+                      </p>
+                    ) : (
+                      <button type="button" disabled={busy || externalStale} onClick={() => void planWork()}>
+                        Ask the Foreman for a blueprint
+                      </button>
+                    );
+                  })()
+                )
               ) : (
                 <button type="button" disabled={busy} onClick={() => void planWork()}>
                   Ask the Foreman for a blueprint
+                </button>
+              )}
+              {hosted && planningRecoveryAvailable && foremanCapability === 'available' && (
+                <button type="button" disabled={busy || externalStale} onClick={() => void recoverPlanning()}>
+                  Recover saved planning attempt
                 </button>
               )}
             </>
@@ -788,9 +895,14 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
             </>
           )}
           <p className="fine">
-            Simulation date: {new Date(record.updatedAt).toLocaleDateString('en', { timeZone: 'UTC' })}. Step 9 —
-            test-key connection — is disabled. Real keys belong in your own hosting at handover.
+            Last saved: {new Date(record.updatedAt).toLocaleString('en', { timeZone: 'UTC' })} UTC.
           </p>
+          {hosted && (
+            <p className="fine">
+              Credential entry is disabled here. Planning a draft does not require keys; add real keys only in your own
+              hosting at handover.
+            </p>
+          )}
         </>
       )}
     </section>

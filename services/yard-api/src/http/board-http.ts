@@ -57,7 +57,7 @@ export type BoardConfig = Readonly<{
     intakes?: Pick<IntakeStore, 'withPlanLock'>;
   }>;
   intakes?: IntakeStore;
-  intakePlanner?: Pick<IntakePlanner, 'create'>;
+  intakePlanner?: Pick<IntakePlanner, 'create' | 'recover'>;
   secrets?: SecretVault;
   mandates?: DraftGateway;
   amendments?: AmendmentGateway;

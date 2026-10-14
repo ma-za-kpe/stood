@@ -57,6 +57,7 @@ export function createYardApp(
       operators: config.board.operators,
       clock: config.board.clock,
       origin: config.browser.origin,
+      foremanAvailable: !!config.board.foreman,
     });
   if (config.web) {
     app.get('/app', (c) => c.redirect(`/app/${new URL(c.req.url).search}`, 308));
