@@ -23,6 +23,10 @@ import { browserSession } from './fakes/browser-session.js';
 
 if (process.env.NETWORK_MOCK !== 'true' || process.env.APP_ENV !== 'ci') throw new Error('Mock Yard refused');
 const pool = new pg.Pool({ connectionString: 'postgres://yard_runtime:sim-yard-database-only@db:5432/stood_mock' });
+const intakeLockPool = new pg.Pool({
+  connectionString: 'postgres://yard_runtime:sim-yard-database-only@db:5432/stood_mock',
+  max: 5,
+});
 await pool.query('SELECT version FROM yard.schema_migrations WHERE version=1');
 const clock = async () => {
   const response = await fetch('http://paypal-sim:8080/__sim/time', {
@@ -36,7 +40,7 @@ const clock = async () => {
   return value.now;
 };
 const events = new PostgresYardEvents(pool, clock);
-const intakes = new PostgresIntakes(pool, events);
+const intakes = new PostgresIntakes(pool, events, intakeLockPool);
 const foreman = new Foreman(
   new ScriptedPlannerModel('ci'),
   new PostgresSaver(pool, undefined, { schema: 'yard' }),
@@ -157,6 +161,6 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () => {
     retention.stop();
     server.close(() => {
-      void pool.end();
+      void Promise.all([pool.end(), intakeLockPool.end()]);
     });
   });

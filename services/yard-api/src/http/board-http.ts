@@ -54,6 +54,7 @@ export type BoardConfig = Readonly<{
     repositories: Pick<Repositories, 'issue' | 'seedTests'>;
     installation: string;
     stood: Readonly<{ requestBaseline(input: BaselineInput, key: string): Promise<BaselineView> }>;
+    intakes?: Pick<IntakeStore, 'withPlanLock'>;
   }>;
   intakes?: IntakeStore;
   intakePlanner?: Pick<IntakePlanner, 'create'>;

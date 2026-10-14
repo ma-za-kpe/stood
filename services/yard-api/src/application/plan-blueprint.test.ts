@@ -116,6 +116,54 @@ async function harness(status?: Plan['status']) {
 
 // C4 (#77): an accepted plan becomes a frozen Board blueprint only after Stood's runner shows every frozen test red.
 describe('planBlueprint', () => {
+  it('keeps intake conversion inside the source draft deletion fence through project creation', async () => {
+    const h = await harness();
+    let locked = false;
+    const originalIssue = h.deps.repositories.issue.bind(h.deps.repositories);
+    const originalSeed = h.deps.repositories.seedTests.bind(h.deps.repositories);
+    const originalCreate = h.deps.board.create.bind(h.deps.board);
+    const originalRead = h.deps.board.read.bind(h.deps.board);
+    const originalFreeze = h.deps.board.freeze.bind(h.deps.board);
+    const guarded = {
+      ...h.deps,
+      intakes: {
+        withPlanLock: async <T>(planId: string, run: () => Promise<T>) => {
+          expect(planId).toBe('plan-1');
+          locked = true;
+          try {
+            return { linked: true as const, value: await run() };
+          } finally {
+            locked = false;
+          }
+        },
+      },
+      repositories: {
+        ...h.deps.repositories,
+        issue: async (...args: Parameters<typeof h.deps.repositories.issue>) => {
+          expect(locked).toBe(true);
+          return originalIssue(...args);
+        },
+        seedTests: async (...args: Parameters<typeof h.deps.repositories.seedTests>) => {
+          expect(locked).toBe(true);
+          return originalSeed(...args);
+        },
+      },
+      board: {
+        read: (...args: Parameters<typeof h.deps.board.read>) => originalRead(...args),
+        create: async (...args: Parameters<typeof h.deps.board.create>) => {
+          expect(locked).toBe(true);
+          return originalCreate(...args);
+        },
+        freeze: (...args: Parameters<typeof h.deps.board.freeze>) => originalFreeze(...args),
+      },
+    };
+    await expect(planBlueprint('plan-1', buyer, guarded)).resolves.toMatchObject({
+      blueprintId: 'shop',
+      status: 'BASELINE_RUNNING',
+    });
+    expect(locked).toBe(false);
+  });
+
   it('seeds the tests onto main, creates the blueprint at that commit and freezes it once every test failed', async () => {
     const h = await harness();
     const first = await planBlueprint('plan-1', buyer, h.deps);

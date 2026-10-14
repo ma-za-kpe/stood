@@ -62,9 +62,9 @@ export function yardRuntime(env: Env) {
     return { config: { environment } as Config, notes, jobs: [], start: async () => {}, stop: async () => {} };
 
   const pool = new pg.Pool({ connectionString: url, max: 5 });
-  // Long planning calls hold an intake advisory lock while Foreman uses the main pool. Keep lock sessions isolated
-  // so a full set of planners cannot consume every connection they need to finish their own checkpoints.
-  const intakeLockPool = new pg.Pool({ connectionString: url, max: 1 });
+  // Acquire intake locks before main-pool work; saves waiting on another operation stay out of the five connections
+  // that the lock holder needs for reads, checkpoints and cleanup. The dedicated pool supports five lock holders.
+  const intakeLockPool = new pg.Pool({ connectionString: url, max: 5 });
   const clock = async () => Date.now();
   const events = new PostgresYardEvents(pool, clock);
   // ADR-0027: with the real Stood, Yard's PayPal merchant id is the payee of every allowance.
@@ -116,7 +116,7 @@ export function yardRuntime(env: Env) {
         ? { foreman, intakePlanner: new IntakePlanner(intakes, foreman, planner.repositories) }
         : {}),
       // C4 (#77): accepted plans become frozen blueprints once Stood's runner shows every frozen test red.
-      ...(foreman && planner && stood ? { planBlueprints: { ...planner.seed, stood } } : {}),
+      ...(foreman && planner && stood ? { planBlueprints: { ...planner.seed, stood, intakes } } : {}),
       clock,
       operators,
       secrets: vault,
