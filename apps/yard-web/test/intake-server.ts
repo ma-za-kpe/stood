@@ -41,7 +41,9 @@ export const progress = (status: string, milestones: { baseline: string; passing
   milestones: milestones.map((m, i) => ({ id: `m${i + 1}`, passing: [], ...m })),
 });
 
-export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
+export function intakeServer(
+  initial: { draft?: unknown; step?: number; foreman?: boolean; capabilitiesStatus?: number } = {},
+) {
   const state = {
     record: null as null | {
       id: string;
@@ -60,6 +62,11 @@ export function intakeServer(initial: { draft?: unknown; step?: number } = {}) {
     eraseStatus: 0 as number,
   };
   const reply = (call: Call) => {
+    if (call.path === '/capabilities')
+      return {
+        ...(initial.capabilitiesStatus === undefined ? {} : { status: initial.capabilitiesStatus }),
+        body: { foreman: initial.foreman ?? true },
+      };
     if (call.path === '/research/ideas')
       return {
         body: {

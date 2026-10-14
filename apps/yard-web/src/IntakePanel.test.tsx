@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, render, streams } from '../test/harness.js';
 import { completeDraft, intakeServer, plan, progress } from '../test/intake-server.js';
 import { IntakePanel } from './IntakePanel.js';
 
-afterEach(() => window.history.replaceState(null, '', '/'));
+afterEach(() => {
+  window.history.replaceState(null, '', '/');
+  vi.restoreAllMocks();
+});
 const click = async (name: string | RegExp) => {
   await act(async () => fireEvent.click(screen.getByRole('button', { name })));
 };
@@ -17,8 +20,10 @@ const saved = () =>
 
 describe('IntakePanel (T-0275)', () => {
   it('asks people to sign in as a buyer first', () => {
-    render(<IntakePanel enabled={false} />);
+    const calls = api(() => ({ body: { foreman: true } }));
+    render(<IntakePanel enabled={false} hosted />);
     expect(screen.getByText('Sign in as a buyer to start or resume a private intake.')).toBeTruthy();
+    expect(calls).toHaveLength(0);
   });
 
   it('starts a private intake, autosaves with version checks, and moves between sections', async () => {
@@ -205,7 +210,7 @@ describe('IntakePanel (T-0275)', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/looks like a key/);
   });
 
-  it('opens a saved hosted link as a brief overview, allows partial briefs and explains planning is next', async () => {
+  it('opens a saved hosted link, names missing planning choices, and keeps credentials separate', async () => {
     const all = streams();
     const server = intakeServer();
     const calls = api(server.reply);
@@ -219,8 +224,11 @@ describe('IntakePanel (T-0275)', () => {
     render(<IntakePanel enabled hosted />);
     expect(await screen.findByText('Review your project brief.')).toBeTruthy();
     expect(calls.filter((c) => c.method === 'GET' && c.path === `/intakes/${id}`).length).toBe(1);
-    expect(screen.getByText(/Planning is the next connection/)).toBeTruthy();
-    expect(screen.getByText(/Planning is coming next; nothing is signed or funded/)).toBeTruthy();
+    expect(screen.getByText(/Complete or correct these choices before requesting a blueprint/)).toBeTruthy();
+    expect(screen.getByText('What are we building?')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
+    expect(screen.getByText(/Last saved:/)).toBeTruthy();
+    expect(screen.getByText(/Planning a draft does not require keys/)).toBeTruthy();
     expect(screen.getAllByText('Not chosen yet').length).toBeGreaterThan(5);
     act(() => all.at(-1)?.open());
     expect(await screen.findByText(/Intake updates: connected/)).toBeTruthy();
@@ -232,6 +240,99 @@ describe('IntakePanel (T-0275)', () => {
     expect((screen.getByLabelText('Saved what are we building?') as HTMLTextAreaElement).value).toBe(
       'Partial idea only',
     );
+  });
+
+  it('lets an eligible hosted buyer request a draft blueprint when Foreman is available', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    const calls = api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    expect(await screen.findByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeTruthy();
+    await click('Ask the Foreman for a blueprint');
+    expect(await screen.findByText('Blueprint’s ready. Read the tests.')).toBeTruthy();
+    expect(calls.some((call) => call.path.endsWith('/plan') && call.method === 'POST')).toBe(true);
+    expect(calls.some((call) => call.path === '/capabilities')).toBe(true);
+  });
+
+  it('rechecks completeness at click time if the saved deadline expires after rendering', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    const calls = api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    expect(await screen.findByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeTruthy();
+    const record = server.state.record;
+    if (!record) throw new Error('Expected the test intake to be saved.');
+    const deadline = (record.draft as { timing: { deadline: number } }).timing.deadline;
+    vi.spyOn(Date, 'now').mockReturnValue(deadline + 1);
+    await click('Ask the Foreman for a blueprint');
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Deadline/);
+    expect(calls.filter((call) => call.path.endsWith('/plan'))).toHaveLength(0);
+    vi.restoreAllMocks();
+  });
+
+  it('reports the Foreman capability as unavailable and does not offer planning', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7, foreman: false });
+    api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    expect(await screen.findByText(/Foreman planning is unavailable in this Yard deployment/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
+  });
+
+  it('shows an unknown capability state when the status check cannot be reached', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7, capabilitiesStatus: 503 });
+    api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    expect(await screen.findByText(/Planning availability could not be checked/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeNull();
+  });
+
+  it('shows the capability check while pending and ignores its reply after unmount', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    let finish: (() => void) | undefined;
+    api((call) =>
+      call.path === '/capabilities'
+        ? new Promise((resolve) => {
+            finish = () => resolve({ body: { foreman: true } });
+          })
+        : server.reply(call),
+    );
+    const view = render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    expect(screen.getByText(/Checking whether Foreman planning is available/)).toBeTruthy();
+    view.unmount();
+    finish?.();
+  });
+
+  it('reports planning becoming unavailable after the capability check', async () => {
+    streams();
+    const server = intakeServer({ draft: completeDraft(), step: 7 });
+    server.state.failPlan = true;
+    const calls = api(server.reply);
+    render(<IntakePanel enabled hosted />);
+    await click('Start a private intake');
+    await saved();
+    await click('Review my choices');
+    await click('Ask the Foreman for a blueprint');
+    expect(await screen.findByText(/Foreman planning is currently unavailable/)).toBeTruthy();
+    expect(screen.getByText(/Your brief is saved; try again later/)).toBeTruthy();
+    expect(calls.filter((call) => call.path.endsWith('/plan'))).toHaveLength(1);
   });
 
   it('stops saving when another tab changed the answers, until the saved version is reloaded', async () => {
