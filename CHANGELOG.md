@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.1](https://github.com/ma-za-kpe/stood/compare/v0.14.0...v0.14.1) (2026-10-14)
+
+
+### Fixes
+
+* **yard:** make intake erasure resumable and fenced ([#177](https://github.com/ma-za-kpe/stood/issues/177)) ([5bec892](https://github.com/ma-za-kpe/stood/commit/5bec8924cb5fe39892a48b57ff9c274f40f760c7))
+
+
+### Documentation
+
+* **tasks:** record hosted Yard amendment payout ([#176](https://github.com/ma-za-kpe/stood/issues/176)) ([b4441b8](https://github.com/ma-za-kpe/stood/commit/b4441b8c0d6a77781cb15ae0d9db5f9f84625a7c))
+
 ## [0.14.0](https://github.com/ma-za-kpe/stood/compare/v0.13.0...v0.14.0) (2026-10-14)
 
 
