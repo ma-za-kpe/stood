@@ -33,7 +33,7 @@ Run `scripts/dev yard-access-codes` once to add an unpredictable `accessCode` to
 
 Sessions use opaque Secure/HttpOnly/SameSite=Strict cookies and expire after eight hours. Sign-out removes the server session and private browser queries. Sessions live in this single service instance; a restart signs everyone out. Access-code guessing is limited; mutations require the configured page origin. Rotation replaces the code in YARD_OPERATORS and deploys, revoking the old code and sessions.
 
-Buyer sign-in opens the start screen with automatically loaded clickable research cards and a separate own-project option. Cards open focused review and can start a private summary brief. Full Startup Tribunal Copy JSON import is a secondary disclosure; known private metadata is stripped automatically with a notice, and source caveats/scores are preserved. Saved links open a brief overview; editing returns to the saved section. The public discovery feed is read from one fixed HTTPS endpoint, bounded to ten items/64 KiB and cached for ten minutes; rate-limit responses delay retries. Imported blueprints are bounded to 128 KiB and twenty levels, scanned with the existing credential guard, and never rendered as HTML or executed. Only a reviewed, bounded excerpt becomes intake; the full raw research stays in memory and is discarded when the panel closes. Planning remains disabled until the hosted Foreman is connected.
+Buyer sign-in opens the start screen with automatically loaded clickable research cards and a separate own-project option. Cards open focused review and can start a private summary brief. Full Startup Tribunal Copy JSON import is a secondary disclosure; known private metadata is stripped automatically with a notice, and source caveats/scores are preserved. Saved links open a brief overview; editing returns to the saved section. The public discovery feed is read from one fixed HTTPS endpoint, bounded to ten items/64 KiB and cached for ten minutes; rate-limit responses delay retries. Imported blueprints are bounded to 128 KiB and twenty levels, scanned with the existing credential guard, and never rendered as HTML or executed. Only a reviewed, bounded excerpt becomes intake; the full raw research stays in memory and is discarded when the panel closes. The planning action is shown only when the hosted capability endpoint confirms the Foreman is configured.
 
 ### Deployed C2 entry points and evidence
 
@@ -49,10 +49,12 @@ Buyer sign-in opens the start screen with automatically loaded clickable researc
 | Project `.env` (repository root, gitignored, mode 600) | All local values | The owner. Never committed |
 | `~/.config/stood/.env` (mode 600) | A copy of the project `.env`, outside every repository | The owner and local tooling |
 | Render service environment | Each service's runtime values (table below) | Render and the owner |
-| Project `.env` only (not on Render yet) | `GROK_PLANNER_API_KEY` for Yard's planner model (xAI). Checked with a free model listing (HTTP 200). The live adapter is T-0181 | The owner |
+| Yard service environment | `GROK_PLANNER_API_KEY` for Yard's planner model (xAI); `GROK_DAILY_BUDGET_USD` applies the shared Postgres-backed cap. Keep the provider key private | The owner |
 | `~/.config/stood/yard-github-app.pem` (mode 600) | The Yard GitHub App private key; `.env` holds `GITHUB_APP_ID` and the key's path. The app is installable only on the owner's account, on selected test repositories, with Contents and Pull requests read/write and Metadata read; its webhook stays off until Yard is deployed | The owner |
 | Project `.env` only | `APIMATIC_API_KEY`: regenerates the TypeScript SDK with `scripts/dev sdk` (T-0053). From the APIMatic dashboard → Account → API Keys. Only the person regenerating needs it; CI builds and tests the committed SDK without it | The owner |
 | Project `.env` only | `GITGUARDIAN_API_KEY`: a GitGuardian personal access token with the `scan` scope, for the `ggshield` pre-push hook (T-0287). Get it at [dashboard.gitguardian.com](https://dashboard.gitguardian.com) → API → Personal access tokens. Every push fails without it | The owner |
+| Yard service environment (optional) | `AG_STUDIO_LICENSE`, `AG_STUDIO_LICENSE_EXPIRES_AT`: commercial/trial key and exact UTC ISO expiry; missing/expired state uses the read-only table fallback | AG Studio license holder |
+| Yard service environment (optional) | `YARD_ZAPIER_CATCH_HOOK_URL`, `YARD_NOTICE_CONTACTS_JSON`: private Catch Hook URL and bounded JSON actor-id-to-recipient allow-list; both are required to enable outbound notices | Zapier owner |
 | `~/.claude/settings.json` (mode 600) | `PAYPAL_SANDBOX_ACCESS_TOKEN` for the PayPal AI Toolkit MCP server only ([T16](tech/T16-paypal-ai-toolkit.md)), renewed automatically by the token refresher (section 8) | The developer's Claude Code |
 
 Rules we followed: no value in Git, chat, issues or screenshots; tools report only "set" or "empty". Values containing `&` (such as database URLs) must be read with a parser, not `source`d by a shell.
@@ -181,6 +183,8 @@ scripts/dev planner-check   # five live drafts against the shared contract; abou
 | `YARD_SANDBOX_REPOSITORY` | the one repository Yard plans against, `owner/name` |
 
 The spend cap is kept in Postgres (`yard.planner_spend`), so restarts and extra instances share one daily budget. Plans are pinned to the repository's real `main` through a read-only token. The pre-deploy migration also creates the Foreman's checkpoint tables.
+
+Step-by-step integration guides: [Grok planner](guides/grok-yard-planner.md), [Yard GitHub App](guides/github-app-yard.md), [StartupTribunal catalog](guides/startuptribunal-catalog-import.md), [Cloudflare R2](guides/cloudflare-r2-evidence.md), [AG Studio reviewer file](guides/ag-studio-reviewer-file.md), [Bryntum milestone timeline](guides/bryntum-milestone-timeline.md), [Zapier notifications](guides/zapier-yard-notifications.md) and [GitGuardian scanning](guides/gitguardian-secret-scanning.md).
 
 ### Code runner and settlement (T-0159, T-0164, ADR-0026)
 
