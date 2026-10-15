@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { createActor } from 'xstate';
 import { z } from 'zod';
@@ -8,6 +8,10 @@ import refusedStamp from '../../../docs/brand/logo/stamp-refused.svg';
 import releasedStamp from '../../../docs/brand/logo/stamp-released.svg';
 import logo from '../../../docs/brand/yard/logo/yard-lockup-on-dark.svg';
 import { BoardPanel } from './BoardPanel.js';
+
+const MilestoneTimeline = lazy(() => import('./MilestoneTimeline.js').then((m) => ({ default: m.MilestoneTimeline })));
+const ReviewerPanel = lazy(() => import('./ReviewerPanel.js').then((m) => ({ default: m.ReviewerPanel })));
+
 import { leaseRemaining } from './board-ui.js';
 import { connectionMachine, staleConnection } from './connection.js';
 import { HandoverPanel } from './HandoverPanel.js';
@@ -120,6 +124,8 @@ export function App() {
   const [selected, setSelected] = useState(new URLSearchParams(window.location.search).get('project') ?? '');
   const [session, setSession] = useState({ ready: false, generation: 0, switching: false });
   const [role, setRole] = useState<'buyer' | 'builder' | null>(null);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [reviewerOpen, setReviewerOpen] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const generation = useRef(0),
     switching = useRef(false);
@@ -568,6 +574,24 @@ export function App() {
                     <p className="fine">No keys are embedded in this application.</p>
                   </aside>
                 </div>
+                <details className="partner-detail" onToggle={(event) => setTimelineOpen(event.currentTarget.open)}>
+                  <summary>Open milestone timeline</summary>
+                  {timelineOpen && (
+                    <Suspense fallback={<p role="status">Loading milestone timeline…</p>}>
+                      <MilestoneTimeline room={room.data} />
+                    </Suspense>
+                  )}
+                </details>
+                {role === 'buyer' && (
+                  <details className="partner-detail" onToggle={(event) => setReviewerOpen(event.currentTarget.open)}>
+                    <summary>Open reviewer reconciliation file</summary>
+                    {reviewerOpen && (
+                      <Suspense fallback={<p role="status">Loading reviewer file…</p>}>
+                        <ReviewerPanel room={room.data} />
+                      </Suspense>
+                    )}
+                  </details>
+                )}
               </>
             )}
           </>

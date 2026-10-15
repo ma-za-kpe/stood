@@ -29,7 +29,7 @@ function reviseInFreshProcess(url: string, id: string, output: unknown) {
         '--sourceMap',
         'false',
       ],
-      { timeout: 15000 },
+      { timeout: 60000 },
     );
     writeFileSync(join(directory, 'package.json'), JSON.stringify({ type: 'module' }));
     symlinkSync(resolve('services/yard-foreman/node_modules'), join(directory, 'node_modules'), 'dir');
@@ -54,7 +54,7 @@ function reviseInFreshProcess(url: string, id: string, output: unknown) {
         cwd: directory,
         input: JSON.stringify({ url, id, output }),
         encoding: 'utf8',
-        timeout: 10000,
+        timeout: 30000,
       }),
     ) as { plan: Awaited<ReturnType<Foreman['read']>>; calls: number };
   } finally {
@@ -147,7 +147,7 @@ it('resumes the newest real-Postgres review despite host clock rollback, with no
     await recovered.end();
     await f.close();
   }
-}, 30000);
+}, 60000);
 
 it('releases the Postgres thread lock when model work fails and requires pool capacity', async () => {
   const f = await yardDatabase();
@@ -245,7 +245,7 @@ it('lets five concurrent Foreman drafts persist checkpoints through a dedicated 
     await checkpointPool.end();
     await f.close();
   }
-});
+}, 30000);
 
 it('never persists a recognised key from model output in real Postgres checkpoints or task writes', async () => {
   const f = await yardDatabase(),

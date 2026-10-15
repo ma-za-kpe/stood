@@ -61,6 +61,14 @@
 | Guide for APIMatic developers | [A typed SDK from your OpenAPI contract, including per-request HMAC signing, step by step](docs/guides/apimatic-sdk-from-openapi.md) | Written from our own runs: the SDK calls the real router in CI, and every generation mistake we fixed |
 | Guide for Vercel Sandbox developers | [Judge untrusted code with tests it cannot touch, step by step](docs/guides/vercel-sandbox-untrusted-code-judge.md) | Written from our own runs: the builder's early exit and forged report fail, its tampering is refused, and every isolation mistake we fixed |
 | Guide for PayPal Payouts developers | [Pay builders after the money is released, with PayPal Payouts, step by step](docs/guides/paypal-payouts-builder-payouts.md) | Written from our own sandbox run: paid out, a retry not paid twice, and where PayPal really puts the duplicate's link |
+| Guide for AG Studio developers | [Build a buyer-only reviewer file with a license-expiry fallback](docs/guides/ag-studio-reviewer-file.md) | Separate work-order and ledger sources; read-only data; plain-table fallback |
+| Guide for Bryntum developers | [Show signed milestones in a locked read-only Gantt](docs/guides/bryntum-milestone-timeline.md) | Lazy-loaded trial package, exact deadlines, no write path |
+| Guide for Zapier developers | [Deliver Yard notices through a private Catch Hook](docs/guides/zapier-yard-notifications.md) | Durable retries, explicit recipient allow-list and duplicate key |
+| Guide for xAI Grok developers | [Plan projects within a shared spend cap](docs/guides/grok-yard-planner.md) | Schema-checked proposals; buyer budget and dates stay deterministic |
+| Guide for GitHub App developers | [Scope Yard to one disposable repository](docs/guides/github-app-yard.md) | Short-lived installation tokens and guarded work-order branches |
+| Guide for StartupTribunal developers | [Import a public catalog idea into a private brief](docs/guides/startuptribunal-catalog-import.md) | Attribution, bounded reads and safe retry behavior |
+| Guide for Cloudflare R2 developers | [Store private, hash-checked evidence](docs/guides/cloudflare-r2-evidence.md) | Scoped bucket token, short-lived URLs and retention boundaries |
+| Guide for GitGuardian developers | [Scan every unmerged commit before pushing](docs/guides/gitguardian-secret-scanning.md) | `ggshield`, local checks and credential incident response |
 | PayPal tools we use | [PayPal Developer](https://developer.paypal.com/) · [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit) · [APIMatic PayPal Context Plugin](https://github.com/paypaldev/server-sdk-context-plugin-preview) | [How we use them](docs/tech/T16-paypal-ai-toolkit.md) |
 
 **Browse ideas:** open [hosted Yard](https://stood-yard-api.onrender.com/app/), sign in with the buyer code from the private `~/.config/stood/yard-access-codes` file, then open **Describe a project**. Ideas load automatically; search and click **View idea** to review a card. No StartupTribunal API key is needed for public discovery. Codes are already configured as `accessCode` entries in the private `.env` `YARD_OPERATORS`; never paste them into issues or screenshots.
@@ -169,20 +177,23 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 
 ## Built with
 
-**Planned integrations:** PayPal at the centre (Orders v2 authorise / capture / void, Vault, Disputes, Transaction Search, Agent Toolkit MCP, the APIMatic-generated Server SDK), plus planned partner jobs ([S13](docs/stood/S13-sponsor-integration.md)):
+**Integrated tools:** PayPal at the centre (Orders v2 authorise / capture / void, Vault, Disputes, Transaction Search, Agent Toolkit MCP, the APIMatic-generated Server SDK), plus partner jobs ([S13](docs/stood/S13-sponsor-integration.md)):
 
 | Partner | Job in Stood |
 |---|---|
 | APIMatic | Context Plugin grounds PayPal SDK calls. Generates Stood's SDK, docs and MCP |
-| AG Grid · AG Studio | Reviewer file + reconciliation (gate-bypass detector) |
-| Bryntum | Gantt of milestones, each locked until released |
+| AG Grid · AG Studio | Buyer-only read-only reviewer file with milestone and capture reconciliation; license expiry falls back to Yard tables |
+| Bryntum | Lazy-loaded read-only Gantt of milestone deadlines; unreleased milestones remain locked |
 | Channel3 | Catalog match: was the specified fitting installed? |
 | Render | Hosting (Docker) + durable hold timers (Workflows) |
+
 | Astropods | Runs the evidence agent, with no PayPal credentials |
 | Elastic | Evidence memory: reused and internet photo detection |
 | Kernel | Automates the sandbox buyer approval so judges can replay every outcome |
 | Postman | Deferred by owner (2026-10-09); no paid upgrade, workspace or monitors in use. See [operational decision](docs/tech/T10-deployment.md#postman-deferred). |
 | Zapier | Delivers the one-line reason by email / SMS / Slack |
+
+See [the C5 submission draft and demo storyboard](docs/submission/c5-devpost-draft.md) for the evidence-backed tools description and the owner-only submission steps. Sponsor integrations are sandbox/pilot features; their guides state where local tests stop and live provider qualification begins. Develocity 2026.3 was assessed for a no-cost fit; the current stack has no supported, ongoing free integration. See the [fit decision and no-cost build measurement plan](docs/guides/develocity-build-measurement.md).
 
 **Target free-tier deployment:** Render · Neon Postgres · Cloudflare R2 · Cloudflare Workers AI (Llama 3.2 Vision, open weights) · GitHub Actions / Pages. Everything else is open source ([T09](docs/tech/T09-tech-stack.md), [T10](docs/tech/T10-deployment.md)).
 
@@ -232,6 +243,8 @@ pre-commit run --all-files         # must pass before you push
 ```
 
 Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push` should list all three. Fast checks run on every commit; before every push, `scripts/ci-local` runs every CI job locally (clean image build, all hooks, the Docker product gate, the site, mock network and hosted Yard checks), about 25 minutes, so CI never fails first ([ADR-0023](docs/adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md)). Docker must be running, because some hooks run in pinned containers. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
+
+To run the gate from a second checkout while another Stood checkout uses the default Compose project or database port, isolate its containers and choose a free host port, for example: `COMPOSE_PROJECT_NAME=stood-c5 STOOD_DB_HOST_PORT=55432 scripts/ci-local`. The database still listens on port 5432 inside Compose.
 
 **There's no way around the gate:**
 

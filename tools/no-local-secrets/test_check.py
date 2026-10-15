@@ -1,5 +1,7 @@
 """Tests for the no-local-secrets hook (T-0252). Run: python3 -m unittest discover tools/no-local-secrets"""
 
+from __future__ import annotations
+
 import os
 import subprocess
 import sys

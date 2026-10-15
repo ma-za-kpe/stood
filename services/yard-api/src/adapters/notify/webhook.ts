@@ -5,6 +5,7 @@ export class WebhookNotifier implements Notifier {
   constructor(
     private readonly url: string,
     private readonly transport: (request: Request) => Promise<Response> = fetch,
+    private readonly simulated = true,
   ) {
     if (!/^https:\/\/[^\s]+$/.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url))
       throw new RangeError('Notices go to an https catch hook');
@@ -19,7 +20,7 @@ export class WebhookNotifier implements Notifier {
           to: notice.to,
           subject: notice.subject,
           text: notice.text,
-          simulated: true,
+          simulated: this.simulated,
         }),
         redirect: 'error',
         signal: AbortSignal.timeout(5000),

@@ -5,6 +5,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['apps/yard-web/src/**/*.test.{ts,tsx}'],
+    // Keep instrumented jsdom flows from starving each other on shared Docker hosts.
+    maxWorkers: Number(process.env.STOOD_UI_MAX_WORKERS) || 4,
     // Whole jsdom user flows under coverage instrumentation: 5 seconds timed out in Docker on a busy machine.
     testTimeout: Number(process.env.STOOD_TEST_TIMEOUT_MS) || 15000,
     coverage: {

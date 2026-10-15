@@ -988,3 +988,52 @@ summary {
 .brief-sections .intake-rail {
   margin: 12px 0;
 }
+/* C5 partner components: bounded surfaces for the optional analytics and timeline tools. */
+.partner-detail {
+  margin-top: 1rem;
+  border: 1px solid var(--y-steel);
+  border-radius: 1rem;
+  background: var(--surface);
+  color: var(--text);
+  padding: 1rem;
+}
+.partner-detail > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.partner-timeline,
+.reviewer-file {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.partner-timeline__canvas {
+  width: 100%;
+  height: 360px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 0.75rem;
+}
+.partner-timeline__legend {
+  display: grid;
+  gap: 0.5rem;
+}
+.reviewer-file__fallback .table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.reviewer-file__fallback table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.reviewer-file__fallback th,
+.reviewer-file__fallback td {
+  border-bottom: 1px solid var(--line, #363144);
+  padding: 0.65rem;
+  text-align: left;
+  vertical-align: top;
+}
+.reviewer-file__fallback th {
+  color: var(--accent, #d9ff5f);
+  white-space: nowrap;
+}

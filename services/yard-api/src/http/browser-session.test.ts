@@ -5,7 +5,11 @@ import { createYardApp } from './app.js';
 
 const code = 'buyer-access-code-xxxxxxxxxxxxxxxx';
 const secret = 's'.repeat(40);
-function hosted(foreman = false) {
+function hosted(
+  foreman = false,
+  agStudioLicense?: Readonly<{ key?: string; expiresAt?: string }>,
+  actorKind: 'BUYER' | 'BUILDER' = 'BUYER',
+) {
   let now = 1791158400000;
   const app = createYardApp({
     environment: 'demo',
@@ -14,11 +18,21 @@ function hosted(foreman = false) {
       clock: async () => now,
       ...(foreman ? { foreman: {} as never } : {}),
       operators: [
-        { key: 'buyer-key', secret, accessCode: code, actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' } },
+        {
+          key: 'buyer-key',
+          secret,
+          accessCode: actorKind === 'BUYER' ? code : 'builder-access-code-xxxxxxxxx',
+          actor: {
+            id: actorKind === 'BUYER' ? 'buyer' : 'builder',
+            root: `${actorKind.toLowerCase()}-root`,
+            kind: actorKind,
+          },
+        },
       ],
     },
     browser: {
       origin: 'https://stood-yard-api.onrender.com',
+      ...(agStudioLicense ? { agStudioLicense } : {}),
       ...(foreman ? { plannerRepository: 'owner/sandbox' } : {}),
     },
   });
@@ -40,6 +54,43 @@ it('reports only the configured Foreman capability to the hosted page', async ()
 
   const on = await hosted(true).app.request('/app/api/capabilities');
   expect(await on.json()).toEqual({ foreman: true, repository: 'owner/sandbox' });
+});
+
+it('serves the AG Studio trial key only to an authenticated buyer and removes it at expiry', async () => {
+  const expiresAt = '2026-11-24T00:00:00.000Z';
+  const secretKey = 'trial-license-key-never-commit';
+  const { app, advance } = hosted(false, { key: secretKey, expiresAt });
+  expect((await app.request('/app/api/ag-studio-license')).status).toBe(401);
+  const signedIn = await signIn(app, code);
+  const cookie = { Cookie: (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '' };
+  const active = await app.request('/app/api/ag-studio-license', { headers: cookie });
+  expect(active.headers.get('Cache-Control')).toBe('private, no-store');
+  expect(await active.json()).toEqual({ state: 'licensed', expiresAt, licenseKey: secretKey });
+  advance(Date.parse(expiresAt) - 14 * 24 * 60 * 60 * 1000 - 1791158400000);
+  const expiringLogin = await signIn(app, code, '203.0.113.2');
+  const expiringCookie = { Cookie: (expiringLogin.headers.get('set-cookie') ?? '').split(';')[0] ?? '' };
+  expect(await (await app.request('/app/api/ag-studio-license', { headers: expiringCookie })).json()).toEqual({
+    state: 'expiring',
+    expiresAt,
+    licenseKey: secretKey,
+  });
+  advance(14 * 24 * 60 * 60 * 1000 + 1);
+  const expiredLogin = await signIn(app, code, '203.0.113.3');
+  const expiredCookie = { Cookie: (expiredLogin.headers.get('set-cookie') ?? '').split(';')[0] ?? '' };
+  expect(await (await app.request('/app/api/ag-studio-license', { headers: expiredCookie })).json()).toEqual({
+    state: 'expired',
+    expiresAt,
+  });
+  expect(
+    JSON.stringify(await (await app.request('/app/api/ag-studio-license', { headers: expiredCookie })).json()),
+  ).not.toContain(secretKey);
+});
+
+it('does not expose the AG Studio key to an authenticated builder session', async () => {
+  const { app } = hosted(false, { key: 'test-key', expiresAt: '2026-11-24T00:00:00.000Z' }, 'BUILDER');
+  const signedIn = await signIn(app, 'builder-access-code-xxxxxxxxx');
+  const cookie = { Cookie: (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '' };
+  expect((await app.request('/app/api/ag-studio-license', { headers: cookie })).status).toBe(403);
 });
 
 // T-0266: the hosted Yard page signs people in with an access code the owner issues. The cookie is an opaque,

@@ -476,7 +476,7 @@ describe('IntakePanel (T-0275)', () => {
     await saved();
     await click('Review my choices');
     await click('Ask the Foreman for a blueprint');
-    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect((await screen.findByRole('alert')).textContent).toMatch(/temporary xAI outage or an exhausted xAI quota/);
     expect(screen.getByRole('button', { name: 'Ask the Foreman for a blueprint' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Recover saved planning attempt' })).toBeTruthy();
     expect(calls.filter((call) => call.path.endsWith('/plan'))).toHaveLength(1);

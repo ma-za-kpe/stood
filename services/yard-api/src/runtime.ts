@@ -5,12 +5,14 @@ import { LocalKeyWrapper } from './adapters/crypto/local-key-wrapper.js';
 import { usageSigner } from './adapters/crypto/usage-signer.js';
 import { PostgresYardEvents } from './adapters/db-postgres/events.js';
 import { PostgresIntakes } from './adapters/db-postgres/intakes.js';
+import { PostgresNoticeLog } from './adapters/db-postgres/notices.js';
 import { PostgresPlannerSpend } from './adapters/db-postgres/planner-spend.js';
 import { PostgresPreviewSlots } from './adapters/db-postgres/preview-slots.js';
 import { PostgresSecretRows } from './adapters/db-postgres/secrets.js';
 import { PostgresSiteLogs } from './adapters/db-postgres/site-log.js';
 import { GitHubRepositories } from './adapters/github/github.js';
 import { GitleaksScanner } from './adapters/log-scanner/gitleaks.js';
+import { WebhookNotifier } from './adapters/notify/webhook.js';
 import { PayPalPayouts } from './adapters/paypal/payouts.js';
 import { PREVIEW_CAP, RenderPreviewHost } from './adapters/render/render-host.js';
 import { StoodPackageGateway } from './adapters/stood/package-gateway.js';
@@ -21,6 +23,7 @@ import { Board, MAX_ACTIVE_CLAIMS, type Operator } from './application/board.js'
 import { expireIntakes } from './application/intake-erasure.js';
 import { IntakePlanner } from './application/intake-planner.js';
 import { MandateBridge } from './application/mandate-bridge.js';
+import { notifyAll } from './application/notifications.js';
 import { runPayouts } from './application/payouts.js';
 import { Previews } from './application/previews.js';
 import { SecretVault } from './application/secret-vault.js';
@@ -114,6 +117,10 @@ export function yardRuntime(env: Env) {
       ? {
           browser: {
             origin: env.YARD_PUBLIC_ORIGIN ?? 'https://stood-yard-api.onrender.com',
+            agStudioLicense: {
+              key: env.AG_STUDIO_LICENSE?.trim() ?? '',
+              expiresAt: env.AG_STUDIO_LICENSE_EXPIRES_AT?.trim() ?? '',
+            },
             ...(planner ? { plannerRepository: planner.repository } : {}),
           },
         }
@@ -161,6 +168,30 @@ export function yardRuntime(env: Env) {
       "Payouts off: YARD_PAYPAL_CLIENT_ID and YARD_PAYPAL_CLIENT_SECRET (Yard's own PayPal sandbox app) are required.",
     );
   const payees = new Map(operators.flatMap((o) => (o.payeeRef ? [[o.actor.id, o.payeeRef] as const] : [])));
+  const noticeHook = env.YARD_ZAPIER_CATCH_HOOK_URL?.trim() ?? '';
+  const noticeContacts = parseNoticeContacts(env.YARD_NOTICE_CONTACTS_JSON);
+  if (noticeHook && !noticeContacts) notes.push('Zapier notices off: YARD_NOTICE_CONTACTS_JSON is missing or invalid.');
+  if (!noticeHook && env.YARD_NOTICE_CONTACTS_JSON?.trim())
+    notes.push('Zapier notices off: YARD_ZAPIER_CATCH_HOOK_URL is missing.');
+  let notifier: WebhookNotifier | null = null;
+  if (noticeHook && noticeContacts) {
+    try {
+      const hook = new URL(noticeHook);
+      if (
+        hook.protocol !== 'https:' ||
+        hook.hostname !== 'hooks.zapier.com' ||
+        hook.username ||
+        hook.password ||
+        hook.search ||
+        hook.hash ||
+        !/^\/hooks\/catch\/\d+\/[A-Za-z0-9]+\/?$/.test(hook.pathname)
+      )
+        throw new RangeError('Not a Zapier Catch Hook');
+      notifier = new WebhookNotifier(noticeHook, fetch, environment !== 'demo');
+    } catch {
+      notes.push('Zapier notices off: provide a valid HTTPS Zapier Catch Hook.');
+    }
+  }
   // A failure logs its code only (a driver's message can quote stored values); payouts keep their reason, as before.
   const report = (code: string) => (error: unknown) =>
     process.stderr.write(
@@ -254,6 +285,22 @@ export function yardRuntime(env: Env) {
   }
   if (usage)
     schedule.push({ code: 'USAGE_FORWARD_FAILED', everyMs: 60_000, task: async () => void (await usage.run()) });
+  if (notifier && noticeContacts)
+    schedule.push({
+      code: 'ZAPIER_NOTICE_DELIVERY_FAILED',
+      everyMs: 60_000,
+      task: async () => {
+        const counts = await notifyAll(
+          board,
+          new PostgresNoticeLog(pool),
+          notifier as WebhookNotifier,
+          noticeContacts,
+          Date.now(),
+        );
+        if (Object.values(counts).some((n) => n > 0))
+          process.stdout.write(`${JSON.stringify({ code: 'ZAPIER_NOTICES', ...counts })}\n`);
+      },
+    });
   const running: Repeating[] = [];
   return {
     config,
@@ -275,6 +322,30 @@ export function yardRuntime(env: Env) {
       await Promise.all([pool.end(), intakeLockPool.end(), foremanCoordinatorPool.end()]);
     },
   };
+}
+
+export function parseNoticeContacts(value: string | undefined): Readonly<Record<string, string>> | null {
+  if (!value?.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const entries = Object.entries(parsed);
+    if (
+      entries.length === 0 ||
+      entries.length > 100 ||
+      entries.some(
+        ([actor, email]) =>
+          !/^[A-Za-z0-9_.:-]{1,100}$/.test(actor) ||
+          typeof email !== 'string' ||
+          email.length > 320 ||
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+      )
+    )
+      return null;
+    return Object.freeze(Object.fromEntries(entries));
+  } catch {
+    return null;
+  }
 }
 
 // T-0181: the hosted Foreman needs a planner key, a sane daily cap and the GitHub App, which pins every plan to the

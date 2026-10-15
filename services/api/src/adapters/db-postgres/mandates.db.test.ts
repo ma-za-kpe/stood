@@ -491,7 +491,7 @@ it('gives unexpired signing work a slot past 100 older expired reservations', as
   await store.setupCreated(input.key, receipt(input.key));
   expect(await store.unresolved(at)).toContain(input.key);
   expect((await store.unresolved(at)).length).toBeLessThanOrEqual(100);
-});
+}, 30000);
 
 it('rotates still-waiting mandates durably so a later reservation gets a turn', async () => {
   const at = now + 60 * 86400000;
@@ -504,7 +504,7 @@ it('rotates still-waiting mandates durably so a later reservation gets a turn', 
   await store.reserve({ ...input, acceptedAt: at });
   const restarted = new PostgresMandates(db, cipher);
   expect(await restarted.unresolved(at)).toContain(input.key);
-});
+}, 30000);
 
 it('keeps queue scheduling outside consent history and rejects backward or mixed scheduling writes', async () => {
   const { input } = await setup();

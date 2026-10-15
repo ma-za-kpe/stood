@@ -19,3 +19,6 @@ artifacts/
 __pycache__/
 *.pyc
 .ci-local/
+
+# Added by ggshield
+.cache_ggshield

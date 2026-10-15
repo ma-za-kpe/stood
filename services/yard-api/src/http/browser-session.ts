@@ -54,7 +54,10 @@ type Operator = Readonly<{
 const SESSION_MS = 8 * 3600_000;
 const WINDOW_MS = 60_000;
 const MAX_FAILURES = 10;
+const AG_STUDIO_WARNING_MS = 14 * 24 * 60 * 60 * 1000;
 const digest = (s: string) => createHash('sha256').update(s).digest();
+const nowForLicense = (expiry: number, now: number) =>
+  now >= expiry ? 'expired' : expiry - now <= AG_STUDIO_WARNING_MS ? 'expiring' : 'licensed';
 
 // T-0266: hosted sign-in. The owner gives each operator an access code; signing in creates an opaque, expiring
 // session id (in memory: one instance; a restart signs everyone out). Changes must come from the page's own origin.
@@ -66,6 +69,7 @@ export function hostedSessions(
     origin: string;
     foremanAvailable?: boolean;
     plannerRepository?: string;
+    agStudioLicense?: Readonly<{ key?: string; expiresAt?: string }>;
   }>,
 ): void {
   const sessions = new Map<string, { key: string; expiresAt: number }>();
@@ -98,6 +102,21 @@ export function hostedSessions(
     return c.json({
       foreman: config.foremanAvailable ?? false,
       ...(config.foremanAvailable && config.plannerRepository ? { repository: config.plannerRepository } : {}),
+    });
+  });
+  app.get('/app/api/ag-studio-license', async (c) => {
+    const operator = await current(c);
+    if (!operator) return c.json({ code: 'unauthorized' }, 401);
+    if (operator.actor.kind !== 'BUYER') return c.json({ code: 'forbidden' }, 403);
+    const key = config.agStudioLicense?.key?.trim() ?? '';
+    const expiresAt = config.agStudioLicense?.expiresAt?.trim() ?? '';
+    const expiry = Date.parse(expiresAt);
+    const validDate = Number.isFinite(expiry) && new Date(expiry).toISOString() === expiresAt;
+    const state = !key ? 'missing' : !validDate ? 'invalid' : nowForLicense(expiry, await config.clock());
+    return c.json({
+      state,
+      ...(validDate ? { expiresAt } : {}),
+      ...(['licensed', 'expiring'].includes(state) ? { licenseKey: key } : {}),
     });
   });
   app.get('/app/api/session', async (c) => {

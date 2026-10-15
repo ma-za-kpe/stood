@@ -1,7 +1,7 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { createYardApp } from './http/app.js';
-import { plannerConfig, yardRuntime } from './runtime.js';
+import { parseNoticeContacts, plannerConfig, yardRuntime } from './runtime.js';
 
 const secret = 's'.repeat(40);
 const operators = JSON.stringify([
@@ -15,6 +15,46 @@ const hosted = {
 };
 const capabilities = async (env: Record<string, string>) =>
   (await (await createYardApp(yardRuntime(env).config).request('/health')).json()).capabilities;
+
+it('parses only bounded actor-to-email allow-lists for outbound notifications', () => {
+  expect(parseNoticeContacts('{"buyer-1":"buyer@example.com"}')).toEqual({ 'buyer-1': 'buyer@example.com' });
+  for (const invalid of [
+    undefined,
+    '',
+    '[]',
+    '{}',
+    '{bad',
+    '{"buyer":"not-an-email"}',
+    `{"${'a'.repeat(101)}":"a@b.com"}`,
+  ])
+    expect(parseNoticeContacts(invalid)).toBeNull();
+});
+
+it('enables Zapier delivery only with both an HTTPS hook and an explicit recipient allow-list', async () => {
+  const url = new URL('https://hooks.zapier.com');
+  url.pathname = ['hooks', 'catch', '123456', 'X'].join('/');
+  const contacts = '{"buyer":"buyer@example.com"}';
+  const partial = yardRuntime({ ...hosted, YARD_ZAPIER_CATCH_HOOK_URL: url.toString() });
+  expect(partial.jobs.some((job) => job.code === 'ZAPIER_NOTICE_DELIVERY_FAILED')).toBe(false);
+  expect(partial.notes).toContain('Zapier notices off: YARD_NOTICE_CONTACTS_JSON is missing or invalid.');
+  await partial.stop();
+  const ready = yardRuntime({
+    ...hosted,
+    YARD_ZAPIER_CATCH_HOOK_URL: url.toString(),
+    YARD_NOTICE_CONTACTS_JSON: contacts,
+  });
+  expect(ready.jobs.some((job) => job.code === 'ZAPIER_NOTICE_DELIVERY_FAILED')).toBe(true);
+  expect(JSON.stringify(ready.notes)).not.toContain('hooks.zapier.com');
+  await ready.stop();
+  const unsafe = yardRuntime({
+    ...hosted,
+    YARD_ZAPIER_CATCH_HOOK_URL: 'http://hooks.example.com/catch',
+    YARD_NOTICE_CONTACTS_JSON: contacts,
+  });
+  expect(unsafe.jobs.some((job) => job.code === 'ZAPIER_NOTICE_DELIVERY_FAILED')).toBe(false);
+  expect(unsafe.notes).toContain('Zapier notices off: provide a valid HTTPS Zapier Catch Hook.');
+  await unsafe.stop();
+});
 
 // T-0220: one composition root for hosted Yard. Each part runs only when its configuration is complete and safe;
 // anything missing is a named note, never a crash, a fallback or a leaked value.
@@ -68,7 +108,10 @@ it('turns on hosted sign-in and the page only with valid access codes', () => {
     { key: 'buyer-key', secret, accessCode: 'a'.repeat(32), actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' } },
   ]);
   const on = yardRuntime({ ...hosted, YARD_OPERATORS: coded, YARD_WEB_DIR: '/app/web' });
-  expect(on.config.browser).toEqual({ origin: 'https://stood-yard-api.onrender.com' });
+  expect(on.config.browser).toEqual({
+    origin: 'https://stood-yard-api.onrender.com',
+    agStudioLicense: { key: '', expiresAt: '' },
+  });
   expect(on.config.web).toEqual({ root: '/app/web' });
   const short = yardRuntime({ ...hosted, YARD_OPERATORS: coded.replace('a'.repeat(32), 'short-code') });
   expect(short.notes).toContain('Board off: YARD_OPERATORS is not a valid operator list.');
