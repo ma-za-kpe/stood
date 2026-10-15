@@ -22,13 +22,14 @@ step() {
   fi
 }
 echo "Running every CI job locally (log: $log)"
-# The product gate's Postgres binds 127.0.0.1:5432. Another checkout's database there fails the run after minutes,
-# so say so up front, with the container to stop.
+# The product gate's Postgres binds a configurable host port (5432 by default). Another checkout's database there
+# fails the run after minutes, so say so up front. Set STOOD_DB_HOST_PORT to an available port to validate in parallel.
 # compose.yaml fixes the project name, so every checkout's database is stood-db-1; tell them apart by the folder.
+db_host_port=${STOOD_DB_HOST_PORT:-5432}
 holder=$(docker ps --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}|{{.Ports}}' |
-  awk -F'|' -v here="$PWD" 'index($3, "127.0.0.1:5432->") && $2 != here { print $1 }' || true)
+  awk -F'|' -v here="$PWD" -v port="127.0.0.1:${db_host_port}->" 'index($3, port) && $2 != here { print $1 }' || true)
 if [ -n "$holder" ]; then
-  echo "FAIL  port 5432 is held by $holder (another checkout). Stop it first: docker stop $holder"
+  echo "FAIL  port $db_host_port is held by $holder (another checkout). Set STOOD_DB_HOST_PORT to an available port or stop that checkout."
   exit 1
 fi
 # A clean image build, as CI has no cache. Any remote Docker Hub pull fails the run (rate limits, outages).

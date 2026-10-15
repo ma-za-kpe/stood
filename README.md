@@ -243,6 +243,8 @@ pre-commit run --all-files         # must pass before you push
 
 Check it's active: `ls .git/hooks/pre-commit .git/hooks/commit-msg .git/hooks/pre-push` should list all three. Fast checks run on every commit; before every push, `scripts/ci-local` runs every CI job locally (clean image build, all hooks, the Docker product gate, the site, mock network and hosted Yard checks), about 25 minutes, so CI never fails first ([ADR-0023](docs/adr/0023-pinned-hermetic-gate-with-pre-push-product-check.md)). Docker must be running, because some hooks run in pinned containers. The `commit-msg` hook rejects any commit without a Conventional message and a **DCO sign-off**, so always commit with `git commit -s`.
 
+To run the gate from a second checkout while another Stood checkout uses the default Compose project or database port, isolate its containers and choose a free host port, for example: `COMPOSE_PROJECT_NAME=stood-c5 STOOD_DB_HOST_PORT=55432 scripts/ci-local`. The database still listens on port 5432 inside Compose.
+
 **There's no way around the gate:**
 
 - CI runs the **same** `.pre-commit-config.yaml` on every PR (`pre-commit` check).
