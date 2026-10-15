@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.1](https://github.com/ma-za-kpe/stood/compare/v0.15.0...v0.15.1) (2026-10-14)
+
+
+### Fixes
+
+* **yard:** allow time for hosted Foreman planning ([#201](https://github.com/ma-za-kpe/stood/issues/201)) ([a6dfd2b](https://github.com/ma-za-kpe/stood/commit/a6dfd2b78b293a47ad2b830bc34cb0037c4e429b))
+* **yard:** wait for planner capabilities before intake ([#199](https://github.com/ma-za-kpe/stood/issues/199)) ([b6ac6cd](https://github.com/ma-za-kpe/stood/commit/b6ac6cd7f8b397442e616963beecdfbced10e102))
+
 ## [0.15.0](https://github.com/ma-za-kpe/stood/compare/v0.14.2...v0.15.0) (2026-10-14)
 
 
