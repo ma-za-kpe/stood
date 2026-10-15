@@ -617,6 +617,7 @@ export class Board {
           id: wo,
           name: milestone.name,
           budgetMinor: milestone.budgetMinor,
+          deadline: milestone.deadline,
           trancheId: order.trancheId,
           state: status(order, work),
           ...feedback(order),
