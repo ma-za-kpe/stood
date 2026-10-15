@@ -184,7 +184,7 @@ scripts/dev planner-check   # five live drafts against the shared contract; abou
 
 The spend cap is kept in Postgres (`yard.planner_spend`), so restarts and extra instances share one daily budget. Plans are pinned to the repository's real `main` through a read-only token. The pre-deploy migration also creates the Foreman's checkpoint tables.
 
-Step-by-step integration guides: [Grok planner](guides/grok-yard-planner.md), [Yard GitHub App](guides/github-app-yard.md), [StartupTribunal catalog](guides/startuptribunal-catalog-import.md), [Cloudflare R2](guides/cloudflare-r2-evidence.md), [AG Studio reviewer file](guides/ag-studio-reviewer-file.md), [Bryntum milestone timeline](guides/bryntum-milestone-timeline.md), [Zapier notifications](guides/zapier-yard-notifications.md) and [GitGuardian scanning](guides/gitguardian-secret-scanning.md).
+Step-by-step integration guides: [Grok planner](guides/grok-yard-planner.md), [Yard GitHub App](guides/github-app-yard.md), [StartupTribunal catalog](guides/startuptribunal-catalog-import.md), [Cloudflare R2](guides/cloudflare-r2-evidence.md), [AG Studio reviewer file](guides/ag-studio-reviewer-file.md), [Bryntum milestone timeline](guides/bryntum-milestone-timeline.md), [Zapier notifications](guides/zapier-yard-notifications.md) and [GitGuardian scanning](guides/gitguardian-secret-scanning.md). The [Develocity 2026.3 assessment](guides/develocity-build-measurement.md) records why we are not enabling a paid or unsupported build telemetry integration and how to compare CI improvements for free.
 
 ### Code runner and settlement (T-0159, T-0164, ADR-0026)
 

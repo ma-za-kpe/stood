@@ -187,12 +187,13 @@ Hexagonal domain core, pure decision rules, idempotent money commands, a transac
 | Channel3 | Catalog match: was the specified fitting installed? |
 | Render | Hosting (Docker) + durable hold timers (Workflows) |
 
-See [the C5 submission draft and demo storyboard](docs/submission/c5-devpost-draft.md) for the evidence-backed tools description and the owner-only submission steps. Sponsor integrations are sandbox/pilot features; their guides state where local tests stop and live provider qualification begins.
 | Astropods | Runs the evidence agent, with no PayPal credentials |
 | Elastic | Evidence memory: reused and internet photo detection |
 | Kernel | Automates the sandbox buyer approval so judges can replay every outcome |
 | Postman | Deferred by owner (2026-10-09); no paid upgrade, workspace or monitors in use. See [operational decision](docs/tech/T10-deployment.md#postman-deferred). |
 | Zapier | Delivers the one-line reason by email / SMS / Slack |
+
+See [the C5 submission draft and demo storyboard](docs/submission/c5-devpost-draft.md) for the evidence-backed tools description and the owner-only submission steps. Sponsor integrations are sandbox/pilot features; their guides state where local tests stop and live provider qualification begins. Develocity 2026.3 was assessed for a no-cost fit; the current stack has no supported, ongoing free integration. See the [fit decision and no-cost build measurement plan](docs/guides/develocity-build-measurement.md).
 
 **Target free-tier deployment:** Render · Neon Postgres · Cloudflare R2 · Cloudflare Workers AI (Llama 3.2 Vision, open weights) · GitHub Actions / Pages. Everything else is open source ([T09](docs/tech/T09-tech-stack.md), [T10](docs/tech/T10-deployment.md)).
 
