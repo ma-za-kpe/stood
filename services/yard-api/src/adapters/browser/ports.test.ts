@@ -42,6 +42,17 @@ it('posts notices outbound to an https catch hook only (T-0228)', async () => {
     text: '$10.00 released.',
     simulated: true,
   });
+  const liveSent: Request[] = [];
+  const live = new WebhookNotifier(
+    'https://hooks.example.invalid/live',
+    async (request) => {
+      liveSent.push(request);
+      return new Response('{}', { status: 200 });
+    },
+    false,
+  );
+  await live.send({ key: 'k2', to: 'buyer@example.invalid', subject: 'Milestone paid', text: 'Confirmed by Stood.' });
+  expect(await liveSent[0]?.json()).toMatchObject({ key: 'k2', simulated: false });
   expect(() => new WebhookNotifier('http://hooks.example.invalid/catch')).toThrow();
   const refusing = new WebhookNotifier(
     'https://hooks.example.invalid/c',

@@ -12,12 +12,16 @@
     "@stood/yard-contracts": "workspace:*",
     "@stood/yard-domain": "workspace:*",
     "@tanstack/react-query": "5.104.1",
+    "ag-studio": "3.0.0",
+    "ag-studio-react": "3.0.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "7.89.0",
     "xstate": "5.33.2",
     "zod": "4.6.5",
-    "zustand": "5.0.15"
+    "zustand": "5.0.15",
+    "@bryntum/gantt": "npm:@bryntum/gantt-trial@7.3.7",
+    "@bryntum/gantt-react": "7.3.7"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",
