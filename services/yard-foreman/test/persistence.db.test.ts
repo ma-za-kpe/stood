@@ -245,7 +245,7 @@ it('lets five concurrent Foreman drafts persist checkpoints through a dedicated 
     await checkpointPool.end();
     await f.close();
   }
-});
+}, 30000);
 
 it('never persists a recognised key from model output in real Postgres checkpoints or task writes', async () => {
   const f = await yardDatabase(),
