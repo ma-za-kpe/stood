@@ -27,6 +27,14 @@ jobs:
           LOCAL_GID="$(id -g)"
           export LOCAL_UID LOCAL_GID
           scripts/check-site
+      - name: Retain browser diagnostics on failure
+        if: failure()
+        # actions/upload-artifact v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: site-browser-diagnostics
+          path: artifacts/site/
+          if-no-files-found: ignore
   mock-network:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -40,7 +48,15 @@ jobs:
           LOCAL_GID="$(id -g)"
           export LOCAL_UID LOCAL_GID
           scripts/dev mock
-  pre-commit:
+      - name: Retain network diagnostics on failure
+        if: failure()
+        # actions/upload-artifact v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: mock-network-diagnostics
+          path: artifacts/mock-network/
+          if-no-files-found: ignore
+  quality:
     runs-on: ubuntu-latest
     steps:
       # actions/checkout v7.0.1
@@ -62,13 +78,6 @@ jobs:
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
       # Hash-locked (Scorecard Pinned-Dependencies); Dependabot keeps .github/requirements current.
       - run: pip install --require-hashes -r .github/requirements/pre-commit.txt
-      - name: Prepare the Docker toolchain
-        run: |
-          LOCAL_UID="$(id -u)"
-          LOCAL_GID="$(id -g)"
-          export LOCAL_UID LOCAL_GID
-          docker compose build app
-          docker compose run --rm app pnpm install --frozen-lockfile
       - name: Run every hook on every file
         env:
           SKIP: no-commit-to-branch,branch-name
@@ -77,8 +86,47 @@ jobs:
         env:
           SKIP: no-commit-to-branch,branch-name,ci-local
         run: pre-commit run --all-files --hook-stage pre-push --show-diff-on-failure
-      - name: Run the product gate (Docker validation and Postgres tests)
+  product:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Prepare the Docker toolchain
+        run: |
+          LOCAL_UID="$(id -u)"
+          LOCAL_GID="$(id -g)"
+          export LOCAL_UID LOCAL_GID
+          docker compose build app
+          docker compose run --rm app pnpm install --frozen-lockfile
+      - name: Run the product gate and Postgres tests
+        env:
+          STOOD_SKIP_PRODUCT_LINT: "1"
         run: scripts/check-product
+      - name: Retain product diagnostics on failure
+        if: failure()
+        # actions/upload-artifact v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: product-diagnostics
+          path: |
+            coverage/
+            artifacts/
+          if-no-files-found: ignore
+  pre-commit:
+    if: always()
+    needs: [quality, product]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preserve the existing aggregate CI check
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          PRODUCT_RESULT: ${{ needs.product.result }}
+        run: |
+          printf 'Quality hooks: %s\nProduct and database gate: %s\n' "$QUALITY_RESULT" "$PRODUCT_RESULT"
+          test "$QUALITY_RESULT" = success
+          test "$PRODUCT_RESULT" = success
 
   pr-title:
     if: github.event_name == 'pull_request'
@@ -137,3 +185,11 @@ jobs:
           persist-credentials: false
       - name: Hosted Yard production-image journey with disposable Postgres
         run: scripts/check-hosted-yard
+      - name: Retain hosted Yard diagnostics on failure
+        if: failure()
+        # actions/upload-artifact v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: hosted-yard-diagnostics
+          path: artifacts/hosted-yard/
+          if-no-files-found: ignore
