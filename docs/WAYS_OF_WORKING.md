@@ -245,6 +245,10 @@ Hooks are pinned to commit SHAs (tag in a `# frozen:` comment) or to container i
 
 Record the full-gate wall time and each stage's elapsed seconds from `.ci-local/timings.tsv`; for GitHub, record the workflow run URL/commit and each job's duration from the Actions run. Compare the same commit range, runner class, cache state and gate set. Use at least three completed runs for a stable comparison and report median plus range; label a one-off cold/warm comparison as a pilot. Include cache hit state, reruns, cancellations and failures, because a faster skipped or superseded check is not faster validation. Keep the full set of gates green. Revert a cache or parallelization change that does not improve the measured critical path or that makes failures harder to reproduce.
 
+Do not run competing cold Docker gates on the same constrained daemon. Separate project names prevent resource-name collisions, but builds still compete for registry bandwidth, disk and CPU. Queue full local gates or use independent runners; record when another heavy build was active and exclude that run from a clean timing comparison.
+
+This policy follows the vendor guidance to run independent GitHub jobs concurrently and reuse Docker build layers, while measuring actual cost before adding caches: [GitHub Actions job parallelism](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-jobs-in-a-workflow), [Docker build cache optimization](https://docs.docker.com/build/cache/optimize/).
+
 Still planned: `pnpm audit` as a gate, an OpenAPI breaking-change diff (after T-0053) and mutation testing on the decision module (§4).
 
 ## 9. Releases (release-please)
@@ -326,6 +330,8 @@ Current ADRs:
 - Test early at the user-visible boundary. UI changes get a real browser journey and screenshot review; accessibility checks and mobile/desktop layouts remain separate assertions. The author does not certify their own visual or security review.
 - AI coding agents follow this document too. They're grounded with the partner MCPs ([S14](stood/S14-open-source-plan.md)), they write tests first, they never touch `main`, and their claims are checked like anyone else's.
 - **Review of agent-written code:** while Stood runs only on the PayPal sandbox, a pull request merges when every required CI check passes, money-path code included ([ADR-0024](adr/0024-ci-gate-reviews-agent-code-in-the-sandbox.md), owner decision 2026-10-08). Human review of money-path code becomes required again before any live PayPal app or real money, or when a second maintainer joins.
+
+The durable task list, explicit handoffs, clean starts and incremental verification also follow [Anthropic's long-running agent harness guidance](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) and [OpenAI's Codex guidance for long-horizon work](https://developers.openai.com/blog/run-long-horizon-tasks-with-codex). These sources support disciplined handoffs and worktree isolation; they do not establish that adding more agents always makes delivery faster.
 
 ---
 
