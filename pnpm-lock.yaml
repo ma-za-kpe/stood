@@ -132,8 +132,8 @@ importers:
         specifier: 2.5.0
         version: 2.5.0
       '@vercel/sandbox':
-        specifier: 3.5.0
-        version: 3.5.0
+        specifier: 3.6.1
+        version: 3.6.1
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/pg@8.23.1)(pg@8.23.1)
@@ -1012,8 +1012,8 @@ packages:
     resolution: {integrity: sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==}
     engines: {node: '>= 20'}
 
-  '@vercel/sandbox@3.5.0':
-    resolution: {integrity: sha512-BZjrOiPImL9o3mvFanEZYCEV8YLhtpAzxJa9PuweZBkIXSbdsD1tBytx42a3/0nJOHpCYMHBrBNNqD8nklzY1A==}
+  '@vercel/sandbox@3.6.1':
+    resolution: {integrity: sha512-U6dwyadp2SmW/M96W2Bb3UjIql6TOOYwu9McUIwob209pj0A3ks/wKrMv7lCE7INx50J5zOpqLhMOnFa+Yodlg==}
 
   '@vitest/coverage-v8@5.0.3':
     resolution: {integrity: sha512-+klsyz7BvT1vCU28Zkfzms1Ia78XD0V41U3FUtRaa3S+vOr/EXvK1O6BvVD7l1RzEjm6SONR2aybOvDDf9u0mQ==}
@@ -1564,8 +1564,8 @@ packages:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
 
-  langsmith@0.10.8:
-    resolution: {integrity: sha512-svLrSnytr4cwZvx5XAel93fXRB1/OmC/u7tfXhnmyMpxIazPLDKKaMQYxGIjCvCRGhprmp9P4RiKM8ecZU46Mg==}
+  langsmith@0.10.11:
+    resolution: {integrity: sha512-99ySd5piFC/y0kyKxlUODamdxYuHs0Sbnz47mop0SypvOaRT8REuB1vd8QpESBag8sHW0QPSXvUbhXpn2+v9yQ==}
     peerDependencies:
       '@opentelemetry/api': '*'
       '@opentelemetry/exporter-trace-otlp-proto': '*'
@@ -2585,7 +2585,7 @@ snapshots:
       '@cfworker/json-schema': 4.1.1
       '@standard-schema/spec': 1.1.0
       js-tiktoken: 1.0.21
-      langsmith: 0.10.8
+      langsmith: 0.10.11
       mustache: 4.2.0
       p-queue: 6.6.2
       zod: 4.6.5
@@ -2781,7 +2781,7 @@ snapshots:
 
   '@vercel/oidc@3.2.0': {}
 
-  '@vercel/sandbox@3.5.0':
+  '@vercel/sandbox@3.6.1':
     dependencies:
       '@vercel/detect-agent': 1.2.5
       '@vercel/oidc': 3.2.0
@@ -3311,7 +3311,7 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  langsmith@0.10.8:
+  langsmith@0.10.11:
     dependencies:
       p-queue: 6.6.2
 
