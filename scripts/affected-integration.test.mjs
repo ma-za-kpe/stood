@@ -1,26 +1,50 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { chmodSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const selector = resolve(root, 'scripts/affected-packages.mjs');
+const productGate = resolve(root, 'scripts/check-product');
+const turbo = resolve(root, 'node_modules/.bin/turbo');
 const selectedPackages = (...paths) => {
   const result = spawnSync(process.execPath, [selector, ...paths], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim().split('\n').filter(Boolean);
 };
-const turboPlan = (...packages) => {
+const turboPlanAt = (cwd, ...packages) => {
   const result = spawnSync(
-    'pnpm',
-    ['exec', 'turbo', 'run', 'test', 'typecheck', 'build', ...packages.map((name) => `--filter=${name}`), '--dry=json'],
-    { cwd: root, encoding: 'utf8' },
+    turbo,
+    ['run', 'test', 'typecheck', 'build', ...packages.map((name) => `--filter=${name}`), '--dry=json'],
+    { cwd, encoding: 'utf8' },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return JSON.parse(result.stdout);
 };
+const turboPlan = (...packages) => turboPlanAt(root, ...packages);
+
+test('the full product gate fails when selector integration tests fail', () => {
+  const bin = mkdtempSync(join(tmpdir(), 'stood-product-gate-stub-'));
+  try {
+    const docker = resolve(bin, 'docker');
+    writeFileSync(
+      docker,
+      '#!/bin/sh\ncase "$*" in\n  *affected-integration.test.mjs*) exit 41 ;;\n  *) exit 0 ;;\nesac\n',
+    );
+    chmodSync(docker, 0o755);
+    const result = spawnSync(productGate, [], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}${process.env.PATH ? `:${process.env.PATH}` : ''}`, STOOD_SKIP_PRODUCT_LINT: '1' },
+    });
+    assert.equal(result.status, 41, result.stderr || result.stdout);
+  } finally {
+    rmSync(bin, { recursive: true, force: true });
+  }
+});
 
 test('simulator consumers are selected and their test/typecheck tasks depend on the simulator build', () => {
   const packages = selectedPackages('services/simulators/src/webhooks.ts');
@@ -39,22 +63,43 @@ test('simulator consumers are selected and their test/typecheck tasks depend on 
   );
 });
 
-test('changing simulator source changes the cached API test task hash', () => {
-  const sourceFile = resolve(root, 'services/simulators/src/webhooks.ts');
-  const original = readFileSync(sourceFile, 'utf8');
-  const hash = () =>
-    turboPlan('@stood/api', '@stood/provider-simulators').tasks.find((task) => task.taskId === '@stood/api#test')?.hash;
-  const before = hash();
+test('changing shared source changes the consumer test hash in an isolated workspace fixture', () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'stood-turbo-hash-'));
   try {
-    writeFileSync(sourceFile, `${original}\n// isolated task-hash probe\n`);
+    mkdirSync(resolve(fixture, 'packages/provider-simulators/src'), { recursive: true });
+    mkdirSync(resolve(fixture, 'packages/api/src'), { recursive: true });
+    writeFileSync(
+      resolve(fixture, 'package.json'),
+      JSON.stringify({ name: 'turbo-hash-fixture', private: true, packageManager: 'pnpm@10.32.1' }),
+    );
+    writeFileSync(resolve(fixture, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+    writeFileSync(resolve(fixture, 'turbo.json'), readFileSync(resolve(root, 'turbo.json'), 'utf8'));
+    const tasks = { test: 'node -e "process.exit(0)"', typecheck: 'node -e "process.exit(0)"', build: 'node -e "process.exit(0)"' };
+    writeFileSync(
+      resolve(fixture, 'packages/provider-simulators/package.json'),
+      JSON.stringify({ name: '@stood/provider-simulators', version: '1.0.0', scripts: tasks }),
+    );
+    writeFileSync(
+      resolve(fixture, 'packages/api/package.json'),
+      JSON.stringify({
+        name: '@stood/api',
+        version: '1.0.0',
+        scripts: tasks,
+        devDependencies: { '@stood/provider-simulators': 'workspace:*' },
+      }),
+    );
+    const sourceFile = resolve(fixture, 'packages/provider-simulators/src/webhooks.ts');
+    writeFileSync(sourceFile, 'export const simulated = true;\n');
+    const hash = () => turboPlanAt(fixture, '@stood/api').tasks.find((task) => task.taskId === '@stood/api#test')?.hash;
+    const before = hash();
+    writeFileSync(sourceFile, 'export const simulated = false;\n');
     const after = hash();
     assert.ok(before, 'Turbo must report the API test task hash');
     assert.ok(after, 'Turbo must report the API test task hash after the shared source changes');
     assert.notEqual(after, before, 'shared simulator edits must invalidate the API test cache');
   } finally {
-    writeFileSync(sourceFile, original);
+    rmSync(fixture, { recursive: true, force: true });
   }
-  assert.equal(readFileSync(sourceFile, 'utf8'), original, 'the hash probe must restore the source byte-for-byte');
 });
 
 test('consumer tasks include shared contract build hashes and build before typecheck', () => {

@@ -20,7 +20,8 @@ if [ -z "${GITHUB_ACTIONS:-}" ] &&
   exec scripts/check-product
 fi
 
-changed=$(git diff --name-only "$base...HEAD")
+# Preserve both ends of a move: the source path may trigger a stricter gate than its destination.
+changed=$(git diff --no-renames --name-only "$base...HEAD")
 set --
 if [ -n "$changed" ]; then
   # Paths cannot contain newlines in this repository; pass each changed path as an argument.

@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const script = fileURLToPath(new URL('./affected-plan.mjs', import.meta.url));
+const runner = fileURLToPath(new URL('./check-product-affected', import.meta.url));
 const plan = (...paths) => {
   const result = spawnSync(process.execPath, [script, ...paths], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -53,6 +57,37 @@ test('payment decision, database, contract, migration and global changes keep th
     'tools/site/serve.mjs',
   ]) {
     assert.match(plan(path), /^full::/, path);
+  }
+});
+
+test('renames retain both paths so a payment source moved into a UI still selects the full gate', () => {
+  const repository = mkdtempSync(join(tmpdir(), 'stood-affected-rename-'));
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: repository, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    git('init', '-q');
+    git('config', 'user.name', 'Affected selector test');
+    git('config', 'user.email', 'affected-selector@example.invalid');
+    const source = resolve(repository, 'services/api/src/domain/money.ts');
+    const destination = resolve(repository, 'apps/yard-web/src/money.ts');
+    mkdirSync(join(repository, 'services/api/src/domain'), { recursive: true });
+    mkdirSync(join(repository, 'apps/yard-web/src'), { recursive: true });
+    writeFileSync(source, 'export const money = 1;\n');
+    git('add', '.');
+    git('commit', '-qm', 'test fixture baseline');
+    writeFileSync(destination, readFileSync(source));
+    rmSync(source);
+    git('add', '-A');
+
+    const paths = git('diff', '--no-renames', '--name-only', 'HEAD').split('\n');
+    assert.deepEqual(paths.sort(), ['apps/yard-web/src/money.ts', 'services/api/src/domain/money.ts']);
+    assert.match(plan(...paths), /^full::/);
+    assert.match(readFileSync(runner, 'utf8'), /git diff --no-renames --name-only/);
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
   }
 });
 
