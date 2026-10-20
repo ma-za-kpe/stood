@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "pnpm --dir ../.. test:yard-domain",
     "typecheck": "tsc --noEmit",
     "build": "tsc --outDir dist"
   },

@@ -1,8 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalPassThroughEnv": ["DATABASE_URL", "STOOD_TEST_TIMEOUT_MS"],
+  "globalPassThroughEnv": ["DATABASE_URL", "STOOD_TEST_TIMEOUT_MS", "STOOD_UI_MAX_WORKERS"],
   "tasks": {
-    "typecheck": { "dependsOn": ["^typecheck"], "outputs": [] },
+    "test": { "dependsOn": ["^build"], "outputs": [] },
+    "typecheck": { "dependsOn": ["^build", "^typecheck"], "outputs": [] },
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"], "env": ["YARD_UI_COVERAGE"] }
   }
 }

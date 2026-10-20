@@ -92,6 +92,7 @@ jobs:
       # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Prepare the Docker toolchain
         run: |
@@ -100,7 +101,13 @@ jobs:
           export LOCAL_UID LOCAL_GID
           docker compose build app
           docker compose run --rm app pnpm install --frozen-lockfile
-      - name: Run the product gate and Postgres tests
+      - name: Run affected workspace checks for a feature PR into develop
+        if: github.event_name == 'pull_request' && github.base_ref == 'develop'
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: scripts/check-product-affected "$GITHUB_BASE_REF"
+      - name: Run the full product gate for integration and promotion
+        if: github.event_name != 'pull_request' || github.base_ref == 'main'
         env:
           STOOD_SKIP_PRODUCT_LINT: "1"
         run: scripts/check-product

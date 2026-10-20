@@ -7,6 +7,7 @@ if [ "${STOOD_SKIP_PRODUCT_LINT:-0}" = 1 ]; then
 else
   docker compose run --rm app pnpm validate
 fi
+docker compose run --rm app node --test scripts/affected-integration.test.mjs
 scripts/check-migrations
 docker compose run --rm app node --test tools/site/serve.test.mjs tools/site/check-portal.test.mjs
 docker compose up -d --wait db

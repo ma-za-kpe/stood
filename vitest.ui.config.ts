@@ -1,8 +1,10 @@
 import { defineConfig } from 'vitest/config';
+import { workspaceAliases } from './vitest-workspaces.js';
 
 // T-0275: the Yard web app's coverage gate. Every app source file is measured (unexecuted screens count as
 // zero) by one instrumentation over unit and jsdom component tests, and must reach 98% in all four metrics.
 export default defineConfig({
+  resolve: { alias: workspaceAliases },
   test: {
     include: ['apps/yard-web/src/**/*.test.{ts,tsx}'],
     // Keep instrumented jsdom flows from starving each other on shared Docker hosts.

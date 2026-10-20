@@ -8,6 +8,7 @@
     "drizzle"
   ],
   "scripts": {
+    "test": "pnpm --dir ../.. test:api && pnpm --dir ../.. test:api-release",
     "typecheck": "tsc --noEmit",
     "build": "tsc --outDir dist",
     "start": "node dist/server.js"
@@ -23,6 +24,8 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "@stood/provider-simulators": "workspace:*",
+    "@stood/stood-sdk": "workspace:*"
   }
 }
