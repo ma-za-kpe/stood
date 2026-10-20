@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+
+base_ref=${1:-${GITHUB_BASE_REF:-develop}}
+case "$base_ref" in
+  origin/*) base=$base_ref ;;
+  *) base="origin/$base_ref" ;;
+esac
+
+if ! git rev-parse --verify "$base^{commit}" >/dev/null 2>&1 ||
+  ! git merge-base "$base" HEAD >/dev/null 2>&1; then
+  echo "Affected-check base $base is unavailable; falling back to the complete product gate."
+  exec scripts/check-product
+fi
+
+if [ -z "${GITHUB_ACTIONS:-}" ] &&
+  { ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; }; then
+  echo "Uncommitted paths cannot be selected safely by Turbo's Git comparison; use a workspace test command while editing."
+  exec scripts/check-product
+fi
+
+changed=$(git diff --name-only "$base...HEAD")
+set --
+if [ -n "$changed" ]; then
+  # Paths cannot contain newlines in this repository; pass each changed path as an argument.
+  while IFS= read -r path; do
+    [ -n "$path" ] && set -- "$@" "$path"
+  done <<EOF
+$changed
+EOF
+fi
+
+plan=$(node scripts/affected-plan.mjs "$@")
+mode=${plan%%::*}
+reason=${plan#*::}
+echo "Validation selection: $mode — $reason"
+node --test scripts/affected-plan.test.mjs
+
+if [ "$mode" = full ]; then
+  exec scripts/check-product
+fi
+
+docker compose run --rm -e "TURBO_SCM_BASE=$base" app \
+  pnpm exec turbo run test typecheck build --affected

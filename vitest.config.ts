@@ -1,25 +1,29 @@
 import { defineConfig } from 'vitest/config';
 
+const coverageIncludes = [
+  'services/api/src/**/*.ts',
+  'services/yard-api/src/**/*.ts',
+  'services/yard-foreman/src/**/*.ts',
+  'services/simulators/src/**/*.ts',
+  'packages/yard-domain/src/**/*.ts',
+  'packages/yard-contracts/src/**/*.ts',
+  'packages/stood-sdk/src/**/*.ts',
+];
+
 export default defineConfig({
   test: {
-    // Slow shared builders (Render's image build) need more than the 5 s default; CI and local keep it.
-    testTimeout: Number(process.env.STOOD_TEST_TIMEOUT_MS) || 5000,
-    include: ['services/**/*.test.ts', 'packages/**/*.test.ts', 'apps/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/*.db.test.ts', '**/*.network.test.ts', '**/*.sdk.test.ts'],
+    // Each pnpm workspace owns its test project. Coverage runs once across the full process.
+    projects: [
+      'services/*/vitest.config.ts',
+      'services/api/vitest.release.config.ts',
+      'packages/*/vitest.config.ts',
+      'apps/*/vitest.config.ts',
+    ],
     coverage: {
       provider: 'v8',
-      include: [
-        'services/api/src/**/*.ts',
-        'apps/yard-web/src/project-state.ts',
-        'services/yard-api/src/**/*.ts',
-        'services/yard-foreman/src/**/*.ts',
-        'services/simulators/src/**/*.ts',
-        'packages/yard-domain/src/**/*.ts',
-        'packages/yard-contracts/src/**/*.ts',
-        'packages/stood-sdk/src/**/*.ts',
-      ],
+      include: ['apps/yard-web/src/**/*.{ts,tsx}', ...coverageIncludes],
       exclude: [
-        '**/*.test.ts',
+        '**/*.test.{ts,tsx}',
         '**/server.ts',
         '**/setup-cli.ts',
         '**/reconcile-cli.ts',
@@ -38,6 +42,7 @@ export default defineConfig({
         '**/adapters/runner/vercel-sdk.ts',
         '**/yard-api/src/server.ts',
         '**/adapters/db-postgres/**',
+        'apps/yard-web/src/vite-env.d.ts',
       ],
       reporter: ['text', 'json-summary'],
       thresholds: {
@@ -47,6 +52,7 @@ export default defineConfig({
         statements: 85,
         'services/api/src/domain/**': { branches: 100, functions: 100, lines: 100, statements: 100 },
         'packages/yard-domain/src/**': { branches: 100, functions: 100, lines: 100, statements: 100 },
+        'apps/yard-web/src/**': { branches: 98, functions: 98, lines: 98, statements: 98 },
       },
     },
   },

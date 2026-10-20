@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "pnpm --dir ../.. test:yard-api",
     "typecheck": "tsc --noEmit",
     "build": "tsc --outDir dist",
     "start": "node dist/server.js"

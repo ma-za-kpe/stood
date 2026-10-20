@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "pnpm --dir ../.. test:ui",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "start": "vite --host 0.0.0.0"

@@ -8,6 +8,7 @@
     "drizzle"
   ],
   "scripts": {
+    "test": "pnpm --dir ../.. test:api && pnpm --dir ../.. test:api-release",
     "typecheck": "tsc --noEmit",
     "build": "tsc --outDir dist",
     "start": "node dist/server.js"
