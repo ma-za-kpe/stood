@@ -41,5 +41,8 @@ if [ "$mode" = full ]; then
   exec scripts/check-product
 fi
 
-docker compose run --rm -e "TURBO_SCM_BASE=$base" app \
+docker compose run --rm -e "TURBO_SCM_BASE=$base" app sh -ec '
+  # Workspace selection must not skip repository-wide architectural rules.
+  pnpm boundary
   pnpm exec turbo run test typecheck build --affected
+'

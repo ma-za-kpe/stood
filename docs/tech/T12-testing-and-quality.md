@@ -31,7 +31,7 @@ Policy: [WoW §4](../WAYS_OF_WORKING.md#4-test-driven-development). This page is
 
 ## Workspace selection
 
-The pnpm workspaces are the unit-test modules. Their `test` scripts run only the workspace's own tests; Turborepo selects changed workspaces and their dependents for feature PRs into `develop`, with dependency builds scheduled first. The Yard web workspace uses its dedicated 98% coverage config. Payment decision code, Postgres adapters/tests, migrations, published contracts, global test/build configuration, and missing Git history conservatively use the complete product gate. Full overall coverage, database, SDK/OpenAPI and end-to-end checks remain mandatory on the integration/release path. The affected selector changes when tests run, not the required release evidence.
+The pnpm workspaces are the unit-test modules. Their `test` scripts run only the workspace's own tests; Turborepo selects changed workspaces and their dependents for feature PRs into `develop`, with dependency builds scheduled first. The affected path also runs the repository-wide dependency-boundary check, which cannot be safely scoped to one workspace. The Yard web workspace uses its dedicated 98% coverage config. Payment decision code, Postgres adapters/tests, migrations, published contracts, global test/build configuration, and missing Git history conservatively use the complete product gate. Full overall coverage, database, SDK/OpenAPI and end-to-end checks remain mandatory on the integration/release path. The affected selector changes when tests run, not the required release evidence.
 
 ## Fixtures (shared by tests, demo, Postman)
 
