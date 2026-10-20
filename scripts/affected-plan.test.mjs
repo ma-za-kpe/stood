@@ -8,6 +8,10 @@ import test from 'node:test';
 
 const script = fileURLToPath(new URL('./affected-plan.mjs', import.meta.url));
 const runner = fileURLToPath(new URL('./check-product-affected', import.meta.url));
+const isolatedGitEnvironment = { ...process.env };
+for (const key of Object.keys(isolatedGitEnvironment)) {
+  if (key.startsWith('GIT_')) delete isolatedGitEnvironment[key];
+}
 const plan = (...paths) => {
   const result = spawnSync(process.execPath, [script, ...paths], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -63,7 +67,7 @@ test('payment decision, database, contract, migration and global changes keep th
 test('renames retain both paths so a payment source moved into a UI still selects the full gate', () => {
   const repository = mkdtempSync(join(tmpdir(), 'stood-affected-rename-'));
   const git = (...args) => {
-    const result = spawnSync('git', args, { cwd: repository, encoding: 'utf8' });
+    const result = spawnSync('git', args, { cwd: repository, encoding: 'utf8', env: isolatedGitEnvironment });
     assert.equal(result.status, 0, result.stderr);
     return result.stdout.trim();
   };
@@ -77,7 +81,7 @@ test('renames retain both paths so a payment source moved into a UI still select
     mkdirSync(join(repository, 'apps/yard-web/src'), { recursive: true });
     writeFileSync(source, 'export const money = 1;\n');
     git('add', '.');
-    git('commit', '-qm', 'test fixture baseline');
+    git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'test fixture baseline');
     writeFileSync(destination, readFileSync(source));
     rmSync(source);
     git('add', '-A');
