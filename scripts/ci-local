@@ -30,6 +30,25 @@ step() {
     failed=1
   fi
 }
+product_gate() {
+  STOOD_SKIP_PRODUCT_LINT=1
+  export STOOD_SKIP_PRODUCT_LINT
+  branch=$(git symbolic-ref --quiet --short HEAD || true)
+  case "$branch" in
+    main|develop|release/*)
+      scripts/check-product
+      ;;
+    *)
+      if git rev-parse --verify 'origin/develop^{commit}' >/dev/null 2>&1 &&
+        git merge-base origin/develop HEAD >/dev/null 2>&1; then
+        scripts/check-product-affected develop
+      else
+        echo "No committed feature-branch comparison is available; running the full product gate."
+        scripts/check-product
+      fi
+      ;;
+  esac
+}
 echo "Running every CI job locally (log: $log)"
 # The product gate's Postgres binds a configurable host port (5432 by default). Another checkout's database there
 # fails the run after minutes, so say so up front. Set STOOD_DB_HOST_PORT to an available port to validate in parallel.
@@ -45,7 +64,7 @@ fi
 step build docker compose build --no-cache --progress=plain app
 step install docker compose run --rm -T app pnpm install --frozen-lockfile
 step hooks env SKIP=ci-local pre-commit run --all-files --show-diff-on-failure
-step product env STOOD_SKIP_PRODUCT_LINT=1 scripts/check-product
+step product product_gate
 step site scripts/check-site
 step mock scripts/dev mock
 step hosted scripts/check-hosted-yard

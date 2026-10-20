@@ -22,6 +22,22 @@ test('a shared workspace contract edit selects dependent workspace tasks', () =>
   assert.match(plan('packages/yard-contracts/src/intake.ts'), /^affected::/);
 });
 
+test('SDK source and contract tests always run SDK qualification', () => {
+  for (const path of [
+    'sdk/typescript/src/controllers/api.ts',
+    'apimatic/src/sdk-source-tree/.typescript/src/index.ts',
+    'services/api/test/sdk/apimatic-sdk.sdk.test.ts',
+  ]) {
+    assert.match(plan(path), /^full::generated SDK or SDK qualification changed/, path);
+  }
+});
+
+test('non-workspace executable and site paths fail safe to the full gate', () => {
+  for (const path of ['site/yard/tokens.css', 'tools/new-check/run.mjs', 'unknown/run-tests.sh']) {
+    assert.match(plan(path), /^full::/, path);
+  }
+});
+
 test('payment decision, database, contract, migration and global changes keep the full gate', () => {
   for (const path of [
     'services/api/src/domain/decision.ts',

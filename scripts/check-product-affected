@@ -41,8 +41,21 @@ if [ "$mode" = full ]; then
   exec scripts/check-product
 fi
 
-docker compose run --rm -e "TURBO_SCM_BASE=$base" app sh -ec '
+packages=$(node scripts/affected-packages.mjs "$@")
+if [ "${packages%%::*}" = full ]; then
+  echo "Workspace mapping fell back to the full gate: ${packages#*::}"
+  exec scripts/check-product
+fi
+set --
+while IFS= read -r package; do
+  [ -n "$package" ] && set -- "$@" "--filter=$package"
+done <<EOF
+$packages
+EOF
+
+docker compose run --rm app sh -ec '
   # Workspace selection must not skip repository-wide architectural rules.
   pnpm boundary
-  pnpm exec turbo run test typecheck build --affected
-'
+  node --test scripts/affected-integration.test.mjs
+  pnpm exec turbo run test typecheck build "$@"
+' sh "$@"
