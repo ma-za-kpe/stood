@@ -17,7 +17,7 @@
     "ag-studio-react": "3.0.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-hook-form": "7.89.0",
+    "react-hook-form": "7.90.0",
     "xstate": "5.33.2",
     "zod": "4.6.5",
     "zustand": "5.0.15",
