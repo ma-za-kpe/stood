@@ -120,7 +120,7 @@ it('refuses malformed, unknown, open or early assessment requests and replays an
     'CONFLICT',
   );
   await expect(store.complete('platform', id, 'missing', now)).rejects.toThrow('NOT_FOUND');
-  await expect(store.complete('platform', id, open.id, open.createdAt - 1)).rejects.toThrow('INVALID');
+  await expect(store.complete('platform', id, open.id, now - 1)).rejects.toThrow('INVALID');
   await store.complete('platform', id, open.id, now + 1);
   const first = await store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now + 2);
   expect(await store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now + 3)).toEqual(first);
