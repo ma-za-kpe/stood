@@ -2,7 +2,9 @@
 import { intakeFixture } from '../../../packages/yard-contracts/test/fakes/intake.js';
 import type { Call } from './harness.js';
 
-export const T = Date.parse('2026-10-05T00:00:00Z');
+// Anchored to the start of today (UTC), not a fixed date: a fixed date made every saved deadline
+// expire once real time passed it, and the planning tests then failed on the calendar alone.
+export const T = Math.floor(Date.now() / 86400000) * 86400000;
 export function completeDraft() {
   const draft = structuredClone(intakeFixture(T)) as { handover: Record<string, unknown> };
   delete draft.handover.baseCommit;
