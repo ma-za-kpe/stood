@@ -94,6 +94,37 @@ it('durably binds the immutable assessment receipt to one idempotency key and re
   ).rejects.toThrow('CONFLICT');
   await expect(store.loadAssessment('other', id, open.id, 'assessment-key', requestHash)).rejects.toThrow('NOT_FOUND');
 });
+it('refuses malformed, unknown, open or early assessment requests and replays an exact retry', async () => {
+  const id = await tranche(),
+    now = Date.now();
+  const receipt = { payload: { evidenceId: 'evidence-2' }, signature: 'signed' };
+  const [request, hash] = ['d'.repeat(64), 'e'.repeat(64)];
+  const open = await store.reserve('platform', id, 'assessment-edges', 'c'.repeat(64), photos, now);
+  // Nothing recorded yet: a read finds no receipt rather than inventing one.
+  expect(await store.loadAssessment('platform', id, open.id, 'k', request)).toBeNull();
+  for (const [key, req, rh] of [
+    [' ', request, hash],
+    ['k'.repeat(201), request, hash],
+    ['k', 'not-a-hash', hash],
+    ['k', request, 'not-a-hash'],
+  ] as const)
+    await expect(store.recordAssessment('platform', id, open.id, key, req, receipt, rh, now)).rejects.toThrow(
+      'INVALID',
+    );
+  await expect(store.loadAssessment('platform', id, open.id, ' ', request)).rejects.toThrow('INVALID');
+  await expect(store.recordAssessment('platform', id, 'missing', 'k', request, receipt, hash, now)).rejects.toThrow(
+    'NOT_FOUND',
+  );
+  // Only a completed upload can carry an assessment.
+  await expect(store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now)).rejects.toThrow(
+    'CONFLICT',
+  );
+  await expect(store.complete('platform', id, 'missing', now)).rejects.toThrow('NOT_FOUND');
+  await expect(store.complete('platform', id, open.id, open.createdAt - 1)).rejects.toThrow('INVALID');
+  await store.complete('platform', id, open.id, now + 1);
+  const first = await store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now + 2);
+  expect(await store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now + 3)).toEqual(first);
+});
 it('permits only one open session per tranche and bounds reservations, refusing malformed time or metadata', async () => {
   const id = await tranche(),
     now = Date.now();
