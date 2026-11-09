@@ -33,7 +33,8 @@ export type FundingView = Readonly<{
   key: string;
   status: 'RESERVED' | 'CREATING' | 'AWAITING_APPROVAL' | 'AUTHORIZING' | 'HELD' | 'FAILED' | 'EXPIRED';
   approveUrl: string | null;
-  holdExpiresAt: string | null;
+  // Only while HELD: when the PayPal hold lapses, Unix milliseconds (the API's `hold_expires_at`).
+  holdExpiresAt: number | null;
 }>;
 export type PackageInput = Readonly<{
   repository: string;
@@ -249,7 +250,7 @@ function fundingView(v: unknown, key: string): FundingView {
       String(v.status),
     ) ||
     !(v.approve_url === null || typeof v.approve_url === 'string') ||
-    !(v.hold_expires_at === null || v.hold_expires_at === undefined || typeof v.hold_expires_at === 'string')
+    !(v.hold_expires_at === null || Number.isSafeInteger(v.hold_expires_at))
   )
     throw new StoodClientError('INVALID_RESPONSE');
   if (typeof v.approve_url === 'string') {
@@ -271,7 +272,7 @@ function fundingView(v: unknown, key: string): FundingView {
     key,
     status: v.status as FundingView['status'],
     approveUrl: (v.approve_url as string | null) ?? null,
-    holdExpiresAt: (v.hold_expires_at as string | null | undefined) ?? null,
+    holdExpiresAt: v.hold_expires_at as number | null,
   });
 }
 function trancheView(v: unknown, trancheId: string): TrancheView {

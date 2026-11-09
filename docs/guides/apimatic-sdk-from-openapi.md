@@ -167,7 +167,9 @@ The SDK and the portal come from one file, `openapi/stood.json`, so they cannot 
 3. **Write the one page developers need most.** `src/content/guides/signing-requests.md`, listed in `src/content/toc.yml` with `page:` and `file:` (custom pages never use `generate:`).
 4. **Build it:** `scripts/dev portal` (CLI 1.5.0, key from `.env`, never printed), into `apimatic/portal/` (git-ignored). About 3 MB of static files.
 5. **Check the SDK is unaffected:** `scripts/dev sdk` and confirm `git status sdk/` is clean. APIMatic rewrites its own change-tracking file on every run; restore it if the SDK did not change.
-6. **Publish in CI.** The Pages workflow runs the same command with the `APIMATIC_API_KEY` repository secret, into `_site/api`, on every merge to `main`. Without the secret it skips the portal and publishes the rest of the site.
+6. **Publish in CI.** The Pages workflow runs the same command with the `APIMATIC_API_KEY` repository secret, into `_site/api`, on every merge to `main`. Without the secret it skips the portal and publishes the rest of the site. If portal generation fails three times in a row, the workflow logs a warning and publishes nothing, so the live site keeps its last good portal. A portal that generates but fails `tools/site/check-portal.mjs` still fails the run.
+
+   **When CLI 1.5.0 says "An unexpected error occurred, please try again later", check the subscription first (9 November 2026).** The server had answered `403` with `"Docs as code is not allowed on your subscription"`, and the CLI showed it as a generic server error. The same key still validated specs (`apimatic api validate`), so the key was fine; the plan no longer included portal generation. To see the real status and body, wrap `handleServiceError` in `lib/infrastructure/service-error.js` in a scratch copy of the CLI and log `error.statusCode` and `error.result`. Restore the feature on the APIMatic dashboard (or ask APIMatic support), then rerun the `landing-page` workflow.
 
 We chose GitHub Pages over Render because the portal is static: it costs nothing there, and it ships with the website it is linked from.
 
