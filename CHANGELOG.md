@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/ma-za-kpe/stood/compare/v0.16.0...v0.16.1) (2026-11-09)
+
+
+### Fixes
+
+* **sdk:** read a held funding's expiry as Unix milliseconds ([#228](https://github.com/ma-za-kpe/stood/issues/228)) ([ad02d52](https://github.com/ma-za-kpe/stood/commit/ad02d525664756cc97eacc7036ab7a37a0de28cf))
+
 ## [0.16.0](https://github.com/ma-za-kpe/stood/compare/v0.15.1...v0.16.0) (2026-11-09)
 
 
