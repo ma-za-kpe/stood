@@ -37,8 +37,9 @@ jobs:
           npm ci --prefix tools/site --ignore-scripts
           node tools/site/build.mjs
       # T-0332: the APIMatic developer portal for the Stood API, from openapi/stood.json, at /stood/api/.
-      # Without the APIMATIC_API_KEY secret the site publishes without it. When APIMatic's service
-      # itself fails three times, nothing is published, so the live site keeps its last good portal.
+      # Without the APIMATIC_API_KEY secret the site publishes without it. When generation fails three
+      # times (an APIMatic outage, or a plan without "Docs as code", which CLI 1.5.0 reports as an
+      # "unexpected error"), nothing is published, so the live site keeps its last good portal.
       # A portal that generates but fails check-portal still fails the job.
       - name: Build API portal (APIMatic)
         id: portal
@@ -57,7 +58,7 @@ jobs:
             echo "APIMatic portal generation failed (attempt $attempt of 3)."
             sleep $((attempt * 20))
           done
-          echo "::warning title=API portal not regenerated::APIMatic portal generation failed three times; the live site is left unchanged."
+          echo "::warning title=API portal not regenerated::APIMatic portal generation failed three times (outage, or the plan lacks Docs as code); the live site is left unchanged."
           echo "portal=unavailable" >> "$GITHUB_OUTPUT"
       # actions/configure-pages v6.0.0
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
