@@ -240,7 +240,9 @@ export function roomChecked(value: unknown): ProjectRoom {
         proof.effect !== 'CAPTURE' ||
         typeof proof.reference !== 'string' ||
         !proof.reference.trim() ||
-        proof.minor !== o.budgetMinor ||
+        // ADR-0027: the buyer pays Yard's fee on top of the builder's price in the same hold, so a capture covers at least it.
+        !Number.isSafeInteger(proof.minor) ||
+        (proof.minor as number) < (o.budgetMinor as number) ||
         proof.currency !== value.currency ||
         proof.trancheId !== o.trancheId ||
         proof.simulated !== true ||
