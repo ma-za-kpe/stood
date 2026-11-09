@@ -167,7 +167,7 @@ The SDK and the portal come from one file, `openapi/stood.json`, so they cannot 
 3. **Write the one page developers need most.** `src/content/guides/signing-requests.md`, listed in `src/content/toc.yml` with `page:` and `file:` (custom pages never use `generate:`).
 4. **Build it:** `scripts/dev portal` (CLI 1.5.0, key from `.env`, never printed), into `apimatic/portal/` (git-ignored). About 3 MB of static files.
 5. **Check the SDK is unaffected:** `scripts/dev sdk` and confirm `git status sdk/` is clean. APIMatic rewrites its own change-tracking file on every run; restore it if the SDK did not change.
-6. **Publish in CI.** The Pages workflow runs the same command with the `APIMATIC_API_KEY` repository secret, into `_site/api`, on every merge to `main`. Without the secret it skips the portal and publishes the rest of the site.
+6. **Publish in CI.** The Pages workflow runs the same command with the `APIMATIC_API_KEY` repository secret, into `_site/api`, on every merge to `main`. Without the secret it skips the portal and publishes the rest of the site. If APIMatic's service itself fails three times in a row (on 9 November 2026 it answered "An unexpected error occurred, please try again later" even for the spec that built on 15 October), the workflow logs a warning and publishes nothing, so the live site keeps its last good portal. A portal that generates but fails `tools/site/check-portal.mjs` still fails the run.
 
 We chose GitHub Pages over Render because the portal is static: it costs nothing there, and it ships with the website it is linked from.
 
