@@ -111,12 +111,18 @@ export class DemoAutopilot {
     };
     const run = this.current;
     void this.run(run).catch((error: unknown) => {
+      const failedAt = run.step;
       run.status = 'STOPPED';
       run.error = error instanceof DemoError ? error.message : 'The demo stopped; nothing more will be charged.';
       run.step = 'Stopped';
       run.updatedAt = this.deps.clock();
       for (const t of run.tasks) if (!['CAPTURED', 'PAID_OUT'].includes(t.state)) t.state = 'STOPPED';
-      this.deps.log({ code: 'DEMO_STOPPED', runId: run.runId, step: run.step, reason: run.error });
+      // The cause is for the owner's log only: an error code or a Yard path and status, never a secret.
+      const cause =
+        error instanceof Error
+          ? `${error.name}${'code' in error ? `:${String(error.code)}` : ''} ${error.message}`.slice(0, 300)
+          : 'unknown';
+      this.deps.log({ code: 'DEMO_STOPPED', runId: run.runId, step: run.step, reason: run.error, failedAt, cause });
     });
     return structuredClone(run);
   }

@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
+import { StoodClient, StoodClientError } from '../../../../packages/stood-sdk/src/client.js';
 import { codeParams } from '../../test/fixtures/code-terms.js';
 import { mandateTermsHash } from '../application/mandate-terms.js';
 import { FundingStoreError } from '../ports/funding-store.js';
@@ -220,4 +221,35 @@ it('rejects malformed or non-empty mandate bodies before touching storage', asyn
     expect(await r.json()).toMatchObject({ code: 'validation' });
   }
   expect(mandates.reserve).not.toHaveBeenCalled();
+});
+
+// 2026-11-09: the first hosted judge demo stopped right after PayPal placed a real hold, because the SDK expected
+// `hold_expires_at` as a string. Read the router's actual output through the public SDK so the two cannot drift.
+it('reads a held funding through the public SDK with the hold expiry in Unix milliseconds', async () => {
+  const { app, funding } = fixture();
+  const client = new StoodClient({
+    baseUrl: 'https://stood.fixture',
+    key,
+    secret,
+    clock: () => now,
+    transport: async (r: Request) => app.fetch(r),
+  });
+  await expect(client.requestFunding('trn_1', 0, 'K7Q', 'f-key')).resolves.toEqual({
+    key: 'f-key',
+    status: 'RESERVED',
+    approveUrl: null,
+    holdExpiresAt: null,
+  });
+  await expect(client.getFunding('trn_1', 'f-key')).resolves.toEqual({
+    key: 'f-key',
+    status: 'HELD',
+    approveUrl: null,
+    holdExpiresAt: now + 86400000,
+  });
+  funding.load.mockResolvedValueOnce({
+    ...(await funding.load()),
+    // biome-ignore lint/suspicious/noExplicitAny: a malformed store row to prove the SDK rejects a non-integer expiry
+    hold: { orderId: 'O', authorizationId: 'A', heldAt: now, expiresAt: 1.5 as any, reference: 'R' },
+  });
+  await expect(client.getFunding('trn_1', 'f-key')).rejects.toBeInstanceOf(StoodClientError);
 });
