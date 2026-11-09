@@ -240,6 +240,12 @@ export const UploadSession = z
   .object({
     id,
     trancheId: id,
+    allowanceId: id.nullable(),
+    termsVersion: z.number().int().nullable(),
+    assessmentNonce: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable(),
     status: z.enum(['OPEN', 'COMPLETE']).meta({ id: 'UploadStatus' }),
     photos: z.array(StoredUploadPhoto).min(1).max(10),
     expiresAt: z.number().int(),
@@ -250,9 +256,21 @@ export const UploadSession = z
   .meta({
     id: 'UploadSession',
     description:
-      'COMPLETE means owned bytes, size, hash and format header checked; no assessment or payment. URLs are derived short-lived capabilities, not persisted receipts.',
+      'COMPLETE means owned bytes, size, hash and format header checked; signed assessment receipts are audit-only and grant no payment authority. URLs are derived short-lived capabilities, not persisted receipts.',
   });
 export const UploadCompletion = z.object({}).strict().meta({ id: 'UploadCompletion' });
+export const EyeOnSiteAssessmentRequest = z
+  .object({ evidenceId: id })
+  .strict()
+  .meta({ id: 'EyeOnSiteAssessmentRequest' });
+export const EyeOnSiteAssessmentResponse = z
+  .object({ receipt: z.record(z.string(), z.unknown()), authority: z.literal('AUDIT_ONLY') })
+  .strict()
+  .meta({
+    id: 'EyeOnSiteAssessmentResponse',
+    description:
+      'Authenticated EyeOnSite evidence retained for audit only; it has no payment or milestone decision authority.',
+  });
 
 export const BaselineStatus = z.enum(['QUEUED', 'DONE', 'INVALID']).meta({
   id: 'BaselineStatus',
@@ -470,6 +488,16 @@ export const operations: readonly Operation[] = [
     summary: 'Check the uploaded bytes and complete the evidence intake; creates no decision or payment',
     body: UploadCompletion,
     ok: { status: 200, schema: UploadSession },
+    idempotent: true,
+    problems: [401, 404, 409, 422, 503],
+  },
+  {
+    method: 'post',
+    path: '/tranches/{id}/uploads/{uploadId}/assessment',
+    id: 'assessUpload',
+    summary: 'Ask EyeOnSite for a signed assessment of processed evidence; stores the receipt as audit-only evidence',
+    body: EyeOnSiteAssessmentRequest,
+    ok: { status: 200, schema: EyeOnSiteAssessmentResponse },
     idempotent: true,
     problems: [401, 404, 409, 422, 503],
   },

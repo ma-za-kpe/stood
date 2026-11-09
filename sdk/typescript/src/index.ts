@@ -37,6 +37,8 @@ export type { CommitPackage } from './models/commitPackage.js';
 export type { CommitPackageInput } from './models/commitPackageInput.js';
 export type { Decision } from './models/decision.js';
 export { DecisionOutcome } from './models/decisionOutcome.js';
+export type { EyeOnSiteAssessmentRequest } from './models/eyeOnSiteAssessmentRequest.js';
+export type { EyeOnSiteAssessmentResponse } from './models/eyeOnSiteAssessmentResponse.js';
 export type { FrozenTest } from './models/frozenTest.js';
 export type { Funding } from './models/funding.js';
 export type { FundingRequest } from './models/fundingRequest.js';

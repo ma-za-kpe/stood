@@ -1,5 +1,6 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
+import { canonicalEyeOnSiteReceipt } from '../application/eyeonsite-assessment.js';
 import { UploadError } from '../ports/upload-store.js';
 import { UploadSession } from './contract.js';
 import { platformApi } from './platform-api.js';
@@ -11,6 +12,9 @@ const photo = { sha256: createHash('sha256').update(body).digest('hex'), bytes: 
 const session = {
   id: 'session',
   trancheId: 'tranche',
+  allowanceId: 'allowance',
+  termsVersion: 2,
+  assessmentNonce: 'a'.repeat(64),
   status: 'OPEN' as const,
   photos: [{ ...photo, key: 'uploads/session/photo' }],
   expiresAt: now + 900000,
@@ -23,6 +27,9 @@ function fixture() {
     complete: vi.fn(async () => ({ ...session, status: 'COMPLETE' as const, completedAt: now })),
     expiredOpen: vi.fn(async () => []),
     recordCleanup: vi.fn(async () => false),
+    recordCleanupFailure: vi.fn(async () => {}),
+    loadAssessment: vi.fn(async (): Promise<import('../ports/upload-store.js').StoredAssessmentReceipt | null> => null),
+    recordAssessment: vi.fn(async (_platform, _tranche, _id, _key, _hash, receipt) => receipt),
   };
   const objects = {
     get: vi.fn(async () => body),
@@ -60,6 +67,41 @@ function fixture() {
     });
   };
   return { store, objects, request };
+}
+function signedReceipt() {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const payload = {
+    schemaVersion: 1 as const,
+    issuer: 'eyeonsite' as const,
+    keyId: 'test-key',
+    evidenceId: 'evidence-1',
+    taskId: 'task-1',
+    allowanceId: 'allowance',
+    termsVersion: 2,
+    trancheId: 'tranche',
+    uploadId: 'session',
+    nonce: 'a'.repeat(64),
+    issuedAt: now,
+    photos: [{ sha256: photo.sha256, bytes: photo.bytes }],
+    assessment: {
+      qualityScore: 50,
+      gpsValid: false,
+      fraudRisk: 'LOW' as const,
+      contentRisk: 'UNKNOWN' as const,
+      provenanceStatus: 'UNVERIFIED' as const,
+      attestationVerdict: 'UNKNOWN' as const,
+      signals: [],
+    },
+  };
+  const signature = sign(null, Buffer.from(canonicalEyeOnSiteReceipt(payload)), privateKey).toString('base64url');
+  return {
+    receipt: { payload, signature },
+    key: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+    resign: (next: typeof payload) => ({
+      payload: next,
+      signature: sign(null, Buffer.from(canonicalEyeOnSiteReceipt(next)), privateKey).toString('base64url'),
+    }),
+  };
 }
 it('reserves an owned session, issues URLs only for its fixed keys and completes from trusted bytes', async () => {
   const f = fixture(),
@@ -120,4 +162,78 @@ it('returns typed absence, expiry, incomplete and storage failures without signi
   expect((await f.request(`${path}/session/complete`, 'POST', {})).status).toBe(422);
   expect(f.store.complete).not.toHaveBeenCalled();
   expect(f.objects.presignPut).not.toHaveBeenCalled();
+});
+it('stores only fresh signed receipts bound to a complete upload and makes the receipt immutable', async () => {
+  const f = fixture();
+  const { receipt, key, resign } = signedReceipt();
+  f.store.get.mockResolvedValue({ ...session, status: 'COMPLETE', completedAt: now } as never);
+  const issue = vi.fn(async (_input: unknown) => receipt);
+  const app = platformApi({
+    store: {} as never,
+    platformId: 'platform',
+    key: 'upload-key',
+    secret,
+    clock: () => now,
+    uploads: { store: f.store, objects: f.objects },
+    eyeOnSiteAssessment: { publicKeys: { 'test-key': key }, issue },
+  });
+  const send = (body: unknown) => {
+    const raw = JSON.stringify(body),
+      t = String(now / 1000),
+      idem = 'one';
+    const signature = createHmac('sha256', secret)
+      .update(
+        JSON.stringify([
+          'stood.request@2',
+          t,
+          'POST',
+          '/v1/tranches/tranche/uploads/session/assessment',
+          idem,
+          '',
+          'application/json',
+          raw,
+        ]),
+      )
+      .digest('hex');
+    return app.request('/tranches/tranche/uploads/session/assessment', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer upload-key',
+        'Stood-Signature': `t=${t},v2=${signature}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idem,
+      },
+      body: raw,
+    });
+  };
+  const first = await send({ evidenceId: 'evidence-1' });
+  expect(first.status).toBe(200);
+  expect(await first.json()).toMatchObject({ authority: 'AUDIT_ONLY', receipt });
+  expect(f.store.recordAssessment).toHaveBeenCalledTimes(1);
+  f.store.loadAssessment.mockResolvedValueOnce(receipt);
+  expect((await send({ evidenceId: 'evidence-1' })).status).toBe(200);
+  expect(issue).toHaveBeenCalledTimes(1);
+  expect(f.store.recordAssessment).toHaveBeenCalledTimes(1);
+  f.store.loadAssessment.mockRejectedValueOnce(new UploadError('CONFLICT'));
+  expect((await send({ evidenceId: 'different-evidence' })).status).toBe(409);
+  expect(issue).toHaveBeenCalledTimes(1);
+  const changedPayload = structuredClone(receipt.payload);
+  changedPayload.assessment.qualityScore = 51;
+  issue.mockResolvedValueOnce(resign(changedPayload));
+  f.store.loadAssessment.mockResolvedValueOnce(null);
+  f.store.recordAssessment.mockRejectedValueOnce(new UploadError('CONFLICT'));
+  expect((await send({ evidenceId: 'evidence-1' })).status).toBe(409);
+  const issuedInput = issue.mock.calls[0]?.[0];
+  expect(issuedInput).toMatchObject({
+    evidenceId: 'evidence-1',
+    allowanceId: 'allowance',
+    termsVersion: 2,
+    trancheId: 'tranche',
+    uploadId: 'session',
+    nonce: 'a'.repeat(64),
+  });
+});
+it('keeps receipt ingestion disabled without trusted keys', async () => {
+  const f = fixture();
+  expect((await f.request('/tranches/tranche/uploads/session/assessment', 'POST', {})).status).toBe(503);
 });

@@ -1693,6 +1693,147 @@
         }
       }
     },
+    "/tranches/{id}/uploads/{uploadId}/assessment": {
+      "post": {
+        "operationId": "assessUpload",
+        "summary": "Ask EyeOnSite for a signed assessment of processed evidence; stores the receipt as audit-only evidence",
+        "security": [
+          {
+            "platformKey": [],
+            "requestSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uploadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Same key and body return the same response; a different body is 409",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EyeOnSiteAssessmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EyeOnSiteAssessmentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid platform key or signature",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not owned by this platform",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency or version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 64 KiB",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the current one-minute window ends",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or the feature is unavailable; retry with the same idempotency key",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tranches/{id}/packages": {
       "post": {
         "operationId": "submitPackage",
@@ -2484,6 +2625,42 @@
           "WAIT"
         ]
       },
+      "EyeOnSiteAssessmentRequest": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "evidenceId"
+        ],
+        "additionalProperties": false
+      },
+      "EyeOnSiteAssessmentResponse": {
+        "type": "object",
+        "properties": {
+          "receipt": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "authority": {
+            "type": "string",
+            "const": "AUDIT_ONLY"
+          }
+        },
+        "required": [
+          "receipt",
+          "authority"
+        ],
+        "additionalProperties": false,
+        "description": "Authenticated EyeOnSite evidence retained for audit only; it has no payment or milestone decision authority."
+      },
       "FrozenTest": {
         "type": "object",
         "properties": {
@@ -3041,6 +3218,29 @@
             "minLength": 1,
             "maxLength": 200
           },
+          "allowanceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "termsVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "assessmentNonce": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{64}$"
+          },
           "status": {
             "$ref": "#/components/schemas/UploadStatus"
           },
@@ -3076,6 +3276,9 @@
         "required": [
           "id",
           "trancheId",
+          "allowanceId",
+          "termsVersion",
+          "assessmentNonce",
           "status",
           "photos",
           "expiresAt",
@@ -3083,7 +3286,7 @@
           "uploads"
         ],
         "additionalProperties": false,
-        "description": "COMPLETE means owned bytes, size, hash and format header checked; no assessment or payment. URLs are derived short-lived capabilities, not persisted receipts."
+        "description": "COMPLETE means owned bytes, size, hash and format header checked; signed assessment receipts are audit-only and grant no payment authority. URLs are derived short-lived capabilities, not persisted receipts."
       },
       "UploadStatus": {
         "type": "string",
