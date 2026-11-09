@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { ApiError, api } from './http.js';
 
@@ -93,6 +93,16 @@ export function DemoBuild(props: {
   };
   const run = status.data;
   const repo = run ? github(run.repository) : null;
+  // The latest run's room holds the Transactions panel: open it on sign-in or reload, and refresh it as each page is paid.
+  const opened = useRef(props.onStarted);
+  opened.current = props.onStarted;
+  const projectId = run?.projectId,
+    paid = run?.paid,
+    state = run?.status;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: paid and state are the triggers; the callback is read from a ref
+  useEffect(() => {
+    if (projectId) opened.current(projectId);
+  }, [projectId, paid, state]);
   return (
     <section className="demo-build" aria-label="Build a project">
       <button
