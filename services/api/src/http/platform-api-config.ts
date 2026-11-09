@@ -14,6 +14,20 @@ export type PlatformApiConfig = Readonly<{
   versions?: AllowanceVersionStore;
   packages?: CommitPackageStore;
   uploads?: Readonly<{ store: UploadStore; objects: UploadObjects }>;
+  // Empty/absent means EyeOnSite receipts are disabled. Only the server calls the issuer.
+  eyeOnSiteAssessment?: Readonly<{
+    publicKeys: Readonly<Record<string, string>>;
+    issue(
+      input: Readonly<{
+        evidenceId: string;
+        allowanceId: string;
+        termsVersion: number;
+        trancheId: string;
+        uploadId: string;
+        nonce: string;
+      }>,
+    ): Promise<unknown>;
+  }>;
   // C4 (#77): baselines that prove a milestone's frozen tests fail on the base commit.
   baselines?: Pick<BaselineStore, 'request' | 'get'>;
   // C4 (#77): the buyer's signed confirmation that a final milestone is in use, and who may sign it.

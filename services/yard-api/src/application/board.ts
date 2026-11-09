@@ -12,6 +12,7 @@ import {
   beforeDeadline,
   currentHold,
   type Data,
+  DEMO_MAX_CAP_MINOR,
   data,
   feedback,
   field,
@@ -121,6 +122,29 @@ export class Board {
       input.id,
       actor.id,
       { blueprint: Blueprint.create(input).snapshot, buyerRoot: actor.root, orders: {} },
+      key,
+    );
+  }
+  // Judge demo only, called in-process by the demo autopilot (no HTTP route accepts `demo`). The same checks as
+  // `create`, plus a small cap, then the project is marked so its Crew is paid at release.
+  async createDemo(input: BlueprintInput, actor: Operator, key: string, runId: string): Promise<YardSnapshot> {
+    if (actor.kind !== 'BUYER' || input.buyerOperatorId !== actor.id) throw new YardError('FORBIDDEN');
+    if (
+      !/^demo-[A-Za-z0-9_-]{1,90}$/.test(input.id) ||
+      !/^[A-Za-z0-9_-]{1,80}$/.test(runId) ||
+      input.capMinor > DEMO_MAX_CAP_MINOR ||
+      !input.milestones.every((m) => /^[A-Za-z0-9_-]{1,100}$/.test(m.id))
+    )
+      throw new YardError('INVALID');
+    return this.events.create(
+      input.id,
+      actor.id,
+      {
+        blueprint: Blueprint.create(input).snapshot,
+        buyerRoot: actor.root,
+        orders: {},
+        demo: { runId, immediatePayout: true },
+      },
       key,
     );
   }
@@ -609,6 +633,7 @@ export class Board {
       milestoneCount: d.blueprint.milestones.length,
       summary: d.blueprint.summary,
       currency: d.blueprint.currency,
+      ...(d.demo ? { demo: true } : {}),
       simulated: true,
       orders: Object.keys(d.orders).map((wo) => {
         const { work, order } = workOrder(d, wo),
@@ -617,6 +642,7 @@ export class Board {
           id: wo,
           name: milestone.name,
           budgetMinor: milestone.budgetMinor,
+          deadline: milestone.deadline,
           trancheId: order.trancheId,
           state: status(order, work),
           ...feedback(order),

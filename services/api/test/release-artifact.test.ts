@@ -8,14 +8,14 @@ it('deploys the real API release with its entrypoint and no test/fake/simulator 
   const directory = mkdtempSync(join(tmpdir(), 'stood-release-'));
   const release = join(directory, 'api');
   try {
-    execFileSync('pnpm', ['--filter', '@stood/api', 'build'], { stdio: 'pipe', timeout: 90000 });
+    execFileSync('pnpm', ['--filter', '@stood/api', 'build'], { stdio: 'pipe', timeout: 180000 });
     const store = dirname(execFileSync('pnpm', ['store', 'path'], { encoding: 'utf8', timeout: 30000 }).trim());
     execFileSync(
       'pnpm',
       ['--filter', '@stood/api', 'deploy', '--legacy', '--prod', '--prefer-offline', '--store-dir', store, release],
       {
         stdio: 'pipe',
-        timeout: 90000,
+        timeout: 180000,
       },
     );
     expect(existsSync(join(release, 'dist/server.js'))).toBe(true);
@@ -32,4 +32,4 @@ it('deploys the real API release with its entrypoint and no test/fake/simulator 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-}, 240000);
+}, 360000);

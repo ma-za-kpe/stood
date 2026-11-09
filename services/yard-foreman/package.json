@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "pnpm --dir ../.. test:foreman",
     "typecheck": "tsc --noEmit",
     "build": "tsc --outDir dist"
   },

@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+
+base_ref=${1:-${GITHUB_BASE_REF:-develop}}
+case "$base_ref" in
+  origin/*) base=$base_ref ;;
+  *) base="origin/$base_ref" ;;
+esac
+
+if ! git rev-parse --verify "$base^{commit}" >/dev/null 2>&1 ||
+  ! git merge-base "$base" HEAD >/dev/null 2>&1; then
+  echo "Affected-check base $base is unavailable; falling back to the complete product gate."
+  exec scripts/check-product
+fi
+
+if [ -z "${GITHUB_ACTIONS:-}" ] &&
+  { ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; }; then
+  echo "Uncommitted paths cannot be selected safely by Turbo's Git comparison; use a workspace test command while editing."
+  exec scripts/check-product
+fi
+
+# Preserve both ends of a move: the source path may trigger a stricter gate than its destination.
+changed=$(git diff --no-renames --name-only "$base...HEAD")
+set --
+if [ -n "$changed" ]; then
+  # Paths cannot contain newlines in this repository; pass each changed path as an argument.
+  while IFS= read -r path; do
+    [ -n "$path" ] && set -- "$@" "$path"
+  done <<EOF
+$changed
+EOF
+fi
+
+plan=$(node scripts/affected-plan.mjs "$@")
+mode=${plan%%::*}
+reason=${plan#*::}
+echo "Validation selection: $mode — $reason"
+node --test scripts/affected-plan.test.mjs
+
+if [ "$mode" = full ]; then
+  exec scripts/check-product
+fi
+
+packages=$(node scripts/affected-packages.mjs "$@")
+if [ "${packages%%::*}" = full ]; then
+  echo "Workspace mapping fell back to the full gate: ${packages#*::}"
+  exec scripts/check-product
+fi
+set --
+while IFS= read -r package; do
+  [ -n "$package" ] && set -- "$@" "--filter=$package"
+done <<EOF
+$packages
+EOF
+
+docker compose run --rm app sh -ec '
+  # Workspace selection must not skip repository-wide architectural rules.
+  pnpm boundary
+  node --test scripts/affected-integration.test.mjs
+  pnpm exec turbo run test typecheck build "$@"
+' sh "$@"

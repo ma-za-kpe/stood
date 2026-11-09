@@ -1,8 +1,8 @@
 import { createHash, createHmac, createPrivateKey, randomBytes, sign } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
+import { KernelSandboxApprover } from '@stood/sandbox-approver';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
-import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
 import { bundleHash } from './application/code-evidence.js';
 import { receiptPayload } from './domain/usage-receipt.js';
 

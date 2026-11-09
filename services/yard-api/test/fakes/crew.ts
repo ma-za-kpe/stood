@@ -288,5 +288,5 @@ export function fakeCrew(config: { clock(): number; board: CrewBoard; repositori
       throw error;
     }
   });
-  return { app, poll: () => discover(), tick };
+  return { app, poll: (ids?: readonly string[]) => discover(ids), tick };
 }

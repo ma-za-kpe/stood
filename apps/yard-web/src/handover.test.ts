@@ -8,6 +8,7 @@ const order = (state: string) => ({
   name: 'm',
   state,
   budgetMinor: 1000,
+  deadline: 0,
   trancheId: 't',
   payment:
     state === 'PAID'

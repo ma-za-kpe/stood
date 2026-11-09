@@ -17,6 +17,7 @@ export type OrderView = Readonly<{
   state: string;
   budgetMinor: number;
   trancheId: string;
+  deadline: number;
   payment: MoneyProof | null;
   submission: Readonly<{ packageId: string; commit: string }> | null;
   leasedUntil: number | null;
@@ -180,7 +181,9 @@ export function roomChecked(value: unknown): ProjectRoom {
       !states.includes(o.state) ||
       !Number.isSafeInteger(o.budgetMinor) ||
       Number(o.budgetMinor) <= 0 ||
-      !identifier(o.trancheId)
+      !identifier(o.trancheId) ||
+      !Number.isSafeInteger(o.deadline) ||
+      Number(o.deadline) < 0
     )
       throw new Error('Invalid work order');
     if (seen.has(o.id)) throw new Error('Duplicate work order');

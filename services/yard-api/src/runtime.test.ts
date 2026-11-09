@@ -1,7 +1,7 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { createYardApp } from './http/app.js';
-import { plannerConfig, yardRuntime } from './runtime.js';
+import { parseNoticeContacts, plannerConfig, yardRuntime } from './runtime.js';
 
 const secret = 's'.repeat(40);
 const operators = JSON.stringify([
@@ -15,6 +15,46 @@ const hosted = {
 };
 const capabilities = async (env: Record<string, string>) =>
   (await (await createYardApp(yardRuntime(env).config).request('/health')).json()).capabilities;
+
+it('parses only bounded actor-to-email allow-lists for outbound notifications', () => {
+  expect(parseNoticeContacts('{"buyer-1":"buyer@example.com"}')).toEqual({ 'buyer-1': 'buyer@example.com' });
+  for (const invalid of [
+    undefined,
+    '',
+    '[]',
+    '{}',
+    '{bad',
+    '{"buyer":"not-an-email"}',
+    `{"${'a'.repeat(101)}":"a@b.com"}`,
+  ])
+    expect(parseNoticeContacts(invalid)).toBeNull();
+});
+
+it('enables Zapier delivery only with both an HTTPS hook and an explicit recipient allow-list', async () => {
+  const url = new URL('https://hooks.zapier.com');
+  url.pathname = ['hooks', 'catch', '123456', 'X'].join('/');
+  const contacts = '{"buyer":"buyer@example.com"}';
+  const partial = yardRuntime({ ...hosted, YARD_ZAPIER_CATCH_HOOK_URL: url.toString() });
+  expect(partial.jobs.some((job) => job.code === 'ZAPIER_NOTICE_DELIVERY_FAILED')).toBe(false);
+  expect(partial.notes).toContain('Zapier notices off: YARD_NOTICE_CONTACTS_JSON is missing or invalid.');
+  await partial.stop();
+  const ready = yardRuntime({
+    ...hosted,
+    YARD_ZAPIER_CATCH_HOOK_URL: url.toString(),
+    YARD_NOTICE_CONTACTS_JSON: contacts,
+  });
+  expect(ready.jobs.some((job) => job.code === 'ZAPIER_NOTICE_DELIVERY_FAILED')).toBe(true);
+  expect(JSON.stringify(ready.notes)).not.toContain('hooks.zapier.com');
+  await ready.stop();
+  const unsafe = yardRuntime({
+    ...hosted,
+    YARD_ZAPIER_CATCH_HOOK_URL: 'http://hooks.example.com/catch',
+    YARD_NOTICE_CONTACTS_JSON: contacts,
+  });
+  expect(unsafe.jobs.some((job) => job.code === 'ZAPIER_NOTICE_DELIVERY_FAILED')).toBe(false);
+  expect(unsafe.notes).toContain('Zapier notices off: provide a valid HTTPS Zapier Catch Hook.');
+  await unsafe.stop();
+});
 
 // T-0220: one composition root for hosted Yard. Each part runs only when its configuration is complete and safe;
 // anything missing is a named note, never a crash, a fallback or a leaked value.
@@ -68,7 +108,10 @@ it('turns on hosted sign-in and the page only with valid access codes', () => {
     { key: 'buyer-key', secret, accessCode: 'a'.repeat(32), actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' } },
   ]);
   const on = yardRuntime({ ...hosted, YARD_OPERATORS: coded, YARD_WEB_DIR: '/app/web' });
-  expect(on.config.browser).toEqual({ origin: 'https://stood-yard-api.onrender.com' });
+  expect(on.config.browser).toEqual({
+    origin: 'https://stood-yard-api.onrender.com',
+    agStudioLicense: { key: '', expiresAt: '' },
+  });
   expect(on.config.web).toEqual({ root: '/app/web' });
   const short = yardRuntime({ ...hosted, YARD_OPERATORS: coded.replace('a'.repeat(32), 'short-code') });
   expect(short.notes).toContain('Board off: YARD_OPERATORS is not a valid operator list.');
@@ -228,4 +271,64 @@ it('schedules the secret purge always, recovery with Stood, and the preview swee
     PAYOUTS_FAILED: 60_000,
   });
   expect(yardRuntime({}).jobs).toEqual([]);
+});
+
+it('turns on the judge demo only when asked and every real piece is configured, and says what is missing', async () => {
+  const { privateKey: usage } = generateKeyPairSync('ed25519');
+  const { privateKey: app } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const crewOperators = JSON.stringify([
+    {
+      key: 'buyer-key',
+      secret,
+      accessCode: 'buyer-access-code-xxxxxxxxxxxxxxxx',
+      actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' },
+    },
+    {
+      key: 'crew-key',
+      secret,
+      actor: { id: 'crew', root: 'crew-root', kind: 'BUILDER' },
+      payeeRef: 'crew@example.com',
+    },
+  ]);
+  const full = {
+    ...hosted,
+    YARD_OPERATORS: crewOperators,
+    STOOD_API_KEY: 'stood-key',
+    STOOD_HMAC_SECRET: 'h'.repeat(40),
+    YARD_PAYPAL_MERCHANT_ID: 'MERCHANT12345',
+    YARD_PAYPAL_CLIENT_ID: 'client',
+    YARD_PAYPAL_CLIENT_SECRET: 'client-secret',
+    YARD_USAGE_KEY_ID: 'usage-1',
+    YARD_USAGE_SIGNING_KEY: Buffer.from(usage.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+    GITHUB_APP_ID: '123456',
+    GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from(app.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+    GITHUB_APP_INSTALLATION_ID: '987654',
+    YARD_SANDBOX_REPOSITORY: 'owner/sandbox',
+    KERNEL_API_KEY: 'kernel-key',
+    PAYPAL_SANDBOX_BUYER_EMAIL: 'buyer@example.com',
+    PAYPAL_SANDBOX_BUYER_PASSWORD: 'pw',
+  };
+  expect(yardRuntime(full).demo).toBe(false);
+  const on = yardRuntime({ ...full, YARD_DEMO_AUTOPILOT: 'on' });
+  expect(on.demo).toBe(true);
+  expect(on.notes.filter((n) => n.startsWith('Demo off'))).toEqual([]);
+  const page = createYardApp(on.config);
+  on.bind?.(page);
+  expect(await (await page.request('/app/api/capabilities')).json()).toMatchObject({ demo: true });
+  for (const [change, note] of [
+    [{ KERNEL_API_KEY: '' }, 'Demo off: KERNEL_API_KEY and the PayPal sandbox buyer login are required.'],
+    [{ YARD_DEMO_CREW_OPERATOR: 'nobody' }, 'Demo off: builder operator "nobody" with a payeeRef is required.'],
+    [{ YARD_SANDBOX_REPOSITORY: '' }, 'Demo off: the GitHub App and YARD_SANDBOX_REPOSITORY are required.'],
+    [{ YARD_PAYPAL_CLIENT_ID: '' }, 'Demo off: Yard payouts are not configured.'],
+    [{ YARD_USAGE_KEY_ID: '' }, 'Demo off: the usage signing key is not configured.'],
+    [{ STOOD_API_KEY: '' }, 'Demo off: Stood payments are not configured.'],
+    [
+      { YARD_OPERATORS: JSON.stringify([JSON.parse(crewOperators)[1]]) },
+      'Demo off: no buyer operator has an access code.',
+    ],
+  ] as const) {
+    const off = yardRuntime({ ...full, YARD_DEMO_AUTOPILOT: 'on', ...change });
+    expect(off.notes).toContain(note);
+    expect(off.demo).toBe(false);
+  }
 });

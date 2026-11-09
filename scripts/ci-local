@@ -7,35 +7,64 @@ set -u
 cd "$(dirname "$0")/.." || exit 2
 mkdir -p .ci-local
 log=.ci-local/ci-local.log
+timings=.ci-local/timings.tsv
 : >"$log"
+printf 'step\tseconds\texit_code\n' >"$timings"
 failed=0
+started=$(date +%s)
 step() {
   name=$1
   shift
   printf '%-8s ' "$name"
   start=$(date +%s)
+  printf '\n== %s started %s ==\n' "$name" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$log"
   if "$@" >>"$log" 2>&1; then
-    printf 'ok    %4ss\n' "$(($(date +%s) - start))"
+    elapsed=$(($(date +%s) - start))
+    printf 'ok    %4ss\n' "$elapsed"
+    printf '%s\t%s\t0\n' "$name" "$elapsed" >>"$timings"
   else
-    printf 'FAIL  %4ss  (see %s)\n' "$(($(date +%s) - start))" "$log"
+    result=$?
+    elapsed=$(($(date +%s) - start))
+    printf 'FAIL  %4ss  (see %s)\n' "$elapsed" "$log"
+    printf '%s\t%s\t%s\n' "$name" "$elapsed" "$result" >>"$timings"
     failed=1
   fi
 }
+product_gate() {
+  STOOD_SKIP_PRODUCT_LINT=1
+  export STOOD_SKIP_PRODUCT_LINT
+  branch=$(git symbolic-ref --quiet --short HEAD || true)
+  case "$branch" in
+    main|develop|release/*)
+      scripts/check-product
+      ;;
+    *)
+      if git rev-parse --verify 'origin/develop^{commit}' >/dev/null 2>&1 &&
+        git merge-base origin/develop HEAD >/dev/null 2>&1; then
+        scripts/check-product-affected develop
+      else
+        echo "No committed feature-branch comparison is available; running the full product gate."
+        scripts/check-product
+      fi
+      ;;
+  esac
+}
 echo "Running every CI job locally (log: $log)"
-# The product gate's Postgres binds 127.0.0.1:5432. Another checkout's database there fails the run after minutes,
-# so say so up front, with the container to stop.
+# The product gate's Postgres binds a configurable host port (5432 by default). Another checkout's database there
+# fails the run after minutes, so say so up front. Set STOOD_DB_HOST_PORT to an available port to validate in parallel.
 # compose.yaml fixes the project name, so every checkout's database is stood-db-1; tell them apart by the folder.
+db_host_port=${STOOD_DB_HOST_PORT:-5432}
 holder=$(docker ps --format '{{.Names}}|{{.Label "com.docker.compose.project.working_dir"}}|{{.Ports}}' |
-  awk -F'|' -v here="$PWD" 'index($3, "127.0.0.1:5432->") && $2 != here { print $1 }' || true)
+  awk -F'|' -v here="$PWD" -v port="127.0.0.1:${db_host_port}->" 'index($3, port) && $2 != here { print $1 }' || true)
 if [ -n "$holder" ]; then
-  echo "FAIL  port 5432 is held by $holder (another checkout). Stop it first: docker stop $holder"
+  echo "FAIL  port $db_host_port is held by $holder (another checkout). Set STOOD_DB_HOST_PORT to an available port or stop that checkout."
   exit 1
 fi
 # A clean image build, as CI has no cache. Any remote Docker Hub pull fails the run (rate limits, outages).
 step build docker compose build --no-cache --progress=plain app
 step install docker compose run --rm -T app pnpm install --frozen-lockfile
 step hooks env SKIP=ci-local pre-commit run --all-files --show-diff-on-failure
-step product scripts/check-product
+step product product_gate
 step site scripts/check-site
 step mock scripts/dev mock
 step hosted scripts/check-hosted-yard
@@ -45,7 +74,7 @@ if [ "$pulls" -gt 0 ]; then
   failed=1
 fi
 if [ "$failed" -ne 0 ]; then
-  echo "Local CI failed: fix it before pushing."
+  echo "Local CI failed: fix it before pushing. Timing report: $timings"
   exit 1
 fi
-echo "Every CI job passed locally."
+printf 'Every CI job passed locally in %ss. Timing report: %s\n' "$(($(date +%s) - started))" "$timings"

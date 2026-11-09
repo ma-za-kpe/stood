@@ -4,7 +4,7 @@ export const UPLOAD_CLEANUP_GRACE_MS = 60 * 60_000;
 export const UPLOAD_CLEANUP_BATCH_SIZE = 25;
 
 export async function cleanupExpiredUploads(
-  store: Pick<UploadStore, 'expiredOpen' | 'recordCleanup'>,
+  store: Pick<UploadStore, 'expiredOpen' | 'recordCleanup' | 'recordCleanupFailure'>,
   objects: Pick<UploadObjects, 'deleteUpload'>,
   now: number,
 ) {
@@ -28,7 +28,12 @@ export async function cleanupExpiredUploads(
             else absent += 1;
           }
         } catch {
-          // Each object is independent. A later sweep retries only objects without a durable receipt.
+          // Durable backoff lets newer objects progress while a failing object cools down.
+          try {
+            await store.recordCleanupFailure(item.session.id, item.photo.key, now, UPLOAD_CLEANUP_GRACE_MS);
+          } catch {
+            // Keep this object failure isolated even if retry scheduling itself is temporarily unavailable.
+          }
           failed += 1;
         }
       }

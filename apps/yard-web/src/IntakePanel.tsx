@@ -8,7 +8,7 @@ import { BlueprintEditor } from './BlueprintEditor.js';
 import type { AcceptanceCase, EditableDraft } from './blueprint-edit.js';
 import { CostBreakdown } from './CostBreakdown.js';
 import { browserRequestKey } from './claim-keys.js';
-import { ApiError, api, PLANNER_TIMEOUT_MS } from './http.js';
+import { ApiError, api, PLANNER_TIMEOUT_MS, plannerFailureMessage } from './http.js';
 import {
   foremanChoices,
   formDraft,
@@ -402,7 +402,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
     } catch (e) {
       if (live.current) {
         if (hosted) setPlanningRecoveryAvailable(true);
-        setError((e as Error).message);
+        setError(hosted ? plannerFailureMessage(e) : (e as Error).message);
         actorRef.current?.send({ type: 'ERROR' });
       }
     } finally {
@@ -436,7 +436,9 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
       }
     } catch (e) {
       if (live.current) {
-        setError(`The saved planning attempt could not be recovered: ${(e as Error).message} You can retry planning.`);
+        setError(
+          `The saved planning attempt could not be recovered: ${plannerFailureMessage(e)} You can retry planning.`,
+        );
         actorRef.current?.send({ type: 'ERROR' });
       }
     } finally {
@@ -551,7 +553,7 @@ export function IntakePanel({ enabled, hosted = false }: { enabled: boolean; hos
         setFeedback('');
       }
     } catch (e) {
-      if (live.current) setError((e as Error).message);
+      if (live.current) setError(hosted ? plannerFailureMessage(e) : (e as Error).message);
     } finally {
       pending.current = false;
       if (live.current) setBusy(false);

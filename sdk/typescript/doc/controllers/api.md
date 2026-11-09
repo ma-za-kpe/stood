@@ -25,6 +25,7 @@ const api = new Api(client);
 * [Create Upload](../../doc/controllers/api.md#create-upload)
 * [Get Upload](../../doc/controllers/api.md#get-upload)
 * [Complete Upload](../../doc/controllers/api.md#complete-upload)
+* [Assess Upload](../../doc/controllers/api.md#assess-upload)
 * [Submit Package](../../doc/controllers/api.md#submit-package)
 * [Confirm Usage](../../doc/controllers/api.md#confirm-usage)
 * [Get Package](../../doc/controllers/api.md#get-package)
@@ -1218,6 +1219,96 @@ const body = { 'key1': 'val1', 'key2': 'val2' };
 
 try {
   const response = await api.completeUpload(
+    id,
+    uploadId,
+    idempotencyKey,
+    body
+  );
+
+  // Extracting fully parsed response body.
+  console.log(response.result);
+
+  // Extracting response status code.
+  console.log(response.statusCode);
+  // Extracting response headers.
+  console.log(response.headers);
+  // Extracting response body of type `string | Stream`
+  console.log(response.body);
+} catch (error) {
+  if (error instanceof ApiError) {
+    // Extracting response error status code.
+    console.log(error.statusCode);
+    // Extracting response error headers.
+    console.log(error.headers);
+    // Extracting response error body of type `string | Stream`.
+    console.log(error.body);
+    if (error instanceof ProblemError) {
+      console.log(error.result);
+    }
+  }
+}
+```
+
+## Errors
+
+| HTTP Status Code | Error Description | Exception Class |
+|  --- | --- | --- |
+| 401 | Missing or invalid platform key or signature | [`ProblemError`](../../doc/models/problem-error.md) |
+| 404 | Not found, or not owned by this platform | [`ProblemError`](../../doc/models/problem-error.md) |
+| 409 | Idempotency or version conflict | [`ProblemError`](../../doc/models/problem-error.md) |
+| 413 | Body over 64 KiB | [`ProblemError`](../../doc/models/problem-error.md) |
+| 422 | Invalid request | [`ProblemError`](../../doc/models/problem-error.md) |
+| 429 | Too many requests: over the platform's per-minute budget (120 writes, 600 reads) or too many failed sign-ins from this address | [`ProblemError`](../../doc/models/problem-error.md) |
+| 503 | Storage or the feature is unavailable; retry with the same idempotency key | [`ProblemError`](../../doc/models/problem-error.md) |
+
+
+# Assess Upload
+
+```ts
+async assessUpload(
+  id: string,
+  uploadId: string,
+  idempotencyKey: string,
+  body: EyeOnSiteAssessmentRequest,
+  requestOptions?: RequestOptions
+): Promise<ApiResponse<EyeOnSiteAssessmentResponse>>
+```
+
+## Authentication
+
+This endpoint requires [platformKey](../../doc/auth/oauth-2-bearer-token.md) **AND** [requestSignature](../../doc/auth/custom-header-signature.md)
+
+## Parameters
+
+| Parameter | Type | Tags | Description |
+|  --- | --- | --- | --- |
+| `id` | `string` | Template, Required | - |
+| `uploadId` | `string` | Template, Required | - |
+| `idempotencyKey` | `string` | Header, Required | Same key and body return the same response; a different body is 409<br><br>**Constraints**: *Maximum Length*: `200` |
+| `body` | [`EyeOnSiteAssessmentRequest`](../../doc/models/eye-on-site-assessment-request.md) | Body, Required | - |
+| `requestOptions` | `RequestOptions \| undefined` | Optional | Pass additional request options. |
+
+## Response Type
+
+**200**: OK
+
+This method returns an [`ApiResponse`](../../doc/api-response.md) instance. The `result` property of this instance returns the response data which is of type [`EyeOnSiteAssessmentResponse`](../../doc/models/eye-on-site-assessment-response.md).
+
+## Example Usage
+
+```ts
+const id = 'id0';
+
+const uploadId = 'uploadId0';
+
+const idempotencyKey = 'Idempotency-Key0';
+
+const body: EyeOnSiteAssessmentRequest = {
+  evidenceId: 'evidenceId2',
+};
+
+try {
+  const response = await api.assessUpload(
     id,
     uploadId,
     idempotencyKey,

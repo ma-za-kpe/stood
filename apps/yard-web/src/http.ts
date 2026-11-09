@@ -10,6 +10,15 @@ export class ApiError extends Error {
 export const API_TIMEOUT_MS = 20_000;
 export const PLANNER_TIMEOUT_MS = 180_000;
 
+export function plannerFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'The planner could not complete this request.';
+  const timedOut = error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name);
+  const providerUnavailable = error instanceof ApiError && error.status >= 500;
+  if (timedOut || providerUnavailable || /signal timed out|request timed out/i.test(message))
+    return 'The AI planner could not return a response. This may be a temporary xAI outage or an exhausted xAI quota. Your saved brief is safe; check the xAI usage and credits, then retry. If a request timed out, use Recover saved planning attempt when it is offered.';
+  return message;
+}
+
 export async function api(path: string, options?: RequestInit, timeoutMs = API_TIMEOUT_MS) {
   const response = await fetch(`/app/api${path}`, {
     ...options,

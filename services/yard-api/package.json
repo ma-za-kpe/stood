@@ -4,19 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "pnpm --dir ../.. test:yard-api",
     "typecheck": "tsc --noEmit",
     "build": "tsc --outDir dist",
     "start": "node dist/server.js"
   },
   "dependencies": {
     "@hono/node-server": "2.1.3",
+    "@stood/sandbox-approver": "workspace:*",
+    "@stood/stood-sdk": "workspace:*",
+    "@stood/yard-contracts": "workspace:*",
     "@stood/yard-domain": "workspace:*",
+    "@stood/yard-foreman": "workspace:*",
     "drizzle-orm": "0.45.3",
     "hono": "4.13.12",
-    "pg": "8.23.1",
-    "@stood/yard-contracts": "workspace:*",
-    "@stood/yard-foreman": "workspace:*",
-    "@stood/stood-sdk": "workspace:*"
+    "pg": "8.23.1"
   },
   "devDependencies": {
     "@types/pg": "8.23.1"

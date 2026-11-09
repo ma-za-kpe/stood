@@ -51,7 +51,13 @@ const foreman = new Foreman(
   true,
   new PostgresForemanCoordinator(foremanCoordinatorPool),
 );
-const board = new Board(events);
+// The retained demo stack (compose.demo.yaml) lets the one simulated Crew hold more than two claims,
+// because earlier seeded scenarios leave claims open. Tests keep the production cap.
+const demoClaims = Number(process.env.YARD_MOCK_MAX_ACTIVE_CLAIMS ?? 0);
+const board =
+  Number.isSafeInteger(demoClaims) && demoClaims > 0
+    ? new Board(events, { maxActiveClaims: demoClaims })
+    : new Board(events);
 const logs = new PostgresSiteLogs(pool, events);
 const retention = startLogRetention(logs, clock, (code) => console.warn(JSON.stringify({ code })));
 await retention.run();

@@ -7,11 +7,15 @@ export type StoredUploadPhoto = UploadPhoto & Readonly<{ key: string }>;
 export type UploadSession = Readonly<{
   id: string;
   trancheId: string;
+  allowanceId: string | null;
+  termsVersion: number | null;
+  assessmentNonce: string | null;
   status: 'OPEN' | 'COMPLETE';
   photos: readonly StoredUploadPhoto[];
   expiresAt: number;
   completedAt: number | null;
 }>;
+export type StoredAssessmentReceipt = Readonly<{ payload: unknown; signature: string }>;
 export interface UploadStore {
   reserve(
     platformId: string,
@@ -22,6 +26,23 @@ export interface UploadStore {
     now: number,
   ): Promise<UploadSession>;
   get(platformId: string, trancheId: string, id: string): Promise<UploadSession | null>;
+  recordAssessment(
+    platformId: string,
+    trancheId: string,
+    id: string,
+    idempotencyKey: string,
+    requestHash: string,
+    receipt: StoredAssessmentReceipt,
+    receiptHash: string,
+    now: number,
+  ): Promise<StoredAssessmentReceipt>;
+  loadAssessment(
+    platformId: string,
+    trancheId: string,
+    id: string,
+    idempotencyKey: string,
+    requestHash: string,
+  ): Promise<StoredAssessmentReceipt | null>;
   complete(platformId: string, trancheId: string, id: string, now: number): Promise<UploadSession>;
   expiredOpen(
     now: number,
@@ -35,6 +56,7 @@ export interface UploadStore {
     now: number,
     graceMs: number,
   ): Promise<boolean>;
+  recordCleanupFailure(id: string, objectKey: string, now: number, graceMs: number): Promise<void>;
 }
 export interface UploadObjects {
   presignPut(

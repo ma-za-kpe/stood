@@ -168,12 +168,18 @@ export type Data = {
   previews?: { wo: string; serviceId: string; url: string; expiresAt: number }[];
   // Fifth audit (2026-10-11): a preview deploy reserved before Render is called, so a crash leaves a trace to repair.
   previewIntents?: { wo: string; deployId: string; name: string; at: number }[];
+  // Judge demo (2026-11-09): set only by the demo autopilot at creation, never by an HTTP route. Its small, scripted
+  // project pays the Crew at release instead of after the 48-hour review window.
+  demo?: { runId: string; immediatePayout: true };
 };
+// The most a demo project may hold: above this the normal holdback applies even to a demo project.
+export const DEMO_MAX_CAP_MINOR = 500;
 // ADR-0027: when a paid work order may be paid out: at release for the final milestone, 48 hours later otherwise.
 export function payoutDueAt(d: Data, order: Order): number | null {
   if (!order.payment || order.releasedAt === undefined || order.refund) return null;
   // A dispute holds the payout until the owner decides it for the builder; then it is due at once.
   if (order.dispute) return order.dispute.resolved?.outcome === 'PAY_BUILDER' ? order.dispute.resolved.at : null;
+  if (d.demo?.immediatePayout && d.blueprint.capMinor <= DEMO_MAX_CAP_MINOR) return order.releasedAt;
   const final = terms(d, order.milestone)?.profileId === 'code.final@1';
   return final ? order.releasedAt : order.releasedAt + HOLDBACK_MS;
 }

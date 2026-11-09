@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from 'vitest';
 import { api as stub } from '../test/harness.js';
-import { API_TIMEOUT_MS, ApiError, api, PLANNER_TIMEOUT_MS } from './http.js';
+import { API_TIMEOUT_MS, ApiError, api, PLANNER_TIMEOUT_MS, plannerFailureMessage } from './http.js';
 
 // T-0275: each refusal reads as one plain sentence; the status stays available to callers.
 it('turns each refusal into a plain sentence and keeps its status', async () => {
@@ -33,4 +33,19 @@ it('gives planner calls a longer timeout while keeping the ordinary API timeout 
   } finally {
     timeout.mockRestore();
   }
+});
+
+it('explains provider quota or timeout failures without replacing the saved intake or inventing a plan', () => {
+  expect(
+    plannerFailureMessage(
+      new ApiError(503, 'The service could not complete this request. Retry when it is available.'),
+    ),
+  ).toMatch(/temporary xAI outage or an exhausted xAI quota/);
+  expect(plannerFailureMessage(Object.assign(new Error('signal timed out'), { name: 'TimeoutError' }))).toMatch(
+    /Your saved brief is safe/,
+  );
+  expect(
+    plannerFailureMessage(new ApiError(409, 'The work changed. Reload its current record before trying again.')),
+  ).toMatch(/The work changed/);
+  expect(plannerFailureMessage('unexpected')).toMatch(/The planner could not complete/);
 });

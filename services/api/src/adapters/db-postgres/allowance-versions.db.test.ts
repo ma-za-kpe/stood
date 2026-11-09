@@ -18,8 +18,11 @@ import { TokenCipher } from './token-cipher.js';
 import { PostgresUploads } from './uploads.js';
 
 const name = `test_versions_${randomUUID().replaceAll('-', '')}`;
-const admin = new pg.Pool({ connectionString: 'postgres://stood:stood_local_only@db:5432/stood' });
-const connectionString = `postgres://stood:stood_local_only@db:5432/${name}`;
+const adminUrl = new URL(process.env.TEST_DATABASE_URL ?? 'postgres://stood:stood_local_only@db:5432/stood');
+const databaseUrl = new URL(adminUrl);
+databaseUrl.pathname = `/${name}`;
+const connectionString = databaseUrl.toString();
+const admin = new pg.Pool({ connectionString: adminUrl.toString() });
 const pool = new pg.Pool({ connectionString });
 const db = drizzle(pool, { schema });
 const drafts = new PostgresPlatformApi(db);
@@ -256,6 +259,63 @@ it('refuses to change terms after evidence intake even when no payment has been 
   await expect(versions.propose('owner', original.id, 'after-upload', 1, proposal('roof'))).rejects.toThrow(
     'Amendment changes funded work',
   );
+});
+
+it('freezes the allowance version on upload and stores one immutable audit receipt', async () => {
+  const original = await draft();
+  const trancheId = original.tranches[0]?.id ?? '';
+  const uploads = new PostgresUploads(db);
+  const now = Date.now();
+  const session = await uploads.reserve(
+    'owner',
+    trancheId,
+    'receipt-upload',
+    'e'.repeat(64),
+    [{ sha256: 'a'.repeat(64), bytes: 4, contentType: 'image/jpeg' }],
+    now,
+  );
+  expect(session).toMatchObject({ allowanceId: original.id, termsVersion: 1 });
+  expect(session.assessmentNonce).toMatch(/^[a-f0-9]{64}$/);
+  await uploads.complete('owner', trancheId, session.id, now + 1000);
+  const receipt = { payload: { schemaVersion: 1, issuer: 'eyeonsite' }, signature: 'test-signature' };
+  const requestHash = 'd'.repeat(64),
+    receiptHash = 'f'.repeat(64);
+  expect(
+    await uploads.recordAssessment(
+      'owner',
+      trancheId,
+      session.id,
+      'assessment-key',
+      requestHash,
+      receipt,
+      receiptHash,
+      now + 2000,
+    ),
+  ).toEqual(receipt);
+  expect(
+    await uploads.recordAssessment(
+      'owner',
+      trancheId,
+      session.id,
+      'assessment-key',
+      requestHash,
+      receipt,
+      receiptHash,
+      now + 3000,
+    ),
+  ).toEqual(receipt);
+  await expect(
+    uploads.recordAssessment(
+      'owner',
+      trancheId,
+      session.id,
+      'assessment-key',
+      requestHash,
+      receipt,
+      '0'.repeat(64),
+      now + 4000,
+    ),
+  ).rejects.toThrow('CONFLICT');
 });
 
 it('proposes, reads and signs explicit versions through authenticated HTTP with exact retry recovery', async () => {

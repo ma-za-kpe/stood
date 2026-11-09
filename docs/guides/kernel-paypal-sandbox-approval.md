@@ -4,8 +4,8 @@ A practical guide for developers who test PayPal flows that need a **buyer to ap
 
 Stood's code is linked at each step, so you can read a working, tested implementation:
 
-- [`services/api/src/adapters/kernel/sandbox-approver.ts`](../../services/api/src/adapters/kernel/sandbox-approver.ts): the approver
-- [`services/api/src/adapters/kernel/sandbox-approver.test.ts`](../../services/api/src/adapters/kernel/sandbox-approver.test.ts): its tests, against a fake Kernel API and a fake page
+- [`packages/sandbox-approver/src/sandbox-approver.ts`](../../packages/sandbox-approver/src/sandbox-approver.ts): the approver
+- [`packages/sandbox-approver/src/sandbox-approver.test.ts`](../../packages/sandbox-approver/src/sandbox-approver.test.ts): its tests, against a fake Kernel API and a fake page
 - [`services/api/src/sandbox-run-cli.ts`](../../services/api/src/sandbox-run-cli.ts): where `scripts/dev sandbox-run` plugs it in
 - [`services/api/src/application/sandbox-run.ts`](../../services/api/src/application/sandbox-run.ts): the sandbox run that creates the order, waits for approval and settles
 

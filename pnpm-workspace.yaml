@@ -10,3 +10,9 @@ overrides:
   # drizzle-kit 0.31 still pulls esbuild 0.18 through @esbuild-kit (GHSA-67mh-4wv8-2f99, fixed in 0.25.0).
   # 0.25.12 is already used elsewhere in the workspace. Remove when drizzle-kit drops @esbuild-kit.
   '@esbuild-kit/core-utils>esbuild': 0.25.12
+  # GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472, GHSA-xjj6-f33q-929c: undici 7.30.0 (transitive), fixed in 7.30.1.
+  'undici@7.30.0': 7.30.1
+  # GHSA-2m5v-pch6-74hx, GHSA-4w7w-5xrc-9h26, GHSA-55wc-3pg8-jfw6 and others: undici 8.11.2 (transitive), fixed in 8.12.2.
+  'undici@8.11.2': 8.12.2
+  # GHSA-mrwp-f3q8-3g9p: follow-redirects 1.16.1 (transitive), fixed in 1.16.2.
+  'follow-redirects@1.16.1': 1.16.2

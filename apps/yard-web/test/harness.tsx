@@ -54,6 +54,7 @@ export const order = (state: string, i = 0) => ({
   name: `Milestone ${i + 1}`,
   state,
   budgetMinor: 1000,
+  deadline: Date.parse('2026-11-01T00:00:00Z'),
   trancheId: `t${i}`,
   payment:
     state === 'PAID'
