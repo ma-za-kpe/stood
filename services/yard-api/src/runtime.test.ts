@@ -272,3 +272,63 @@ it('schedules the secret purge always, recovery with Stood, and the preview swee
   });
   expect(yardRuntime({}).jobs).toEqual([]);
 });
+
+it('turns on the judge demo only when asked and every real piece is configured, and says what is missing', async () => {
+  const { privateKey: usage } = generateKeyPairSync('ed25519');
+  const { privateKey: app } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const crewOperators = JSON.stringify([
+    {
+      key: 'buyer-key',
+      secret,
+      accessCode: 'buyer-access-code-xxxxxxxxxxxxxxxx',
+      actor: { id: 'buyer', root: 'buyer-root', kind: 'BUYER' },
+    },
+    {
+      key: 'crew-key',
+      secret,
+      actor: { id: 'crew', root: 'crew-root', kind: 'BUILDER' },
+      payeeRef: 'crew@example.com',
+    },
+  ]);
+  const full = {
+    ...hosted,
+    YARD_OPERATORS: crewOperators,
+    STOOD_API_KEY: 'stood-key',
+    STOOD_HMAC_SECRET: 'h'.repeat(40),
+    YARD_PAYPAL_MERCHANT_ID: 'MERCHANT12345',
+    YARD_PAYPAL_CLIENT_ID: 'client',
+    YARD_PAYPAL_CLIENT_SECRET: 'client-secret',
+    YARD_USAGE_KEY_ID: 'usage-1',
+    YARD_USAGE_SIGNING_KEY: Buffer.from(usage.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+    GITHUB_APP_ID: '123456',
+    GITHUB_APP_PRIVATE_KEY_BASE64: Buffer.from(app.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+    GITHUB_APP_INSTALLATION_ID: '987654',
+    YARD_SANDBOX_REPOSITORY: 'owner/sandbox',
+    KERNEL_API_KEY: 'kernel-key',
+    PAYPAL_SANDBOX_BUYER_EMAIL: 'buyer@example.com',
+    PAYPAL_SANDBOX_BUYER_PASSWORD: 'pw',
+  };
+  expect(yardRuntime(full).demo).toBe(false);
+  const on = yardRuntime({ ...full, YARD_DEMO_AUTOPILOT: 'on' });
+  expect(on.demo).toBe(true);
+  expect(on.notes.filter((n) => n.startsWith('Demo off'))).toEqual([]);
+  const page = createYardApp(on.config);
+  on.bind?.(page);
+  expect(await (await page.request('/app/api/capabilities')).json()).toMatchObject({ demo: true });
+  for (const [change, note] of [
+    [{ KERNEL_API_KEY: '' }, 'Demo off: KERNEL_API_KEY and the PayPal sandbox buyer login are required.'],
+    [{ YARD_DEMO_CREW_OPERATOR: 'nobody' }, 'Demo off: builder operator "nobody" with a payeeRef is required.'],
+    [{ YARD_SANDBOX_REPOSITORY: '' }, 'Demo off: the GitHub App and YARD_SANDBOX_REPOSITORY are required.'],
+    [{ YARD_PAYPAL_CLIENT_ID: '' }, 'Demo off: Yard payouts are not configured.'],
+    [{ YARD_USAGE_KEY_ID: '' }, 'Demo off: the usage signing key is not configured.'],
+    [{ STOOD_API_KEY: '' }, 'Demo off: Stood payments are not configured.'],
+    [
+      { YARD_OPERATORS: JSON.stringify([JSON.parse(crewOperators)[1]]) },
+      'Demo off: no buyer operator has an access code.',
+    ],
+  ] as const) {
+    const off = yardRuntime({ ...full, YARD_DEMO_AUTOPILOT: 'on', ...change });
+    expect(off.notes).toContain(note);
+    expect(off.demo).toBe(false);
+  }
+});

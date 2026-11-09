@@ -80,7 +80,10 @@ controls.onError((error) => {
 controls.post('/sessions/:id', (c) => {
   const id = c.req.param('id'),
     // Yard scenarios reuse a shared Stood money flow under their own session id.
-    base = { 'yard-first': 'code-good', 'yard-rework': 'refuse-then-pass' }[id],
+    // Demo autopilot sessions (one per task, `demo-build-…`) reuse the passing code flow.
+    base = /^demo-build-[a-z0-9-]{1,80}$/.test(id)
+      ? 'code-good'
+      : { 'yard-first': 'code-good', 'yard-rework': 'refuse-then-pass' }[id],
     scenario = base
       ? scenarioDefinition({ ...fixtures.find((s) => s.id === base), id })
       : fixtures.find((s) => s.id === id);

@@ -12,6 +12,9 @@ const photo = {
 const session: UploadSession = {
   id: 'session',
   trancheId: 'tranche',
+  allowanceId: null,
+  termsVersion: null,
+  assessmentNonce: null,
   status: 'OPEN',
   photos: [{ ...photo, key: 'uploads/session/photo' }],
   expiresAt: 2000,

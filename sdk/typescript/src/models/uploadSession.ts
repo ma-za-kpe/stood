@@ -20,10 +20,13 @@ import {
 } from './storedUploadPhoto.js';
 import { UploadStatus, uploadStatusSchema } from './uploadStatus.js';
 
-/** COMPLETE means owned bytes, size, hash and format header checked; no assessment or payment. URLs are derived short-lived capabilities, not persisted receipts. */
+/** COMPLETE means owned bytes, size, hash and format header checked; signed assessment receipts are audit-only and grant no payment authority. URLs are derived short-lived capabilities, not persisted receipts. */
 export interface UploadSession {
   id: string;
   trancheId: string;
+  allowanceId: string | null;
+  termsVersion: number | null;
+  assessmentNonce: string | null;
   status: UploadStatus;
   photos: StoredUploadPhoto[];
   expiresAt: number;
@@ -35,6 +38,9 @@ export const uploadSessionSchema: Schema<UploadSession> = lazy(() =>
   object({
     id: ['id', string()],
     trancheId: ['trancheId', string()],
+    allowanceId: ['allowanceId', nullable(string())],
+    termsVersion: ['termsVersion', nullable(number())],
+    assessmentNonce: ['assessmentNonce', nullable(string())],
     status: ['status', uploadStatusSchema],
     photos: ['photos', array(storedUploadPhotoSchema)],
     expiresAt: ['expiresAt', number()],

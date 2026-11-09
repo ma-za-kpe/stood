@@ -19,7 +19,7 @@
     "react-dom": "19.3.0",
     "react-hook-form": "7.89.0",
     "xstate": "5.33.2",
-    "zod": "4.6.5",
+    "zod": "4.6.6",
     "zustand": "5.0.15",
     "@bryntum/gantt": "npm:@bryntum/gantt-trial@7.3.7",
     "@bryntum/gantt-react": "7.3.7"

@@ -200,6 +200,7 @@ Settlement is a separate switch. With `SETTLEMENT_EXECUTOR=on`, the reconciler t
 | `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID` | Committed in `render.yaml` (the `stood-runner` project) |
 | `RUNNER_KEY_ID`, `RUNNER_SIGNING_KEY` | From `scripts/dev runner-key`, which writes them to `.env` without printing; copy both to Render |
 | `STOOD_EVIDENCE_S3_ENDPOINT`, `STOOD_EVIDENCE_S3_ACCESS_KEY_ID`, `STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY` | Cloudflare R2: the account's S3 endpoint and a token scoped to the `stood-evidence` bucket only (set 2026-10-10). `STOOD_EVIDENCE_S3_BUCKET=stood-evidence` is committed in `render.yaml`. The runner stays off without all four |
+| `EYEONSITE_ASSESSMENT_URL`, `EYEONSITE_ASSESSMENT_PUBLIC_KEYS`, `STOOD_EVIDENCE_REQUEST_SECRET` | Optional server-to-server EyeOnSite receipt issuer. Leave unset to keep receipt ingestion disabled. The URL must be HTTPS; public keys are a JSON object keyed by Ed25519 `keyId`; the request secret must match EyeOnSite's `STOOD_EVIDENCE_REQUEST_SECRET`. Configure only after both services' qualification. |
 | `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64` | GitHub reads through the Yard GitHub App: short-lived installation tokens limited to reading contents and metadata, renewed before they expire. The two ids are committed in `render.yaml`; Render prompts for the key (the same one `stood-yard-api` uses). The log names which access is in use |
 | `GITHUB_READ_TOKEN` | Fallback while the App key is not set: a read-only token (private repositories, GitHub's higher rate limit) |
 | `SETTLEMENT_EXECUTOR` | `on` to capture or void decided tranches; anything else keeps settlement off |
@@ -254,6 +255,17 @@ Render has no spend cap, so Yard keeps its own, reserved in Postgres before each
 ```bash
 scripts/dev preview-check   # one free-plan preview from a digest-pinned public image; waits for https, deletes it, checks it is gone
 ```
+
+### Judge demo: one click, real sandbox money (2026-11-09)
+
+Hosted Yard has a **Build a project** button for the signed-in buyer when `YARD_DEMO_AUTOPILOT=on` (set in `render.yaml`). One click builds a three-page café website (home, menu, contact):
+
+1. Yard writes this run's frozen tests onto `yard-sandbox` main with the GitHub App, and Stood's runner proves each fails on the empty site.
+2. The buyer's single PayPal approval (the saved-account signature) is made by a Kernel cloud browser with the sandbox buyer login.
+3. For each page: Stood holds $1.05 from the saved account, the scripted Crew (`YARD_DEMO_CREW_OPERATOR`, default `crew`) pushes the page to `wo/demo-<run>` and submits it, Stood's runner runs the frozen tests, Stood captures, and Yard pays the Crew $1.00 from its own sandbox app straight away. Only demo projects pay at release, and only up to $5.00 in total (`DEMO_MAX_CAP_MINOR`); every other project keeps the 48-hour review window.
+4. The final page releases once the buyer confirms the site works; the demo confirms for the buyer.
+
+It needs, on `stood-yard-api`: the Stood, payout and usage settings above, the GitHub App, `YARD_SANDBOX_REPOSITORY`, `KERNEL_API_KEY`, `PAYPAL_SANDBOX_BUYER_EMAIL` and `PAYPAL_SANDBOX_BUYER_PASSWORD` (set through the Render API, never in `render.yaml`), and a builder operator with a `payeeRef` in `YARD_OPERATORS`. If anything is missing, `/app/api/capabilities` does not offer the demo and the log says `Demo off: …` with the reason. One run at a time, at most 12 a day. Locally, `scripts/dev demo` runs the same button against the PayPal simulator.
 
 ### Unattended sandbox approval with Kernel (C3)
 
@@ -334,6 +346,8 @@ A session allows 1–10 distinct photos, each at most 8 MiB, declared as JPEG, H
 PUT each photo to its returned URL with the returned headers. The signature binds content type, byte length, SHA-256 checksum and `If-None-Match: *`; an object cannot be replaced through that capability. Native browser code lets the browser set Content-Length to the actual body's length. Upload responses use `Cache-Control: private, no-store`. Never log or publish a presigned URL: possession authorizes writing that one object until expiry. Completion streams the private objects with a byte cap, checks exact size/hash and the declared format header, rechecks expiry after the reads, and records COMPLETE once. A missing object, mismatch or unavailable bucket does not complete. This checks intake integrity, not a full image decode, location, capture time, novelty, nonce recognition or attestation. No assessment, decision or payment is created. The trusted site-visit processor remains open under T-0156.
 
 Set the existing `STOOD_EVIDENCE_S3_ENDPOINT`, `STOOD_EVIDENCE_S3_BUCKET`, `STOOD_EVIDENCE_S3_ACCESS_KEY_ID` and `STOOD_EVIDENCE_S3_SECRET_ACCESS_KEY` on **stood-api**, as well as the reconciler. No new account or dependency is required. Missing settings produce `Uploads off` at startup and 503 on these routes. Keep the bucket private. A browser caller also needs a bucket CORS policy restricted to its approved origin, PUT, and the returned content-type, if-none-match and x-amz-checksum-sha256 headers; do not open all origins. See [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/) and [CORS](https://developers.cloudflare.com/r2/buckets/cors/).
+
+EyeOnSite assessments are optional and disabled unless the issuer URL, its Ed25519 public-key map and the shared request secret are configured. The Stood API calls the issuer itself using a timestamped HMAC; callers only provide an EyeOnSite evidence id. EyeOnSite verifies that the evidence is server-processed and belongs to the task's matched inspector, then hashes the canonical Firebase Storage JPEG objects and signs the receipt. Stood checks the signature, one-time upload nonce, exact allowance version/tranche/upload and exact photo hashes before retaining the receipt. The receipt is audit-only: it does not decide a milestone, capture money or establish device provenance. Current attestation remains `UNKNOWN`/`UNVERIFIED`. Do not enable photo deletion or project erasure until an approved retention policy exists.
 
 `scripts/dev upload-check` qualifies a small synthetic byte probe in the real bucket: signed PUT, bounded read-back, overwrite refusal, changed content-type refusal and idempotent deletion of that exact probe object. It qualifies storage only. T-0359 adds resumable cleanup receipts for expired `OPEN` sessions, but `INCOMPLETE_UPLOAD_CLEANUP` stays `off` until explicitly authorized; completed sessions are excluded. Do not configure a blanket bucket expiry that could delete evidence relied on by a dispute.
 

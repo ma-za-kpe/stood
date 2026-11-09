@@ -14,6 +14,7 @@ const ReviewerPanel = lazy(() => import('./ReviewerPanel.js').then((m) => ({ def
 
 import { leaseRemaining } from './board-ui.js';
 import { connectionMachine, staleConnection } from './connection.js';
+import { DemoBuild } from './DemoBuild.js';
 import { HandoverPanel } from './HandoverPanel.js';
 import { ApiError, api } from './http.js';
 import { IntakePanel } from './IntakePanel.js';
@@ -21,6 +22,7 @@ import { KeysPanel } from './KeysPanel.js';
 import { applyEvent, type ProjectRoom, type RoomEvent, roomChecked } from './project-state.js';
 import { SiteLogPanel } from './SiteLogPanel.js';
 import { notice, sessionChecked } from './session.js';
+import { TransactionsPanel } from './TransactionsPanel.js';
 
 const useUI = create<{ theme: 'dark' | 'paper'; toggle(): void }>((set) => ({
   theme: 'dark',
@@ -126,6 +128,17 @@ export function App() {
   const [role, setRole] = useState<'buyer' | 'builder' | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [reviewerOpen, setReviewerOpen] = useState(false);
+  // Demo mode: the simulated Crew is the builder, so the app shows one Build button.
+  // `?operators` restores the Buyer/Builder picker and the Board (used by the role-isolation tests).
+  const [operators] = useState(() => {
+    const asked = new URLSearchParams(window.location.search).has('operators');
+    try {
+      if (asked) sessionStorage.setItem('yard-operators', '1');
+      return asked || sessionStorage.getItem('yard-operators') === '1';
+    } catch {
+      return asked;
+    }
+  });
   const [sessionError, setSessionError] = useState('');
   const generation = useRef(0),
     switching = useRef(false);
@@ -152,6 +165,29 @@ export function App() {
   });
   const mode = status.data?.mode;
   const said = notice(status.isError ? 'unreachable' : (mode ?? 'loading'));
+  // Hosted Yard says whether the judge demo is switched on (a flag only; nothing about its configuration).
+  const capabilities = useQuery({
+    queryKey: ['capabilities'],
+    enabled: mode === 'hosted',
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) =>
+      z
+        .object({ demo: z.boolean().optional() })
+        .passthrough()
+        .parse(await api('/capabilities', { signal })),
+  });
+  const demoOn = mode === 'mock' || (mode === 'hosted' && capabilities.data?.demo === true);
+  const simple = demoOn && !operators;
+  const openProject = (id: string) => {
+    setSelected(id);
+    setPane('room');
+    void client.invalidateQueries({ queryKey: ['room', id] });
+    window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
+  };
+  useEffect(() => {
+    if (simple) setPane('room');
+  }, [simple]);
   const [code, setCode] = useState('');
   useEffect(() => {
     if (status.data && !status.data.role && session.ready && !switching.current) {
@@ -269,15 +305,21 @@ export function App() {
         <nav aria-label="Product navigation">
           <a href={mode === 'mock' ? '../../' : 'https://ma-za-kpe.github.io/stood/'}>Stood ↗</a>
           <a href={mode === 'mock' ? '../' : 'https://ma-za-kpe.github.io/stood/yard/'}>Yard story</a>
-          <button type="button" aria-pressed={pane === 'intake'} onClick={() => setPane('intake')}>
-            Describe a project
-          </button>
-          <button type="button" aria-pressed={pane === 'board'} onClick={() => setPane('board')}>
-            The Board
-          </button>
-          <button type="button" aria-pressed={pane === 'room'} onClick={() => setPane('room')}>
-            Project room
-          </button>
+          {!simple && (
+            <button type="button" aria-pressed={pane === 'intake'} onClick={() => setPane('intake')}>
+              Describe a project
+            </button>
+          )}
+          {!simple && (
+            <button type="button" aria-pressed={pane === 'board'} onClick={() => setPane('board')}>
+              The Board
+            </button>
+          )}
+          {!simple && (
+            <button type="button" aria-pressed={pane === 'room'} onClick={() => setPane('room')}>
+              Project room
+            </button>
+          )}
           <button type="button" onClick={toggle}>
             {theme === 'dark' ? 'Paper theme' : 'Dark theme'}
           </button>
@@ -290,15 +332,24 @@ export function App() {
         <div className={`room-intro ${pane !== 'room' ? 'compact-intro' : ''}`}>
           <div>
             <p className="eyebrow">
-              Yard / {pane === 'intake' ? 'start a project' : pane === 'board' ? 'posted work' : 'project room'}
+              {simple ? 'Yard × Stood / demo' : 'Yard / '}
+              {!simple && (pane === 'intake' ? 'start a project' : pane === 'board' ? 'posted work' : 'project room')}
             </p>
             <h1>
-              {pane === 'intake'
-                ? 'What will you build?'
-                : pane === 'board'
-                  ? 'Find your next work order.'
-                  : 'Work in motion.'}
-              {pane === 'room' && (
+              {simple ? (
+                <>
+                  Click build.
+                  <br />
+                  <em>Watch Stood pay the Crew.</em>
+                </>
+              ) : pane === 'intake' ? (
+                'What will you build?'
+              ) : pane === 'board' ? (
+                'Find your next work order.'
+              ) : (
+                'Work in motion.'
+              )}
+              {!simple && pane === 'room' && (
                 <>
                   <br />
                   <em>Money with proof.</em>
@@ -306,11 +357,13 @@ export function App() {
               )}
             </h1>
             <p className="lede">
-              {pane === 'intake'
-                ? 'Choose an idea or describe your own project. Keep your brief in one place.'
-                : mode === 'mock'
-                  ? 'A real service stream, with simulated providers. Stood decides the payment; Yard shows the build.'
-                  : 'A live Board and event stream. Stood decides the payment; Yard shows the build.'}
+              {simple
+                ? 'A café website, page by page. The Crew builds each page, Stood checks it against frozen tests, and pays the moment the work stands.'
+                : pane === 'intake'
+                  ? 'Choose an idea or describe your own project. Keep your brief in one place.'
+                  : mode === 'mock'
+                    ? 'A real service stream, with simulated providers. Stood decides the payment; Yard shows the build.'
+                    : 'A live Board and event stream. Stood decides the payment; Yard shows the build.'}
             </p>
           </div>
           <div className="operator-card">
@@ -323,6 +376,9 @@ export function App() {
               >
                 {role ? (
                   <>
+                    {demoOn && role === 'buyer' && (
+                      <DemoBuild hosted ensureBuyer={async () => true} onStarted={openProject} />
+                    )}
                     <p role="status">Signed in as the {role}.</p>
                     <button type="button" onClick={() => void signOut()}>
                       Sign out
@@ -351,16 +407,26 @@ export function App() {
               </form>
             ) : mode === 'mock' ? (
               <>
-                <fieldset>
-                  <legend>Demo operator</legend>
-                  <button type="button" disabled={session.switching} onClick={() => void choose('buyer')}>
-                    Buyer
-                  </button>
-                  <button type="button" disabled={session.switching} onClick={() => void choose('builder')}>
-                    Builder
-                  </button>
-                </fieldset>
-                <p className="fine">Synthetic accounts only. Operator keys stay on the server.</p>
+                <DemoBuild
+                  hosted={false}
+                  ensureBuyer={async () => {
+                    if (role !== 'buyer') await choose('buyer');
+                    return sessionChecked(await api('/session')).role === 'buyer';
+                  }}
+                  onStarted={openProject}
+                />
+                {!simple && (
+                  <fieldset>
+                    <legend>Demo operator</legend>
+                    <button type="button" disabled={session.switching} onClick={() => void choose('buyer')}>
+                      Buyer
+                    </button>
+                    <button type="button" disabled={session.switching} onClick={() => void choose('builder')}>
+                      Builder
+                    </button>
+                  </fieldset>
+                )}
+                {!simple && <p className="fine">Synthetic accounts only. Operator keys stay on the server.</p>}
               </>
             ) : (
               <p>Connecting to Yard…</p>
@@ -393,28 +459,30 @@ export function App() {
         )}
         {pane === 'room' && (
           <>
-            <form
-              className="room-picker"
-              onSubmit={handleSubmit(({ id }) => {
-                if (!projectId.safeParse(id).success) {
-                  setError('id', { message: 'Use the project ID from the Board.' });
-                  return;
-                }
-                setSelected(id);
-                void client.invalidateQueries({ queryKey: ['room', id, session.generation] });
-                window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
-              })}
-            >
-              <label htmlFor="project-id">Project ID</label>
-              <input
-                id="project-id"
-                {...register('id', { required: 'Enter a project ID.' })}
-                placeholder="yard-project"
-                autoComplete="off"
-              />
-              <button type="submit">Open project →</button>
-              {errors.id && <p role="alert">{errors.id.message}</p>}
-            </form>
+            {!simple && (
+              <form
+                className="room-picker"
+                onSubmit={handleSubmit(({ id }) => {
+                  if (!projectId.safeParse(id).success) {
+                    setError('id', { message: 'Use the project ID from the Board.' });
+                    return;
+                  }
+                  setSelected(id);
+                  void client.invalidateQueries({ queryKey: ['room', id, session.generation] });
+                  window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
+                })}
+              >
+                <label htmlFor="project-id">Project ID</label>
+                <input
+                  id="project-id"
+                  {...register('id', { required: 'Enter a project ID.' })}
+                  placeholder="yard-project"
+                  autoComplete="off"
+                />
+                <button type="submit">Open project →</button>
+                {errors.id && <p role="alert">{errors.id.message}</p>}
+              </form>
+            )}
             {room.isFetching && <p role="status">Loading the latest project record…</p>}
             {room.error && (
               <p className="error" role="alert">
@@ -428,9 +496,11 @@ export function App() {
                 </div>
                 <h2>Your build belongs here.</h2>
                 <p>
-                  {mode === 'hosted'
-                    ? 'Open a project from the Board when work is posted. Start with an idea or your own project brief.'
-                    : 'Choose a simulated operator, then open a project created by the local journey.'}
+                  {simple
+                    ? 'Press Build a project. Each task appears here as the Crew works and Stood pays.'
+                    : mode === 'hosted'
+                      ? 'Open a project from the Board when work is posted. Start with an idea or your own project brief.'
+                      : 'Choose a simulated operator, then open a project created by the local journey.'}
                 </p>
                 <p className="fine">This screen does not invent progress or payment.</p>
               </section>
@@ -474,8 +544,9 @@ export function App() {
                                 height="56"
                               />
                               <p>
-                                Simulated capture confirmed. {money(o.budgetMinor, room.data.currency)} recorded as
-                                paid.
+                                {mode === 'hosted'
+                                  ? `Captured on PayPal sandbox. ${money(o.budgetMinor, room.data.currency)} paid for this page.`
+                                  : `Simulated capture confirmed. ${money(o.budgetMinor, room.data.currency)} recorded as paid.`}
                               </p>
                               {!!o.refusals?.length && (
                                 <p className="fine">
@@ -542,14 +613,15 @@ export function App() {
                       </article>
                     ))}
                   </section>
-                  {role === 'buyer' && (
+                  {role === 'buyer' && !simple && (
                     <KeysPanel
                       projectId={room.data.id}
                       version={room.data.version}
                       signed={room.data.signed !== false}
                     />
                   )}
-                  <HandoverPanel room={room.data} buyer={role === 'buyer'} />
+                  {!simple && <HandoverPanel room={room.data} buyer={role === 'buyer'} />}
+                  <TransactionsPanel room={room.data} simulated={mode === 'mock'} />
                   <aside className="truth-panel">
                     <p className="eyebrow">Yard builds. Stood pays.</p>
                     <h3>
@@ -565,11 +637,11 @@ export function App() {
                     <p className="eyebrow">Provider mode</p>
                     <dl>
                       <dt>Payments</dt>
-                      <dd>Simulated</dd>
+                      <dd>{mode === 'hosted' ? 'PayPal sandbox' : 'Simulated'}</dd>
                       <dt>Crew</dt>
-                      <dd>Simulated</dd>
+                      <dd>{mode === 'hosted' ? 'Scripted demo Crew' : 'Simulated'}</dd>
                       <dt>Evidence</dt>
-                      <dd>Synthetic fixture</dd>
+                      <dd>{mode === 'hosted' ? 'Stood runner, frozen tests' : 'Synthetic fixture'}</dd>
                     </dl>
                     <p className="fine">No keys are embedded in this application.</p>
                   </aside>

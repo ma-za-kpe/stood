@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
-import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
+import { KernelSandboxApprover } from '@stood/sandbox-approver';
 import { ServerSdkTransport } from './adapters/payments-paypal/sdk.js';
 import { runSandboxScenario, runVaultSetup, type SandboxRecording } from './application/sandbox-run.js';
 

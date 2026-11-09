@@ -49,7 +49,7 @@ type Operator = Readonly<{
   secret: string;
   accessCode?: string;
   notAfter?: number;
-  actor: { kind: 'BUYER' | 'BUILDER' };
+  actor: { id?: string; root?: string; kind: 'BUYER' | 'BUILDER' };
 }>;
 const SESSION_MS = 8 * 3600_000;
 const WINDOW_MS = 60_000;
@@ -70,6 +70,11 @@ export function hostedSessions(
     foremanAvailable?: boolean;
     plannerRepository?: string;
     agStudioLicense?: Readonly<{ key?: string; expiresAt?: string }>;
+    // Judge demo: a signed-in buyer starts one autopilot build and reads its progress.
+    demo?: Readonly<{
+      start(actor: Readonly<{ id: string; root: string; kind: 'BUYER' | 'BUILDER' }>): unknown;
+      status(actor: Readonly<{ id: string; root: string; kind: 'BUYER' | 'BUILDER' }>): unknown;
+    }>;
   }>,
 ): void {
   const sessions = new Map<string, { key: string; expiresAt: number }>();
@@ -101,6 +106,7 @@ export function hostedSessions(
     c.header('Cache-Control', 'no-store');
     return c.json({
       foreman: config.foremanAvailable ?? false,
+      ...(config.demo ? { demo: true } : {}),
       ...(config.foremanAvailable && config.plannerRepository ? { repository: config.plannerRepository } : {}),
     });
   });
@@ -158,6 +164,28 @@ export function hostedSessions(
     });
     return c.json({ mode: 'hosted', role: role(match) });
   });
+  const demo = config.demo;
+  if (demo) {
+    app.get('/app/api/demo/build', async (c) => {
+      const operator = await current(c);
+      if (!operator) return c.json({ code: 'unauthorized' }, 401);
+      if (operator.actor.kind !== 'BUYER') return c.json({ code: 'forbidden' }, 403);
+      return c.json({ run: demo.status(operator.actor as never) ?? null, available: true });
+    });
+    app.post('/app/api/demo/build', async (c) => {
+      const operator = await current(c);
+      if (!operator) return c.json({ code: 'unauthorized' }, 401);
+      if (operator.actor.kind !== 'BUYER') return c.json({ code: 'forbidden' }, 403);
+      try {
+        return c.json({ run: demo.start(operator.actor as never) }, 202);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : '';
+        if (code === 'BUSY') return c.json({ code: 'busy' }, 409);
+        if (code === 'DAILY_LIMIT') return c.json({ code: 'daily_limit' }, 429);
+        return c.json({ code: 'forbidden' }, 403);
+      }
+    });
+  }
   app.delete('/app/api/session', (c) => {
     sessions.delete(getCookie(c, 'yard-session') ?? '');
     deleteCookie(c, 'yard-session', { path: '/app/api', secure: true });

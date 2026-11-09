@@ -9,8 +9,11 @@ import * as schema from './schema.js';
 import { PostgresUploads } from './uploads.js';
 
 const name = `test_uploads_${randomUUID().replaceAll('-', '')}`;
-const admin = new pg.Pool({ connectionString: 'postgres://stood:stood_local_only@db:5432/stood' });
-const pool = new pg.Pool({ connectionString: `postgres://stood:stood_local_only@db:5432/${name}` });
+const adminUrl = new URL(process.env.TEST_DATABASE_URL ?? 'postgres://stood:stood_local_only@db:5432/stood');
+const databaseUrl = new URL(adminUrl);
+databaseUrl.pathname = `/${name}`;
+const admin = new pg.Pool({ connectionString: adminUrl.toString() });
+const pool = new pg.Pool({ connectionString: databaseUrl.toString() });
 const db = drizzle(pool, { schema }),
   store = new PostgresUploads(db);
 beforeAll(async () => {
@@ -33,7 +36,9 @@ async function tranche(platform = 'platform') {
     window_days: 7,
     max_resubmits: 1,
   });
-  return draft.tranches[0]!.id;
+  const first = draft.tranches.at(0);
+  if (!first) throw new Error('Expected a tranche');
+  return first.id;
 }
 it('reserves one durable session for racing exact retries; changed body and tenant conflicts never return its object keys', async () => {
   const id = await tranche(),
@@ -42,11 +47,13 @@ it('reserves one durable session for racing exact retries; changed body and tena
     Array.from({ length: 8 }, () => store.reserve('platform', id, 'one', 'c'.repeat(64), photos, now)),
   );
   expect(new Set(results.map((s) => s.id)).size).toBe(1);
-  expect(results[0]?.photos[0]?.key).toMatch(/^uploads\/upl_[a-f0-9-]+\/0-[a-f0-9]{64}$/);
-  expect(await store.get('other', id, results[0]!.id)).toBeNull();
+  const first = results.at(0);
+  if (!first) throw new Error('Expected a reserved upload');
+  expect(first.photos[0]?.key).toMatch(/^uploads\/upl_[a-f0-9-]+\/0-[a-f0-9]{64}$/);
+  expect(await store.get('other', id, first.id)).toBeNull();
   await expect(store.reserve('other', id, 'one', 'c'.repeat(64), photos, now)).rejects.toThrow('NOT_FOUND');
   await expect(store.reserve('platform', id, 'one', 'd'.repeat(64), photos, now)).rejects.toThrow('CONFLICT');
-  expect(await new PostgresUploads(drizzle(pool, { schema })).get('platform', id, results[0]!.id)).toEqual(results[0]);
+  expect(await new PostgresUploads(drizzle(pool, { schema })).get('platform', id, first.id)).toEqual(first);
 });
 it('records completion once, refuses expiry and keeps the original receipt when retried after expiry', async () => {
   const id = await tranche(),
@@ -58,6 +65,65 @@ it('records completion once, refuses expiry and keeps the original receipt when 
   expect(complete.status).toBe('COMPLETE');
   expect(await store.complete('platform', id, open.id, open.expiresAt + 1)).toEqual(complete);
   expect(await store.reserve('platform', id, 'one', 'c'.repeat(64), photos, now + 2)).toEqual(complete);
+});
+it('durably binds the immutable assessment receipt to one idempotency key and request body', async () => {
+  const id = await tranche(),
+    now = Date.now();
+  const open = await store.reserve('platform', id, 'assessment-upload', 'c'.repeat(64), photos, now);
+  await store.complete('platform', id, open.id, now + 1);
+  const receipt = { payload: { evidenceId: 'evidence-1' }, signature: 'signed' };
+  const requestHash = 'd'.repeat(64),
+    receiptHash = 'e'.repeat(64);
+  await store.recordAssessment('platform', id, open.id, 'assessment-key', requestHash, receipt, receiptHash, now + 2);
+  expect(await store.loadAssessment('platform', id, open.id, 'assessment-key', requestHash)).toEqual(receipt);
+  await expect(store.loadAssessment('platform', id, open.id, 'assessment-key', 'f'.repeat(64))).rejects.toThrow(
+    'CONFLICT',
+  );
+  await expect(store.loadAssessment('platform', id, open.id, 'another-key', requestHash)).rejects.toThrow('CONFLICT');
+  await expect(
+    store.recordAssessment(
+      'platform',
+      id,
+      open.id,
+      'assessment-key',
+      requestHash,
+      { payload: { evidenceId: 'changed' }, signature: 'changed' },
+      'f'.repeat(64),
+      now + 3,
+    ),
+  ).rejects.toThrow('CONFLICT');
+  await expect(store.loadAssessment('other', id, open.id, 'assessment-key', requestHash)).rejects.toThrow('NOT_FOUND');
+});
+it('refuses malformed, unknown, open or early assessment requests and replays an exact retry', async () => {
+  const id = await tranche(),
+    now = Date.now();
+  const receipt = { payload: { evidenceId: 'evidence-2' }, signature: 'signed' };
+  const [request, hash] = ['d'.repeat(64), 'e'.repeat(64)];
+  const open = await store.reserve('platform', id, 'assessment-edges', 'c'.repeat(64), photos, now);
+  // Nothing recorded yet: a read finds no receipt rather than inventing one.
+  expect(await store.loadAssessment('platform', id, open.id, 'k', request)).toBeNull();
+  for (const [key, req, rh] of [
+    [' ', request, hash],
+    ['k'.repeat(201), request, hash],
+    ['k', 'not-a-hash', hash],
+    ['k', request, 'not-a-hash'],
+  ] as const)
+    await expect(store.recordAssessment('platform', id, open.id, key, req, receipt, rh, now)).rejects.toThrow(
+      'INVALID',
+    );
+  await expect(store.loadAssessment('platform', id, open.id, ' ', request)).rejects.toThrow('INVALID');
+  await expect(store.recordAssessment('platform', id, 'missing', 'k', request, receipt, hash, now)).rejects.toThrow(
+    'NOT_FOUND',
+  );
+  // Only a completed upload can carry an assessment.
+  await expect(store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now)).rejects.toThrow(
+    'CONFLICT',
+  );
+  await expect(store.complete('platform', id, 'missing', now)).rejects.toThrow('NOT_FOUND');
+  await expect(store.complete('platform', id, open.id, now - 1)).rejects.toThrow('INVALID');
+  await store.complete('platform', id, open.id, now + 1);
+  const first = await store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now + 2);
+  expect(await store.recordAssessment('platform', id, open.id, 'k', request, receipt, hash, now + 3)).toEqual(first);
 });
 it('permits only one open session per tranche and bounds reservations, refusing malformed time or metadata', async () => {
   const id = await tranche(),
@@ -117,4 +183,35 @@ it('cleans only expired OPEN upload objects, resumes per-object receipts, and ex
   await expect(pool.query('DELETE FROM upload_cleanup_receipts WHERE session_id = $1', [abandoned.id])).rejects.toThrow(
     'immutable',
   );
+});
+
+it('backs off failed objects so a batch of failures cannot starve the next expired sessions', async () => {
+  const base = Date.now() - 2 * 24 * 60 * 60_000;
+  const entries = await Promise.all(
+    Array.from({ length: 26 }, async (_, index) => {
+      const platform = `cleanup-fair-${index}`;
+      const id = await tranche(platform);
+      const session = await store.reserve(platform, id, 'expired', 'f'.repeat(64), photos, base);
+      return session;
+    }),
+  );
+  const now = Math.max(...entries.map((entry) => entry.expiresAt)) + 60 * 60_000;
+  const firstBatch = await store.expiredOpen(now, 60 * 60_000, 25);
+  expect(firstBatch).toHaveLength(25);
+  await Promise.all(
+    firstBatch.map((session) => {
+      const photo = session.photos.at(0);
+      if (!photo) throw new Error('Expected an upload object');
+      return store.recordCleanupFailure(session.id, photo.key, now, 60 * 60_000);
+    }),
+  );
+
+  const nextBatch = await store.expiredOpen(now, 60 * 60_000, 25);
+  const retriedIds = new Set(firstBatch.map((session) => session.id));
+  const notYetAttempted = entries.filter((entry) => !retriedIds.has(entry.id));
+  expect(notYetAttempted.length).toBeGreaterThan(0);
+  expect(nextBatch.map((session) => session.id)).toEqual(
+    expect.arrayContaining(notYetAttempted.map((entry) => entry.id)),
+  );
+  expect(nextBatch.some((session) => retriedIds.has(session.id))).toBe(false);
 });

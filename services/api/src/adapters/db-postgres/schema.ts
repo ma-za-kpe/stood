@@ -560,6 +560,9 @@ export const uploadSessions = pgTable(
     id: text().primaryKey(),
     platformId: text('platform_id').notNull(),
     trancheId: text('tranche_id').notNull(),
+    allowanceId: text('allowance_id'),
+    termsVersion: integer('terms_version'),
+    assessmentNonce: text('assessment_nonce'),
     key: text().notNull(),
     fingerprint: text().notNull(),
     photos: jsonb().$type<readonly import('../../ports/upload-store.js').StoredUploadPhoto[]>().notNull(),
@@ -570,6 +573,7 @@ export const uploadSessions = pgTable(
   },
   (t) => [
     index('upload_sessions_cleanup_due').on(t.expiresAt, t.id).where(sql`${t.status} = 'OPEN'`),
+    uniqueIndex('upload_assessment_nonce_unique').on(t.assessmentNonce).where(sql`${t.assessmentNonce} IS NOT NULL`),
     unique('upload_request_identity').on(t.platformId, t.trancheId, t.key),
     foreignKey({
       columns: [t.trancheId, t.platformId],
@@ -585,9 +589,33 @@ export const uploadSessions = pgTable(
     ),
     check('upload_time_valid', sql`${t.createdAt} >= 0 AND ${t.expiresAt} = ${t.createdAt} + 900000`),
     check(
+      'upload_assessment_binding_valid',
+      sql`(${t.allowanceId} IS NULL AND ${t.termsVersion} IS NULL AND ${t.assessmentNonce} IS NULL) OR (${t.allowanceId} IS NOT NULL AND length(trim(${t.allowanceId})) BETWEEN 1 AND 200 AND ${t.termsVersion} > 0 AND ${t.assessmentNonce} ~ '^[a-f0-9]{64}$')`,
+    ),
+    check(
       'upload_status_valid',
       sql`(${t.status} = 'OPEN' AND ${t.completedAt} IS NULL) OR (${t.status} = 'COMPLETE' AND ${t.completedAt} >= ${t.createdAt} AND ${t.completedAt} < ${t.expiresAt})`,
     ),
+  ],
+);
+
+// Signed EyeOnSite assessment evidence is immutable and deliberately has no decision authority.
+export const uploadAssessmentReceipts = pgTable(
+  'upload_assessment_receipts',
+  {
+    uploadId: text('upload_id').primaryKey(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    receipt: jsonb().$type<import('../../ports/upload-store.js').StoredAssessmentReceipt>().notNull(),
+    receiptHash: text('receipt_hash').notNull(),
+    recordedAt: bigint('recorded_at', { mode: 'number' }).notNull(),
+  },
+  (t) => [
+    foreignKey({ columns: [t.uploadId], foreignColumns: [uploadSessions.id] }),
+    check('upload_assessment_idempotency_key_valid', sql`length(trim(${t.idempotencyKey})) BETWEEN 1 AND 200`),
+    check('upload_assessment_request_hash_valid', sql`${t.requestHash} ~ '^[a-f0-9]{64}$'`),
+    check('upload_assessment_hash_valid', sql`${t.receiptHash} ~ '^[a-f0-9]{64}$'`),
+    check('upload_assessment_time_valid', sql`${t.recordedAt} >= 0`),
   ],
 );
 
@@ -607,5 +635,27 @@ export const uploadCleanupReceipts = pgTable(
     check('upload_cleanup_key_valid', sql`${t.objectKey} ~ ('^uploads/' || ${t.sessionId} || '/[0-9]+-[a-f0-9]{64}$')`),
     check('upload_cleanup_outcome_valid', sql`${t.outcome} IN ('DELETED', 'ABSENT')`),
     check('upload_cleanup_time_valid', sql`${t.recordedAt} >= 0`),
+  ],
+);
+
+// Retry scheduling is mutable operational state, separate from immutable deletion receipts.
+export const uploadCleanupRetries = pgTable(
+  'upload_cleanup_retries',
+  {
+    sessionId: text('session_id').notNull(),
+    objectKey: text('object_key').notNull(),
+    attempts: integer().notNull(),
+    nextAttemptAt: bigint('next_attempt_at', { mode: 'number' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.objectKey] }),
+    foreignKey({ columns: [t.sessionId], foreignColumns: [uploadSessions.id] }),
+    index('upload_cleanup_retry_due').on(t.nextAttemptAt, t.sessionId),
+    check(
+      'upload_cleanup_retry_key_valid',
+      sql`${t.objectKey} ~ ('^uploads/' || ${t.sessionId} || '/[0-9]+-[a-f0-9]{64}$')`,
+    ),
+    check('upload_cleanup_retry_attempts_valid', sql`${t.attempts} > 0`),
+    check('upload_cleanup_retry_time_valid', sql`${t.nextAttemptAt} >= 0`),
   ],
 );

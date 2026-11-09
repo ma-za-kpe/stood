@@ -36,7 +36,7 @@ try {
   const privacy = await browser.newContext({ viewport: { width: 1100, height: 850 }, reducedMotion: 'reduce' });
   const privatePage = await privacy.newPage();
   if (process.env.YARD_UI_COVERAGE === '1') await privatePage.coverage.startJSCoverage({ resetOnNavigation: false });
-  await privatePage.goto('http://web:3002/yard/app/');
+  await privatePage.goto('http://web:3002/yard/app/?operators');
   const [sessionResponse] = await Promise.all([
     privatePage.waitForResponse((response) => new URL(response.url()).pathname === '/app/api/demo/session'),
     privatePage.getByRole('button', { name: 'Buyer', exact: true }).click(),
@@ -133,7 +133,7 @@ try {
     if (process.env.YARD_UI_COVERAGE === '1') await page.coverage.startJSCoverage({ resetOnNavigation: false });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto('http://web:3002/yard/app/?project=yard-project');
+    await page.goto('http://web:3002/yard/app/?project=yard-project&operators');
     await page.getByRole('button', { name: 'Buyer', exact: true }).click();
     await page.getByRole('heading', { name: 'A booking app', exact: true }).waitFor();
     await page.getByAltText('Stood / Released').waitFor();
@@ -279,7 +279,7 @@ try {
   const intakeContext = await browser.newContext({ viewport: { width: 1100, height: 900 }, reducedMotion: 'reduce' });
   const intakePage = await intakeContext.newPage();
   if (process.env.YARD_UI_COVERAGE === '1') await intakePage.coverage.startJSCoverage({ resetOnNavigation: false });
-  await intakePage.goto('http://web:3002/yard/app');
+  await intakePage.goto('http://web:3002/yard/app?operators');
   assert.equal(new URL(intakePage.url()).pathname, '/yard/app/');
   await intakePage.getByRole('button', { name: 'Buyer', exact: true }).click();
   await intakePage.getByRole('button', { name: 'Describe a project', exact: true }).click();

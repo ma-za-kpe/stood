@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { KernelSandboxApprover } from '@stood/sandbox-approver';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
-import { KernelSandboxApprover } from './adapters/kernel/sandbox-approver.js';
 import { bundleHash } from './application/code-evidence.js';
 
 // T-0384 operator qualification: sign v1, amend only evidence terms, sign v2, then fund and execute under v2.

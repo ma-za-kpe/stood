@@ -47,6 +47,7 @@ compose run --rm runner pnpm test:mock:network
 compose run --rm browser
 
 if [ "$keep" = true ]; then
+  compose up -d --no-deps --wait --wait-timeout 60 director
   for path in / /yard/ '/yard/app/?project=yard-project'; do
     curl --fail --silent --show-error "http://127.0.0.1:3002$path" >/dev/null
   done

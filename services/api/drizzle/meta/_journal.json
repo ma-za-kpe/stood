@@ -239,6 +239,34 @@
       "when": 1791940367037,
       "tag": "0033_married_nehzno",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791978950232,
+      "tag": "0034_chemical_barracuda",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791979392761,
+      "tag": "0035_great_jasper_sitwell",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791979817506,
+      "tag": "0036_certain_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792075632045,
+      "tag": "0037_loud_mandrill",
+      "breakpoints": true
     }
   ]
 }

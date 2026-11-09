@@ -18,6 +18,7 @@ describe('cleanupExpiredUploads', () => {
         return [{ id: 'upl_12345678-1234-1234-1234-123456789abc', photos }];
       }),
       recordCleanup: vi.fn(async (_id: string, _key: string, _result: string) => true),
+      recordCleanupFailure: vi.fn(async () => {}),
     };
     const objects = {
       deleteUpload: vi
@@ -29,6 +30,12 @@ describe('cleanupExpiredUploads', () => {
 
     expect(await cleanupExpiredUploads(store, objects, now)).toEqual({ sessions: 1, deleted: 1, absent: 1, failed: 1 });
     expect(store.recordCleanup).toHaveBeenCalledTimes(2);
+    expect(store.recordCleanupFailure).toHaveBeenCalledWith(
+      expect.any(String),
+      photos[1]!.key,
+      now,
+      UPLOAD_CLEANUP_GRACE_MS,
+    );
     expect(store.recordCleanup).toHaveBeenNthCalledWith(
       1,
       expect.any(String),
@@ -48,7 +55,7 @@ describe('cleanupExpiredUploads', () => {
   });
 
   it('rejects invalid cleanup clocks before listing or deleting anything', async () => {
-    const store = { expiredOpen: vi.fn(), recordCleanup: vi.fn() };
+    const store = { expiredOpen: vi.fn(), recordCleanup: vi.fn(), recordCleanupFailure: vi.fn() };
     const objects = { deleteUpload: vi.fn() };
     await expect(cleanupExpiredUploads(store, objects, Number.NaN)).rejects.toThrow('Invalid cleanup clock');
     expect(store.expiredOpen).not.toHaveBeenCalled();
