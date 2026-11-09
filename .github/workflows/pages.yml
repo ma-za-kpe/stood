@@ -16,6 +16,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      portal: ${{ steps.portal.outputs.portal }}
     steps:
       # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -35,16 +37,28 @@ jobs:
           npm ci --prefix tools/site --ignore-scripts
           node tools/site/build.mjs
       # T-0332: the APIMatic developer portal for the Stood API, from openapi/stood.json, at /stood/api/.
-      # Without the APIMATIC_API_KEY secret the site publishes without it.
+      # Without the APIMATIC_API_KEY secret the site publishes without it. When APIMatic's service
+      # itself fails three times, nothing is published, so the live site keeps its last good portal.
+      # A portal that generates but fails check-portal still fails the job.
       - name: Build API portal (APIMatic)
+        id: portal
         env:
           APIMATIC_API_KEY: ${{ secrets.APIMATIC_API_KEY }}
         run: |
-          if [ -z "$APIMATIC_API_KEY" ]; then echo "APIMATIC_API_KEY not set: publishing without the API portal."; exit 0; fi
+          if [ -z "$APIMATIC_API_KEY" ]; then echo "APIMATIC_API_KEY not set: publishing without the API portal."; echo "portal=skipped" >> "$GITHUB_OUTPUT"; exit 0; fi
           cp openapi/stood.json apimatic/src/spec/stood.json
-          npx -y @apimatic/cli@1.5.0 portal generate --input=apimatic --destination=_site/api --force --auth-key="$APIMATIC_API_KEY"
-          test -f _site/api/index.html
-          node tools/site/check-portal.mjs _site/api
+          for attempt in 1 2 3; do
+            if npx -y @apimatic/cli@1.5.0 portal generate --input=apimatic --destination=_site/api --force --auth-key="$APIMATIC_API_KEY"; then
+              test -f _site/api/index.html
+              node tools/site/check-portal.mjs _site/api
+              echo "portal=built" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "APIMatic portal generation failed (attempt $attempt of 3)."
+            sleep $((attempt * 20))
+          done
+          echo "::warning title=API portal not regenerated::APIMatic portal generation failed three times; the live site is left unchanged."
+          echo "portal=unavailable" >> "$GITHUB_OUTPUT"
       # actions/configure-pages v6.0.0
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
       # actions/upload-pages-artifact v5.0.0
@@ -54,6 +68,7 @@ jobs:
 
   deploy:
     needs: build
+    if: needs.build.outputs.portal != 'unavailable'
     runs-on: ubuntu-latest
     permissions:
       pages: write
