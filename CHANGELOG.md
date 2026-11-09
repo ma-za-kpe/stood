@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.16.0](https://github.com/ma-za-kpe/stood/compare/v0.15.1...v0.16.0) (2026-11-09)
+
+
+### Features
+
+* **yard:** one-click judge demo with real PayPal sandbox payments ([#222](https://github.com/ma-za-kpe/stood/issues/222)) ([c0435ae](https://github.com/ma-za-kpe/stood/commit/c0435ae22df9fb8cd33d0f02a4e698e18cf867f1))
+
+
+### Fixes
+
+* **ci:** handle renames and isolate turbo hash probes ([927f999](https://github.com/ma-za-kpe/stood/commit/927f999dc70d6e2e5d2b86fcceb61d75c6c08ce5))
+* **ci:** make affected validation dependency safe ([5c543f0](https://github.com/ma-za-kpe/stood/commit/5c543f0400513276219b9589cf0b40fadfacbd88))
+* **ci:** preserve boundary checks for affected workspaces ([05df995](https://github.com/ma-za-kpe/stood/commit/05df9954f4cc76e337f5447b81128a3f8c18c4b4))
+
+
+### Performance
+
+* **ci:** parallelize independent quality gates ([d3b0895](https://github.com/ma-za-kpe/stood/commit/d3b08958340555c7f1c2dc28046d24619d9c13de))
+* **ci:** parallelize independent quality gates ([#203](https://github.com/ma-za-kpe/stood/issues/203)) ([facd108](https://github.com/ma-za-kpe/stood/commit/facd108db64a182481a489f13bb228849bc053fe))
+
+
+### Documentation
+
+* **ci:** record affected validation evidence ([b263535](https://github.com/ma-za-kpe/stood/commit/b2635350f3c1afa5fbe7359dc4271ad3253a4e8e))
+* **ci:** record final selector audit fixes ([0eae2e2](https://github.com/ma-za-kpe/stood/commit/0eae2e2dec85aa7c6b9ef76c848ce7fde7147d90))
+* **tasks:** compare repeated CI timing samples ([#203](https://github.com/ma-za-kpe/stood/issues/203)) ([3cc9a60](https://github.com/ma-za-kpe/stood/commit/3cc9a609513562570ec661b1e786a00f0f7218bf))
+* **tasks:** reconcile CI throughput sample count ([#203](https://github.com/ma-za-kpe/stood/issues/203)) ([a2b8795](https://github.com/ma-za-kpe/stood/commit/a2b8795fc4416d2a309d9d9628c5366ff9fa65fb))
+* **tasks:** record CI throughput trial results ([#203](https://github.com/ma-za-kpe/stood/issues/203)) ([c2b920c](https://github.com/ma-za-kpe/stood/commit/c2b920c8f59b44ee3d2811571da6419968322a53))
+* **ways:** document measured parallel workflow rules ([#203](https://github.com/ma-za-kpe/stood/issues/203)) ([34a384e](https://github.com/ma-za-kpe/stood/commit/34a384e6642d00e210fe26749a4d83b9717cf7c5))
+
+
+### Refactoring
+
+* **ci:** select validation by workspace ([6a1d231](https://github.com/ma-za-kpe/stood/commit/6a1d23132748e10f6ac000117d10e5cdb113f095))
+
 ## [0.15.1](https://github.com/ma-za-kpe/stood/compare/v0.15.0...v0.15.1) (2026-10-14)
 
 
