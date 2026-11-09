@@ -93,6 +93,33 @@ const paidRoom = (reference: string) => {
   });
 };
 
+describe('DemoBuild room and fee (hosted, 9 Nov)', () => {
+  it('opens the latest run room on load, without a new click, so its Transactions show after a reload', async () => {
+    api(() => ({
+      body: { run: run({ status: 'DONE', paid: 3, step: 'Site built. Every page paid on PayPal sandbox.' }) },
+    }));
+    const onStarted = vi.fn();
+    render(<DemoBuild hosted ensureBuyer={async () => true} onStarted={onStarted} />);
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith('demo-r1'));
+    expect(await screen.findByRole('button', { name: 'Build another' })).toBeTruthy();
+  });
+  it('accepts a capture of the builder price plus the Yard fee, and still refuses one below the price', () => {
+    const o = order('PAID', 0);
+    const room = (minor: number) => ({
+      id: 'demo-r1',
+      version: 4,
+      summary: 's',
+      currency: 'USD',
+      simulated: true,
+      orders: [{ ...o, payment: { ...o.payment, minor } }],
+    });
+    // ADR-0027: a real demo page is captured at $1.05 for a $1.00 builder price.
+    expect(roomChecked(room(o.budgetMinor + Math.round(o.budgetMinor * 0.05))).orders[0]?.state).toBe('PAID');
+    expect(() => roomChecked(room(o.budgetMinor - 1))).toThrow('Missing Stood proof');
+    expect(() => roomChecked(room(1.5))).toThrow('Missing Stood proof');
+  });
+});
+
 describe('TransactionsPanel (judge demo)', () => {
   it('shows nothing paid before the first capture', () => {
     api(() => ({ body: { lines: [] } }));

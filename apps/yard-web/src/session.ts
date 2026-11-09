@@ -15,7 +15,7 @@ export function notice(mode: Session['mode'] | 'unreachable' | 'loading'): Reado
   return mode === 'hosted'
     ? {
         signal: 'LIVE',
-        text: 'Hosted Yard: the Board, events and site log are live. Stood is connected to the PayPal sandbox; Yard’s payment connection is still being built, so no real money moves.',
+        text: 'Hosted Yard on the PayPal sandbox: Stood holds, captures and voids each payment, and Yard pays builders through PayPal Payouts. Sandbox only, so no real money moves.',
       }
     : {
         signal: 'SIMULATED',
