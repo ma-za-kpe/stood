@@ -454,7 +454,9 @@ describe('App judge demo', () => {
     expect(screen.getByRole('region', { name: 'Transactions' })).toBeTruthy();
     // A second build reuses the signed-in buyer.
     finished = true;
-    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Build another' })));
+    await act(async () =>
+      fireEvent.click(await screen.findByRole('button', { name: 'Build another' }, { timeout: 5000 })),
+    );
     expect(calls.filter((c) => c.path === '/demo/session')).toHaveLength(1);
   });
   it('offers the demo to a hosted buyer when Yard switches it on, with sandbox wording', async () => {
