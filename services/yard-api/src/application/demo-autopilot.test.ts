@@ -71,7 +71,7 @@ function harness(options: { refuse?: string; payout?: string } = {}) {
           ? { key, status: 'SIGNED', approveUrl: null, expiresAt: 1 }
           : { key, status: 'AWAITING_APPROVAL', approveUrl: 'https://www.sandbox.paypal.com/approve', expiresAt: 1 },
       requestFunding: async (_id, _v, _n, key) => ({ key, status: 'RESERVED', approveUrl: null, holdExpiresAt: null }),
-      getFunding: async (_id, key) => ({ key, status: 'HELD', approveUrl: null, holdExpiresAt: null }),
+      getFunding: async (_id, key) => ({ key, status: 'HELD', approveUrl: null, holdExpiresAt: t + 86400000 }),
       getTranche: async (id) => tranche(id) as never,
     },
     approver: { approve: async (url) => void approvals.push(url) },
@@ -137,6 +137,27 @@ it('stops when a Crew payout needs review, and refuses anyone but the configured
   expect(() => pilot.start({ ...buyer, id: 'someone' })).toThrow('FORBIDDEN');
   pilot.start(buyer);
   expect(await settle(pilot)).toMatchObject({ status: 'STOPPED', paid: 1 });
+});
+
+it('shows buyers a calm stop but logs the step and cause for the owner', async () => {
+  const h = harness();
+  const logs: Record<string, unknown>[] = [];
+  const failure = Object.assign(new Error('Stood returned a response it could not read'), { code: 'INVALID_RESPONSE' });
+  const pilot = new DemoAutopilot({
+    ...h.deps,
+    log: (entry) => void logs.push(entry as Record<string, unknown>),
+    stood: { ...h.deps.stood, getFunding: async () => Promise.reject(failure) },
+  });
+  pilot.start(buyer);
+  expect(await settle(pilot)).toMatchObject({
+    status: 'STOPPED',
+    paid: 0,
+    error: 'The demo stopped; nothing more will be charged.',
+  });
+  expect(logs.find((l) => l.code === 'DEMO_STOPPED')).toMatchObject({
+    failedAt: 'Stood holds $1.00 on PayPal for “Home page”',
+    cause: 'Error:INVALID_RESPONSE Stood returned a response it could not read',
+  });
 });
 
 it('caps runs per day', async () => {
