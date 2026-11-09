@@ -4,5 +4,8 @@ services:
     networks: [mock, viewer]
     ports:
       - "127.0.0.1:3002:3002"
+  yard-api:
+    environment:
+      YARD_MOCK_MAX_ACTIVE_CLAIMS: "100"
 networks:
   viewer: {}

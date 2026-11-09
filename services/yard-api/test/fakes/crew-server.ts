@@ -170,6 +170,16 @@ app.post('/__mock/scenario', async (c) => {
 });
 app.post('/__mock/poll', async (c) => {
   await clock();
+  // Optional: take only one project's work order (the demo autopilot), never other open offers.
+  const body = (await c.req.json().catch(() => ({}))) as { projectId?: unknown; workOrderId?: unknown };
+  if (typeof body.projectId === 'string' && typeof body.workOrderId === 'string') {
+    const ids = (await openOffers())
+      .filter((o) => o.projectId === body.projectId && o.workOrderId === body.workOrderId)
+      .map((o) => o.id);
+    if (ids.length !== 1) return c.json({ code: 'not_on_board' }, 409);
+    await crew.poll(ids);
+    return c.json({ simulated: true });
+  }
   await crew.poll();
   return c.json({ simulated: true });
 });

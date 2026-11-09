@@ -20,6 +20,19 @@ export function browserSession(app: Hono, clock: () => Promise<number>): void {
     setCookie(c, 'yard-mock-session', role, { httpOnly: true, sameSite: 'Strict', path: '/app/api', maxAge: 3600 });
     return c.json({ role, simulated: true });
   });
+  // Demo autopilot: the buyer clicks Build; the mock-only director builds and pays each task.
+  app.on(['GET', 'POST'], '/app/api/demo/build', async (c) => {
+    if (getCookie(c, 'yard-mock-session') !== 'buyer') return c.json({ code: 'buyer_only' }, 403);
+    try {
+      const r = await fetch('http://director:8082/build', {
+        method: c.req.method,
+        signal: AbortSignal.timeout(30000),
+      });
+      return c.json(await r.json(), r.status as 200);
+    } catch {
+      return c.json({ code: 'director_unavailable' }, 503);
+    }
+  });
   app.get('/app/api/session', (c) => {
     const role = getCookie(c, 'yard-mock-session');
     return c.json({ mode: 'mock', role: role === 'buyer' || role === 'builder' ? role : null });

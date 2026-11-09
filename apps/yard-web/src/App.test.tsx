@@ -5,7 +5,7 @@ import { api, type Call, render, streams } from '../test/harness.js';
 import { App } from './App.js';
 
 afterEach(() => {
-  window.history.replaceState(null, '', '/');
+  window.history.replaceState(null, '', '/?operators');
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -225,7 +225,7 @@ describe('App (T-0275)', () => {
   });
 
   it('runs a local project room: operators, every milestone state, and the live room stream', async () => {
-    window.history.replaceState(null, '', '?project=proj1');
+    window.history.replaceState(null, '', '?project=proj1&operators');
     const all = streams();
     local();
     render(<App />);
@@ -353,7 +353,7 @@ describe('App (T-0275)', () => {
   });
 
   it('shows refusal history, rework and leases without a server clock, and a room that cannot load', async () => {
-    window.history.replaceState(null, '', '?project=proj1');
+    window.history.replaceState(null, '', '?project=proj1&operators');
     const all = streams();
     const variant = room();
     const orders = variant.orders as Record<string, unknown>[];
@@ -388,7 +388,7 @@ describe('App (T-0275)', () => {
   });
 
   it('keeps a healthy room stream open when the watchdog checks it', async () => {
-    window.history.replaceState(null, '', '?project=proj1');
+    window.history.replaceState(null, '', '?project=proj1&operators');
     const watchdogs: (() => void)[] = [];
     const setInterval = window.setInterval.bind(window);
     vi.spyOn(window, 'setInterval').mockImplementation(((fn: () => void, ms?: number) => {
