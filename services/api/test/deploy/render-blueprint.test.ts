@@ -23,6 +23,8 @@ const blueprint = parse(readFileSync('render.yaml', 'utf8')) as { services: Serv
 const secretName = /SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|CLIENT_ID|WEBHOOK_ID|OWNER|OPERATORS/;
 // The evidence endpoint names the owner's Cloudflare account, so it is prompted rather than committed (C4).
 const ownerChoice = [
+  // Judge demo: the sandbox buyer login Kernel signs in with is an account identity, so it is prompted too.
+  'PAYPAL_SANDBOX_BUYER_EMAIL',
   'PROVIDER_PAYPAL',
   'SETTLEMENT_EXECUTOR',
   'RUNNER_KEY_ID',
@@ -144,9 +146,17 @@ it('prompts the owner for every secret in their own Render account and commits n
     if (!stood(s)) {
       // Yard never holds Stood's PayPal credentials. ADR-0027: its merchant id is a public identifier, and its own
       // PayPal app (used only to pay builders out) is prompted, never committed.
-      const yardPayPal = ['YARD_PAYPAL_MERCHANT_ID', 'YARD_PAYPAL_CLIENT_ID', 'YARD_PAYPAL_CLIENT_SECRET'];
+      // Judge demo: the sandbox BUYER's login, which Kernel uses to approve as the buyer. It is not Stood's PayPal
+      // app and cannot move money by itself; it is prompted, never committed.
+      const demoBuyer = ['PAYPAL_SANDBOX_BUYER_EMAIL', 'PAYPAL_SANDBOX_BUYER_PASSWORD'];
+      const yardPayPal = [
+        'YARD_PAYPAL_MERCHANT_ID',
+        'YARD_PAYPAL_CLIENT_ID',
+        'YARD_PAYPAL_CLIENT_SECRET',
+        ...demoBuyer,
+      ];
       expect(keys.filter((k) => k.includes('PAYPAL') && !yardPayPal.includes(k))).toEqual([]);
-      for (const key of ['YARD_PAYPAL_CLIENT_ID', 'YARD_PAYPAL_CLIENT_SECRET'])
+      for (const key of ['YARD_PAYPAL_CLIENT_ID', 'YARD_PAYPAL_CLIENT_SECRET', ...demoBuyer])
         if (keys.includes(key)) expect(s.envVars.find((e) => e.key === key)?.sync, key).toBe(false);
       expect(s.envVars.find((e) => e.key === 'YARD_ENV')?.value).toBe('demo');
       continue;
