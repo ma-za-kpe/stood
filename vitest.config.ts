@@ -8,6 +8,7 @@ const coverageIncludes = [
   'packages/yard-domain/src/**/*.ts',
   'packages/yard-contracts/src/**/*.ts',
   'packages/stood-sdk/src/**/*.ts',
+  'packages/sandbox-approver/src/**/*.ts',
 ];
 
 export default defineConfig({

@@ -1,12 +1,8 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
+import { KernelApprovalBrowserError, KernelBrowserError, KernelSandboxApprover } from '@stood/sandbox-approver';
 import { GitHubRepositoryReader } from './adapters/github/repository-reader.js';
-import {
-  KernelApprovalBrowserError,
-  KernelBrowserError,
-  KernelSandboxApprover,
-} from './adapters/kernel/sandbox-approver.js';
 import { bundleHash } from './application/code-evidence.js';
 import { hostedSession } from './application/hosted-session.js';
 import { existingYardMandate, qualifiedYardPayment } from './application/yard-qualification.js';

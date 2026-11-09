@@ -28,6 +28,13 @@ export type MandateView = Readonly<{
   approveUrl: string | null;
   expiresAt: number;
 }>;
+// Funding one tranche from the buyer's saved PayPal account (no approval once the mandate is signed).
+export type FundingView = Readonly<{
+  key: string;
+  status: 'RESERVED' | 'CREATING' | 'AWAITING_APPROVAL' | 'AUTHORIZING' | 'HELD' | 'FAILED' | 'EXPIRED';
+  approveUrl: string | null;
+  holdExpiresAt: string | null;
+}>;
 export type PackageInput = Readonly<{
   repository: string;
   base_commit: string;
@@ -232,6 +239,39 @@ function mandateView(v: unknown, key: string): MandateView {
     status: v.status as MandateView['status'],
     approveUrl: v.approve_url as string | null,
     expiresAt: Number(v.expires_at),
+  });
+}
+function fundingView(v: unknown, key: string): FundingView {
+  if (
+    !object(v) ||
+    v.key !== key ||
+    !['RESERVED', 'CREATING', 'AWAITING_APPROVAL', 'AUTHORIZING', 'HELD', 'FAILED', 'EXPIRED'].includes(
+      String(v.status),
+    ) ||
+    !(v.approve_url === null || typeof v.approve_url === 'string') ||
+    !(v.hold_expires_at === null || v.hold_expires_at === undefined || typeof v.hold_expires_at === 'string')
+  )
+    throw new StoodClientError('INVALID_RESPONSE');
+  if (typeof v.approve_url === 'string') {
+    // The same rule as a signing link: only a PayPal sandbox page (or the local simulator) is ever followed.
+    let url: URL;
+    try {
+      url = new URL(v.approve_url);
+    } catch {
+      throw new StoodClientError('INVALID_RESPONSE');
+    }
+    if (
+      url.username ||
+      url.password ||
+      !(url.origin === 'https://www.sandbox.paypal.com' || url.origin === 'http://paypal-sim:8080')
+    )
+      throw new StoodClientError('INVALID_RESPONSE');
+  }
+  return Object.freeze({
+    key,
+    status: v.status as FundingView['status'],
+    approveUrl: (v.approve_url as string | null) ?? null,
+    holdExpiresAt: (v.hold_expires_at as string | null | undefined) ?? null,
   });
 }
 function trancheView(v: unknown, trancheId: string): TrancheView {
@@ -585,6 +625,25 @@ export class StoodClient {
     )
       throw new StoodClientError('INVALID_RESPONSE');
     return Object.freeze({ trancheId, commit: v.commit, acceptedAt: v.accepted_at });
+  }
+  async requestFunding(trancheId: string, expectedVersion: number, nonce: string, key: string): Promise<FundingView> {
+    if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0 || !/^[A-HJ-NP-Z2-9]{3}$/.test(nonce))
+      throw new StoodClientError('INVALID_INPUT');
+    return fundingView(
+      await this.request(
+        'POST',
+        `/tranches/${this.resource(trancheId)}/funding`,
+        { expected_version: expectedVersion, nonce },
+        key,
+      ),
+      key,
+    );
+  }
+  async getFunding(trancheId: string, key: string): Promise<FundingView> {
+    return fundingView(
+      await this.request('GET', `/tranches/${this.resource(trancheId)}/funding/${this.resource(key)}`),
+      key,
+    );
   }
   async getTranche(trancheId: string): Promise<TrancheView> {
     return trancheView(await this.request('GET', `/tranches/${this.resource(trancheId)}`), trancheId);

@@ -114,6 +114,12 @@ importers:
 
   packages/contracts: {}
 
+  packages/sandbox-approver:
+    dependencies:
+      playwright-core:
+        specifier: 1.63.0
+        version: 1.63.0
+
   packages/stood-sdk: {}
 
   packages/yard-contracts:
@@ -132,6 +138,9 @@ importers:
       '@paypal/paypal-server-sdk':
         specifier: 2.5.0
         version: 2.5.0
+      '@stood/sandbox-approver':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-approver
       '@vercel/sandbox':
         specifier: 3.6.1
         version: 3.6.1
@@ -175,6 +184,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.3
         version: 2.1.3(hono@4.13.12)
+      '@stood/sandbox-approver':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-approver
       '@stood/stood-sdk':
         specifier: workspace:*
         version: link:../../packages/stood-sdk
