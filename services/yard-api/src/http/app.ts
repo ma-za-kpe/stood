@@ -17,6 +17,7 @@ export function createYardApp(
       origin: string;
       plannerRepository?: string;
       agStudioLicense?: Readonly<{ key?: string; expiresAt?: string }>;
+      demo?: Parameters<typeof hostedSessions>[1]['demo'];
     }>;
     // T-0267: the built Yard page, served from this origin.
     web?: Readonly<{ root: string }>;
@@ -63,6 +64,7 @@ export function createYardApp(
       origin: config.browser.origin,
       foremanAvailable: !!config.board.foreman,
       ...(config.browser.agStudioLicense ? { agStudioLicense: config.browser.agStudioLicense } : {}),
+      ...(config.browser.demo ? { demo: config.browser.demo } : {}),
       ...(config.board.foreman && config.browser.plannerRepository
         ? { plannerRepository: config.browser.plannerRepository }
         : {}),

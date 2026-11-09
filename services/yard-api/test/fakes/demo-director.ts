@@ -16,10 +16,9 @@ const API = 'http://api:3000',
 // Prewritten tasks. The last milestone must be the final (usage) milestone; each is $10.00 because
 // the simulated Stood money flow authorizes one fixed $10.00 hold per tranche.
 const TASKS = [
-  { name: 'Sign-up and login', test: 'auth-works' },
-  { name: 'Booking calendar', test: 'booking-works' },
-  { name: 'Payments page', test: 'checkout-works' },
-  { name: 'Launch and hand over', test: 'launch-works' },
+  { name: 'Home page', test: 'home-works' },
+  { name: 'Menu page', test: 'menu-works' },
+  { name: 'Contact page', test: 'contact-works' },
 ];
 const BUDGET = 1000;
 
@@ -144,7 +143,7 @@ async function prepare(project: string) {
       buyerOperatorId: 'buyer',
       repository: repo.repository,
       baseCommit: repo.commit,
-      summary: 'Demo: a booking app, built task by task',
+      summary: 'Sunrise Café website, built page by page',
       capMinor: BUDGET * TASKS.length,
       currency: 'USD',
       milestones,
@@ -254,9 +253,39 @@ async function run(project: string) {
 
 const app = new Hono();
 app.get('/health', (c) => c.json({ status: 'ok', simulated: true }));
-app.get('/build', (c) => c.json({ ...status, simulated: true }));
+// The same shape as hosted Yard's /app/api/demo/build, so one UI serves both.
+const view = () =>
+  status.projectId
+    ? {
+        runId: status.projectId,
+        projectId: status.projectId,
+        status: status.running ? 'RUNNING' : status.error ? 'STOPPED' : 'DONE',
+        step: status.step,
+        task: status.task,
+        total: status.total,
+        paid: status.paid,
+        error: status.error,
+        repository: 'simulated',
+        branch: 'simulated',
+        tasks: TASKS.map((t, i) => ({
+          id: `t${i + 1}`,
+          name: t.name,
+          state:
+            i < status.paid
+              ? 'CAPTURED'
+              : i + 1 === status.task && status.running
+                ? 'BUILDING'
+                : status.error && i + 1 >= status.task
+                  ? 'STOPPED'
+                  : 'WAITING',
+          commit: null,
+        })),
+        simulated: true,
+      }
+    : null;
+app.get('/build', (c) => c.json({ run: view(), available: true }));
 app.post('/build', async (c) => {
-  if (status.running) return c.json({ code: 'busy', ...status }, 409);
+  if (status.running) return c.json({ code: 'busy' }, 409);
   const project = `demo-build-${Date.now().toString(36)}-${++runs}`;
   status = {
     projectId: project,
@@ -271,10 +300,10 @@ app.post('/build', async (c) => {
     await prepare(project);
   } catch (e) {
     status = { ...status, running: false, error: (e as Error).message, step: 'Stopped' };
-    return c.json({ code: 'prepare_failed', ...status }, 502);
+    return c.json({ code: 'prepare_failed' }, 502);
   }
   void run(project);
-  return c.json({ ...status, simulated: true }, 202);
+  return c.json({ run: view() }, 202);
 });
 const server = serve({ fetch: app.fetch, hostname: '0.0.0.0', port: 8082 });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => server.close());

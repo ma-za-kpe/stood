@@ -256,6 +256,17 @@ Render has no spend cap, so Yard keeps its own, reserved in Postgres before each
 scripts/dev preview-check   # one free-plan preview from a digest-pinned public image; waits for https, deletes it, checks it is gone
 ```
 
+### Judge demo: one click, real sandbox money (2026-11-09)
+
+Hosted Yard has a **Build a project** button for the signed-in buyer when `YARD_DEMO_AUTOPILOT=on` (set in `render.yaml`). One click builds a three-page café website (home, menu, contact):
+
+1. Yard writes this run's frozen tests onto `yard-sandbox` main with the GitHub App, and Stood's runner proves each fails on the empty site.
+2. The buyer's single PayPal approval (the saved-account signature) is made by a Kernel cloud browser with the sandbox buyer login.
+3. For each page: Stood holds $1.05 from the saved account, the scripted Crew (`YARD_DEMO_CREW_OPERATOR`, default `crew`) pushes the page to `wo/demo-<run>` and submits it, Stood's runner runs the frozen tests, Stood captures, and Yard pays the Crew $1.00 from its own sandbox app straight away. Only demo projects pay at release, and only up to $5.00 in total (`DEMO_MAX_CAP_MINOR`); every other project keeps the 48-hour review window.
+4. The final page releases once the buyer confirms the site works; the demo confirms for the buyer.
+
+It needs, on `stood-yard-api`: the Stood, payout and usage settings above, the GitHub App, `YARD_SANDBOX_REPOSITORY`, `KERNEL_API_KEY`, `PAYPAL_SANDBOX_BUYER_EMAIL` and `PAYPAL_SANDBOX_BUYER_PASSWORD` (set through the Render API, never in `render.yaml`), and a builder operator with a `payeeRef` in `YARD_OPERATORS`. If anything is missing, `/app/api/capabilities` does not offer the demo and the log says `Demo off: …` with the reason. One run at a time, at most 12 a day. Locally, `scripts/dev demo` runs the same button against the PayPal simulator.
+
 ### Unattended sandbox approval with Kernel (C3)
 
 `scripts/dev sandbox-run release|refuse|vault-setup` needs a buyer to approve on PayPal's sandbox page. With `KERNEL_API_KEY` (from kernel.sh) and the sandbox personal account's `PAYPAL_SANDBOX_BUYER_EMAIL` and `PAYPAL_SANDBOX_BUYER_PASSWORD` in `.env`, a Kernel cloud browser signs in and approves instead, so every outcome replays with nobody at the keyboard. It opens nothing but `https://www.sandbox.paypal.com`, never prints the password, and always ends the cloud browser (which also stops on its own after five idle minutes). Without them, the run prints the link for a person, as before.

@@ -1097,3 +1097,40 @@ summary {
   color: var(--text-muted);
   text-align: right;
 }
+.demo-steps {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 8px;
+}
+.demo-steps li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--y-steel);
+}
+.demo-steps li a {
+  grid-column: 1 / -1;
+  font-size: 12px;
+}
+.demo-state {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.demo-steps li[data-state="CAPTURED"] .demo-state,
+.demo-steps li[data-state="PAID_OUT"] .demo-state {
+  color: var(--y-lime, #c8ff3d);
+}
+.demo-steps li[data-state="STOPPED"] .demo-state {
+  color: var(--y-red, #ff5533);
+}
+.tx-links {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}

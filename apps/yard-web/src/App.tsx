@@ -165,7 +165,26 @@ export function App() {
   });
   const mode = status.data?.mode;
   const said = notice(status.isError ? 'unreachable' : (mode ?? 'loading'));
-  const simple = mode === 'mock' && !operators;
+  // Hosted Yard says whether the judge demo is switched on (a flag only; nothing about its configuration).
+  const capabilities = useQuery({
+    queryKey: ['capabilities'],
+    enabled: mode === 'hosted',
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) =>
+      z
+        .object({ demo: z.boolean().optional() })
+        .passthrough()
+        .parse(await api('/capabilities', { signal })),
+  });
+  const demoOn = mode === 'mock' || (mode === 'hosted' && capabilities.data?.demo === true);
+  const simple = demoOn && !operators;
+  const openProject = (id: string) => {
+    setSelected(id);
+    setPane('room');
+    void client.invalidateQueries({ queryKey: ['room', id] });
+    window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
+  };
   useEffect(() => {
     if (simple) setPane('room');
   }, [simple]);
@@ -339,7 +358,7 @@ export function App() {
             </h1>
             <p className="lede">
               {simple
-                ? 'Four prewritten tasks. The Crew builds each one, Stood checks it against frozen tests, and pays the moment the work stands.'
+                ? 'A café website, page by page. The Crew builds each page, Stood checks it against frozen tests, and pays the moment the work stands.'
                 : pane === 'intake'
                   ? 'Choose an idea or describe your own project. Keep your brief in one place.'
                   : mode === 'mock'
@@ -357,6 +376,9 @@ export function App() {
               >
                 {role ? (
                   <>
+                    {demoOn && role === 'buyer' && (
+                      <DemoBuild hosted ensureBuyer={async () => true} onStarted={openProject} />
+                    )}
                     <p role="status">Signed in as the {role}.</p>
                     <button type="button" onClick={() => void signOut()}>
                       Sign out
@@ -386,16 +408,12 @@ export function App() {
             ) : mode === 'mock' ? (
               <>
                 <DemoBuild
+                  hosted={false}
                   ensureBuyer={async () => {
                     if (role !== 'buyer') await choose('buyer');
                     return sessionChecked(await api('/session')).role === 'buyer';
                   }}
-                  onStarted={(id) => {
-                    setSelected(id);
-                    setPane('room');
-                    void client.invalidateQueries({ queryKey: ['room', id] });
-                    window.history.replaceState(null, '', `?project=${encodeURIComponent(id)}`);
-                  }}
+                  onStarted={openProject}
                 />
                 {!simple && (
                   <fieldset>
@@ -526,8 +544,9 @@ export function App() {
                                 height="56"
                               />
                               <p>
-                                Simulated capture confirmed. {money(o.budgetMinor, room.data.currency)} recorded as
-                                paid.
+                                {mode === 'hosted'
+                                  ? `Captured on PayPal sandbox. ${money(o.budgetMinor, room.data.currency)} paid for this page.`
+                                  : `Simulated capture confirmed. ${money(o.budgetMinor, room.data.currency)} recorded as paid.`}
                               </p>
                               {!!o.refusals?.length && (
                                 <p className="fine">
@@ -618,11 +637,11 @@ export function App() {
                     <p className="eyebrow">Provider mode</p>
                     <dl>
                       <dt>Payments</dt>
-                      <dd>Simulated</dd>
+                      <dd>{mode === 'hosted' ? 'PayPal sandbox' : 'Simulated'}</dd>
                       <dt>Crew</dt>
-                      <dd>Simulated</dd>
+                      <dd>{mode === 'hosted' ? 'Scripted demo Crew' : 'Simulated'}</dd>
                       <dt>Evidence</dt>
-                      <dd>Synthetic fixture</dd>
+                      <dd>{mode === 'hosted' ? 'Stood runner, frozen tests' : 'Synthetic fixture'}</dd>
                     </dl>
                     <p className="fine">No keys are embedded in this application.</p>
                   </aside>

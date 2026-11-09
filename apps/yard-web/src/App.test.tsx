@@ -406,3 +406,73 @@ describe('App (T-0275)', () => {
     expect(all.length).toBe(before);
   });
 });
+
+describe('App judge demo', () => {
+  const demoRun = (projectId: string) => ({
+    runId: 'r1',
+    projectId,
+    status: 'RUNNING',
+    step: 'The Crew builds the home page',
+    task: 1,
+    total: 3,
+    paid: 0,
+    error: null,
+    repository: 'simulated',
+    branch: 'simulated',
+    tasks: [{ id: 'home', name: 'Home page', state: 'BUILDING', commit: null }],
+    simulated: true,
+  });
+  it('shows only the Build button locally, signs in the buyer and opens the new project', async () => {
+    sessionStorage.clear();
+    window.history.replaceState(null, '', '/');
+    streams();
+    let role: string | null = null,
+      started = false,
+      finished = false;
+    const calls = api((c) => {
+      if (c.path === '/demo/session') {
+        role = 'buyer';
+        return { body: { role: 'buyer', simulated: true } };
+      }
+      if (c.path === '/session') return { body: { mode: 'mock', role } };
+      if (c.path === '/demo/build') {
+        if (c.method === 'POST') started = true;
+        const value = started ? { ...demoRun('demo-1'), ...(finished ? { status: 'DONE' } : {}) } : null;
+        return { status: c.method === 'POST' ? 202 : 200, body: { run: value } };
+      }
+      if (c.path.startsWith('/blueprints/demo-1/room')) return { body: { ...room(), id: 'demo-1' } };
+      return { body: { orders: [], nextCursor: null, simulated: true } };
+    });
+    render(<App />);
+    expect(await screen.findByText('Watch Stood pay the Crew.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'The Board' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Builder' })).toBeNull();
+    await click('Build a project');
+    await waitFor(() => expect(window.location.search).toBe('?project=demo-1'));
+    expect(calls.some((c) => c.path === '/demo/session')).toBe(true);
+    expect(await screen.findByText('Salon bookings')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Transactions' })).toBeTruthy();
+    // A second build reuses the signed-in buyer.
+    finished = true;
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Build another' })));
+    expect(calls.filter((c) => c.path === '/demo/session')).toHaveLength(1);
+  });
+  it('offers the demo to a hosted buyer when Yard switches it on, with sandbox wording', async () => {
+    sessionStorage.clear();
+    window.history.replaceState(null, '', '/?project=proj1');
+    streams();
+    api((c) => {
+      if (c.path === '/session') return { body: { mode: 'hosted', role: 'buyer' } };
+      if (c.path === '/capabilities') return { body: { foreman: false, demo: true } };
+      if (c.path === '/demo/build') return { body: { run: null } };
+      if (c.path.startsWith('/blueprints/proj1/room')) return { body: room() };
+      if (c.path.startsWith('/blueprints/proj1/ledger')) return { body: { lines: [] } };
+      return { body: { orders: [], nextCursor: null, simulated: true } };
+    });
+    render(<App />);
+    expect(await screen.findByRole('button', { name: 'Build a project' })).toBeTruthy();
+    expect(await screen.findByText(/Captured on PayPal sandbox/)).toBeTruthy();
+    expect(screen.getByText('PayPal sandbox', { selector: 'dd' })).toBeTruthy();
+    expect(screen.getByText('Yard × Stood / demo')).toBeTruthy();
+  });
+});

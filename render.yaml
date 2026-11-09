@@ -192,6 +192,18 @@ services:
       - key: YARD_USAGE_SIGNING_KEY
         sync: false
       # T-0196: previews in a separate Render workspace, so this key cannot reach Stood's services.
+      # Judge demo (2026-11-09): one click builds a three-page site with a scripted Crew; the money is real
+      # PayPal sandbox. The buyer's one PayPal approval is made by a Kernel cloud browser with the sandbox buyer.
+      - key: YARD_DEMO_AUTOPILOT
+        value: "on"
+      - key: YARD_DEMO_CREW_OPERATOR
+        value: crew
+      - key: KERNEL_API_KEY
+        sync: false
+      - key: PAYPAL_SANDBOX_BUYER_EMAIL
+        sync: false
+      - key: PAYPAL_SANDBOX_BUYER_PASSWORD
+        sync: false
       - key: RENDER_PREVIEW_API_KEY
         sync: false
       - key: RENDER_PREVIEW_OWNER_ID
