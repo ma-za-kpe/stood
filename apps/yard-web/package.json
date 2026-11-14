@@ -22,7 +22,7 @@
     "zod": "4.6.6",
     "zustand": "5.0.15",
     "@bryntum/gantt": "npm:@bryntum/gantt-trial@7.3.7",
-    "@bryntum/gantt-react": "7.3.7"
+    "@bryntum/gantt-react": "7.3.8"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",
