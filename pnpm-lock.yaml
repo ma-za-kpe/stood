@@ -56,8 +56,8 @@ importers:
         specifier: npm:@bryntum/gantt-trial@7.3.7
         version: '@bryntum/gantt-trial@7.3.7'
       '@bryntum/gantt-react':
-        specifier: 7.3.7
-        version: 7.3.7
+        specifier: 7.3.8
+        version: 7.3.8
       '@stood/yard-contracts':
         specifier: workspace:*
         version: link:../../packages/yard-contracts
@@ -387,8 +387,8 @@ packages:
     resolution: {integrity: sha512-0GEz8qJWokkUVYQYRukmkSHIFNoBH8QTreeHrAFbvz1XFYc3Y+puhMs8PQ5x8GNugiC2l5jvDBXKLbBIByeSBw==}
     hasBin: true
 
-  '@bryntum/gantt-react@7.3.7':
-    resolution: {integrity: sha512-nKIQ8/BVPF7BqeZDRZSWMFP+ZvjqK8p/TNA6L1e/lH+RQO18SRw6fQeGctj118LHcZQ/CA3utebXv7ORiCRwWA==}
+  '@bryntum/gantt-react@7.3.8':
+    resolution: {integrity: sha512-CmlxtRIN2LleR6FlCBFXzxpzkNjx74WhD5z5U3/JJkMdJLd2OQWrjebyOMRbCYe6hD5fnCOta5RwuApM/ZQQQQ==}
     engines: {node: '>=0.10.0'}
 
   '@bryntum/gantt-trial-lib@1.0.1':
@@ -398,8 +398,8 @@ packages:
     resolution: {integrity: sha512-OHvlsCYDGzxdDcFF6JHjPDWiCOynJr8tP1RRteJSZ6c9NT0+DOtgwVyj8MABXmIY61rKABQ+t6csik5ZT1BMqA==}
     engines: {node: '>=0.10.0'}
 
-  '@cfworker/json-schema@4.1.4':
-    resolution: {integrity: sha512-20rPE8EX0dSg6JGOVe31HpqsLYZTDSlcFJZA5mpZqQxcZ71vh/SXCMX+UuHO1mMcZBDKeb752z+3L8IWa+0Svg==}
+  '@cfworker/json-schema@4.1.6':
+    resolution: {integrity: sha512-YzVGTHXf4bzlyAL5KAvHYCdNbbt6zM5cYkAgxqxQPDQM6aZ4ShIIN5yJ+6q7YeonnevxT8k/LmD2tJi/jOiKkg==}
 
   '@csstools/color-helpers@6.1.2':
     resolution: {integrity: sha512-grhRy3OKmniaAEKXMjua5z/EODX0MSqBGjunw8+j/3HQjOnahs2AGhvEOIYVUWcU6ScApbhLhVrQTX8XqrMrow==}
@@ -1585,8 +1585,8 @@ packages:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
 
-  langsmith@0.11.7:
-    resolution: {integrity: sha512-ItiCV3YhUuWHWT92odob5PhEUMY+ixHa03Fixsgwk/EIPEiRgUIZRBQSB8LCm87ypuUhgIwgw01z1gxPX5qTWg==}
+  langsmith@0.11.8:
+    resolution: {integrity: sha512-rAskvQCNjwGqwjA9fOJGugZ1vLB66yaivxWGSTA9ldtF9+P00gvXH1DEr0kW798cyUyBlZolFO0kPb//zDNc7w==}
     peerDependencies:
       '@opentelemetry/api': '*'
       '@opentelemetry/exporter-trace-otlp-proto': '*'
@@ -2376,7 +2376,7 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@bryntum/gantt-react@7.3.7': {}
+  '@bryntum/gantt-react@7.3.8': {}
 
   '@bryntum/gantt-trial-lib@1.0.1': {}
 
@@ -2384,7 +2384,7 @@ snapshots:
     dependencies:
       '@bryntum/gantt-trial-lib': 1.0.1
 
-  '@cfworker/json-schema@4.1.4': {}
+  '@cfworker/json-schema@4.1.6': {}
 
   '@csstools/color-helpers@6.1.2': {}
 
@@ -2595,10 +2595,10 @@ snapshots:
 
   '@langchain/core@1.2.14':
     dependencies:
-      '@cfworker/json-schema': 4.1.4
+      '@cfworker/json-schema': 4.1.6
       '@standard-schema/spec': 1.1.0
       js-tiktoken: 1.0.21
-      langsmith: 0.11.7
+      langsmith: 0.11.8
       mustache: 4.2.0
       p-queue: 6.6.2
       zod: 4.6.6
@@ -3324,7 +3324,7 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  langsmith@0.11.7:
+  langsmith@0.11.8:
     dependencies:
       p-queue: 6.6.2
 
